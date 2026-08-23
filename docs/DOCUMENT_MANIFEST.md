@@ -47,6 +47,7 @@
 - `docs/operations/runbook.md`
 - `docs/operations/server-migration.md`
 - `docs/operations/translation-operations.md`
+- `docs/planning/implementation-plan.md`
 - `docs/specification/acceptance-criteria.md`
 - `docs/specification/non-functional-requirements.md`
 - `docs/specification/project-requirements.md`

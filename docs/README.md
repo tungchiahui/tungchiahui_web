@@ -30,6 +30,14 @@ docs/architecture/network-and-origin.md
 docs/architecture/control-plane-and-jobs.md
 ```
 
+开始实施前阅读：
+
+```text
+docs/planning/implementation-plan.md
+```
+
+该计划定义 Phase 0–18 的执行顺序、硬 Gate、Commit/停止规则和 Accepted ADR Coverage；它不替代规范或 ADR。
+
 ## 目录
 
 - `specification/` — 系统必须实现什么
@@ -37,4 +45,5 @@ docs/architecture/control-plane-and-jobs.md
 - `development/` — 工程师和 Agent 如何进行本地开发
 - `operations/` — 生产系统如何部署、翻译与恢复
 - `migration/` — 从旧 Nuxt 实现迁移到 V2
+- `planning/` — 阶段化实施顺序、依赖、Gate 与进度
 - `decisions/` — 不可随意重写的架构决策记录
