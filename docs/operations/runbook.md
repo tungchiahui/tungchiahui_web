@@ -25,6 +25,8 @@
 
 如果 Deployment 在 Cutover 前失败，Production 应继续停留在 Old Slot。
 
+正常 Application Release 由 Web Application Repository 的 `main` Workflow 在 CI Gates 通过后自动发起。这里的命令用于人工触发、重试或指定版本，并调用同一个 Deployment Engine。
+
 ## Rollback
 
 ```bash
@@ -51,7 +53,9 @@
 3. 评估 Latest Known-good Backup/WAL
 4. 选择 Restore Target/Time
 5. 时间允许时，先 Restore 到 Disposable Validation Environment
-6. 执行 Controlled Recovery
+6. 使用 `./site restore <backup-or-time>` 执行 Controlled Recovery
+
+该 Restore Path 通过独立 `control-api`、Control-state SQLite 与 `deploy-agent` 工作，不要求待恢复的 Production PostgreSQL 先健康。完成 Restore/Integrity/Readiness Check 后，再恢复 PostgreSQL-backed Content/Translation/Search Job。
 
 ## S3 Incident
 
@@ -136,3 +140,7 @@ ddns.tungchiahui.cn
 日常运维中不要把它们替换成记忆中的公网数字 IP。
 
 如果 Origin Connectivity 失败，在修改 Application Configuration 前先诊断 DNS/DDNS/IPv6/EdgeOne Reachability。
+
+OpenResty 必须把 `/api/ops/*` 直接路由到独立 `control-api`，而不是 Next.js Blue/Green Slot。因此 Next.js 全挂时先验证 Control API 与 Control-state SQLite，再决定 Deploy/Rollback。
+
+如果 EdgeOne/OpenResty/`control-api` 也不可用，使用文档化的显式 Break-glass Mode，通过稳定 Ansible Inventory/SSH Alias 调用同一个 Recovery Engine。要求 Environment、Target、Reason、Confirmation 和 Audit；不得临时发明无审计的 Root Script。

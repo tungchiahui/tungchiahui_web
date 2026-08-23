@@ -134,7 +134,7 @@ Server-side Worker 在继续发出付费 Request 前强制执行 Budget。
 
 ### operational_jobs
 
-通用的 Durable Control-plane Job。
+PostgreSQL-backed 的 Application-level Durable Job，用于 Content Sync、Translation、Search/Reindex 与普通后台任务。
 
 典型字段：
 
@@ -153,6 +153,8 @@ error_summary
 ```
 
 它可以实现成一个通用表，并在关联表中保存 Translation-specific Detail；也可以实现成多个 Specialized Table。最终 Relational Design 应保持 Durable、Inspectable State。
+
+Deploy、Rollback、PostgreSQL Restore/Recovery 与基础 Disaster-recovery Operation 不使用此表作为唯一状态，因为这些操作必须能在 Production PostgreSQL 不可用时启动、恢复和查询。它们的最小状态属于 ADR 0015 定义的 host-local SQLite Control-state Schema，包括 Active/Previous Slot、Deployment SHA、Operation Phase、Lock/Lease 与 Audit Record。该 Schema 不属于业务 PostgreSQL Data Model，也不得承载 Content/Translation/Search Data。
 
 ### ingestion_runs
 

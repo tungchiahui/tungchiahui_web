@@ -42,6 +42,19 @@ slot
 
 不得包含 Secret。
 
+### control-api / Recovery State
+
+独立观察：
+
+- `control-api` Health/Latency/Authentication Failure/Rate Limit
+- OpenResty `/api/ops/*` Direct-routing Correctness
+- Control-state SQLite Integrity/Schema Version/WAL/Checkpoint Health
+- Infrastructure Operation Phase、Lock/Lease、Heartbeat 与 Stuck/Expired Lease
+- Active/Previous Slot 和 Current/Last Deployment SHA 对账
+- Break-glass Invocation 与 Audit Continuity
+
+这些检查不得要求健康的 Production PostgreSQL；否则 Database Incident 时会同时失去 Recovery Observability。
+
 ### PostgreSQL / PgBouncer
 
 监控：
@@ -101,10 +114,12 @@ Alert 应可操作。
 - Translation Pending-block Count
 - Translation Token/Cost Usage
 - Budget-stop/Partial Job
-- deploy-agent Job Failure
-- Job Age / Stuck-job Detection
+- deploy-agent Operation Failure
+- Job/Operation Age 与 Stuck Detection
 
-Durable Job 如果保持 `running` 超过预期 Execution Window，必须能够检测并告警。
+其中 Content/Translation/Search 属于 PostgreSQL-backed Job；Deploy/Rollback/Restore/Recovery 属于 SQLite-backed Infrastructure Operation。Dashboard/Alert 必须明确区分，不得把 Database 不可用误报为 Control Plane 整体消失。
+
+Durable Job/Operation 如果保持 `running` 超过预期 Execution Window，必须能够检测并告警。
 
 ## Network/Origin Health
 

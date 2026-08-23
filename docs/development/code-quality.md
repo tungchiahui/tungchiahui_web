@@ -53,6 +53,15 @@ Biome 是默认 Formatter/Linter。
 - 不要无必要地增加重复 Platform/Library 行为的 Utility
 - 优先使用小而内聚的 Module，而不是巨型 Utility File
 
+Renovate 是统一的 Dependency Update Automation：
+
+- 只创建 Dependency Update PR，不直接修改 `main`
+- 同步更新 `pnpm-lock.yaml`
+- 每个 PR 通过现有 Format/Lint、Typecheck、Test、Migration、Build 与适用 E2E Gate
+- Core Major Update 默认不自动 Merge
+- Security Update 提高优先级
+- 稳定版/LTS 优先，不默认追踪 Beta/Canary
+
 ## Error Handling
 
 Error 必须携带足够 Context 以诊断 Failure，但不得暴露 Secret。

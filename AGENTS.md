@@ -84,9 +84,9 @@ PostgreSQL 是运行时内容与结构化数据存储。
 - Sequelize
 - TypeORM
 - MongoDB
-- SQLite 作为生产 Runtime Store
+- SQLite 作为业务 Production Runtime Store；唯一例外是 ADR 0015 定义的 host-local Control-plane Recovery State
 - Redis 作为持久化
-- 使用文件系统持久化应用状态
+- 使用文件系统持久化业务应用状态；ADR 0015 定义的受限 Recovery-state Volume 不在此列
 
 除非已批准 ADR 改变架构。
 
@@ -201,6 +201,7 @@ Secret 永远不得以明文提交。
 - Migration
 - Development Seed Data
 - Next.js Development Server
+- Local `control-api` 与隔离的 Control-state SQLite
 
 开发不得要求生产 Credential。
 
@@ -247,6 +248,20 @@ Blue-Green Compatibility 是强制要求。
 
 Deployment 使用 Blue-Green。
 
+Web Application Repository 的正常生产发布路径必须是：
+
+```text
+push/merge to main
+-> CI Quality Gates
+-> Build Git-SHA-tagged Immutable Image
+-> Production Blue-Green Deployment
+-> Pre-cutover Health/Readiness/Smoke
+-> OpenResty Cutover
+-> Post-cutover Public Smoke
+```
+
+GitHub Actions 与 `./site deploy` 必须调用同一个 Control Plane、Deployment Engine 和 Policy，不得维护两套实现。`./site deploy` 保留用于人工触发、重试和指定版本。Content Repository Push 只执行 Content Sync，不得触发 Next.js Image Build/Blue-Green。
+
 绝不在原地替换 Active Application Container。
 
 一次 Deployment 必须：
@@ -262,6 +277,18 @@ Deployment 使用 Blue-Green。
 9. 保留 Previous Slot，以便立即 Rollback
 
 不得使用 `latest` 作为 Deployment Identity。
+
+Production Docker 必须：
+
+- 使用 Multi-stage Build
+- Runtime Container 使用 Non-root User 和尽量 Minimal 的 Image
+- 不把 Secret Bake 进 Image
+- 在实际可行的 Service 上使用 Read-only Root Filesystem
+- 只通过明确的 Writable Volume/tmpfs 提供必要写路径
+- Drop 不需要的 Linux Capability，并遵守 Least Privilege
+- 仅向 `deploy-agent` 授予完成部署所需的最小 Docker/Host 权限
+
+`content-worker` 不得获得 Docker Socket。
 
 ## 13. 备份
 
@@ -308,7 +335,11 @@ Backup Command 成功不足以证明可恢复性。
 - 使用受支持的 LTS Runtime
 - Container Image 按 Version/Digest 固定
 - 提交 `pnpm-lock.yaml`
-- Dependency Upgrade 通过 PR + CI
+- 使用 Renovate 自动创建 Dependency Update PR，并同步维护 `pnpm-lock.yaml`
+- Renovate 不得直接写入或绕过 PR 修改 `main`
+- 所有 Dependency Update PR 必须通过现有 CI Quality Gates
+- Core Major Update 默认不得自动 Merge
+- Security Update 提高优先级
 - 及时移除未使用依赖
 
 ## 17. 旧 Nuxt 仓库
@@ -358,6 +389,10 @@ https://www.tungchiahui.cn/api/ops/*
 
 除非未来 ADR 要求，否则不得引入单独的 Operations Domain。
 
+OpenResty 必须把 `/api/ops/*` 直接路由到独立 `control-api`。该服务不属于 Next.js Blue/Green Slot；不得在 `src/app/api/ops/*` 或其他 Next.js Route Handler 中实现正式 Privileged Control Plane。普通 `/api/search`、`/api/health`、`/api/ready`、`/api/version` 仍属于 Next.js。
+
+`control-api` 负责 Authentication、Capability Authorization、Zod Validation、Idempotency/Replay Protection、Job Control/Status 和必要 Recovery Control，但不得成为无边界的 Root Service。
+
 生产 Origin Identity 是：
 
 ```text
@@ -367,6 +402,12 @@ ddns.tungchiahui.cn
 不得在应用、CI、CLI 或正常 Infrastructure Configuration 中持久保存家庭公网数字 IP。
 
 内部使用 Docker Service DNS。
+
+Content Sync、Translation、Search/Reindex 和普通 Application Background Job 继续使用 PostgreSQL-backed Durable Job。
+
+Deploy、Rollback、PostgreSQL Restore/Recovery 和必要 Server Migration/Disaster Recovery 不得把健康的 Production PostgreSQL 当作创建、恢复或查询 Operation 的绝对前置条件。它们使用 ADR 0015 定义的 host-local SQLite Recovery State，且必须实现 Transaction、WAL/同步落盘、Crash Recovery、Lock/Lease、Active/Previous Slot、Current/Last SHA、Operation Status 与 Audit Record。该 SQLite 不是业务 Production Database。
+
+正常操作优先使用 `https://www.tungchiahui.cn/api/ops/*`。当 Control API 本身不可用时，Break-glass Path 只可通过授权的 Host/Inventory Identity 调用同一个 Deployment/Recovery Engine，并留下审计记录；不得另建一套脚本实现。
 
 ## 21. 付费 AI 翻译
 
@@ -402,5 +443,7 @@ GitHub -> PostgreSQL
 高权限 Deployment Work 属于 `deploy-agent`。
 
 不得为了方便给 `content-worker` Docker Socket、Unrestricted Host Shell 或 OpenResty Administrative Privilege。
+
+`control-api` 不得获得不受限 Host Shell 或完整 Docker Socket 权限；高权限执行仍交给最小权限 `deploy-agent`。只有 `deploy-agent` 可以获得完成部署与恢复所需的受控 Docker/Host Capability。
 
 不得直接在 Public Next.js Request Handler 中执行长时间 Translation/Deployment。

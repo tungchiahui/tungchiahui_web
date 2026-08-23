@@ -27,6 +27,10 @@ Next.js dev server     localhost:3000
         +---- PostgreSQL Dev
         |
         +---- S3Mock Dev
+
+Local control-api      isolated local endpoint
+        |
+        +---- Disposable/local control-state SQLite
 ```
 
 为避免冲突，实际映射的 PostgreSQL/S3Mock Port 可以配置。
@@ -41,8 +45,9 @@ Next.js dev server     localhost:3000
 6. 创建所需 Test/Dev Bucket State
 7. 运行当前 DB Migration
 8. 应用幂等的 Development Seed Data
-9. 启动 Next.js Dev Server
-10. 报告 Endpoint 和 Service Status
+9. 启动不具 Production Host/Docker 权限的 Local `control-api` 与隔离的 Control-state SQLite
+10. 启动 Next.js Dev Server
+11. 报告 Endpoint 和 Service Status
 
 ## 隔离
 
@@ -59,6 +64,8 @@ Next.js dev server     localhost:3000
 为了方便，Developer Data 可以在多次 `./site dev` 之间持久保存。
 
 Automated Test Data 不得共享同一个 Database/Volume。
+
+Local Control-state Directory 也必须与 Production 隔离。Local `control-api`/Fake Deploy Agent 不得挂载 Production Docker Socket、OpenResty Config 或 Recovery Directory。
 
 ## Reset
 

@@ -6,6 +6,8 @@
 
 改动应在聚焦的 Branch 中完成，并通过经过 Review 的 Pull Request 合并。
 
+Web Application Repository 的 PR 合并或 Push 到 `main` 后，只有在 CI Quality Gates 全部通过时才自动构建 Git-SHA-tagged Immutable Image 并通过统一 Deployment Engine 发布到 Production。Content Repository 的 Markdown Push 只触发 Content Sync，不触发 Next.js Build/Blue-Green Deployment。
+
 ## 编码前
 
 阅读：
@@ -66,6 +68,8 @@ Commit 应保持聚焦且可回滚。
 不要只是为了少写一点项目特定代码就增加依赖。
 
 对于成熟的安全、解析或协议敏感功能，如果已有维护良好的依赖，不要自行重新实现。
+
+Renovate 是依赖自动更新工具。它只创建 Dependency Update PR，不得直接修改 `main`；PR 必须同步 `pnpm-lock.yaml` 并通过与普通改动相同的 CI Quality Gates。Core Major Update 默认由人工 Review/Merge，Security Update 提高处理优先级，稳定版/LTS 策略保持不变。
 
 ## 文档
 

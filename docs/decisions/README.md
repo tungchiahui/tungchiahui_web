@@ -34,3 +34,5 @@ ADR 是不可变的历史记录。
 - `0011-domain-addressed-control-plane-and-ddns-origin.md`
 - `0012-one-way-github-content-synchronization.md`
 - `0013-separate-content-worker-and-deploy-agent.md`
+- `0014-decouple-control-api-from-nextjs-slots.md`
+- `0015-postgresql-independent-control-plane-recovery-state.md`

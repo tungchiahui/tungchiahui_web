@@ -13,7 +13,7 @@ cdn.tungchiahui.cn
 
 这些名称可以通过 EdgeOne 提供服务。
 
-不需要单独的 `ops.tungchiahui.cn`。
+不需要单独的 Operations Domain。
 
 管理控制统一放在：
 
@@ -47,14 +47,20 @@ www.tungchiahui.cn
 ddns.tungchiahui.cn:8443
        |
     OpenResty
+    /       \
+   v         v
+Next B/G   control-api
+site/API   /api/ops/*
 ```
+
+OpenResty 必须在 Blue/Green Upstream Selection 之前执行 Path Routing：`/api/ops/*` 直接进入独立 `control-api`；其余网站请求与普通业务 API 进入 Active Next.js Slot。不得把正式 Privileged Control Plane 放进 Next.js Route Handler。
 
 ## 不持久保存数字 IP 配置
 
 不要持久保存如下值：
 
 ```text
-PRODUCTION_HOST=203.0.113.10
+PRODUCTION_HOST=<numeric-public-ip>
 ```
 
 不得将其写入：
@@ -124,3 +130,5 @@ Cache-Control: no-store
 ```
 
 运维 POST Request 永远不得缓存。
+
+EdgeOne 与 OpenResty 必须保留原始 Host、Method、Path 和控制面认证所需的安全 Header，并对 `/api/ops/*` 使用独立的 WAF/Rate-limit/Method Policy。Next.js Slot 是否健康不得决定 `control-api` Route 是否可达。

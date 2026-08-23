@@ -15,6 +15,8 @@ GitHub content repository
         |
 trigger /api/ops/content/sync
         |
+independent control-api
+        |
 durable content-sync job
         |
 content-worker
@@ -43,6 +45,8 @@ reuse EN                 mark pending
 ```
 
 Push Workflow **不会**等待人工翻译。
+
+`/api/ops/content/sync` 由独立 `control-api` 提供，但 Content-sync Job 本身继续保存在 PostgreSQL 并由 `content-worker` 执行。Content Repository Push 不构建 Next.js Image，也不触发 Blue-Green Deployment。
 
 ## Source of Truth 规则
 

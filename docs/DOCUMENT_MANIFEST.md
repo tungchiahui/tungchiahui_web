@@ -30,6 +30,8 @@
 - `docs/decisions/0011-domain-addressed-control-plane-and-ddns-origin.md`
 - `docs/decisions/0012-one-way-github-content-synchronization.md`
 - `docs/decisions/0013-separate-content-worker-and-deploy-agent.md`
+- `docs/decisions/0014-decouple-control-api-from-nextjs-slots.md`
+- `docs/decisions/0015-postgresql-independent-control-plane-recovery-state.md`
 - `docs/decisions/README.md`
 - `docs/development/code-quality.md`
 - `docs/development/configuration-and-secrets.md`

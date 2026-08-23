@@ -52,6 +52,8 @@ Risky Migration 执行前必须有 Fresh Recoverable Backup。
 
 Deployment CLI 根据 Migration Metadata/Policy 决定这一点，而不是依赖 Operator 记忆。
 
+Migration Orchestration Phase、Lock 与 Audit State 保存在 PostgreSQL-independent Control-state SQLite 中，不能要求先向目标 Production PostgreSQL 创建 Operation Job。实际执行某个 Schema Migration 当然要求 Database 可达；如果不可达，应安全停在明确 Phase，并保留可恢复状态。PostgreSQL Restore/Recovery 使用同一 Control/Recovery Engine。
+
 ## CI
 
 Migration CI 验证：

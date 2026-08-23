@@ -18,6 +18,8 @@ External Client 只通过以下 Endpoint 创建/查询 Job：
 https://www.tungchiahui.cn/api/ops/translations
 ```
 
+该 Endpoint 由独立 `control-api` 提供，不属于 Next.js Blue/Green Slot。Translation Job 本身仍是 PostgreSQL-backed Application Job；不得迁入只服务 Deploy/Restore/Recovery 的 Control-state SQLite。Production PostgreSQL 不可用时，Endpoint 应安全报告 Translation Capability 不可用，而不是尝试在 Recovery Store 中执行翻译。
+
 ## 为什么这样设计
 
 避免暴露：

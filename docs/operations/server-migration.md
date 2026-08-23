@@ -12,6 +12,8 @@
 
 Durable Interface 不要求家庭公网数字 IP。
 
+Migration/Recovery Operation 使用 PostgreSQL-independent Control-state SQLite，因此即使 Source Production PostgreSQL 故障，也可以创建、恢复和审计基础 Recovery Phase。正常路径仍通过独立 `control-api`；必要时使用稳定 Inventory/SSH Alias 的显式 Break-glass Mode，并调用同一 Engine。
+
 ## 寻址原则
 
 使用稳定 Infrastructure Identity：
@@ -48,7 +50,7 @@ PostgreSQL Standby
 
 1. 使用 Ansible Provision 新服务器
 2. 建立稳定 Inventory/SSH Identity
-3. 安装/验证 Docker、OpenResty、Secret、Directory、Monitoring
+3. 安装/验证 Docker、OpenResty、独立 `control-api`、`deploy-agent`、Secret、Control-state Directory、Monitoring
 4. 从当前 Production PostgreSQL 建立 Standby
 5. 等待 WAL Catch Up
 6. 在新服务器部署 Application Candidate
@@ -63,6 +65,8 @@ PostgreSQL Standby
 15. 通过稳定 Hostname 更新 Production Origin/Routing
 16. 执行 Public Post-switch Test
 17. 在 Rollback Window 内保留 Old Server，且处于安全 Non-writing State
+
+Control-state SQLite 必须使用一致性 Snapshot/Export 迁移或在新 Host 上经过明确对账重建，验证 Active/Previous Slot、Current/Last SHA、Operation Phase、Lock/Lease 与 Audit Continuity。不得把 Source Production PostgreSQL 当作这一步唯一 State Source。
 
 ## PostgreSQL Major Upgrade
 

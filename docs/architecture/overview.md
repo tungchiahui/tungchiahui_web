@@ -17,11 +17,14 @@
                           OpenResty
                     /          |          \
                    /           |           \
-        Next.js Blue/Green   /api/ops/*    AList S3
-                   |            |
-                   |       PostgreSQL jobs
-                   |        /           \
-                   |       v             v
+        Next.js Blue/Green   control-api   AList S3
+                   |       /api/ops/*
+                   |          /    \
+                   |         v      v
+                   | PostgreSQL    control-state SQLite
+                   | app jobs      infra recovery ops
+                   |      |              |
+                   |      v              v
                    | content-worker  deploy-agent
                    |
                 PgBouncer
@@ -118,7 +121,7 @@ Runtime Structured Store。
 - Translation-memory Segment
 - Search-indexed Text
 - Ingestion State
-- Durable Background/Control Job
+- Content/Translation/Search 等 Application Durable Job
 
 ### AList S3
 
@@ -132,7 +135,7 @@ Static/Binary Storage。
 - Mirrored Static Asset
 - Backup Artifact
 
-### Next.js
+### Next.js Blue/Green Application
 
 职责：
 
@@ -143,9 +146,14 @@ Static/Binary Storage。
 - Search API/UI
 - Cache/Revalidation
 - Health/Readiness/Version Endpoint
-- 经过认证的 `/api/ops/*` Request/Control Surface
 
-Next.js Request Handler 不直接执行长时间 Translation/Deployment Work。
+Next.js 不提供 Privileged `/api/ops/*` Control Plane，也不直接执行长时间 Translation/Deployment Work。
+
+### control-api
+
+OpenResty 直接把 `/api/ops/*` 路由到该独立内部服务。它负责 Authentication/Authorization、Zod Validation、Replay/Idempotency Protection、Job Control/Status 和必要 Recovery Control，不属于任何 Next.js Blue/Green Slot。
+
+Application Job 使用 PostgreSQL；Deploy/Rollback/Restore/Recovery 使用 host-local SQLite 最小恢复状态，从而不把 Next.js 或健康的 Production PostgreSQL 当作基础恢复前置条件。`control-api` 不拥有任意 Host/Docker 权限。
 
 ### content-worker
 
@@ -167,6 +175,9 @@ Next.js Request Handler 不直接执行长时间 Translation/Deployment Work。
 - Migration Orchestration
 - OpenResty Cutover
 - Rollback
+- PostgreSQL Restore/Recovery Orchestration
+
+`deploy-agent` 通过受限的 Control-state Volume 保存 Active/Previous Slot、Deployment SHA、Operation Phase、Lock/Lease 与 Audit Record。只有它获得完成部署/恢复所需的最小 Docker/Host 权限。
 
 ### OpenResty
 
@@ -177,6 +188,7 @@ Next.js Request Handler 不直接执行长时间 Translation/Deployment Work。
 - 适用时的 TLS/Origin Behavior
 - Safe Upstream Reload
 - Host/Path Routing
+- `/api/ops/*` 到独立 `control-api` 的直接 Routing
 
 ### PgBouncer
 
@@ -190,6 +202,7 @@ Runtime content authority -> PostgreSQL materialized state
 Static assets authority   -> AList S3
 Production backup copy    -> backup repository + R2 replica
 Application authority     -> Git repository + immutable image
+Infrastructure recovery   -> host-local control-state SQLite + immutable artifacts
 ```
 
 ## 付费翻译权威

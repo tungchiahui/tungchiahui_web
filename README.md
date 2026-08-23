@@ -10,7 +10,7 @@
 
 ## 用一句话概括最终架构
 
-**GitHub 是 zh-CN Markdown 的权威编写源；PostgreSQL 是生产运行时的内容/搜索/翻译存储；AList S3 用于静态资源与备份制品；Next.js 通过 OpenResty 采用完整 Blue-Green Deployment；外部自动化只能通过 `www.tungchiahui.cn` 下稳定的 HTTPS 域名 API 访问生产环境，而 `ddns.tungchiahui.cn` 是 DNS-only/DDNS 的源站身份，家庭公网数字 IP 永远不是持久的应用或 CI 配置。**
+**GitHub 是 zh-CN Markdown 的权威编写源；PostgreSQL 是生产运行时的内容/搜索/翻译存储；AList S3 用于静态资源与备份制品；Next.js 通过 OpenResty 采用完整 Blue-Green Deployment；独立 `control-api` 通过 `www.tungchiahui.cn/api/ops/*` 提供不依赖 Next.js Slot 的生产控制，并以 PostgreSQL-independent 的最小恢复状态支撑 Deploy/Restore；`ddns.tungchiahui.cn` 是 DNS-only/DDNS 的源站身份，家庭公网数字 IP 永远不是持久的应用或 CI 配置。**
 
 ## 核心原则
 
@@ -30,7 +30,9 @@
 14. **`ddns.tungchiahui.cn` 是生产源站 Hostname。它由 DNS-only/DDNS 管理，可以解析为 IPv4+IPv6，也可以只有 IPv6。**
 15. **公网数字 IP 地址不得成为长期的应用、CI、CLI、部署或源站配置。**
 16. **内容任务与部署任务分别由不同的最小权限 Worker/Agent 执行。**
-17. **不得仅仅因为这是个人网站，就简化已经确定的工程要求。**
+17. **Web Application Repository 合并或 Push 到 `main` 后，必须先通过 CI Quality Gates，再自动构建 Git SHA Immutable Image 并通过统一 Deployment Engine 执行 Production Blue-Green Deployment；Content Repository Push 只触发 Content Sync。**
+18. **Renovate 负责创建 Dependency Update PR；它不得直接修改 `main`，升级仍须通过 Review 与全部 CI Quality Gates。**
+19. **不得仅仅因为这是个人网站，就简化已经确定的工程要求。**
 
 ## 网络身份
 
@@ -47,6 +49,9 @@ Users / GitHub Actions / local ./site CLI
         DNS-only / DDNS origin
                   |
               OpenResty
+               /       \
+              v         v
+    Next Blue/Green   control-api
 ```
 
 家庭网络可以从：
@@ -83,21 +88,26 @@ GET  /api/ops/jobs/:id
 GET  /api/ops/status
 ```
 
-这些 Endpoint 负责认证、校验、创建/查询 Job 并快速返回。它们不会在 HTTP Request 内执行长时间任务。
+OpenResty 在 Blue/Green Application Routing 之前按 Path 分流：普通网站与业务 API 进入 Active Next.js Slot；`/api/ops/*` 直接进入独立 `control-api`。因此 Next.js Blue/Green 全部不可用时，控制面仍有机会提供 Status、Deploy 与 Rollback。
 
-长时间任务在内部执行：
+`control-api` 负责 Authentication、Capability Authorization、Zod Validation、Replay/Idempotency Protection、Job Control/Status 与必要 Recovery Control。它不属于 Next.js Blue/Green Slot，也不是万能 Root Service。这些 Endpoint 创建/查询 Job 并快速返回，不在 HTTP Request 内执行长时间任务。
 
 ```text
-Next.js /api/ops/*
-        |
-        v
- PostgreSQL durable jobs
-     /           \
-    v             v
-content-worker  deploy-agent
+OpenResty /api/ops/* -> control-api
+                           |
+              +------------+-------------+
+              |                          |
+              v                          v
+ PostgreSQL durable jobs      host-local control-state SQLite
+ Content/Translation/Search    Deploy/Rollback/Restore/Recovery
+              |                          |
+              v                          v
+       content-worker                deploy-agent
 ```
 
 `content-worker` 和 `deploy-agent` 被有意赋予不同权限。
+
+SQLite 只用于单服务器 Control-plane Recovery State，绝不是业务 Production Database。它保存 Active Slot、Rollback Target、Deployment SHA、Recovery Operation、Lock/Lease 与 Audit Record，并通过 Transaction、WAL、同步落盘和受限的明确 Writable Volume 支持 Crash Recovery。Content/Translation/Search Job 继续使用 PostgreSQL。
 
 ## 内容发布与翻译
 
@@ -157,8 +167,29 @@ GitHub Actions 的手动 `workflow_dispatch` 可以触发同一个 Translation J
 - Adobe S3Mock for local S3 emulation
 - AList S3 for production static assets
 - Cloudflare R2 as off-site backup target
+- SQLite as host-local control-plane recovery state only
+- Renovate for Dependency Update PR automation
 
-实际实现中必须固定 Patch Version 和 Container Digest，并通过经过 Review 的依赖更新 PR 进行升级。生产环境不得跟踪 `latest` Tag。
+实际实现中必须固定 Patch Version 和 Container Digest。Renovate 自动创建可 Review 的 Dependency Update PR 并同步维护 `pnpm-lock.yaml`；所有升级通过现有 CI Quality Gates。Core Major Update 默认不自动 Merge，Security Update 提高优先级，生产仍不默认跟踪 Beta/Canary 或 `latest` Tag。
+
+Production Docker Image 使用 Multi-stage Build、尽量 Minimal 的 Runtime Image 和 Non-root User；Secret 不得 Bake 进 Image。实际可行的 Service 使用 Read-only Root Filesystem，只通过明确的 Writable Volume/tmpfs 写入必要数据，并保持最小 Linux Capability。`content-worker` 不得访问 Docker Socket；只有 `deploy-agent` 获得完成部署所需的最小 Docker/Host 权限。
+
+## 正常生产发布路径
+
+Web Application Repository 的正常发布路径固定为：
+
+```text
+push/merge to main
+ -> CI Quality Gates
+ -> build Git-SHA-tagged immutable image
+ -> control-api / shared Deployment Engine
+ -> inactive Blue/Green slot
+ -> pre-cutover health/ready/smoke
+ -> OpenResty cutover
+ -> post-cutover public smoke
+```
+
+`./site deploy [git-sha-or-release]` 保留为人工触发、重试或指定版本部署入口，并调用完全相同的 Control Plane 与 Deployment Engine。Content Repository 的 Markdown Push 只触发 Content Sync，不触发 Next.js Image Build 或 Blue-Green Deployment。
 
 ## 文档地图
 

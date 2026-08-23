@@ -72,7 +72,15 @@ Migration 和运维权限与应用 Runtime 权限分离。
 
 核心 Runtime 和公开服务依赖的安全更新应优先处理。
 
-自动更新工具应创建可 Review 的 PR，而不是静默修改生产环境。
+Renovate 自动创建可 Review 的 Dependency Update PR，不得绕过 PR 直接修改 `main`。所有升级必须通过现有 CI Quality Gates，并同步维护 `pnpm-lock.yaml`。Core Major Update 默认不自动 Merge；Security Update 提高优先级；稳定版/LTS 优先，生产不默认跟踪 Beta/Canary。
+
+## Container Hardening
+
+Production Docker Image 必须使用 Multi-stage Build，并将 Runtime Stage 保持尽量 Minimal。Runtime Container 使用专用 Non-root User，不把 Secret Bake 进 Image，也不使用 `latest` 作为 Production Identity。
+
+实际可行的 Service 使用 Read-only Root Filesystem。必须写入的数据只进入明确授权的 Writable Volume/tmpfs；不得为了一个写路径让整个 Container Filesystem 保持可写。Drop 不需要的 Linux Capability，并限制 Device、Network、Volume 与 Host Namespace Access。
+
+`content-worker` 和 `control-api` 不得获得 Docker Socket 或 Unrestricted Host Shell。只有 `deploy-agent` 可以获得完成部署/恢复所需的最小 Docker/Host Permission；该权限需要单独身份、审计与受控 Command Surface。
 
 ## Incident Response
 
@@ -90,6 +98,8 @@ https://www.tungchiahui.cn/api/ops/*
 
 即使这个 Namespace 与公开网站共享 Hostname，也必须将其视为高权限控制面。
 
+OpenResty 必须把 `/api/ops/*` 直接路由到独立 `control-api`，不得经过或依赖 Next.js Blue/Green Slot。`control-api` 不得成为新的万能 Root Service；高权限 Host/Docker Action 交给权限受限且可审计的 `deploy-agent`。
+
 要求：
 
 - 不允许 CDN Cache
@@ -100,6 +110,10 @@ https://www.tungchiahui.cn/api/ops/*
 - Replay/Idempotency Protection
 - Structured Audit Logging
 - 不返回包含 Secret 的响应
+
+Deploy、Rollback、Restore 与 Recovery 的最小状态保存在 Production PostgreSQL 之外的 host-local SQLite Control-state Store。该文件只挂载到明确需要的 Control-plane Service，目录权限最小化；使用 Transaction、WAL、同步落盘、Lock/Lease 与 Append-oriented Audit Record。它不保存业务 Content/Translation/Search Data，也不是第二个业务数据库。
+
+Break-glass Recovery 只允许经过明确授权的 Operator 通过稳定 Host/Inventory Identity 调用同一底层 Recovery Engine，并记录 Actor、Reason、Target、Result 和 Timestamp。不得把 Break-glass 设计成匿名 Endpoint、永久 Root Token 或绕过审计的任意 Shell。
 
 ## GitHub Actions 认证
 

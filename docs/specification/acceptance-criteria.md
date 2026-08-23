@@ -10,6 +10,7 @@ Website V2 在满足以下标准之前，不视为 Production-ready。
 - [ ] Migration 自动运行，或给出明确且可操作的 Failure。
 - [ ] Development Seed Content 可用。
 - [ ] Next.js 在文档指定的 Local Port 启动。
+- [ ] Local `control-api` 与隔离的 Control-state SQLite 可用，且不挂载 Production Docker/Recovery Resource。
 - [ ] Stack 的 Stop/Restart 是 Deterministic 的。
 
 ## 代码质量
@@ -21,6 +22,14 @@ Website V2 在满足以下标准之前，不视为 Production-ready。
 - [ ] Biome 通过。
 - [ ] Typecheck 通过。
 - [ ] Production Build 通过。
+
+## Dependency Automation
+
+- [ ] Renovate 自动创建 Dependency Update PR，且不能直接修改 `main`。
+- [ ] Dependency PR 同步维护 `pnpm-lock.yaml` 并通过全部现有 CI Quality Gates。
+- [ ] Core Major Update 默认不自动 Merge。
+- [ ] Security Update 具有更高优先级。
+- [ ] 稳定版/LTS 优先，生产默认不跟踪 Beta/Canary。
 
 ## 内容
 
@@ -53,13 +62,29 @@ Website V2 在满足以下标准之前，不视为 Production-ready。
 
 ## Deployment
 
+- [ ] Web Application Repository `push/merge to main` 只有在 CI Quality Gates 全部通过后才自动进入 Production Deployment。
 - [ ] Image 是 Immutable 且通过 Git SHA 标识。
+- [ ] GitHub Actions 与 `./site deploy` 调用同一个 `control-api`、Policy 和 Deployment Engine。
+- [ ] `./site deploy` 支持人工触发、重试和指定版本部署。
+- [ ] Content Repository Push 只触发 Content Sync，不触发 Next.js Image Build/Blue-Green。
 - [ ] Inactive Slot 可以独立部署。
 - [ ] Cutover 前 Health/Readiness Check 通过。
 - [ ] Cutover 前 Smoke Test 通过。
 - [ ] OpenResty 原子切换 Traffic。
 - [ ] 执行 Post-cutover Smoke Test。
 - [ ] Rollback 无需 Rebuild Image 即可切回。
+
+## Docker Production Hardening
+
+- [ ] Production Image 使用 Multi-stage Build 和尽量 Minimal 的 Runtime Stage。
+- [ ] Runtime Container 使用 Non-root User。
+- [ ] Secret 没有 Bake 进 Image/Layer。
+- [ ] Production Identity 不使用 `latest`。
+- [ ] 实际可行的 Service 使用 Read-only Root Filesystem。
+- [ ] 必要写路径只使用明确的 Writable Volume/tmpfs。
+- [ ] 不需要的 Linux Capability 已 Drop。
+- [ ] `content-worker` 与 `control-api` 无 Docker Socket/Unrestricted Host Shell。
+- [ ] 只有 `deploy-agent` 获得完成部署/恢复所需的最小 Docker/Host 权限。
 
 ## Database
 
@@ -75,6 +100,13 @@ Website V2 在满足以下标准之前，不视为 Production-ready。
 - [ ] Restore Drill 能恢复到 Disposable Database。
 - [ ] Restore 后 Integrity Check 通过。
 - [ ] R2 Replica 独立于 Primary Backup Location 存在。
+- [ ] Production PostgreSQL 不可用时，`./site restore` 仍能创建、查询并推进 Recovery Operation。
+- [ ] Deploy/Rollback/Restore/Recovery State 独立于 Production PostgreSQL。
+- [ ] Control-state SQLite 使用 Transaction、WAL/同步落盘、Lock/Lease、Crash Recovery 和版本化 Schema。
+- [ ] Active/Previous Slot、Current/Last SHA、Operation Phase 与 Audit Record 在 Restart 后可恢复。
+- [ ] Control-state Backup/Integrity/Restore Drill 通过。
+- [ ] Break-glass Mode 通过稳定 Inventory/SSH Alias 调用同一个 Recovery Engine，并要求授权、Reason、Confirmation 与 Audit。
+- [ ] PostgreSQL 恢复后，Content/Translation/Search Job 回到 PostgreSQL-backed System。
 
 ## Server Migration
 
@@ -90,6 +122,12 @@ Website V2 在满足以下标准之前，不视为 Production-ready。
 - [ ] 没有 Durable Application/CI Config 需要 Public IPv4。
 - [ ] Architecture Test/Documentation 覆盖 IPv6-only Origin Behavior。
 - [ ] `/api/ops/*` 不可缓存且具有强认证。
+- [ ] OpenResty 直接将 `/api/ops/*` 路由到独立 `control-api`，不经过 Next.js Blue/Green Slot。
+- [ ] 正式 Privileged Control Plane 不存在于 `src/app/api/ops/*` 或其他 Next.js Route Handler。
+- [ ] 两个 Next.js Slot 全部不可用时，`./site status`、`./site deploy`、`./site rollback` 仍有可执行路径。
+- [ ] `control-api` 执行 Zod Validation、Capability Authorization、Idempotency/Replay Protection、Job Status 和必要 Recovery Control。
+- [ ] `control-api` 不具有任意 Root/Docker 权限。
+- [ ] 普通 `/api/search`、`/api/health`、`/api/ready`、`/api/version` 仍可以由 Next.js 提供。
 
 ## Translation Cost Control
 

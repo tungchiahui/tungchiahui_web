@@ -19,6 +19,9 @@
 - Off-host Backup Copy
 - Independent R2 Replica
 - Reproducible Server Provisioning
+- Independent `control-api` outside Next.js Blue/Green Slots
+- PostgreSQL-independent SQLite Control-plane Recovery State
+- Audited Break-glass Path using the same Recovery Engine
 
 ## 可维护性
 
@@ -39,6 +42,9 @@
 - Client Bundle 不包含 Secret
 - 显式 Trust-boundary Validation
 - Runtime/Migration/Backup Credential 分离
+- Multi-stage/Minimal/Non-root Production Container
+- Read-only Root Filesystem where practical, with explicit Writable Volume/tmpfs
+- Docker/Host Privilege restricted to `deploy-agent`
 
 ## 性能
 
@@ -80,7 +86,15 @@ Paid AI Translation 必须有显式 Trigger 和 Server-side Budget Control。
 
 ## 控制面持久性
 
-长时间 Operational Request 必须表示为 Durable Job，而不是绑定到 External HTTP Request 生命周期。
+长时间 Operational Request 必须表示为 Durable Job/Operation，而不是绑定到 External HTTP Request 生命周期。
+
+Content/Translation/Search/普通 Background Job 使用 PostgreSQL；Deploy/Rollback/Restore/Recovery 使用 PostgreSQL-independent host-local SQLite。Control-state Transition 必须 Atomic、Crash-recoverable、Locked、Auditable 且在 Restart 后可恢复。
+
+`/api/ops/*` 由 OpenResty 直接路由到独立 `control-api`，不能依赖 Next.js Slot。正常 Remote Control 与 Break-glass 必须复用同一 Deployment/Recovery Engine。
+
+## 供应链维护
+
+Renovate 只通过 PR 提交依赖更新；`pnpm-lock.yaml` 同步更新，CI Gates 不得绕过，Core Major 默认不自动 Merge，Security Update 提高优先级，生产继续采用 Stable/LTS Version Policy。
 
 ## 方向性
 

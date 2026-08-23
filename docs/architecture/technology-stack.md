@@ -7,9 +7,11 @@
 - 受支持的 Stable Release
 - 如果项目提供 LTS Policy，则使用 Active/Maintenance LTS
 - 实现中固定 Patch/Minor Version 或 Container Digest
-- 经过 Review 的自动升级
+- 使用 Renovate 创建经过 Review 的 Dependency Update PR
 
 Canary、Beta、RC 和 Development Build 不作为生产默认版本。
+
+Renovate 不得绕过 PR 直接修改 `main`。所有升级 PR 通过现有 CI Quality Gates 并同步维护 `pnpm-lock.yaml`；Core Major Update 默认不自动 Merge，Security Update 提高优先级。
 
 ## 截至 2026-08-23 的基线
 
@@ -59,6 +61,21 @@ Canary、Beta、RC 和 Development Build 不作为生产默认版本。
 - Ansible
 - SOPS + age
 - pgBackRest
+- SQLite，仅用于 host-local Control-plane Recovery State
+- Renovate
+
+### Production Container Baseline
+
+- Docker Image 使用 Multi-stage Build
+- Runtime Stage 尽量 Minimal，并使用 Non-root User
+- Secret 不 Bake 进 Image
+- Production Identity 使用 Git SHA/Image Digest，不使用 `latest`
+- 实际可行的 Service 使用 Read-only Root Filesystem
+- 必要写路径使用明确的 Writable Volume/tmpfs
+- Drop 不需要的 Linux Capability
+- `content-worker` 与 `control-api` 无 Docker Socket；仅 `deploy-agent` 获得最小必要 Docker/Host 权限
+
+SQLite 是 ADR 0015 定义的专用 Control-plane State Mechanism，不得用于 Content、Translation、Search 或普通 Application Runtime Data。
 
 ### 本地 S3 模拟
 

@@ -57,6 +57,8 @@ ops/secrets/production.env.sops
 
 使用 SOPS + age 加密。
 
+Secret 在 Runtime/Deployment 时注入，不得通过 Docker Build Argument、Layer、Image Environment 或复制文件的方式 Bake 进 Production Image。需要文件形式 Secret 时，使用权限受限的明确 Runtime Mount/tmpfs，并确保不会进入 Image Layer 或一般 Log。
+
 ## Validation
 
 所有 Runtime Configuration 统一通过 Typed Zod Schema 解析一次。
@@ -118,3 +120,5 @@ https://www.tungchiahui.cn/api/ops/*
 - Host Root Credential
 
 如果只是为了触发 Content Sync、Translation 或 Deployment Job。
+
+`control-api`、`deploy-agent` 与 Control-state SQLite 使用各自最小权限身份。SQLite 目录是明确的 host-local Writable Volume；不得把 Production Database Credential 当作 `control-api` 启动或执行基础 Restore/Recovery 的必需配置。
