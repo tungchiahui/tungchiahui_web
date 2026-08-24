@@ -37,6 +37,8 @@ Local control-api      127.0.0.1:18080
         +---- .local/control-state/control.db
 
 Fake deploy-agent      127.0.0.1:18081
+Local OpenResty        127.0.0.1:18443
+Local content-worker   Docker network only
 ```
 
 端口只绑定 Loopback，可通过 `.env.example` 中的 `SITE_*_PORT` 变量覆盖。容器内部连接只使用 `postgres`、`pgbouncer`、`s3mock`、`control-api` 等 Docker Service DNS，不使用 Container IP。
@@ -51,11 +53,13 @@ Fake deploy-agent      127.0.0.1:18081
 6. 创建所需 Test/Dev Bucket State
 7. 运行当前 DB Migration
 8. 应用幂等的 Development Seed Data
-9. 启动不具 Production Host/Docker 权限的 Local `control-api` 与隔离的 Control-state SQLite
-10. 启动 Next.js Dev Server
+9. 启动不具 Production Host/Docker 权限的 Local `control-api`、`content-worker` 与隔离的 Control-state SQLite
+10. 启动 Next.js Dev Server 和按 Path 分流的 Local OpenResty
 11. 报告 Endpoint 和 Service Status
 
 Phase 3 已用真实 Drizzle Runner 和 Deterministic Seed 替换零 Migration Hook。每次 Start 直接连接 PostgreSQL 执行 Policy/Role/PGroonga/Migration Gate，再通过 transaction-mode PgBouncer 以 `site_content_worker` 权限 Seed 两个 Document、Translation/Job/Ingestion Fixture，以及空的 `tech_footprint`/`weight_loss` Development Dataset。重复 Start 不重复 Row，也不重置已有数据。
+
+Phase 4 的 `control-api` 已是独立 TypeScript HTTP Service：Local Operator 使用签名 Fixture，Application Job/Owner Dataset 走 PostgreSQL，Infrastructure Operation/Replay/Audit 走 SQLite。Local OpenResty 把 `/api/ops/*` 直接送往该 Service，普通请求送往 Next.js。`content-worker` 当前只声明权限边界和 Health；真正 Claim/执行 Job 属于 Phase 5。
 
 ## 隔离
 
@@ -95,7 +99,7 @@ Local Translation Test 默认使用 Fake/No-cost Provider。
 
 普通本地开发不需要 Production Paid AI Credential。
 
-Phase 2 的 Translation Provider 固定为 Deterministic Fake Provider，Cost 永远为 `0`。Fake Deploy Agent 只有 Health Capability，不挂载 Docker Socket、OpenResty 或 Production Recovery Directory，也不能执行真实部署。
+Translation Provider 固定为 Deterministic Fake Provider，Cost 永远为 `0`。Fake Deploy Agent 只有 Health Capability，不挂载 Docker Socket、OpenResty 或 Production Recovery Directory，也不能执行真实部署。`control-api`、`content-worker` 与 Fake Deploy Agent 均使用 Read-only Root Filesystem、`no-new-privileges`、Drop-all Capability 且无 Docker Socket。
 
 ## Stop 与测试隔离
 

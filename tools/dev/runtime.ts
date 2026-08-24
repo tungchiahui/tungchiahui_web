@@ -16,6 +16,7 @@ import { ensureBucket, waitForS3 } from './s3'
 const portEnvironmentSchema = z.object({
   SITE_CONTROL_API_PORT: z.coerce.number().int().min(1024).max(65_535).default(18_080),
   SITE_FAKE_DEPLOY_AGENT_PORT: z.coerce.number().int().min(1024).max(65_535).default(18_081),
+  SITE_OPENRESTY_PORT: z.coerce.number().int().min(1024).max(65_535).default(18_443),
   SITE_PGBOUNCER_PORT: z.coerce.number().int().min(1024).max(65_535).default(16_432),
   SITE_POSTGRES_PORT: z.coerce.number().int().min(1024).max(65_535).default(15_432),
   SITE_S3_PORT: z.coerce.number().int().min(1024).max(65_535).default(19_090),
@@ -39,6 +40,7 @@ function createDevContext(repositoryRoot: string): DevContext {
       databaseUrl: `postgresql://${documentedLocalCredentials.databaseUser}:${documentedLocalCredentials.databasePassword}@127.0.0.1:${ports.SITE_PGBOUNCER_PORT}/tungchiahui`,
       fakeDeployAgentUrl: `http://127.0.0.1:${ports.SITE_FAKE_DEPLOY_AGENT_PORT}`,
       mode: 'local',
+      openRestyUrl: `http://127.0.0.1:${ports.SITE_OPENRESTY_PORT}`,
       s3AccessKeyId: documentedLocalCredentials.s3AccessKeyId,
       s3Bucket: 'tungchiahui-local-assets',
       s3Endpoint: `http://127.0.0.1:${ports.SITE_S3_PORT}`,
@@ -51,6 +53,7 @@ function createDevContext(repositoryRoot: string): DevContext {
   const compose = new ComposeProject(repositoryRoot, 'tungchiahui_dev', 'dev', {
     controlStateDirectory,
     mode: 'local',
+    openRestyPort: ports.SITE_OPENRESTY_PORT,
     s3Bucket: configuration.s3Bucket,
     s3RetainFiles: true,
     webPort: ports.SITE_WEB_PORT,
@@ -88,6 +91,7 @@ export async function startDevelopmentStack(repositoryRoot = process.cwd()) {
   console.log(`Website:          ${context.configuration.siteBaseUrl}`)
   console.log(`Control API:      ${context.configuration.controlApiUrl}`)
   console.log(`Fake deploy agent:${context.configuration.fakeDeployAgentUrl}`)
+  console.log(`OpenResty:        ${context.configuration.openRestyUrl}`)
   console.log(
     `PgBouncer:        ${context.configuration.databaseUrl.hostname}:${context.configuration.databaseUrl.port}`,
   )

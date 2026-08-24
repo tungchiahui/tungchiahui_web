@@ -3,6 +3,7 @@ import { dirname, extname, join, relative, resolve, sep } from 'node:path'
 
 export type SourcePolicyRule =
   | 'application-javascript'
+  | 'nextjs-ops-route'
   | 'server-client-boundary'
   | 'ts-ignore'
   | 'unrecorded-any'
@@ -212,6 +213,14 @@ export function analyzeSourceFiles(
     }
 
     sourceFiles.set(file, source)
+
+    if (displayFile.startsWith('src/app/api/ops/')) {
+      violations.push({
+        file: displayFile,
+        message: 'Privileged /api/ops routes must live in the independent control-api service',
+        rule: 'nextjs-ops-route',
+      })
+    }
 
     if (/^\s*\/\/\s*@ts-ignore\b/m.test(source)) {
       violations.push({

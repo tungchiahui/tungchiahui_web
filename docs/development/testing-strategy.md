@@ -102,7 +102,7 @@ Restore Drill 属于 Operations，但它们是 Backup Validity 的自动化测�
 
 ## Control-plane Test
 
-测试：
+Phase 4 已把以下项纳入 Unit 与 Disposable Integration；后续 Phase 在扩展真实执行能力时继续保持这些 Gate：
 
 - Authentication Failure
 - Authorization/Capability Boundary

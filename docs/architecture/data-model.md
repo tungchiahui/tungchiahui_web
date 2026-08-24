@@ -191,7 +191,12 @@ tech_footprint
 weight_loss
 ```
 
-字段包括 `dataset_key`、JSONB `payload`、单调 `revision`、`updated_at` 和 `updated_by`。Phase 3 只建立 PostgreSQL Authority、Revision 和 JSON Object Constraint；Phase 4 的 Auth/Validation Boundary 必须在写入前对各 Dataset 的具体 Payload Shape 做更窄的 Zod Validation。该表不授权把其他业务数据作为任意 Blob 写入。
+字段包括 `dataset_key`、JSONB `payload`、单调 `revision`、`updated_at` 和 `updated_by`。Phase 4 已在独立 Control API 写边界实现具体 Zod Schema，并使用 `expectedRevision` 做 Compare-and-swap：
+
+- `tech_footprint` Payload 固定为 `{ version: 2, records }`。`records` Key 是 `semester/task/subtask` 三段 Slug；Value 包含 `status: todo | doing | done`、`progress: 0..100`、`note` 与带 Offset 的 `updatedAt`，Status 与 Progress 必须一致。
+- `weight_loss` Payload 固定为 `{ version: 2, records }`。Record Date 必须唯一，并保留 Legacy 的 String-valued Optional Metric：`weight` 35–250、`bodyFat` 2–70、`muscleMass` 10–100、`waist` 40–200；空字符串表示未填写。`targetMin`/`targetMax` 是 35–250 的 Number 且 Min 不得大于 Max，另含 `date` 与 `note`。
+
+这些 Shape 来自 Phase 0 Artifact 无法回答后的定点只读 Legacy Baseline Commit `d33e9ee5f90a266207f9f9658a47031eafdb981a` 检查；未扫描或修改旧仓库。`revision` 属于 PostgreSQL Row Envelope，不重复嵌入 Payload。该表不授权把其他业务数据作为任意 Blob 写入。
 
 ## Phase 3 物理边界
 
@@ -200,7 +205,7 @@ weight_loss
 | PostgreSQL `app` | Document、Translation、Segment、Translation Job、Application Job、Ingestion、Approved Alias、Owner-managed Dataset | Deploy、Rollback、Restore、Recovery、Server Migration Operation |
 | PostgreSQL `drizzle` | Versioned Migration Journal | Application Job 或业务数据 |
 | PostgreSQL `public` | PGroonga Extension Bootstrap | 业务 Table |
-| host-local SQLite | 继续保留 Phase 2 最小 Control-state Skeleton | Content、Translation、Search、Ingestion、Application Job |
+| host-local SQLite | Phase 4 Version 2 Control-state、Nonce、Infrastructure Operation/Lease/Fencing 与 Append-only Audit | Content、Translation、Search、Ingestion、Application Job |
 
 `src/domain/persistence.ts` 是 Locale、Content/Job/Translation Status、Dataset Key 和 External Write Schema 的唯一 Shared Domain 定义。Drizzle Schema 从这些 Closed Union 建立 PostgreSQL Enum，Repository/API 不得再次手写平行 Union。
 

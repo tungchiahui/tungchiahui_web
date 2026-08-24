@@ -14,6 +14,9 @@ services:
   fake-deploy-agent:
     ports:
       - "127.0.0.1:${SITE_FAKE_DEPLOY_AGENT_PORT:-18081}:8081"
+  openresty:
+    ports:
+      - "127.0.0.1:${SITE_OPENRESTY_PORT:-18443}:8082"
   web:
     ports:
       - "127.0.0.1:${SITE_WEB_PORT:-3000}:3000"

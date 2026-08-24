@@ -36,6 +36,7 @@ export type ComposeMode = 'dev' | 'test'
 export type ComposeEnvironment = Readonly<{
   controlStateDirectory: string
   mode: 'local' | 'test'
+  openRestyPort: number
   s3Bucket: string
   s3RetainFiles: boolean
   webPort: number
@@ -53,6 +54,7 @@ function createRestrictedEnvironment(configuration: ComposeEnvironment) {
   const environment: NodeJS.ProcessEnv = {
     NODE_ENV: configuration.mode === 'test' ? 'test' : 'development',
     SITE_CONTROL_STATE_DIRECTORY: configuration.controlStateDirectory,
+    SITE_OPENRESTY_PORT: String(configuration.openRestyPort),
     SITE_RUNTIME_MODE: configuration.mode,
     SITE_S3_BUCKET: configuration.s3Bucket,
     SITE_S3_RETAIN_FILES: String(configuration.s3RetainFiles),
@@ -122,6 +124,14 @@ export class ComposeProject {
 
   restart(service: string) {
     this.#run(['restart', service], true)
+  }
+
+  start(service: string) {
+    this.#run(['start', '--wait', service], true)
+  }
+
+  stop(service: string) {
+    this.#run(['stop', '--timeout', '10', service], true)
   }
 
   exec(

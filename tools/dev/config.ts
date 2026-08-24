@@ -15,6 +15,7 @@ const rawLocalInfrastructureSchema = z.object({
   databaseUrl: z.url(),
   fakeDeployAgentUrl: z.url(),
   mode: z.enum(['local', 'test']),
+  openRestyUrl: z.url(),
   s3AccessKeyId: z.string(),
   s3Bucket: z.string().min(3).max(63),
   s3Endpoint: z.url(),
@@ -31,6 +32,7 @@ export type LocalInfrastructureConfig = Readonly<{
   databaseUrl: URL
   fakeDeployAgentUrl: URL
   mode: 'local' | 'test'
+  openRestyUrl: URL
   s3AccessKeyId: string
   s3Bucket: string
   s3Endpoint: URL
@@ -53,6 +55,7 @@ const allowedServiceHosts = new Set([
   'control-api',
   'fake-deploy-agent',
   'localhost',
+  'openresty',
   'pgbouncer',
   'postgres',
   's3mock',
@@ -116,6 +119,7 @@ export function parseLocalInfrastructureConfig(
     ['http:'],
     issues,
   )
+  const openRestyUrl = requireLocalUrl('openRestyUrl', result.data.openRestyUrl, ['http:'], issues)
   const expectedBucketPrefix = `tungchiahui-${result.data.mode}-`
   const expectedControlRoot = resolve(allowedControlStateRoot)
   const controlStatePath = resolve(result.data.controlStatePath)
@@ -153,6 +157,7 @@ export function parseLocalInfrastructureConfig(
     databaseUrl,
     fakeDeployAgentUrl,
     mode: result.data.mode,
+    openRestyUrl,
     s3AccessKeyId: result.data.s3AccessKeyId,
     s3Bucket: result.data.s3Bucket,
     s3Endpoint,

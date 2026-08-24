@@ -135,6 +135,43 @@ async function assertRoleBoundary(connectionString: string) {
       throw new Error('Application role inherits migration, backup, or replication capability')
     }
 
+    const controlRole = await client.query<{
+      can_delete_documents: boolean
+      can_insert_jobs: boolean
+      can_update_datasets: boolean
+      can_update_jobs: boolean
+      rolcreatedb: boolean
+      rolcreaterole: boolean
+      rolreplication: boolean
+      rolsuper: boolean
+    }>(
+      `SELECT
+        rolsuper,
+        rolcreatedb,
+        rolcreaterole,
+        rolreplication,
+        has_table_privilege('site_control_api', 'app.operational_jobs', 'INSERT') AS can_insert_jobs,
+        has_table_privilege('site_control_api', 'app.operational_jobs', 'UPDATE') AS can_update_jobs,
+        has_table_privilege('site_control_api', 'app.owner_managed_datasets', 'UPDATE') AS can_update_datasets,
+        has_table_privilege('site_control_api', 'app.documents', 'DELETE') AS can_delete_documents
+       FROM pg_roles
+       WHERE rolname = 'site_control_api'`,
+    )
+    const control = controlRole.rows[0]
+    if (
+      !control ||
+      control.rolsuper ||
+      control.rolcreatedb ||
+      control.rolcreaterole ||
+      control.rolreplication ||
+      !control.can_insert_jobs ||
+      control.can_update_jobs ||
+      !control.can_update_datasets ||
+      control.can_delete_documents
+    ) {
+      throw new Error('Control API PostgreSQL role violates its declared least-privilege boundary')
+    }
+
     await client.query('SET ROLE site_app')
     await client.query('SELECT count(*) FROM app.documents')
     await expectQueryFailure(client, 'CREATE EXTENSION hstore')
@@ -207,6 +244,7 @@ async function run() {
   const compose = new ComposeProject(repositoryRoot, `tungchiahui_migration_${suffix}`, 'test', {
     controlStateDirectory: resolve(temporaryRoot, 'control-state'),
     mode: 'test',
+    openRestyPort: 18_443,
     s3Bucket: `tungchiahui-test-${suffix}`,
     s3RetainFiles: false,
     webPort: 3000,
@@ -216,8 +254,8 @@ async function run() {
   try {
     mkdirSync(resolve(temporaryRoot, 'control-state'), { recursive: true, mode: 0o700 })
     compose.validateModel()
-    compose.up(['postgres', 'pgbouncer'])
     stackStarted = true
+    compose.up(['postgres', 'pgbouncer'])
     const postgresPort = compose.port('postgres', 5432)
     const pgbouncerPort = compose.port('pgbouncer', 6432)
     const cleanUrl = databaseUrl(postgresPort)

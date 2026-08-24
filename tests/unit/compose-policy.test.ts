@@ -19,6 +19,9 @@ describe('Phase 2 Compose policy', () => {
     expect(compose).toContain(
       'adobe/s3mock:5.1.0@sha256:65cf60155a2e235fe7d5bf6c633747d6fc7ed93f9f5a6727d86470026b83c2a2',
     )
+    expect(compose).toContain(
+      'openresty/openresty:1.31.1.1-2-bookworm-fat@sha256:45fbb5026af2127655b247c90735aa65dab60518e7ccfc6ebbac71a7403be430',
+    )
     expect(compose).not.toMatch(/image:\s+\S+:latest(?:\s|$)/)
   })
 
@@ -35,7 +38,7 @@ describe('Phase 2 Compose policy', () => {
       .split('\n')
       .filter((line) => line.trimStart().startsWith('- "'))
 
-    expect(publishedPorts).toHaveLength(6)
+    expect(publishedPorts).toHaveLength(7)
     expect(publishedPorts.every((line) => line.includes('127.0.0.1:'))).toBe(true)
   })
 

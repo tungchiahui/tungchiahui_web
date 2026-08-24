@@ -59,4 +59,20 @@ describe('source policy', () => {
       'unrecorded-any',
     ])
   })
+
+  it('rejects privileged control routes inside the Next.js application', () => {
+    const violations = analyzeSourceFiles(
+      repositoryRoot,
+      virtualFiles({
+        'src/app/api/ops/status/route.ts': 'export const GET = () => Response.json({})',
+      }),
+    )
+
+    expect(violations).toEqual([
+      expect.objectContaining({
+        file: 'src/app/api/ops/status/route.ts',
+        rule: 'nextjs-ops-route',
+      }),
+    ])
+  })
 })

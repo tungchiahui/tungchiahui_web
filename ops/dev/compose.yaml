@@ -28,6 +28,7 @@ services:
       retries: 30
     networks: [local]
     read_only: true
+    cap_drop: ["ALL"]
     security_opt: ["no-new-privileges:true"]
     tmpfs:
       - /tmp:size=16m,mode=1777
@@ -52,20 +53,18 @@ services:
       - s3-data:/s3mock-data
 
   control-api:
-    image: tungchiahui-web-local:phase2
+    image: tungchiahui-web-local:phase4
     build:
       context: ../..
       dockerfile: ops/dev/Dockerfile
     command: ["pnpm", "exec", "tsx", "services/control-api/main.ts"]
-    depends_on:
-      pgbouncer:
-        condition: service_healthy
-      s3mock:
-        condition: service_healthy
     environment:
       CONTROL_API_HOST: 0.0.0.0
       CONTROL_API_PORT: 8080
+      CONTROL_RATE_LIMIT_PER_MINUTE: 120
+      CONTROL_REPLAY_WINDOW_SECONDS: 300
       CONTROL_STATE_PATH: /control-state/control.db
+      DATABASE_URL: postgresql://tungchiahui:local-only-postgres@pgbouncer:6432/tungchiahui
       SITE_RUNTIME_MODE: ${SITE_RUNTIME_MODE:?SITE_RUNTIME_MODE is required}
     healthcheck:
       test:
@@ -80,6 +79,7 @@ services:
       retries: 30
     networks: [local]
     read_only: true
+    cap_drop: ["ALL"]
     security_opt: ["no-new-privileges:true"]
     tmpfs:
       - /tmp:size=16m,mode=1777
@@ -89,7 +89,7 @@ services:
         target: /control-state
 
   fake-deploy-agent:
-    image: tungchiahui-web-local:phase2
+    image: tungchiahui-web-local:phase4
     pull_policy: never
     command: ["pnpm", "exec", "tsx", "services/fake-deploy-agent/main.ts"]
     environment:
@@ -114,8 +114,34 @@ services:
     tmpfs:
       - /tmp:size=16m,mode=1777
 
+  content-worker:
+    image: tungchiahui-web-local:phase4
+    pull_policy: never
+    command: ["pnpm", "exec", "tsx", "services/content-worker/main.ts"]
+    environment:
+      CONTENT_WORKER_HOST: 0.0.0.0
+      CONTENT_WORKER_PORT: 8083
+      SITE_RUNTIME_MODE: ${SITE_RUNTIME_MODE:?SITE_RUNTIME_MODE is required}
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8083/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    networks: [local]
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+
   web:
-    image: tungchiahui-web-local:phase2
+    image: tungchiahui-web-local:phase4
     pull_policy: never
     command: ["pnpm", "dev", "--hostname", "0.0.0.0"]
     depends_on:
@@ -152,6 +178,26 @@ services:
       - /tmp:size=32m,mode=1777
     volumes:
       - next-cache:/workspace/.next
+
+  openresty:
+    image: openresty/openresty:1.31.1.1-2-bookworm-fat@sha256:45fbb5026af2127655b247c90735aa65dab60518e7ccfc6ebbac71a7403be430
+    depends_on:
+      control-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8082/openresty-health"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    networks: [local]
+    read_only: true
+    user: nobody
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    volumes:
+      - ./openresty.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro,Z
 
 networks:
   local:

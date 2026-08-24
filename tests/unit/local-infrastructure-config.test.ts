@@ -18,6 +18,7 @@ function validInput(): LocalInfrastructureInput {
     databaseUrl: 'postgresql://tungchiahui:local-only-postgres@127.0.0.1:16432/tungchiahui',
     fakeDeployAgentUrl: 'http://127.0.0.1:18081',
     mode: 'local',
+    openRestyUrl: 'http://127.0.0.1:18443',
     s3AccessKeyId: documentedLocalCredentials.s3AccessKeyId,
     s3Bucket: 'tungchiahui-local-assets',
     s3Endpoint: 'http://127.0.0.1:19090',

@@ -1,7 +1,7 @@
 # Website V2 分阶段实施计划
 
 > Status: Planned
-> Current Phase: Awaiting Owner authorization for Phase 4
+> Current Phase: Awaiting Owner authorization for Phase 5
 > Execution Model: Hard-gated, one Phase at a time
 > Scope: 从新的 Next.js V2 Repository 基线推进到替换旧 Nuxt Production Site
 
@@ -13,7 +13,7 @@
 - [x] Phase 1 — Next.js 工程与质量基线
 - [x] Phase 2 — Hermetic Local Development Platform
 - [x] Phase 3 — PostgreSQL、Drizzle 与持久化基础
-- [ ] Phase 4 — 独立 Control Plane 与 Job Boundary
+- [x] Phase 4 — 独立 Control Plane 与 Job Boundary
 - [ ] Phase 5 — GitHub 单向 Content Ingestion
 - [ ] Phase 6 — zh-CN Website Vertical Slice
 - [ ] Phase 7 — UI i18n 与 zh-HK/zh-TW
@@ -443,17 +443,17 @@ Content Sync、Translation、Deployment 和 Recovery 都要从同一个稳定 Co
 
 ### Task Checklist
 
-- [ ] 建立独立 `control-api` Package/Service，确保正式 `/api/ops/*` 不存在于 Next.js Route Handler。
-- [ ] 定义 Authentication、Capability Authorization、Actor Identity 和 Audit Event Model。
-- [ ] 实现 Method/Path/Body Hash/Timestamp/Nonce 的 Operator Request-signing Baseline，或先提交等效机制 ADR。
-- [ ] 实现 GitHub OIDC issuer、audience、repository、ref/environment、workflow Claim Validation。
-- [ ] 对全部 Control Payload、Header 和 External Claim 使用 Zod Runtime Validation。
-- [ ] 实现 Replay Window、Nonce Store 和 Idempotency Key Behavior。
-- [ ] 实现 PostgreSQL-backed Application Job 创建/查询，不在 HTTP Request Inline 执行长任务。
-- [ ] 实现 SQLite Transaction、WAL/Checkpoint、Versioned Schema、Lock/Lease/Fencing、Audit 和 Restart Reconciliation。
-- [ ] 实现 PostgreSQL 不可用时仍可启动的 Status/Infrastructure Operation Path。
-- [ ] 建立 `content-worker`、`deploy-agent`、`control-api` 的独立 Identity/Capability Contract。
-- [ ] 配置 `/api/ops/*` Cache Bypass、`no-store`、Method Restriction 和 Rate-limit Test Boundary。
+- [x] 建立独立 `control-api` Package/Service，确保正式 `/api/ops/*` 不存在于 Next.js Route Handler。
+- [x] 定义 Authentication、Capability Authorization、Actor Identity 和 Audit Event Model。
+- [x] 实现 Method/Path/Body Hash/Timestamp/Nonce 的 Operator Request-signing Baseline，或先提交等效机制 ADR。
+- [x] 实现 GitHub OIDC issuer、audience、repository、ref/environment、workflow Claim Validation。
+- [x] 对全部 Control Payload、Header 和 External Claim 使用 Zod Runtime Validation。
+- [x] 实现 Replay Window、Nonce Store 和 Idempotency Key Behavior。
+- [x] 实现 PostgreSQL-backed Application Job 创建/查询，不在 HTTP Request Inline 执行长任务。
+- [x] 实现 SQLite Transaction、WAL/Checkpoint、Versioned Schema、Lock/Lease/Fencing、Audit 和 Restart Reconciliation。
+- [x] 实现 PostgreSQL 不可用时仍可启动的 Status/Infrastructure Operation Path。
+- [x] 建立 `content-worker`、`deploy-agent`、`control-api` 的独立 Identity/Capability Contract。
+- [x] 配置 `/api/ops/*` Cache Bypass、`no-store`、Method Restriction 和 Rate-limit Test Boundary。
 
 ### 本 Phase 明确不做什么
 
@@ -463,25 +463,25 @@ Content Sync、Translation、Deployment 和 Recovery 都要从同一个稳定 Co
 
 ### Tests / Verification
 
-- [ ] Authentication Failure、Capability Denial、Malformed Payload、Replay 和 Duplicate Idempotency Test 通过。
-- [ ] OpenResty Test 证明 `/api/ops/*` 到 `control-api`，普通 API 到 Next.js。
-- [ ] 两个 Next.js Slot 不可用时，Control Status Path 仍工作。
-- [ ] PostgreSQL 不可用时，SQLite-backed Operation 可创建、查询和恢复；Application Job 安全报告不可用。
-- [ ] Crash/Restart、Expired Lease、Concurrent Claim、Audit Append 和 Schema Migration Test 通过。
-- [ ] Permission Test 证明 `control-api` 与 `content-worker` 无 Docker/OpenResty Administrative Access。
+- [x] Authentication Failure、Capability Denial、Malformed Payload、Replay 和 Duplicate Idempotency Test 通过。
+- [x] OpenResty Test 证明 `/api/ops/*` 到 `control-api`，普通 API 到 Next.js。
+- [x] 两个 Next.js Slot 不可用时，Control Status Path 仍工作。
+- [x] PostgreSQL 不可用时，SQLite-backed Operation 可创建、查询和恢复；Application Job 安全报告不可用。
+- [x] Crash/Restart、Expired Lease、Concurrent Claim、Audit Append 和 Schema Migration Test 通过。
+- [x] Permission Test 证明 `control-api` 与 `content-worker` 无 Docker/OpenResty Administrative Access。
 
 ### Acceptance Criteria
 
-- [ ] `https://www.tungchiahui.cn/api/ops/*` 的实现边界独立于 Next.js Slot。
-- [ ] 两类 Durable State 不混用且具备清晰的 Failure Behavior。
-- [ ] 所有 Trust Boundary 均有 Runtime Validation、Authz、Replay Protection 和安全 Audit。
+- [x] `https://www.tungchiahui.cn/api/ops/*` 的实现边界独立于 Next.js Slot。
+- [x] 两类 Durable State 不混用且具备清晰的 Failure Behavior。
+- [x] 所有 Trust Boundary 均有 Runtime Validation、Authz、Replay Protection 和安全 Audit。
 
 ### Exit Gate
 
-- [ ] Control-plane Integration/Security/Crash Test 全部通过。
-- [ ] PostgreSQL-down 和 Next.js-down Scenario 均有可验证结果。
-- [ ] 创建聚焦 Commit，建议：`feat(ops): complete phase 4 independent control plane`。
-- [ ] Commit 后停止并向 Owner 报告，不自动进入 Phase 5。
+- [x] Control-plane Integration/Security/Crash Test 全部通过。
+- [x] PostgreSQL-down 和 Next.js-down Scenario 均有可验证结果。
+- [x] 创建聚焦 Commit，建议：`feat(ops): complete phase 4 independent control plane`。
+- [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 5。
 
 ### 本阶段完成后形成的 Artifact / Capability
 

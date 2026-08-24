@@ -128,6 +128,14 @@ Worker 安全 Claim Job，例如使用 PostgreSQL Transaction/Locking 语义中�
 
 SQLite 只用于 Control-plane Recovery State，绝不是业务 Production Database。Content、Translation、Search 和普通 Application Job 不得迁入该 Store。
 
+### Phase 4 executable baseline
+
+Phase 4 的 Local/Test 实现把上述边界具体化为：独立 Node/TypeScript `control-api`、PostgreSQL `site_control_api` NOLOGIN Role，以及 Version 2 SQLite Schema。SQLite 使用 `BEGIN IMMEDIATE` Transaction、WAL、`synchronous=FULL`、`wal_autocheckpoint=1000`、Versioned Migration、Nonce Uniqueness、Append-only Audit Trigger 和 Lease Fencing Token。
+
+Operation State Machine 是 `queued -> claimed -> running -> completed|failed`；Claimed Lease 到期可重新排队并增加 Fencing Token，Running Lease 到期则进入 `needs-attention/reconcile-required`，避免 Restart 后盲目重放高权限副作用。Heartbeat 只能由匹配 Owner/Fencing Token 的未过期 Lease 续期，旧 Token 不能 Start、Heartbeat 或 Finish。
+
+Local/Test OpenResty 在选择 Web Upstream 前直接把 `/api/ops/*` 路由到 `control-api`，隐藏 Upstream Cache Header 后强制单一 `Cache-Control: no-store`，并设置 Cache Bypass、Method/Rate-limit Test Boundary。当前 Baseline 只创建/查询 Application Job、验证 Owner Dataset Write，以及创建/查询 Infrastructure Operation；没有执行真实 Content、AI、Deploy、Cutover 或 Restore。
+
 ## Normal 与 Break-glass Path
 
 正常情况下所有操作仍优先通过：
