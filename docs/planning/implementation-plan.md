@@ -43,7 +43,7 @@
 10. 开始每个 Phase 前，重新阅读该 Phase 引用的规范与适用 ADR；如果发现新冲突，停止实施并报告，不得静默选择。
 11. 所有 Production、Destructive Test、付费 AI、AList 非生产 Bucket、GitHub OIDC、DNS/EdgeOne 或 Server 操作仍需满足对应权限、安全与显式触发要求。
 12. Phase 18 之前不得替换旧 Nuxt Production Site；旧仓库始终只读。
-13. 开始新 Phase 时先阅读 `docs/planning/current-state.md`；完成 Phase 时，如果已完成能力、Stub/Fake、Blocker 或后续 Prerequisite 发生变化，应同步更新该交接入口。
+13. 开始新 Phase 时先阅读 `docs/planning/current-state.md`。每个 Phase 完成后必须自动执行上下文沉淀审计，不等待 Owner 提醒；已完成能力、Stub/Fake、Blocker、踩坑或后续 Prerequisite 有变化时，同步更新该交接入口及最合适的规范/Fixture/Test。最终报告必须明确说明“本阶段上下文已沉淀，可以授权/开启下一阶段”，然后停止；该说明不构成下一 Phase 授权。
 14. Phase 1–17 默认使用 Phase 0 已提交的 Legacy Inventory、Compatibility Matrix、Fixture 与 Traceability，不重复全量扫描旧仓库。仅当仓库内证据无法回答一个具体 Legacy 行为时，才定点只读检查对应文件；Phase 18 再按 Gate 做最终全量 Delta/Inventory 刷新。
 
 ### Phase 完成与 Commit 规则

@@ -374,6 +374,8 @@ Phase 1–17 开始工作时必须先使用这些 Artifact、相关规范和 Fix
 
 不得明知实现与文档不一致而继续保留这种状态。
 
+每个 `implementation-plan.md` Phase 完成时，Agent 必须自动执行阶段交接沉淀，不等待 Owner 另行提醒：复核聊天/运行过程中产生的后续实施必需事实，更新 `docs/planning/current-state.md` 及最合适的规范、Fixture 或 Test，确保新会话不依赖历史聊天。最终报告必须明确说明“本阶段上下文已沉淀，可以授权/开启下一阶段”；这句话只表示依赖就绪，不构成下一 Phase 授权，Agent 仍须停止。
+
 ## 19. 完成定义
 
 Task 不是只要 Happy Path 能跑就算完成。

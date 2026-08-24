@@ -6,6 +6,8 @@
 
 本文件是新 Claude Code/Codex 会话的简洁交接入口。它索引当前实际状态和容易遗漏的实施事实，不替代 `AGENTS.md`、Accepted ADR、架构规范或 `implementation-plan.md`。
 
+维护规则：每个 Phase 完成时，Agent 自动复核并沉淀后续实施所需事实；有状态变化时更新本文件，没有变化时也应在最终报告确认已完成交接审计。完成沉淀只表示下一 Phase 依赖可供 Owner 评估，不授权 Agent 自动继续。
+
 ## 1. 新会话读取顺序
 
 1. `AGENTS.md`、`README.md`、本文件；
