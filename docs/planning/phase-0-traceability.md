@@ -12,10 +12,10 @@
 | Canonical zh-CN Markdown、Directory、Minimal Frontmatter | `project-requirements.md` Content | 0、5、18 | Phase 0 Inventory；Phase 5 Import/Directionality；Phase 18 Final Audit |
 | Deterministic Add/Update/Delete/Move | Content | 3、5、18 | Schema/identity；Transactional ingestion；Final content reconciliation |
 | Legacy URL 与 Pinyin | Routing | 0、5、6、18 | Route/Pinyin Fixture；Ingestion Route；App Router E2E；Final URL Diff |
-| 四个 approved Locale Prefix | Routing / i18n | 7、18 | Locale E2E；Final locale audit |
-| UI next-intl 与 Content i18n 分离 | i18n | 1、7、8 | Skeleton/boundary；UI locale；Translation Memory |
+| 四个 approved Locale Prefix | Routing / i18n | 7、18 | Phase 7 four-locale/negative-route E2E PASS；Final locale audit |
+| UI next-intl 与 Content i18n 分离 | i18n | 1、7、8 | Phase 7 catalog/content-module boundary PASS；Translation Memory |
 | Block-level English Translation | i18n | 8、9 | Segment/hash/fallback；budgeted execution |
-| OpenCC zh-HK/zh-TW | i18n | 7 | Glossary/protected syntax tests |
+| OpenCC zh-HK/zh-TW | i18n | 7 | Phase 7 glossary/protected syntax/PostgreSQL materialization/replay PASS |
 | PostgreSQL + PGroonga Server Search | Search | 3、10 | PGroonga bootstrap；relevance/locale/reindex gate |
 | AList S3 Asset / CDN | Static Asset | 6、11 | Asset boundary；S3Mock + AList non-production contract |
 | One-command Local Development | Operations | 1、2 | CLI baseline；hermetic dev/test demonstration |
@@ -108,10 +108,10 @@ Phase 0 Verification 使用 `rg -c '^- \[ \]' docs/specification/acceptance-crit
 | Physical repo boundary/read-only rule | 1、18 | no in-place Nuxt conversion; final legacy refresh |
 | 237 Canonical Markdown + minimal Frontmatter | 3、5 | schema can express; all import fixtures |
 | Blog explicit paths + Wiki pinyin algorithm | 5、6 | ingestion and real router exact match |
-| Unprefixed zh-CN + approved Locale routes | 6、7 | E2E route suite |
+| Unprefixed zh-CN + approved Locale routes | 6、7 | Phase 7 four-locale route/switch/`zh-hant` negative E2E PASS |
 | 7 Wiki aliases | 5、6、18 | explicit compatibility only |
 | Blog/Wiki reading/navigation behavior | 6 | critical vertical-slice E2E |
-| Page/Article SEO Title、Description、OG 与 Exact Route identity | 6、7、16、18 | locale-aware metadata tests；canonical/indexability/social metadata audit |
+| Page/Article SEO Title、Description、OG 与 Exact Route identity | 6、7、16、18 | Phase 7 locale-aware metadata/Exact Route PASS；canonical/indexability/social metadata audit |
 | Search behavior | 10 | server-side relevance/result contract |
 | CDN/static/media categories | 6、11 | asset loading + S3/AList contract |
 | External integration inventory | 9、11、12、16 | auth/cost/storage/security gates as applicable |

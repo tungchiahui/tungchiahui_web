@@ -1,15 +1,18 @@
 import type { Metadata } from 'next'
 
 import { publicPageMetadata, renderPublicPage } from '@/web/public-page'
+import { parsePublicRoute } from '@/web/routes'
 
 export const dynamic = 'force-dynamic'
 
 type PageProperties = Readonly<{ params: Promise<{ path: string[] }> }>
 
 export async function generateMetadata({ params }: PageProperties): Promise<Metadata> {
-  return publicPageMetadata((await params).path)
+  const route = parsePublicRoute((await params).path)
+  return publicPageMetadata(route.segments, route.context.locale)
 }
 
 export default async function PublicRoutePage({ params }: PageProperties) {
-  return renderPublicPage((await params).path, false)
+  const route = parsePublicRoute((await params).path)
+  return renderPublicPage(route.segments, route.context)
 }

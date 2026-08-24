@@ -37,6 +37,47 @@ test('renders homepage and PostgreSQL-backed Blog/Wiki surfaces in both zh-CN ro
   await expect(page.getByRole('heading', { name: 'Wiki', exact: true })).toBeVisible()
 })
 
+test('routes all approved locales, preserves logical switching and exposes content state', async ({
+  page,
+}) => {
+  const route = '/wiki/2023-10-05-cplusplus-jiao-xue/0200-c-kai-fa-huan-jing-da-jian-yu-ce-shi'
+
+  await page.goto(`/zh-hk${route}`)
+  await expect(page.getByRole('heading', { name: 'C++ 開發環境搭建與測試' })).toBeVisible()
+  await expect(page.locator('[data-content-locale-state="converted"]')).toContainText('確定性轉換')
+  await expect(page.locator('[data-locale-switch] a[hreflang="en-us"]')).toHaveAttribute(
+    'href',
+    `/en-us${route}`,
+  )
+
+  await page.goto(`/zh-tw${route}`)
+  await expect(page.getByRole('heading', { name: 'C++ 開發環境搭建與測試' })).toBeVisible()
+  await expect(page).toHaveTitle(/C\+\+ 開發環境搭建與測試/)
+
+  await page.goto(`/en-us${route}`)
+  await expect(page.getByRole('heading', { name: 'C++ 开发环境搭建与测试' })).toBeVisible()
+  await expect(page.locator('[data-content-locale-state="fallback"]')).toContainText(
+    'latest Simplified Chinese source',
+  )
+  await expect(page.getByRole('link', { name: 'Home', exact: true })).toHaveAttribute(
+    'href',
+    '/en-us',
+  )
+
+  for (const locale of ['zh-cn', 'zh-hk', 'zh-tw', 'en-us']) {
+    const response = await page.goto(`/${locale}/blog`)
+    expect(response?.status(), locale).toBe(200)
+  }
+})
+
+test('keeps removed zh-hant routes negative without redirect', async ({ page }) => {
+  for (const route of ['/zh-hant', '/zh-hant/blog', '/zh-hant/wiki/docker-tutorial']) {
+    const response = await page.goto(route)
+    expect(response?.status(), route).toBe(404)
+    expect(new URL(page.url()).pathname).toBe(route)
+  }
+})
+
 test('preserves exact Legacy article, Pinyin and approved alias routes', async ({ page }) => {
   for (const route of [
     '/blog/newblogenable!',

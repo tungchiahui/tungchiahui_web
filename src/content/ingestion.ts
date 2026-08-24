@@ -1,9 +1,12 @@
+import { createHash } from 'node:crypto'
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
 
 import { createDatabaseClient } from '../database/client'
-import { contentAliases, documents, ingestionRuns } from '../database/schema'
+import { contentAliases, documents, documentTranslations, ingestionRuns } from '../database/schema'
 import { sourceCommitSchema } from '../domain/persistence'
+import { contentGlossary } from '../i18n/content-glossary'
+import { localizeContentMarkdown } from '../i18n/content-markdown'
 import type { PreparedContentDocument } from './contracts'
 import {
   type ContentChange,
@@ -30,6 +33,12 @@ type PlannedDocument = Readonly<{
   existing: ExistingDocument | undefined
   incoming: PreparedContentDocument
 }>
+
+const deterministicContentLocales = ['zh-hk', 'zh-tw'] as const
+
+function sha256(value: string) {
+  return createHash('sha256').update(value).digest('hex')
+}
 
 function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`
@@ -164,7 +173,7 @@ export class ContentIngestionRepository {
     const validated = contentHookInputSchema.parse(input)
     await this.#hooks.diffTranslations(validated)
     await this.#hooks.refreshSearch(validated)
-    await this.#hooks.revalidateZhCn(validated)
+    await this.#hooks.revalidatePublicContent(validated)
   }
 
   async recordFailure(jobIdInput: unknown, sourceCommitInput: unknown, error: unknown) {
@@ -204,6 +213,16 @@ export class ContentIngestionRepository {
     const result = await this.#client.database.transaction(async (transaction) => {
       await transaction.execute(sql`SET LOCAL ROLE site_content_worker`)
       const existingDocuments = await transaction.select().from(documents)
+      const existingTranslations = await transaction
+        .select()
+        .from(documentTranslations)
+        .where(inArray(documentTranslations.locale, deterministicContentLocales))
+      const existingTranslationsByKey = new Map(
+        existingTranslations.map((translation) => [
+          `${translation.documentId}:${translation.locale}`,
+          translation,
+        ]),
+      )
       const { plan, usedIds } = planIdentity(existingDocuments, prepared.documents)
       const startedAt = new Date()
 
@@ -272,6 +291,39 @@ export class ContentIngestionRepository {
           documentId = inserted.id
         }
         documentIdsByRoute.set(item.incoming.routePath, documentId)
+        let materializationChanged = false
+        for (const locale of deterministicContentLocales) {
+          const translatedMarkdown = localizeContentMarkdown(item.incoming.rawMarkdown, locale)
+          const translationHash = sha256(translatedMarkdown)
+          const existingTranslation = existingTranslationsByKey.get(`${documentId}:${locale}`)
+          if (
+            existingTranslation?.translatedMarkdown === translatedMarkdown &&
+            existingTranslation.translationHash === translationHash &&
+            existingTranslation.translationVersion === contentGlossary.revision
+          ) {
+            continue
+          }
+          materializationChanged = true
+          await transaction
+            .insert(documentTranslations)
+            .values({
+              documentId,
+              generatedAt: startedAt,
+              locale,
+              translatedMarkdown,
+              translationHash,
+              translationVersion: contentGlossary.revision,
+            })
+            .onConflictDoUpdate({
+              target: [documentTranslations.documentId, documentTranslations.locale],
+              set: {
+                generatedAt: startedAt,
+                translatedMarkdown,
+                translationHash,
+                translationVersion: contentGlossary.revision,
+              },
+            })
+        }
         if (changed) {
           changes.push({
             documentId,
@@ -282,6 +334,13 @@ export class ContentIngestionRepository {
             routePath: item.incoming.routePath,
             sourceHash: item.incoming.sourceHash,
             type: changeType(item.existing, item.incoming),
+          })
+        } else if (materializationChanged) {
+          changes.push({
+            documentId,
+            routePath: item.incoming.routePath,
+            sourceHash: item.incoming.sourceHash,
+            type: 'modified',
           })
         }
       }
@@ -389,7 +448,12 @@ export class ContentIngestionRepository {
           .where(inArray(contentAliases.aliasPath, staleAliasPaths))
       }
 
-      const filesChanged = changes.filter((change) => change.type !== 'deleted').length
+      const filesChanged = plan.filter((item) =>
+        item.existing
+          ? documentContentChanged(item.existing, item.incoming) ||
+            item.existing.sourcePath !== item.incoming.sourcePath
+          : true,
+      ).length
       const filesDeleted = deleted.length
       await transaction
         .update(ingestionRuns)

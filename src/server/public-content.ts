@@ -5,11 +5,18 @@ import { z } from 'zod'
 
 import { techFootprintPayloadSchema, weightLossPayloadSchema } from '../control-plane/contracts'
 import { createDatabaseClient } from '../database/client'
-import { contentAliases, documents, ownerManagedDatasets } from '../database/schema'
+import {
+  contentAliases,
+  documents,
+  documentTranslations,
+  ownerManagedDatasets,
+} from '../database/schema'
+import type { AppLocale } from '../i18n/locales'
 
 const publicDocumentSchema = z.object({
   contentType: z.enum(['blog', 'wiki']),
   id: z.uuid(),
+  localizedMarkdown: z.string().min(1).nullable(),
   rawFrontmatter: z.record(z.string(), z.json()),
   rawMarkdown: z.string(),
   routePath: z.string().startsWith('/'),
@@ -45,13 +52,14 @@ export class PublicContentRepository {
     await this.#client.close()
   }
 
-  async list(contentType: 'blog' | 'wiki') {
+  async list(contentType: 'blog' | 'wiki', locale: AppLocale) {
     return this.#client.database.transaction(async (transaction) => {
       await transaction.execute(sql`SET LOCAL ROLE site_app`)
       const rows = await transaction
         .select({
           contentType: documents.contentType,
           id: documents.id,
+          localizedMarkdown: documentTranslations.translatedMarkdown,
           rawFrontmatter: documents.rawFrontmatter,
           rawMarkdown: documents.rawMarkdown,
           routePath: documents.routePath,
@@ -61,19 +69,30 @@ export class PublicContentRepository {
           title: documents.title,
         })
         .from(documents)
+        .leftJoin(
+          documentTranslations,
+          and(
+            eq(documentTranslations.documentId, documents.id),
+            eq(
+              documentTranslations.locale,
+              locale === 'zh-hk' || locale === 'zh-tw' ? locale : 'zh-cn',
+            ),
+          ),
+        )
         .where(and(eq(documents.contentType, contentType), eq(documents.isDeleted, false)))
         .orderBy(desc(documents.sourceUpdatedAt), asc(documents.sourcePath))
       return parsePublicDocuments(rows)
     })
   }
 
-  async findByRoute(routePath: string) {
+  async findByRoute(routePath: string, locale: AppLocale) {
     const validatedRoute = z.string().startsWith('/').min(2).parse(routePath)
     return this.#client.database.transaction(async (transaction) => {
       await transaction.execute(sql`SET LOCAL ROLE site_app`)
       const selection = {
         contentType: documents.contentType,
         id: documents.id,
+        localizedMarkdown: documentTranslations.translatedMarkdown,
         rawFrontmatter: documents.rawFrontmatter,
         rawMarkdown: documents.rawMarkdown,
         routePath: documents.routePath,
@@ -85,6 +104,16 @@ export class PublicContentRepository {
       const canonical = await transaction
         .select(selection)
         .from(documents)
+        .leftJoin(
+          documentTranslations,
+          and(
+            eq(documentTranslations.documentId, documents.id),
+            eq(
+              documentTranslations.locale,
+              locale === 'zh-hk' || locale === 'zh-tw' ? locale : 'zh-cn',
+            ),
+          ),
+        )
         .where(and(eq(documents.routePath, validatedRoute), eq(documents.isDeleted, false)))
         .limit(1)
       const direct = canonical[0]
@@ -94,6 +123,16 @@ export class PublicContentRepository {
         .select(selection)
         .from(contentAliases)
         .innerJoin(documents, eq(contentAliases.documentId, documents.id))
+        .leftJoin(
+          documentTranslations,
+          and(
+            eq(documentTranslations.documentId, documents.id),
+            eq(
+              documentTranslations.locale,
+              locale === 'zh-hk' || locale === 'zh-tw' ? locale : 'zh-cn',
+            ),
+          ),
+        )
         .where(and(eq(contentAliases.aliasPath, validatedRoute), eq(documents.isDeleted, false)))
         .limit(1)
       const resolved = alias[0]

@@ -5,7 +5,7 @@
 
 | ID | Risk | Likelihood | Impact | Owner / target Phase | Control / required evidence | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| R-001 | Legacy `zh-hant` 是第五 Locale，但 V2 只批准四个 | High | High: existing URL regression or architecture drift | Owner / 0、7、18 | O-001 approved removal without redirect; negative route test | CONTROLLED |
+| R-001 | Legacy `zh-hant` 是第五 Locale，但 V2 只批准四个 | High | High: existing URL regression or architecture drift | Owner / 0、7、18 | O-001 approved removal without redirect；Phase 7 Home/Blog/Wiki negative E2E PASS；Phase 18 final audit | CONTROLLED |
 | R-002 | Pinyin dependency/version drift changes public URL | Medium | Critical | Content / 1、5、6 | Pinned dependency + Phase 5 route fixture/collision + Phase 6 real App Router PASS | CONTROLLED |
 | R-003 | Future distinct titles collapse to one Pinyin Route | Medium | High: overwrite/ambiguous content | Owner / 0、5 | O-006: pre-write collision gate; whole transaction fails; Owner corrects Source | CONTROLLED |
 | R-004 | 7 existing Wiki Alias are mistaken for permission to create a broad redirect map | Medium | High: SEO/analytics drift | Content / 5、6、18 | Phase 5 exact allowlist/FK/collision + Phase 6 representative response PASS；Phase 18 final audit | CONTROLLED |
@@ -21,15 +21,15 @@
 | R-014 | `tech-footprint`/`weight-loss` Provider-specific Blob becomes an unapproved parallel V2 store | High | Critical | DB/Architecture / 3、4、6、16 | PostgreSQL write boundary + Phase 6 validated Public Read PASS；old Blob persistence absent | CONTROLLED |
 | R-015 | Personal edit token/localStorage design is copied without a new Trust-boundary review | Medium | Critical | Security / 4、16 | O-004 keeps Owner Edit; Zod, authz, rotation, CSRF/replay/abuse review | OPEN |
 | R-016 | Legacy client-side full-corpus Search is mechanically ported | Medium | Critical architecture violation | Search / 10 | Server-only PGroonga; bundle corpus-negative test | CONTROLLED |
-| R-017 | Old Build-time locale generation or translation scripts cause paid calls during publish | Medium | Critical cost | Translation / 5、8、9、15 | Phase 5 Content Module AI/build/deploy negative import test PASS；Phase 8/9/15 pending | OPEN |
-| R-018 | Ignored generated locale Markdown is mistaken for Canonical content | High | High | Content/i18n / 5、7、8 | Phase 5 GitHub canonical-path filter and `_i18n` negative fixture PASS；Phase 7/8 pending | CONTROLLED |
+| R-017 | Old Build-time locale generation or translation scripts cause paid calls during publish | Medium | Critical cost | Translation / 5、8、9、15 | Phase 5 negative import test + Phase 7 whole-document zh-CN fallback/no-provider E2E PASS；Phase 8/9/15 pending | OPEN |
+| R-018 | Ignored generated locale Markdown is mistaken for Canonical content | High | High | Content/i18n / 5、7、8 | Phase 5 canonical-path filter/`_i18n` negative fixture + Phase 7 PostgreSQL-only derived OpenCC materialization PASS；Phase 8 pending | CONTROLLED |
 | R-019 | Legacy `.js` Edge Function/application data is copied into V2 | Medium | High policy violation | Engineering / 1、4 | repository source scan; TypeScript + validation boundary | CONTROLLED |
 | R-020 | Visual modernization removes recognizable identity or key reader interactions | Medium | High | Web/Owner / 6、18 | Phase 6 identity/critical interaction E2E PASS；Phase 18 final visual audit pending | CONTROLLED |
-| R-021 | Hardcoded Legacy UI text is carried into V2 and bypasses next-intl | High | Medium | Engineering/i18n / 1、7 | Phase 6 Web namespace exists with equal keys in all catalogs；Phase 7 locale behavior pending | CONTROLLED |
-| R-022 | Analytics-sensitive Alias/Locale paths split or lose historical traffic continuity | Medium | High | Web/Observability / 6、7、16、18 | aggregate exact path variants; final analytics-sensitive route audit | OPEN |
+| R-021 | Hardcoded Legacy UI text is carried into V2 and bypasses next-intl | High | Medium | Engineering/i18n / 1、7 | Phase 7 four-catalog key completeness、TSX reusable-copy scan and locale E2E PASS | CONTROLLED |
+| R-022 | Analytics-sensitive Alias/Locale paths split or lose historical traffic continuity | Medium | High | Web/Observability / 6、7、16、18 | Phase 7 exact prefixed routes/same-logical-path switch PASS；aggregate analytics and final audit remain Phase 16/18 | OPEN |
 | R-023 | Static Pages deployment assumptions are mistaken for V2 architecture requirements | Medium | Critical | Architecture / 1、12–15 | ADR conformance review; no in-place migration or parallel deploy system | CONTROLLED |
 | R-024 | Legacy changes after Phase 0 make baseline stale before cutover | High | High | Migration / 18 | freeze/refresh inventory and full delta immediately before cutover | OPEN |
-| R-025 | V2 Metadata/Canonical 处理错误地合并 unprefixed、Locale 或 Alias Route，造成重复索引或内容身份漂移 | Medium | High: SEO/URL continuity regression | Web/i18n / 6、7、16、18 | Locale-aware title/description tests；Exact Route canonical audit；final indexability/social metadata review | OPEN |
+| R-025 | V2 Metadata/Canonical 处理错误地合并 unprefixed、Locale 或 Alias Route，造成重复索引或内容身份漂移 | Medium | High: SEO/URL continuity regression | Web/i18n / 6、7、16、18 | Phase 7 locale-aware title/description and Exact Route E2E PASS；canonical/indexability/social metadata review remains Phase 16/18 | OPEN |
 
 ## Severity rule
 

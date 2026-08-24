@@ -2,7 +2,7 @@ import type { ContentSnapshot, ReadonlyContentSource } from '../../src/content/c
 import type { ContentHookInput, ContentIngestionHooks } from '../../src/content/hooks'
 import { ContentIngestionRepository } from '../../src/content/ingestion'
 import { ContentJobRepository } from '../../src/content/jobs'
-import { Phase6ContentHooks } from '../../src/content/revalidation'
+import { PublicContentHooks } from '../../src/content/revalidation'
 import { ContentWorker } from '../../src/content/worker'
 import { ApplicationJobRepository } from '../../src/control-plane/application-jobs'
 import type { ActorIdentity } from '../../src/control-plane/contracts'
@@ -55,12 +55,12 @@ class FailOnceRevalidationHooks implements ContentIngestionHooks {
     await this.#delegate.refreshSearch(input)
   }
 
-  async revalidateZhCn(input: ContentHookInput) {
+  async revalidatePublicContent(input: ContentHookInput) {
     if (!this.#failed) {
       this.#failed = true
       throw new Error('Injected transient Phase 6 revalidation delivery failure')
     }
-    await this.#delegate.revalidateZhCn(input)
+    await this.#delegate.revalidatePublicContent(input)
   }
 }
 
@@ -84,7 +84,7 @@ export async function verifyPhase6Revalidation(connectionString: string, siteBas
   const ingestion = new ContentIngestionRepository(
     connectionString,
     new FailOnceRevalidationHooks(
-      new Phase6ContentHooks(
+      new PublicContentHooks(
         new URL('/api/internal/revalidate', siteBaseUrl).toString(),
         revalidationSecret,
       ),

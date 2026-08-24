@@ -7,9 +7,9 @@ export const dynamic = 'force-dynamic'
 type PageProperties = Readonly<{ params: Promise<{ path: string[] }> }>
 
 export async function generateMetadata({ params }: PageProperties): Promise<Metadata> {
-  return publicPageMetadata((await params).path)
+  return publicPageMetadata((await params).path, 'zh-cn')
 }
 
 export default async function ZhCnPublicRoutePage({ params }: PageProperties) {
-  return renderPublicPage((await params).path, true)
+  return renderPublicPage((await params).path, { locale: 'zh-cn', prefixed: true })
 }

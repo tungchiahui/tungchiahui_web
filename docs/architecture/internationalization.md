@@ -71,6 +71,16 @@ Pending Block 的英文渲染使用最新 Canonical zh-CN Source Block 作为 Fa
 
 不要维护三份人工编写的 Source Article 副本。
 
+Phase 7 的实现契约：
+
+- `content-worker` 在 Content Ingestion Transaction 内把两种确定性结果物化到 `document_translations`；
+- Versioned Glossary 同时提供可审计 Version 和正整数 Persistence Revision；
+- 未改变的 Markdown/Hash/Revision 不重写 `generated_at`，同一 Snapshot 可安全重放；
+- 只替换 Markdown AST `text` Node 的 Source Range，Frontmatter、Code Fence、Inline Code、Raw HTML 和 Link/Image Destination 不进入转换边界；
+- Public DAL 按 Locale 读取物化结果并隔离 Cache Key；Backfill 前允许 Server Renderer 使用同一确定性转换作只读 View，但 Public Request 永不写 DB。
+
+实现与 Backfill 细节见 `docs/development/phase-7-deterministic-locales.md`。
+
 ## Locale 切换
 
 在可行情况下，Locale Switch 应保留同一个 Logical Document Route。
@@ -79,6 +89,8 @@ Pending Block 的英文渲染使用最新 Canonical zh-CN Source Block 作为 Fa
 
 - UI Message Locale
 - Document Translation Locale
+
+Unprefixed Route 与 `/zh-cn/**` 均为 zh-CN。其余批准 Prefix 为 `/zh-hk/**`、`/zh-tw/**`、`/en-us/**`；Locale Switch 只改变 Prefix 并保持 Logical Document Path。`zh-hant` 明确不受支持且不得 Redirect。
 
 ## Fallback
 
@@ -91,3 +103,5 @@ Pending Block 的英文渲染使用最新 Canonical zh-CN Source Block 作为 Fa
 - 仅仅因为一个 Translation Block Pending 就返回 404
 - 把过期旧英文显示成最新 zh-CN 改动对应的翻译
 - 从 Public Page Request 触发付费翻译
+
+Phase 7 在 Block-level State 建立前使用更严格的全 Document zh-CN Fallback，并明确忽略已有 en-US Materialization；Phase 8 才负责把该基线替换为 Semantic-block Translation Memory 与混合 Fallback。

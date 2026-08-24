@@ -20,6 +20,13 @@
     "about": "About",
     "more": "More",
     "themeToggle": "Toggle light or dark theme",
+    "languageSwitcher": "Language switcher",
+    "locale": {
+      "zhCn": "简体中文",
+      "zhHk": "香港繁體",
+      "zhTw": "台灣正體",
+      "enUs": "English"
+    },
     "footerDescription": "Keep learning. Build with care.",
     "filingLabel": "Site registrations",
     "icp": "鲁ICP备2025185601号-2",
@@ -37,6 +44,8 @@
     "wikiDescription": "A long-lived knowledge base organized by document and chapter.",
     "updatedAt": "Updated {date}",
     "readingTime": "About {minutes} min read",
+    "contentStateConverted": "This article is deterministically converted from Simplified Chinese with a versioned glossary.",
+    "contentStateFallback": "An English translation is not available yet. The latest Simplified Chinese source is shown without triggering paid translation.",
     "tableOfContents": "On this page",
     "previous": "Previous",
     "next": "Next",

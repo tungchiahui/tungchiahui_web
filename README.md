@@ -263,7 +263,7 @@ pnpm install --frozen-lockfile
 
 ### 当前实施状态
 
-- Phase 0–6 已完成；Phase 7 尚未开始，等待 Owner 明确授权。
+- Phase 0–7 已完成；Phase 8 尚未开始，等待 Owner 明确授权。
 - `docs/planning/current-state.md` — 新会话开始当前 Phase 前的简洁交接入口。
 - `docs/planning/implementation-plan.md` — Phase 0–18 的硬 Gate、依赖与进度。
 

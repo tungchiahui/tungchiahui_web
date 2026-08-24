@@ -23,7 +23,7 @@ export type ContentHookInput = Readonly<z.infer<typeof contentHookInputSchema>>
 export interface ContentIngestionHooks {
   diffTranslations(input: ContentHookInput): Promise<void>
   refreshSearch(input: ContentHookInput): Promise<void>
-  revalidateZhCn(input: ContentHookInput): Promise<void>
+  revalidatePublicContent(input: ContentHookInput): Promise<void>
 }
 
 export class DeferredPhaseContentHooks implements ContentIngestionHooks {
@@ -35,8 +35,8 @@ export class DeferredPhaseContentHooks implements ContentIngestionHooks {
     this.#log('search_refresh_deferred', 10, input)
   }
 
-  async revalidateZhCn(input: ContentHookInput) {
-    this.#log('zh_cn_revalidation_deferred', 6, input)
+  async revalidatePublicContent(input: ContentHookInput) {
+    this.#log('public_content_revalidation_deferred', 6, input)
   }
 
   #log(event: string, replacementPhase: number, input: ContentHookInput) {
@@ -66,8 +66,8 @@ export class CompositeContentHooks implements ContentIngestionHooks {
     await Promise.all(this.#hooks.map((hook) => hook.refreshSearch(input)))
   }
 
-  async revalidateZhCn(input: ContentHookInput) {
-    await Promise.all(this.#hooks.map((hook) => hook.revalidateZhCn(input)))
+  async revalidatePublicContent(input: ContentHookInput) {
+    await Promise.all(this.#hooks.map((hook) => hook.revalidatePublicContent(input)))
   }
 }
 
@@ -82,7 +82,7 @@ export class RecordingContentHooks implements ContentIngestionHooks {
     this.calls.push(input)
   }
 
-  async revalidateZhCn(input: ContentHookInput) {
+  async revalidatePublicContent(input: ContentHookInput) {
     this.calls.push(input)
   }
 }

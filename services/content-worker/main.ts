@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { GitHubContentSource } from '../../src/content/github-source'
 import { ContentIngestionRepository } from '../../src/content/ingestion'
 import { ContentJobRepository } from '../../src/content/jobs'
-import { Phase6ContentHooks } from '../../src/content/revalidation'
+import { PublicContentHooks } from '../../src/content/revalidation'
 import { ContentWorker } from '../../src/content/worker'
 import { serviceIdentityContracts } from '../../src/control-plane/contracts'
 
@@ -118,7 +118,7 @@ if (configuration.CONTENT_WORKER_POLLING_ENABLED) {
   jobs = new ContentJobRepository(configuration.DATABASE_URL)
   ingestion = new ContentIngestionRepository(
     configuration.DATABASE_URL,
-    new Phase6ContentHooks(
+    new PublicContentHooks(
       configuration.SITE_REVALIDATION_ENDPOINT ?? '',
       configuration.SITE_REVALIDATION_SECRET ?? '',
     ),

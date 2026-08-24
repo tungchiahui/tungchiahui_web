@@ -1,7 +1,7 @@
 # Website V2 分阶段实施计划
 
-> Status: In progress — Phase 0–6 complete
-> Current Phase: Awaiting Owner authorization for Phase 7
+> Status: In progress — Phase 0–7 complete
+> Current Phase: Awaiting Owner authorization for Phase 8
 > Execution Model: Hard-gated, one Phase at a time
 > Scope: 从新的 Next.js V2 Repository 基线推进到替换旧 Nuxt Production Site
 
@@ -16,7 +16,7 @@
 - [x] Phase 4 — 独立 Control Plane 与 Job Boundary
 - [x] Phase 5 — GitHub 单向 Content Ingestion
 - [x] Phase 6 — zh-CN Website Vertical Slice
-- [ ] Phase 7 — UI i18n 与 zh-HK/zh-TW
+- [x] Phase 7 — UI i18n 与 zh-HK/zh-TW
 - [ ] Phase 8 — Translation Memory 与 en-US Fallback
 - [ ] Phase 9 — 显式付费 AI Translation
 - [ ] Phase 10 — PGroonga Search 与 Cache Correctness
@@ -689,14 +689,14 @@ Public Route 和 zh-CN Renderer 已稳定，可以在不混入 AI Translation �
 
 ### Task Checklist
 
-- [ ] 建立四 Locale Message Catalog，以 zh-CN 为 Source UI Locale。
-- [ ] 为 en-US UI 做 Semantic Translation，为 zh-HK/zh-TW UI 做适用的 Deterministic Conversion/Review。
-- [ ] 实现 Locale-prefixed Routing、Negotiation Policy 和同一 Logical Document 的 Locale Switch。
-- [ ] 实现 OpenCC-based zh-HK/zh-TW Content Conversion Pipeline。
-- [ ] 建立技术术语、姓名、品牌和已知转换例外的 Versioned Glossary/Exception。
-- [ ] 防止 Code Fence、Inline Code、URL、Identifier 和受保护 Frontmatter 被盲目转换。
-- [ ] 对 en-US Route 提供明确的全量 zh-CN Fallback Baseline，不触发 AI。
-- [ ] 为 Fallback/Converted State 提供 UI Metadata/Observability Hook。
+- [x] 建立四 Locale Message Catalog，以 zh-CN 为 Source UI Locale。
+- [x] 为 en-US UI 做 Semantic Translation，为 zh-HK/zh-TW UI 做适用的 Deterministic Conversion/Review。
+- [x] 实现 Locale-prefixed Routing、Negotiation Policy 和同一 Logical Document 的 Locale Switch。
+- [x] 实现 OpenCC-based zh-HK/zh-TW Content Conversion Pipeline。
+- [x] 建立技术术语、姓名、品牌和已知转换例外的 Versioned Glossary/Exception。
+- [x] 防止 Code Fence、Inline Code、URL、Identifier 和受保护 Frontmatter 被盲目转换。
+- [x] 对 en-US Route 提供明确的全量 zh-CN Fallback Baseline，不触发 AI。
+- [x] 为 Fallback/Converted State 提供 UI Metadata/Observability Hook。
 
 ### 本 Phase 明确不做什么
 
@@ -706,24 +706,24 @@ Public Route 和 zh-CN Renderer 已稳定，可以在不混入 AI Translation �
 
 ### Tests / Verification
 
-- [ ] 四 Locale UI Message Key 完整性和无硬编码文本检查通过。
-- [ ] Locale Switch 保持同一 Logical Document Route。
-- [ ] OpenCC Representative Glossary/Exception Test 通过。
-- [ ] Code/URL/Identifier Protection Test 通过。
-- [ ] 缺失 en-US Content 不返回 404、不调用 AI，并显示当前 zh-CN。
+- [x] 四 Locale UI Message Key 完整性和无硬编码文本检查通过。
+- [x] Locale Switch 保持同一 Logical Document Route。
+- [x] OpenCC Representative Glossary/Exception Test 通过。
+- [x] Code/URL/Identifier Protection Test 通过。
+- [x] 缺失 en-US Content 不返回 404、不调用 AI，并显示当前 zh-CN。
 
 ### Acceptance Criteria
 
-- [ ] 全部四 Locale 有稳定 Public Route 与 UI。
-- [ ] zh-HK/zh-TW Conversion Deterministic、可重放且受 Glossary Test 保护。
-- [ ] UI i18n 与 Content i18n 的职责没有混合。
+- [x] 全部四 Locale 有稳定 Public Route 与 UI。
+- [x] zh-HK/zh-TW Conversion Deterministic、可重放且受 Glossary Test 保护。
+- [x] UI i18n 与 Content i18n 的职责没有混合。
 
 ### Exit Gate
 
-- [ ] Locale E2E、Message Completeness、OpenCC 和 Protected Syntax Gate 全部通过。
-- [ ] 四 Locale Route Sample 已加入 Regression Suite。
-- [ ] 创建聚焦 Commit，建议：`feat(i18n): complete phase 7 deterministic locales`。
-- [ ] Commit 后停止并向 Owner 报告，不自动进入 Phase 8。
+- [x] Locale E2E、Message Completeness、OpenCC 和 Protected Syntax Gate 全部通过。
+- [x] 四 Locale Route Sample 已加入 Regression Suite。
+- [x] 创建聚焦 Commit，建议：`feat(i18n): complete phase 7 deterministic locales`。
+- [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 8。
 
 ### 本阶段完成后形成的 Artifact / Capability
 

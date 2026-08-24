@@ -1,4 +1,5 @@
 import rehypeShiki from '@shikijs/rehype'
+import type { Root } from 'mdast'
 import rehypeSanitize from 'rehype-sanitize'
 import rehypeStringify from 'rehype-stringify'
 import remarkFrontmatter from 'remark-frontmatter'
@@ -6,7 +7,11 @@ import remarkGfm from 'remark-gfm'
 import remarkParse from 'remark-parse'
 import remarkRehype from 'remark-rehype'
 import { unified } from 'unified'
+import { visit } from 'unist-util-visit'
 import { z } from 'zod'
+
+import { localizeContentText } from '@/i18n/content'
+import type { AppLocale } from '@/i18n/locales'
 
 import { resolveMarkdownAsset } from './assets'
 
@@ -65,12 +70,24 @@ function enhanceHtml(html: string) {
   return { headings: Object.freeze(headings), html: enhanced }
 }
 
-export async function renderMarkdown(rawMarkdown: string): Promise<RenderedMarkdown> {
+function remarkLocaleContent(locale: AppLocale) {
+  return () => (tree: Root) => {
+    visit(tree, 'text', (node) => {
+      node.value = localizeContentText(node.value, locale)
+    })
+  }
+}
+
+export async function renderMarkdown(
+  rawMarkdown: string,
+  locale: AppLocale = 'zh-cn',
+): Promise<RenderedMarkdown> {
   const source = z.string().min(1).parse(rawMarkdown)
   const rendered = await unified()
     .use(remarkParse)
     .use(remarkFrontmatter, ['yaml'])
     .use(remarkGfm)
+    .use(remarkLocaleContent(locale))
     .use(remarkRehype)
     .use(rehypeSanitize)
     .use(rehypeShiki, {

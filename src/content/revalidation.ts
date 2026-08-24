@@ -37,7 +37,7 @@ export function verifyRevalidationSignature(body: string, secret: string, signat
   return expected.length === actual.length && timingSafeEqual(expected, actual)
 }
 
-export class HttpZhCnRevalidationHook implements ContentIngestionHooks {
+export class HttpPublicContentRevalidationHook implements ContentIngestionHooks {
   readonly #endpoint: URL
   readonly #secret: string
 
@@ -50,7 +50,7 @@ export class HttpZhCnRevalidationHook implements ContentIngestionHooks {
 
   async refreshSearch() {}
 
-  async revalidateZhCn(input: ContentHookInput) {
+  async revalidatePublicContent(input: ContentHookInput) {
     if (input.changes.length === 0) return
     const payload = revalidationRequestSchema.parse(input)
     const body = JSON.stringify(payload)
@@ -65,16 +65,18 @@ export class HttpZhCnRevalidationHook implements ContentIngestionHooks {
     })
     if (!response.ok) {
       const summary = (await response.text()).slice(0, 500)
-      throw new Error(`zh-CN cache revalidation failed with HTTP ${response.status}: ${summary}`)
+      throw new Error(
+        `public locale cache revalidation failed with HTTP ${response.status}: ${summary}`,
+      )
     }
   }
 }
 
-export class Phase6ContentHooks implements ContentIngestionHooks {
-  readonly #revalidation: HttpZhCnRevalidationHook
+export class PublicContentHooks implements ContentIngestionHooks {
+  readonly #revalidation: HttpPublicContentRevalidationHook
 
   constructor(endpoint: string, secret: string) {
-    this.#revalidation = new HttpZhCnRevalidationHook(endpoint, secret)
+    this.#revalidation = new HttpPublicContentRevalidationHook(endpoint, secret)
   }
 
   async diffTranslations(input: ContentHookInput) {
@@ -85,8 +87,8 @@ export class Phase6ContentHooks implements ContentIngestionHooks {
     this.#logDeferred('search_refresh_deferred', 10, input)
   }
 
-  async revalidateZhCn(input: ContentHookInput) {
-    await this.#revalidation.revalidateZhCn(input)
+  async revalidatePublicContent(input: ContentHookInput) {
+    await this.#revalidation.revalidatePublicContent(input)
   }
 
   #logDeferred(event: string, replacementPhase: number, input: ContentHookInput) {

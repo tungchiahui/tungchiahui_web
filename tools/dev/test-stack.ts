@@ -306,7 +306,7 @@ function runPlaywright(siteBaseUrl: URL) {
 async function run() {
   assertDockerPrerequisites()
   const repositoryRoot = process.cwd()
-  const temporaryRoot = mkdtempSync(join(tmpdir(), 'tungchiahui-phase6-'))
+  const temporaryRoot = mkdtempSync(join(tmpdir(), 'tungchiahui-phase7-'))
   const suffix = basename(temporaryRoot)
     .replaceAll(/[^a-z0-9]/g, '')
     .slice(-12)
@@ -391,7 +391,7 @@ async function run() {
       configuration.openRestyUrl,
       configuration.siteBaseUrl,
     )
-    console.log(`Disposable infrastructure and Phase 6 E2E: PASS (${projectName})`)
+    console.log(`Disposable infrastructure and public E2E: PASS (${projectName})`)
   } catch (error: unknown) {
     if (stackStarted) compose.logs('web')
     throw error

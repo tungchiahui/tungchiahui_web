@@ -200,6 +200,56 @@ export async function verifyPhase5Ingestion(connectionString: string, firstJobId
     if (Number(activeA.rows[0]?.count) !== snapshotA.files.length) {
       throw new Error('Initial ingestion left an unexpected active document count')
     }
+    const materializations = await client.query<{
+      generated_at: Date
+      locale: 'zh-hk' | 'zh-tw'
+      route_path: string
+      translated_markdown: string
+      translation_version: number
+    }>(`SELECT d.route_path,
+              t.locale,
+              t.translated_markdown,
+              t.translation_version,
+              t.generated_at
+         FROM app.documents d
+         JOIN app.document_translations t ON t.document_id = d.id
+        WHERE NOT d.is_deleted AND t.locale IN ('zh-hk', 'zh-tw')
+        ORDER BY d.route_path, t.locale`)
+    if (materializations.rows.length !== snapshotA.files.length * 2) {
+      throw new Error('OpenCC ingestion did not materialize both deterministic content locales')
+    }
+    const hongKongBlog = materializations.rows.find(
+      (row) => row.route_path === '/blog/newblogenable!' && row.locale === 'zh-hk',
+    )
+    const taiwanBlog = materializations.rows.find(
+      (row) => row.route_path === '/blog/newblogenable!' && row.locale === 'zh-tw',
+    )
+    if (
+      !hongKongBlog?.translated_markdown.includes('# 新網誌啓用') ||
+      !taiwanBlog?.translated_markdown.includes('# 新部落格啟用') ||
+      materializations.rows.some((row) => row.translation_version !== 1)
+    ) {
+      throw new Error('Versioned OpenCC glossary materialization returned unexpected output')
+    }
+    const protectedMarkdown = materializations.rows.find(
+      (row) =>
+        row.route_path ===
+          '/wiki/2023-10-05-cplusplus-jiao-xue/0100-c-kai-fa-huan-jing-da-jian-yu-ce-shi' &&
+        row.locale === 'zh-tw',
+    )?.translated_markdown
+    if (
+      !protectedMarkdown?.includes('title: C++ 开发环境搭建与测试') ||
+      !protectedMarkdown.includes('`ROS2_Control`') ||
+      !protectedMarkdown.includes('https://example.com/id')
+    ) {
+      throw new Error('OpenCC materialization changed protected Markdown syntax')
+    }
+    const materializationTimestamps = new Map(
+      materializations.rows.map((row) => [
+        `${row.route_path}:${row.locale}`,
+        row.generated_at.getTime(),
+      ]),
+    )
     const alias = await client.query<{ approval_reference: string; created_at: Date }>(
       "SELECT approval_reference, created_at FROM app.content_aliases WHERE alias_path = '/wiki/docker-tutorial'",
     )
@@ -216,6 +266,23 @@ export async function verifyPhase5Ingestion(connectionString: string, firstJobId
       throw new Error(
         'Same-commit replay emitted duplicate translation/search/revalidation effects',
       )
+    }
+    const replayedMaterializations = await client.query<{
+      generated_at: Date
+      locale: 'zh-hk' | 'zh-tw'
+      route_path: string
+    }>(`SELECT d.route_path, t.locale, t.generated_at
+         FROM app.documents d
+         JOIN app.document_translations t ON t.document_id = d.id
+        WHERE NOT d.is_deleted AND t.locale IN ('zh-hk', 'zh-tw')`)
+    if (
+      replayedMaterializations.rows.some(
+        (row) =>
+          materializationTimestamps.get(`${row.route_path}:${row.locale}`) !==
+          row.generated_at.getTime(),
+      )
+    ) {
+      throw new Error('Same-commit replay rewrote unchanged OpenCC materialization')
     }
     const replayedAlias = await client.query<{ created_at: Date }>(
       "SELECT created_at FROM app.content_aliases WHERE alias_path = '/wiki/docker-tutorial'",

@@ -9,6 +9,8 @@ import { BookmarkWorkspace } from '@/components/bookmark-workspace'
 import { PrintButton } from '@/components/print-button'
 import { SiteShell } from '@/components/site-shell'
 import { techFootprintPayloadSchema, weightLossPayloadSchema } from '@/control-plane/contracts'
+import { contentLocaleState, localizeContentText } from '@/i18n/content'
+import type { AppLocale } from '@/i18n/locales'
 import {
   listCachedDocuments,
   readCachedDocument,
@@ -17,23 +19,31 @@ import {
 import type { PublicDocument } from '@/server/public-content'
 
 import { renderMarkdown } from './markdown'
-import { publicPath, type SpecialPageSlug, specialPageSlugSchema, withZhCnPrefix } from './routes'
+import {
+  type PublicRouteContext,
+  publicPath,
+  type SpecialPageSlug,
+  specialPageSlugSchema,
+  withLocalePrefix,
+} from './routes'
 
 function formatDate(date: Date | null) {
   return date?.toISOString().slice(0, 10)
 }
 
 function CardLink({
+  context,
   document,
-  prefixed,
-}: Readonly<{ document: PublicDocument; prefixed: boolean }>) {
+}: Readonly<{ context: PublicRouteContext; document: PublicDocument }>) {
   return (
     <li>
       <Link
         className="block rounded-xl border bg-card p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-primary"
-        href={withZhCnPrefix(document.routePath, prefixed)}
+        href={withLocalePrefix(document.routePath, context)}
       >
-        <h3 className="font-semibold text-lg">{document.title}</h3>
+        <h3 className="font-semibold text-lg">
+          {localizeContentText(document.title, context.locale)}
+        </h3>
         {document.sourceUpdatedAt ? (
           <time className="mt-2 block text-muted-foreground text-sm">
             {formatDate(document.sourceUpdatedAt)}
@@ -44,11 +54,11 @@ function CardLink({
   )
 }
 
-async function HomePage({ prefixed }: Readonly<{ prefixed: boolean }>) {
-  const t = await getTranslations('Web')
+async function HomePage({ context }: Readonly<{ context: PublicRouteContext }>) {
+  const t = await getTranslations({ locale: context.locale, namespace: 'Web' })
   const [blogs, wikis] = await Promise.all([
-    listCachedDocuments('blog'),
-    listCachedDocuments('wiki'),
+    listCachedDocuments('blog', context.locale),
+    listCachedDocuments('wiki', context.locale),
   ])
   return (
     <>
@@ -71,7 +81,7 @@ async function HomePage({ prefixed }: Readonly<{ prefixed: boolean }>) {
               <h2 className="font-semibold text-2xl">{section.title}</h2>
               <Link
                 className="text-primary text-sm hover:underline"
-                href={withZhCnPrefix(section.href, prefixed)}
+                href={withLocalePrefix(section.href, context)}
               >
                 {t('viewAll')}
               </Link>
@@ -79,7 +89,7 @@ async function HomePage({ prefixed }: Readonly<{ prefixed: boolean }>) {
             {section.documents.length ? (
               <ul className="grid gap-3">
                 {section.documents.map((document) => (
-                  <CardLink document={document} key={document.id} prefixed={prefixed} />
+                  <CardLink context={context} document={document} key={document.id} />
                 ))}
               </ul>
             ) : (
@@ -97,11 +107,11 @@ function wikiGroup(document: PublicDocument) {
 }
 
 async function ContentList({
+  context,
   contentType,
-  prefixed,
-}: Readonly<{ contentType: 'blog' | 'wiki'; prefixed: boolean }>) {
-  const t = await getTranslations('Web')
-  const documents = await listCachedDocuments(contentType)
+}: Readonly<{ contentType: 'blog' | 'wiki'; context: PublicRouteContext }>) {
+  const t = await getTranslations({ locale: context.locale, namespace: 'Web' })
+  const documents = await listCachedDocuments(contentType, context.locale)
   const title = contentType === 'blog' ? t('blogTitle') : t('wikiTitle')
   const description = contentType === 'blog' ? t('blogDescription') : t('wikiDescription')
 
@@ -114,10 +124,14 @@ async function ContentList({
         <div className="mt-9 grid gap-8">
           {[...groups].map(([group, entries]) => (
             <section className="rounded-2xl border p-5" key={group}>
-              <h2 className="mb-4 font-semibold text-xl">{entries[0]?.title ?? group}</h2>
+              <h2 className="mb-4 font-semibold text-xl">
+                {entries[0]
+                  ? localizeContentText(entries[0].title, context.locale)
+                  : localizeContentText(group, context.locale)}
+              </h2>
               <ol className="grid gap-2">
                 {entries.map((document) => (
-                  <CardLink document={document} key={document.id} prefixed={prefixed} />
+                  <CardLink context={context} document={document} key={document.id} />
                 ))}
               </ol>
             </section>
@@ -133,18 +147,21 @@ async function ContentList({
       <p className="mt-3 text-muted-foreground">{description}</p>
       <ul className="mt-9 grid gap-4 sm:grid-cols-2">
         {documents.map((document) => (
-          <CardLink document={document} key={document.id} prefixed={prefixed} />
+          <CardLink context={context} document={document} key={document.id} />
         ))}
       </ul>
     </section>
   )
 }
 
-async function ArticlePage({ path, prefixed }: Readonly<{ path: string; prefixed: boolean }>) {
-  const t = await getTranslations('Web')
-  const document = await readCachedDocument(path)
+async function ArticlePage({
+  context,
+  path,
+}: Readonly<{ context: PublicRouteContext; path: string }>) {
+  const t = await getTranslations({ locale: context.locale, namespace: 'Web' })
+  const document = await readCachedDocument(path, context.locale)
   if (!document) notFound()
-  const all = await listCachedDocuments(document.contentType)
+  const all = await listCachedDocuments(document.contentType, context.locale)
   const navigation =
     document.contentType === 'wiki'
       ? all.filter((candidate) => wikiGroup(candidate) === wikiGroup(document))
@@ -152,19 +169,35 @@ async function ArticlePage({ path, prefixed }: Readonly<{ path: string; prefixed
   const index = navigation.findIndex((candidate) => candidate.id === document.id)
   const previous = index > 0 ? navigation[index - 1] : undefined
   const next = index >= 0 ? navigation[index + 1] : undefined
-  const rendered = await renderMarkdown(document.rawMarkdown)
+  const rendered = await renderMarkdown(
+    document.localizedMarkdown ?? document.rawMarkdown,
+    document.localizedMarkdown ? 'zh-cn' : context.locale,
+  )
+  const localizedTitle = localizeContentText(document.title, context.locale)
+  const presentationState = contentLocaleState(context.locale)
 
   return (
     <article className="mx-auto max-w-4xl">
       <header className="border-b pb-8">
         <p className="font-medium text-primary text-sm uppercase">{t(document.contentType)}</p>
-        <h1 className="mt-3 font-bold text-4xl tracking-tight sm:text-5xl">{document.title}</h1>
+        <h1 className="mt-3 font-bold text-4xl tracking-tight sm:text-5xl">{localizedTitle}</h1>
         <div className="mt-4 flex flex-wrap gap-4 text-muted-foreground text-sm">
           {document.sourceUpdatedAt ? (
             <time>{t('updatedAt', { date: formatDate(document.sourceUpdatedAt) ?? '' })}</time>
           ) : null}
           <span>{t('readingTime', { minutes: rendered.readingMinutes })}</span>
         </div>
+        {presentationState === 'source' ? null : (
+          <p
+            className="mt-4 rounded-lg border bg-muted/40 px-3 py-2 text-muted-foreground text-sm"
+            data-content-locale={context.locale}
+            data-content-locale-state={presentationState}
+          >
+            {presentationState === 'converted'
+              ? t('contentStateConverted')
+              : t('contentStateFallback')}
+          </p>
+        )}
       </header>
       {rendered.headings.length > 1 ? (
         <nav aria-label={t('tableOfContents')} className="my-8 rounded-xl border bg-card p-5">
@@ -186,10 +219,10 @@ async function ArticlePage({ path, prefixed }: Readonly<{ path: string; prefixed
         {previous ? (
           <Link
             className="rounded-xl border p-4 hover:border-primary"
-            href={withZhCnPrefix(previous.routePath, prefixed)}
+            href={withLocalePrefix(previous.routePath, context)}
           >
             <span className="block text-muted-foreground text-sm">{t('previous')}</span>
-            {previous.title}
+            {localizeContentText(previous.title, context.locale)}
           </Link>
         ) : (
           <span />
@@ -197,10 +230,10 @@ async function ArticlePage({ path, prefixed }: Readonly<{ path: string; prefixed
         {next ? (
           <Link
             className="rounded-xl border p-4 text-right hover:border-primary"
-            href={withZhCnPrefix(next.routePath, prefixed)}
+            href={withLocalePrefix(next.routePath, context)}
           >
             <span className="block text-muted-foreground text-sm">{t('next')}</span>
-            {next.title}
+            {localizeContentText(next.title, context.locale)}
           </Link>
         ) : null}
       </nav>
@@ -218,10 +251,10 @@ function SpecialHeader({ description, title }: Readonly<{ description: string; t
 }
 
 async function SpecialPage({
-  prefixed,
+  context,
   slug,
-}: Readonly<{ prefixed: boolean; slug: SpecialPageSlug }>) {
-  const t = await getTranslations('Web')
+}: Readonly<{ context: PublicRouteContext; slug: SpecialPageSlug }>) {
+  const t = await getTranslations({ locale: context.locale, namespace: 'Web' })
   type SpecialMessageKey =
     | 'aboutDescription'
     | 'aboutTitle'
@@ -331,7 +364,7 @@ async function SpecialPage({
                 <li key={route}>
                   <Link
                     className="block rounded-xl border bg-card p-5 hover:border-primary"
-                    href={withZhCnPrefix(`/${route}`, prefixed)}
+                    href={withLocalePrefix(`/${route}`, context)}
                   >
                     {s(titleKeys[route])}
                   </Link>
@@ -385,8 +418,8 @@ async function SpecialPage({
       )
     case 'stats': {
       const [blogs, wikis] = await Promise.all([
-        listCachedDocuments('blog'),
-        listCachedDocuments('wiki'),
+        listCachedDocuments('blog', context.locale),
+        listCachedDocuments('wiki', context.locale),
       ])
       return (
         <>
@@ -464,33 +497,42 @@ async function SpecialPage({
   }
 }
 
-export async function renderPublicPage(segments: readonly string[], prefixed: boolean) {
+export async function renderPublicPage(segments: readonly string[], context: PublicRouteContext) {
   const path = publicPath(segments)
   let page: ReactNode
-  if (path === '/') page = <HomePage prefixed={prefixed} />
-  else if (path === '/blog') page = <ContentList contentType="blog" prefixed={prefixed} />
-  else if (path === '/wiki') page = <ContentList contentType="wiki" prefixed={prefixed} />
+  if (path === '/') page = <HomePage context={context} />
+  else if (path === '/blog') page = <ContentList contentType="blog" context={context} />
+  else if (path === '/wiki') page = <ContentList contentType="wiki" context={context} />
   else if (path.startsWith('/blog/') || path.startsWith('/wiki/'))
-    page = <ArticlePage path={path} prefixed={prefixed} />
+    page = <ArticlePage context={context} path={path} />
   else {
     const special = specialPageSlugSchema.safeParse(segments.length === 1 ? segments[0] : undefined)
     if (!special.success) notFound()
-    page = <SpecialPage prefixed={prefixed} slug={special.data} />
+    page = <SpecialPage context={context} slug={special.data} />
   }
-  return <SiteShell prefixed={prefixed}>{page}</SiteShell>
+  return (
+    <SiteShell context={context} logicalPath={path}>
+      {page}
+    </SiteShell>
+  )
 }
 
-export async function publicPageMetadata(segments: readonly string[]): Promise<Metadata> {
-  const t = await getTranslations('Web')
+export async function publicPageMetadata(
+  segments: readonly string[],
+  locale: AppLocale,
+): Promise<Metadata> {
+  const t = await getTranslations({ locale, namespace: 'Web' })
   const path = publicPath(segments)
   if (path.startsWith('/blog/') || path.startsWith('/wiki/')) {
-    const document = await readCachedDocument(path)
+    const document = await readCachedDocument(path, locale)
     if (!document) return { title: t('notFoundTitle') }
-    const description =
+    const sourceDescription =
       typeof document.rawFrontmatter.description === 'string'
         ? document.rawFrontmatter.description
         : document.title
-    return { description, openGraph: { description, title: document.title }, title: document.title }
+    const description = localizeContentText(sourceDescription, locale)
+    const title = localizeContentText(document.title, locale)
+    return { description, openGraph: { description, title }, title }
   }
   if (path === '/blog') return { description: t('blogDescription'), title: t('blogTitle') }
   if (path === '/wiki') return { description: t('wikiDescription'), title: t('wikiTitle') }

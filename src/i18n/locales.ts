@@ -1,5 +1,19 @@
-export const locales = ['zh-cn', 'zh-hk', 'zh-tw', 'en-us'] as const
+import { type Locale, localeSchema, localeValues } from '@/domain/persistence'
 
-export type AppLocale = (typeof locales)[number]
+export const locales = localeValues
+
+export type AppLocale = Locale
 
 export const defaultLocale: AppLocale = 'zh-cn'
+export const appLocaleHeader = 'x-tungchiahui-locale'
+export const appLocalePrefixedHeader = 'x-tungchiahui-locale-prefixed'
+
+export function parseAppLocale(value: unknown): AppLocale {
+  return localeSchema.parse(value)
+}
+
+export function localeFromPathname(pathname: string): AppLocale {
+  const firstSegment = pathname.split('/')[1]
+  const parsed = localeSchema.safeParse(firstSegment)
+  return parsed.success ? parsed.data : defaultLocale
+}

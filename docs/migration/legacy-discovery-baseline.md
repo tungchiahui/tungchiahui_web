@@ -133,7 +133,7 @@ Owner 已确认以下 Route 和界面全部保留。`/more` 继续作为入口 H
 | Markdown link | `/docs/*` remains a normal anchor; external links open safely; internal links use app navigation | MUST KEEP outcome | 6 |
 | Markdown image | Responsive lazy/async image rendering | MUST KEEP outcome | 6、11 |
 | Search | Blog/Wiki/static-page indexing、type filter、scoring、highlight/excerpt、query-string sync | MUST KEEP user outcome; legacy client corpus/index MUST REMOVE | 10 |
-| Language Switch | Preserve logical document by `i18nKey`; fall back to section when variant absent; persist choice | MUST KEEP for approved Locales | 7 |
+| Language Switch | Preserve logical document by `i18nKey`; fall back to section when variant absent; persist choice | MUST KEEP for approved Locales | Phase 7 server-rendered same-logical-route switch PASS；Phase 18 final audit |
 
 Legacy Client-side Search Implementation 违反 V2 的 Server-side PostgreSQL + PGroonga 决策。只迁移 Search Experience/Result Contract，不迁移 `queryCollection(...).all()` 后在应用内构建临时索引的实现。
 
@@ -269,8 +269,8 @@ Legacy Site 的事实：
 | Explicit Blog `path` | 4/4 Blog 有 `path` | MUST KEEP exact | Phase 5 Fixture + Phase 6 真实 App Router 四条 Exact Route PASS |
 | Pinyin Route | `pinyin-pro` options + sanitizer | MUST KEEP behavior | Phase 5 Slug/Collision + Phase 6 Representative App Router PASS；Phase 18 刷新全量 Corpus |
 | Unprefixed zh-CN Route | Query candidate fallback | MUST KEEP | Phase 6 unprefixed 与 `/zh-cn` E2E PASS |
-| Four approved Locale | `zh-cn`、`zh-hk`、`zh-tw`、`en-us` | MUST KEEP | Phase 7 E2E |
-| Legacy `zh-hant` | Fifth old Locale | MAY REMOVE；不 Redirect | O-001 RESOLVED；Phase 7/18 Negative Test |
+| Four approved Locale | `zh-cn`、`zh-hk`、`zh-tw`、`en-us` | MUST KEEP | Phase 7 four-locale UI/route/content-state E2E PASS；Phase 18 final audit |
+| Legacy `zh-hant` | Fifth old Locale | MAY REMOVE；不 Redirect | O-001 RESOLVED；Phase 7 Home/Blog/Wiki 404/no-redirect PASS；Phase 18 final negative audit |
 | Seven Wiki Alias | explicit alias map | MUST KEEP unless Owner changes | Phase 5 精确 Allowlist/FK/Collision + Phase 6 Representative Canonical/Alias Response PASS；Phase 18 final audit |
 | Blog/Wiki reading/navigation | Page/Component evidence | MUST KEEP behavior | Phase 6 List/Article/TOC/Previous-next E2E PASS；Phase 16/18 final interaction audit |
 | Search experience | `/search` + Header Search | MUST KEEP outcome | Phase 10 relevance/locale/E2E |

@@ -18,23 +18,24 @@ const change = {
 }
 
 describe('Phase 6 public web boundaries', () => {
-  it('defines an exact route cache owner and invalidates canonical, prefixed and list paths', () => {
+  it('defines an exact route cache owner and invalidates every locale and list path', () => {
     expect(publicContentCachePolicy).toEqual({
       invalidation: 'exact-path-and-shared-index-tags',
       key: 'content type, canonical route path, source hash',
       owner: 'Next.js web application',
       ttl: null,
     })
-    expect(affectedPublicPaths([change])).toEqual([
-      '/',
-      '/wiki',
-      '/wiki/new-route',
-      '/wiki/old-route',
-      '/zh-cn',
-      '/zh-cn/wiki',
-      '/zh-cn/wiki/new-route',
-      '/zh-cn/wiki/old-route',
-    ])
+    const paths = affectedPublicPaths([change])
+    expect(paths).toHaveLength(20)
+    expect(paths).toEqual(
+      expect.arrayContaining([
+        '/',
+        '/en-us/wiki/new-route',
+        '/zh-cn/wiki/new-route',
+        '/zh-hk/wiki/old-route',
+        '/zh-tw/wiki',
+      ]),
+    )
   })
 
   it('signs and validates the internal revalidation trust boundary', () => {
@@ -89,5 +90,35 @@ const identifier = '保持'
     expect(rendered.html).toContain('rel="noopener noreferrer"')
     expect(rendered.html).toContain('data-asset-origin="local"')
     expect(rendered.html).not.toContain('<script')
+  }, 20_000)
+
+  it('converts only Markdown prose and protects frontmatter, code, URLs and identifiers', async () => {
+    const rendered = await renderMarkdown(
+      `---
+title: 软件机器人
+canonical: https://example.com/软件
+---
+
+# 软件机器人项目
+
+访问 [项目链接](https://example.com/软件) 并保留 \`const_identifier\`。
+
+\`\`\`ts
+const_identifier = '软件机器人'
+\`\`\``,
+      'zh-tw',
+    )
+
+    expect(rendered.headings).toContainEqual({
+      depth: 1,
+      id: '軟體機器人專案',
+      text: '軟體機器人專案',
+    })
+    expect(rendered.html).toContain('專案連結')
+    expect(rendered.html).toContain('href="https://example.com/%E8%BD%AF%E4%BB%B6"')
+    expect(rendered.html).not.toContain('%E8%BB%9F%E9%AB%94')
+    expect(rendered.html).toContain('const_identifier')
+    expect(rendered.html).toContain("'软件机器人'")
+    expect(rendered.html).not.toContain('title: 軟體機器人')
   }, 20_000)
 })
