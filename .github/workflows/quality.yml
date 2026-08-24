@@ -48,6 +48,9 @@ jobs:
       - name: TypeScript source and boundary policy
         run: pnpm run check:source
 
+      - name: Drizzle migration consistency
+        run: pnpm run check:drizzle
+
       - name: Typecheck
         run: pnpm run typecheck
 
@@ -57,8 +60,8 @@ jobs:
       - name: Disposable infrastructure integration tests
         run: pnpm run test:integration
 
-      - name: Migration suite placeholder (NOT_IMPLEMENTED; replacement Phase 3)
-        run: pnpm run test:migration:placeholder
+      - name: PostgreSQL migration suite
+        run: pnpm run test:migration
 
       - name: Validate Renovate policy
         run: pnpm run renovate:validate

@@ -40,6 +40,8 @@
 - `docs/development/phase-1-verification-report.md`
 - `docs/development/phase-2-hermetic-local-platform.md`
 - `docs/development/phase-2-verification-report.md`
+- `docs/development/phase-3-persistence-foundation.md`
+- `docs/development/phase-3-verification-report.md`
 - `docs/development/testing-strategy.md`
 - `docs/migration/nuxt-to-next.md`
 - `docs/migration/legacy-discovery-baseline.md`

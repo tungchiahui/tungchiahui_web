@@ -106,8 +106,8 @@ export class ComposeProject {
     return parsed
   }
 
-  up() {
-    this.#run(['up', '--detach', '--build', '--wait', '--wait-timeout', '240'], true)
+  up(services: readonly string[] = []) {
+    this.#run(['up', '--detach', '--build', '--wait', '--wait-timeout', '240', ...services], true)
   }
 
   down(removeVolumes: boolean) {

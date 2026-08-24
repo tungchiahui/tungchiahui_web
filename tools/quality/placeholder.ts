@@ -8,7 +8,7 @@ const kindSchema = z.enum(placeholderKinds)
 const result = kindSchema.safeParse(process.argv[2])
 
 if (!result.success) {
-  console.error('Expected placeholder kind: migration or e2e')
+  console.error('Expected placeholder kind: e2e')
   process.exitCode = 2
 } else {
   const policy = placeholderPolicies[result.data]

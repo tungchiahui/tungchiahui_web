@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "migrations": [
+    {
+      "tag": "0000_phase3_core",
+      "changeKind": "expand",
+      "risk": "medium",
+      "requiresFreshRecoverableBackup": false,
+      "reason": "Initial V2 application schema on a new database; creates additive schema, enums, tables, constraints, and indexes only.",
+      "recovery": "On a disposable target, recreate the database. On a durable target, retain the additive schema and use a reviewed forward-fix migration."
+    },
+    {
+      "tag": "0001_phase3_translation_and_ingestion",
+      "changeKind": "expand",
+      "risk": "low",
+      "requiresFreshRecoverableBackup": false,
+      "reason": "Adds translation, ingestion, and explicitly approved alias structures without changing existing rows.",
+      "recovery": "Retain the additive structures for blue-green compatibility and use a reviewed forward-fix migration if needed."
+    }
+  ]
+}

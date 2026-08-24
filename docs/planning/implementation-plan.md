@@ -1,7 +1,7 @@
 # Website V2 分阶段实施计划
 
 > Status: Planned
-> Current Phase: Awaiting Owner authorization for Phase 3
+> Current Phase: Awaiting Owner authorization for Phase 4
 > Execution Model: Hard-gated, one Phase at a time
 > Scope: 从新的 Next.js V2 Repository 基线推进到替换旧 Nuxt Production Site
 
@@ -12,7 +12,7 @@
 - [x] Phase 0 — Legacy Discovery 与实施基线
 - [x] Phase 1 — Next.js 工程与质量基线
 - [x] Phase 2 — Hermetic Local Development Platform
-- [ ] Phase 3 — PostgreSQL、Drizzle 与持久化基础
+- [x] Phase 3 — PostgreSQL、Drizzle 与持久化基础
 - [ ] Phase 4 — 独立 Control Plane 与 Job Boundary
 - [ ] Phase 5 — GitHub 单向 Content Ingestion
 - [ ] Phase 6 — zh-CN Website Vertical Slice
@@ -361,15 +361,15 @@ Content、Translation、Search 和 Application Job 都依赖稳定 Schema；先�
 
 ### Task Checklist
 
-- [ ] 定义唯一 Shared Domain Type 与 Runtime Validation Boundary，禁止跨层重复定义。
-- [ ] 创建 `documents`、`document_translations`、`translation_segments`、`translation_jobs`、`operational_jobs`、`ingestion_runs` Schema。
-- [ ] 仅为无法保留原 Route 的最后手段设计 `content_aliases`。
-- [ ] 配置 Drizzle Schema/Query Type Integration 与 Versioned SQL Migration。
-- [ ] 建立 PostgreSQL 18 PGroonga Extension Bootstrap；具体 Search Index 留给 Phase 10。
-- [ ] 定义 Application、Migration、Content Worker、Backup/Replication 的最小权限 Role Boundary。
-- [ ] 建立 Expand/Contract Migration Metadata 与 Risk/Backup Policy Hook。
-- [ ] 创建 Deterministic Development Seed 和 Previous-schema Fixture。
-- [ ] 明确 PostgreSQL Application Job 与 SQLite Infrastructure Operation 的 Schema Boundary。
+- [x] 定义唯一 Shared Domain Type 与 Runtime Validation Boundary，禁止跨层重复定义。
+- [x] 创建 `documents`、`document_translations`、`translation_segments`、`translation_jobs`、`operational_jobs`、`ingestion_runs` Schema。
+- [x] 仅为无法保留原 Route 的最后手段设计 `content_aliases`。
+- [x] 配置 Drizzle Schema/Query Type Integration 与 Versioned SQL Migration。
+- [x] 建立 PostgreSQL 18 PGroonga Extension Bootstrap；具体 Search Index 留给 Phase 10。
+- [x] 定义 Application、Migration、Content Worker、Backup/Replication 的最小权限 Role Boundary。
+- [x] 建立 Expand/Contract Migration Metadata 与 Risk/Backup Policy Hook。
+- [x] 创建 Deterministic Development Seed 和 Previous-schema Fixture。
+- [x] 明确 PostgreSQL Application Job 与 SQLite Infrastructure Operation 的 Schema Boundary。
 
 ### 本 Phase 明确不做什么
 
@@ -379,25 +379,25 @@ Content、Translation、Search 和 Application Job 都依赖稳定 Schema；先�
 
 ### Tests / Verification
 
-- [ ] Empty Database -> Latest Migration 通过。
-- [ ] Previous Production-like Schema -> Latest Migration 通过。
-- [ ] Migration 重复执行具有预期的安全行为。
-- [ ] Role Test 证明 Application Role 不能管理 Extension、Replication 或 Backup。
-- [ ] PgBouncer Mode 与 Drizzle Query Pattern 兼容。
-- [ ] Schema/Validation Test 覆盖非法 Locale、Job Type 和 External Payload。
+- [x] Empty Database -> Latest Migration 通过。
+- [x] Previous Production-like Schema -> Latest Migration 通过。
+- [x] Migration 重复执行具有预期的安全行为。
+- [x] Role Test 证明 Application Role 不能管理 Extension、Replication 或 Backup。
+- [x] PgBouncer Mode 与 Drizzle Query Pattern 兼容。
+- [x] Schema/Validation Test 覆盖非法 Locale、Job Type 和 External Payload。
 
 ### Acceptance Criteria
 
-- [ ] Schema 能表达全部已批准 Runtime Content、Translation、Ingestion 与 Application Job State。
-- [ ] 每个 Schema Change 可 Review、可复现并符合 Expand/Contract。
-- [ ] SQLite 例外严格限制在 ADR 0015 的 Recovery State。
+- [x] Schema 能表达全部已批准 Runtime Content、Translation、Ingestion 与 Application Job State。
+- [x] 每个 Schema Change 可 Review、可复现并符合 Expand/Contract。
+- [x] SQLite 例外严格限制在 ADR 0015 的 Recovery State。
 
 ### Exit Gate
 
-- [ ] Clean/Previous Migration Gate、Role Boundary 和 Typecheck 全部通过。
-- [ ] Data Model 与 Migration 文档和实现一致。
-- [ ] 创建聚焦 Commit，建议：`feat(db): complete phase 3 persistence foundation`。
-- [ ] Commit 后停止并向 Owner 报告，不自动进入 Phase 4。
+- [x] Clean/Previous Migration Gate、Role Boundary 和 Typecheck 全部通过。
+- [x] Data Model 与 Migration 文档和实现一致。
+- [x] 创建聚焦 Commit，建议：`feat(db): complete phase 3 persistence foundation`。
+- [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 4。
 
 ### 本阶段完成后形成的 Artifact / Capability
 

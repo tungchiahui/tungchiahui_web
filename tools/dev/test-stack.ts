@@ -115,7 +115,7 @@ async function run() {
 
     await waitForS3(configuration)
     await ensureBucket(configuration)
-    runInfrastructureHooks(repositoryRoot, compose)
+    await runInfrastructureHooks(repositoryRoot, compose)
     verifyPostgresAndPgBouncer(compose)
     await runS3Smoke(configuration)
     await fetchServiceHealth(new URL('/health', configuration.controlApiUrl), 'control-api')

@@ -1,6 +1,6 @@
 # 数据模型
 
-本文件定义逻辑职责，而不是最终 SQL Column Name。精确 Schema 由 Database Migration 进行版本管理。
+本文件定义逻辑职责。Phase 3 已将这些职责实现为 `app` PostgreSQL Schema；精确 Column、Constraint、Index 和 Enum 继续由 `drizzle/*.sql` Versioned Migration 管理，TypeScript Integration 位于 `src/database/schema.ts`。
 
 ## 主要实体
 
@@ -179,6 +179,30 @@ error_summary
 只有在无法通过新的 Deterministic Router 保留 Legacy Route 时才使用。
 
 该表是最后手段，而不是默认用来堆 Redirect Map 的地方。
+
+每条 Alias 必须保存非空 `approval_reference`。Phase 3 不 Seed Alias；Phase 5 只能写入 Phase 0 已批准的 7 个 Legacy Wiki Alias，新增例外仍需 Owner 单项批准。Locale-prefixed Alias 从同一 Logical Route 派生，不复制为无边界 Redirect Row。
+
+### owner_managed_datasets
+
+保存 Owner 已批准从 Legacy EdgeOne Blob 迁入 PostgreSQL 的两类 Runtime Data：
+
+```text
+tech_footprint
+weight_loss
+```
+
+字段包括 `dataset_key`、JSONB `payload`、单调 `revision`、`updated_at` 和 `updated_by`。Phase 3 只建立 PostgreSQL Authority、Revision 和 JSON Object Constraint；Phase 4 的 Auth/Validation Boundary 必须在写入前对各 Dataset 的具体 Payload Shape 做更窄的 Zod Validation。该表不授权把其他业务数据作为任意 Blob 写入。
+
+## Phase 3 物理边界
+
+| Schema / Store | Phase 3 内容 | 明确排除 |
+| --- | --- | --- |
+| PostgreSQL `app` | Document、Translation、Segment、Translation Job、Application Job、Ingestion、Approved Alias、Owner-managed Dataset | Deploy、Rollback、Restore、Recovery、Server Migration Operation |
+| PostgreSQL `drizzle` | Versioned Migration Journal | Application Job 或业务数据 |
+| PostgreSQL `public` | PGroonga Extension Bootstrap | 业务 Table |
+| host-local SQLite | 继续保留 Phase 2 最小 Control-state Skeleton | Content、Translation、Search、Ingestion、Application Job |
+
+`src/domain/persistence.ts` 是 Locale、Content/Job/Translation Status、Dataset Key 和 External Write Schema 的唯一 Shared Domain 定义。Drizzle Schema 从这些 Closed Union 建立 PostgreSQL Enum，Repository/API 不得再次手写平行 Union。
 
 ## 搜索
 

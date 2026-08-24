@@ -1,47 +1,22 @@
-import { readdirSync } from 'node:fs'
-import { resolve } from 'node:path'
-
+import { runPostgresMigrations } from '../../src/database/migrate'
+import { seedDevelopmentDatabase } from '../../src/database/seed'
 import type { ComposeProject } from './compose'
 
-function currentMigrationFiles(repositoryRoot: string) {
-  const migrationDirectory = resolve(repositoryRoot, 'drizzle')
+const localDatabaseCredentials = 'tungchiahui:local-only-postgres'
 
-  try {
-    return readdirSync(migrationDirectory)
-      .filter((name) => name.endsWith('.sql'))
-      .sort()
-  } catch (error: unknown) {
-    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') {
-      return []
-    }
-
-    throw error
-  }
+export function databaseUrl(compose: ComposeProject, service: 'postgres' | 'pgbouncer') {
+  const port = compose.port(service, service === 'postgres' ? 5432 : 6432)
+  return `postgresql://${localDatabaseCredentials}@127.0.0.1:${port}/tungchiahui`
 }
 
-export function runInfrastructureHooks(repositoryRoot: string, compose: ComposeProject) {
-  compose.exec('postgres', [
-    'psql',
-    '--dbname',
-    'tungchiahui',
-    '--set',
-    'ON_ERROR_STOP=1',
-    '--username',
-    'tungchiahui',
-    '--command',
-    'CREATE EXTENSION IF NOT EXISTS pgroonga;',
-  ])
+export async function runInfrastructureHooks(repositoryRoot: string, compose: ComposeProject) {
+  const migrationResult = await runPostgresMigrations(databaseUrl(compose, 'postgres'), {
+    repositoryRoot,
+  })
+  await seedDevelopmentDatabase(databaseUrl(compose, 'pgbouncer'))
 
-  const migrationFiles = currentMigrationFiles(repositoryRoot)
-
-  if (migrationFiles.length > 0) {
-    throw new Error(
-      'Phase 2 migration hook found SQL migrations before the Phase 3 runner exists; refusing partial execution',
-    )
-  }
-
-  console.log('Migration hook: ready (0 versioned migrations; first schema belongs to Phase 3)')
-  console.log('Seed hook: ready (0 business fixtures; first schema belongs to Phase 3)')
+  console.log(`Migration hook: ready (${migrationResult.migrationCount} versioned migrations)`)
+  console.log('Seed hook: ready (deterministic Phase 3 development fixture)')
 }
 
 export function verifyPostgresAndPgBouncer(compose: ComposeProject) {

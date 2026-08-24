@@ -6,6 +6,16 @@ Schema 通过 Drizzle 和 Versioned Migration 表示。
 
 Production Migration 必须可 Review、可复现。
 
+Phase 3 的实现入口：
+
+- `src/database/schema.ts`：当前 Drizzle Type Integration；
+- `drizzle/*.sql` 与 `drizzle/meta/_journal.json`：顺序化 SQL 与 Drizzle Journal；
+- `drizzle/migration-policy.json`：每个 Migration 的 Expand/Contract、Risk、Fresh-backup Requirement 和 Recovery 说明；
+- `src/database/migrate.ts`：Advisory Lock、Policy Gate、Role Bootstrap、Drizzle Runner 与 Applied Hash/Timestamp Verification；
+- `ops/database/roles.sql`：Cluster Role、PGroonga 与 Object Grant Bootstrap。
+
+`drizzle-kit generate` 只生成可 Review Artifact；`drizzle-kit push` 不是受支持的 Production Path。Checked-in Migration 被应用后不得改写：Runner 会把数据库中保存的 Hash/Timestamp 与当前 Artifact 比较并拒绝 Drift。
+
 ## 禁止 Production Push
 
 不要通过未版本化的 Convenience Command 修改 Production Schema。
@@ -54,6 +64,20 @@ Deployment CLI 根据 Migration Metadata/Policy 决定这一点，而不是依�
 
 Migration Orchestration Phase、Lock 与 Audit State 保存在 PostgreSQL-independent Control-state SQLite 中，不能要求先向目标 Production PostgreSQL 创建 Operation Job。实际执行某个 Schema Migration 当然要求 Database 可达；如果不可达，应安全停在明确 Phase，并保留可恢复状态。PostgreSQL Restore/Recovery 使用同一 Control/Recovery Engine。
 
+Phase 3 Runner 已强制解析 Metadata：未经显式 `allowContract` 不执行 Contract Migration；标记 `requiresFreshRecoverableBackup` 的 Migration 在没有 Fresh-recoverable-backup Evidence 时拒绝。Phase 14 才把这些输入接入 Shared Deployment Engine 和 SQLite Operation State；Phase 3 不创建 Deployment Operation。
+
+## Role Boundary
+
+| Role | 能力 | 禁止 |
+| --- | --- | --- |
+| `site_migrator` | 在目标 Database 创建/拥有 `app` 与 `drizzle` Schema Object | Superuser、Role/Database 管理、Replication、Extension Bootstrap |
+| `site_app` | 读取 `app` Runtime Table | Schema 写入、Extension、Backup、Replication、Migration |
+| `site_content_worker` | 对 `app` Table 执行受控 CRUD | Schema/Extension/Role/Replication 管理 |
+| `site_backup` | `pg_read_all_data`、`pg_monitor` | Application Write、Schema Migration、Replication |
+| `site_replication` | PostgreSQL Replication Attribute | Application Table Grant、Schema Migration、Backup Role Inheritance |
+
+这些是 NOLOGIN Group Role；Phase 12 才通过 Encrypted Secret 和 Container Identity 配置 Production Login/Member。Local Seed 在 PgBouncer Transaction 内使用 `SET LOCAL ROLE site_content_worker`，Application Compatibility Test 使用 `SET LOCAL ROLE site_app`，不会把 Superuser Session State 泄漏到下一个 Transaction。
+
 ## CI
 
 Migration CI 验证：
@@ -62,3 +86,5 @@ Migration CI 验证：
 - 从 Previous Production Schema Upgrade
 - Representative Production-like Data
 - Compatibility Assumption
+
+Phase 3 真实 Migration Suite 使用 Disposable PostgreSQL 18，分别验证 Empty -> Latest、由 `tests/fixtures/database/previous-schema.json` 固定的 Previous -> Latest、重复执行、Applied Hash、Representative Data Preservation、Role Boundary、数据库 Enum/JSON Constraint 和 transaction-mode PgBouncer + Drizzle Query。任何成功或失败路径都删除 Test Container、Network 和 Volume。

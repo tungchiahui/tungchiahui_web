@@ -55,7 +55,7 @@ Fake deploy-agent      127.0.0.1:18081
 10. 启动 Next.js Dev Server
 11. 报告 Endpoint 和 Service Status
 
-Phase 2 尚无业务 Schema，因此 Migration/Seed Hook 会明确报告 `0` 个 Versioned Migration/Fixture，同时验证 PostgreSQL、PGroonga 和入口可用；首个业务 Migration/Seed 属于 Phase 3。
+Phase 3 已用真实 Drizzle Runner 和 Deterministic Seed 替换零 Migration Hook。每次 Start 直接连接 PostgreSQL 执行 Policy/Role/PGroonga/Migration Gate，再通过 transaction-mode PgBouncer 以 `site_content_worker` 权限 Seed 两个 Document、Translation/Job/Ingestion Fixture，以及空的 `tech_footprint`/`weight_loss` Development Dataset。重复 Start 不重复 Row，也不重置已有数据。
 
 ## 隔离
 

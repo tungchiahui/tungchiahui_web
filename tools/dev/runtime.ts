@@ -73,7 +73,7 @@ export async function startDevelopmentStack(repositoryRoot = process.cwd()) {
     context.compose.up()
     await waitForS3(context.configuration)
     await ensureBucket(context.configuration)
-    runInfrastructureHooks(context.repositoryRoot, context.compose)
+    await runInfrastructureHooks(context.repositoryRoot, context.compose)
     await waitForHttp(new URL('/health', context.configuration.controlApiUrl), 'control-api')
     await waitForHttp(
       new URL('/health', context.configuration.fakeDeployAgentUrl),

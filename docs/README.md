@@ -67,6 +67,11 @@ docs/planning/implementation-plan.md
 - `development/phase-2-hermetic-local-platform.md` — Compose 拓扑、镜像 Digest、CLI 生命周期、SQLite/Fake Boundary 与 Disposable Test Contract。
 - `development/phase-2-verification-report.md` — Phase 2 Clean Start、重复测试、失败清理、Stop/Restart、Safe Reset 与隔离 Gate 证据。
 
+## Phase 3 Persistence Foundation
+
+- `development/phase-3-persistence-foundation.md` — PostgreSQL/Drizzle Schema、Migration Policy、Role、Seed、PgBouncer 与 SQLite Boundary。
+- `development/phase-3-verification-report.md` — Clean/Previous/Repeat Migration、Role、Validation、Integration 与质量 Gate 证据。
+
 ## Current implementation handoff
 
 - `planning/current-state.md` — 已完成 Phase、实际能力、Stub/Fake、已知限制、Legacy 回查规则与下一 Phase Prerequisite。
