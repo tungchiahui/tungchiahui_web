@@ -33,10 +33,11 @@ docs/architecture/control-plane-and-jobs.md
 开始实施前阅读：
 
 ```text
+docs/planning/current-state.md
 docs/planning/implementation-plan.md
 ```
 
-该计划定义 Phase 0–18 的执行顺序、硬 Gate、Commit/停止规则和 Accepted ADR Coverage；它不替代规范或 ADR。
+`current-state.md` 是新会话的简洁交接入口；实施计划定义 Phase 0–18 的执行顺序、硬 Gate、Commit/停止规则和 Accepted ADR Coverage。两者都不替代规范或 ADR。
 
 ## 目录
 
@@ -65,3 +66,7 @@ docs/planning/implementation-plan.md
 
 - `development/phase-2-hermetic-local-platform.md` — Compose 拓扑、镜像 Digest、CLI 生命周期、SQLite/Fake Boundary 与 Disposable Test Contract。
 - `development/phase-2-verification-report.md` — Phase 2 Clean Start、重复测试、失败清理、Stop/Restart、Safe Reset 与隔离 Gate 证据。
+
+## Current implementation handoff
+
+- `planning/current-state.md` — 已完成 Phase、实际能力、Stub/Fake、已知限制、Legacy 回查规则与下一 Phase Prerequisite。

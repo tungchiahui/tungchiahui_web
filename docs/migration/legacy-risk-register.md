@@ -29,6 +29,7 @@
 | R-022 | Analytics-sensitive Alias/Locale paths split or lose historical traffic continuity | Medium | High | Web/Observability / 6、7、16、18 | aggregate exact path variants; final analytics-sensitive route audit | OPEN |
 | R-023 | Static Pages deployment assumptions are mistaken for V2 architecture requirements | Medium | Critical | Architecture / 1、12–15 | ADR conformance review; no in-place migration or parallel deploy system | CONTROLLED |
 | R-024 | Legacy changes after Phase 0 make baseline stale before cutover | High | High | Migration / 18 | freeze/refresh inventory and full delta immediately before cutover | OPEN |
+| R-025 | V2 Metadata/Canonical 处理错误地合并 unprefixed、Locale 或 Alias Route，造成重复索引或内容身份漂移 | Medium | High: SEO/URL continuity regression | Web/i18n / 6、7、16、18 | Locale-aware title/description tests；Exact Route canonical audit；final indexability/social metadata review | OPEN |
 
 ## Severity rule
 

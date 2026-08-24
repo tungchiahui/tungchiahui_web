@@ -261,6 +261,11 @@ pnpm install --frozen-lockfile
 
 - `docs/migration/nuxt-to-next.md`
 
+### 当前实施状态
+
+- `docs/planning/current-state.md` — 新会话开始当前 Phase 前的简洁交接入口。
+- `docs/planning/implementation-plan.md` — Phase 0–18 的硬 Gate、依赖与进度。
+
 ### 架构决策
 
 参见 `docs/decisions/README.md`。

@@ -24,6 +24,14 @@
 
 The local application image is tagged `tungchiahui-web-local:phase2`; it is not a Production Image or Deployment Identity.
 
+## Implementation constraints and known pitfalls
+
+- PostgreSQL 18 的持久化挂载目标是 `/var/lib/postgresql`。不得改回旧 Image 常见的 `/var/lib/postgresql/data`，除非先验证当前固定 Image 的实际目录契约并重跑 Clean Start/Restart/Reset Gate。
+- Compose `local` Network 有意不设置 `internal: true`。验证使用的 Docker Engine 29 在 Internal Network 下不会按本项目需要发布 Loopback Host Port；当前隔离由 `127.0.0.1` Binding、Local Docker Context 拒绝、受限 Environment 和 Compose Forbidden-target Guard 共同保证。改变 Network Mode 必须重跑全部 Phase 2 Lifecycle/Isolation Test。
+- Development `web` Service 有意不使用 Read-only Root Filesystem，因为 Next.js Dev Runtime 和 `.next` Cache 需要写入；`.next` 使用专用 Named Volume。它不是 Production Container Hardening 结论，Production Image/Read-only Policy 属于 Phase 12/16。
+- `tools/dev/hooks.ts` 在 Phase 2 明确只允许零个业务 Migration，并在发现 `drizzle/*.sql` 时拒绝部分执行。Phase 3 添加首个 Migration 时必须同时用真实 Migration Runner/Seed Gate 替换这一拒绝逻辑和 Migration Placeholder，不能先提交 SQL 再让 `./site dev` 失效。
+- Phase 2 Local Image、`control-api` Skeleton、Fake Deploy Agent 和 Fake Translation Provider 均不可成为隐藏 Production Path。
+
 ## Isolation boundary
 
 - Host ports bind only to `127.0.0.1`; Test ports are assigned dynamically.

@@ -55,6 +55,7 @@
 - `docs/operations/runbook.md`
 - `docs/operations/server-migration.md`
 - `docs/operations/translation-operations.md`
+- `docs/planning/current-state.md`
 - `docs/planning/implementation-plan.md`
 - `docs/planning/phase-0-traceability.md`
 - `docs/specification/acceptance-criteria.md`

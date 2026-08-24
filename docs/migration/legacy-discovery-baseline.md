@@ -18,6 +18,12 @@
 
 只读证据采集开始时，Legacy Repository 位于 `main`，HEAD 为上述 Commit，`git status --short --branch` 仅输出 `## main...origin/main`。采集结束必须再次得到同样的 HEAD 和 Clean Worktree；这是 Phase 0 Gate 的一部分。
 
+### 1.1 Post-baseline Delta 与后续读取规则
+
+Phase 3 前交接审计时，Legacy `main` 已前进到 `155c39874fef1d1de4587d1dc5dacb2c42756a38`。对 `d33e9ee...155c398` 的定点只读 Diff 只有 `.nvmrc`、`package.json` 和 `package-lock.json`，提交主题为 Node.js/npm 版本标准化；没有修改 Content、Frontmatter、Route、Page、Component 或 Asset。因此本文件的 Phase 0 行为证据仍固定在 `d33e9ee...`，不把后来的工具链提交伪装成重新完成过全量 Discovery。
+
+Phase 1–17 应优先使用本文件、`legacy-route-and-pinyin-fixtures.md`、`legacy-risk-register.md` 和 `phase-0-traceability.md`。只有这些 Artifact 无法回答某个具体 Legacy 行为时，才定点只读检查旧仓库；Phase 18 再从当时最新 Legacy HEAD 执行完整 Delta/Inventory 刷新。
+
 ## 2. Evidence scope 与数量
 
 | 类别 | 发现 | 证据 |
@@ -149,6 +155,21 @@ Legacy Client-side Search Implementation 违反 V2 的 Server-side PostgreSQL + 
 - Nuxt Loading、NuxtLink、MDC Component 的具体实现。
 
 Phase 6 使用 Tailwind CSS 4 与 Base UI-based shadcn/ui 重建可识别 Identity；不得复制旧 CSS Architecture 或引入平行 UI/CSS Framework。
+
+## 5A. SEO / Metadata Compatibility
+
+对 Phase 0 Evidence Commit 的定点 SEO 检查确认：
+
+| Surface | Legacy metadata behavior | V2 compatibility |
+| --- | --- | --- |
+| Homepage、Blog/Wiki List、Special Page | Page-level、Locale-aware `title` 与 `description` | MUST KEEP 有意义且与页面 Locale/内容一致的 Title/Description；实现改用 Next.js Metadata |
+| Blog Article | Title 来自文章 Title；Description 优先 Frontmatter `description`，否则回退 Title；同时输出 `og:title`、`og:description` | MUST KEEP Content-derived Title/Description/OG outcome 和 Exact Public Route |
+| Wiki Article | 使用计算后的 Page Title；Description 回退当前 Wiki Title；输出 `og:title` | MUST KEEP Document/Chapter Identity 与 Locale-aware Metadata outcome |
+| Static ROS2 GitBook | 每个静态 HTML 自带历史 `<head>`；部分 Description 为空 | 作为完整 Static Archive 保留，不要求 V2 动态页面替它重写 Metadata |
+
+Legacy Nuxt Config/Pages 没有发现统一 `titleTemplate`、`rel=canonical`、Sitemap/Robots 配置、Twitter Card、`og:url` 或统一 OG Image。这意味着 V2 可以按 Next.js 和生产 SEO 需要新增/改进这些能力，但不得据此改变已批准 Route、建立未经批准的 Redirect，或让 unprefixed/Locale Route 指向错误的 Canonical Identity。`zh-hant` 仍按 O-001 直接移除。
+
+Phase 6/7 应验证 Page/Article 的 Locale-aware Title/Description 和 Exact URL；Phase 16/18 再审计 Canonical、Indexability、Social Metadata 与最终 Legacy URL/SEO Continuity。不得复制 Legacy `useHead` 实现。
 
 ## 6. Content Convention
 

@@ -346,6 +346,15 @@ Backup Command 成功不足以证明可恢复性。
 
 旧 Nuxt 仓库是只读参考资料。
 
+Phase 0 已经把默认 Legacy 知识沉淀在以下仓库内 Artifact：
+
+- `docs/migration/legacy-discovery-baseline.md`
+- `docs/migration/legacy-route-and-pinyin-fixtures.md`
+- `docs/migration/legacy-risk-register.md`
+- `docs/planning/phase-0-traceability.md`
+
+Phase 1–17 开始工作时必须先使用这些 Artifact、相关规范和 Fixture，不得把重新全量扫描旧仓库当作每个 Phase 的默认准备步骤。只有当前仓库无法回答某个具体 Legacy 行为时，才允许对旧仓库做只读、定点的文件或 Commit 检查；新发现的后续实施必需事实应沉淀回 V2 仓库。Phase 18 按计划执行最终 Legacy Delta/Inventory 刷新。
+
 用于理解：
 
 - 现有 Route

@@ -111,6 +111,7 @@ Phase 0 Verification 使用 `rg -c '^- \[ \]' docs/specification/acceptance-crit
 | Unprefixed zh-CN + approved Locale routes | 6、7 | E2E route suite |
 | 7 Wiki aliases | 5、6、18 | explicit compatibility only |
 | Blog/Wiki reading/navigation behavior | 6 | critical vertical-slice E2E |
+| Page/Article SEO Title、Description、OG 与 Exact Route identity | 6、7、16、18 | locale-aware metadata tests；canonical/indexability/social metadata audit |
 | Search behavior | 10 | server-side relevance/result contract |
 | CDN/static/media categories | 6、11 | asset loading + S3/AList contract |
 | External integration inventory | 9、11、12、16 | auth/cost/storage/security gates as applicable |
