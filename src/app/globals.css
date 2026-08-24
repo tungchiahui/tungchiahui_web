@@ -1,0 +1,50 @@
+@import "tailwindcss";
+
+:root {
+  --background: oklch(0.985 0.002 247.839);
+  --foreground: oklch(0.208 0.042 265.755);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.208 0.042 265.755);
+  --primary: oklch(0.546 0.245 262.881);
+  --primary-foreground: oklch(0.985 0.002 247.839);
+  --border: oklch(0.929 0.013 255.508);
+  --ring: oklch(0.623 0.214 259.815);
+  --radius: 0.75rem;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 0.25rem);
+  --radius-md: calc(var(--radius) - 0.125rem);
+  --radius-lg: var(--radius);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: oklch(0.129 0.042 264.695);
+    --foreground: oklch(0.968 0.007 247.896);
+    --card: oklch(0.208 0.042 265.755);
+    --card-foreground: oklch(0.968 0.007 247.896);
+    --primary: oklch(0.707 0.165 254.624);
+    --primary-foreground: oklch(0.129 0.042 264.695);
+    --border: oklch(1 0 0 / 12%);
+    --ring: oklch(0.623 0.214 259.815);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+}

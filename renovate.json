@@ -1,0 +1,53 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":dependencyDashboard", "helpers:pinGitHubActionDigests"],
+  "baseBranchPatterns": ["main"],
+  "labels": ["dependencies"],
+  "automerge": false,
+  "platformAutomerge": false,
+  "rangeStrategy": "pin",
+  "ignoreUnstable": true,
+  "respectLatest": true,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 4am on monday"]
+  },
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["security"]
+  },
+  "packageRules": [
+    {
+      "description": "Require dashboard approval for every major dependency update",
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true,
+      "automerge": false,
+      "labels": ["dependencies", "major"]
+    },
+    {
+      "description": "Keep core runtime major updates isolated and manually reviewed",
+      "matchPackageNames": [
+        "node",
+        "next",
+        "react",
+        "react-dom",
+        "typescript",
+        "tailwindcss",
+        "@tailwindcss/postcss",
+        "next-intl",
+        "@base-ui/react",
+        "zod"
+      ],
+      "matchUpdateTypes": ["major"],
+      "groupName": "core runtime major updates",
+      "dependencyDashboardApproval": true,
+      "automerge": false,
+      "labels": ["dependencies", "core", "major"]
+    },
+    {
+      "description": "Keep the pnpm lockfile synchronized with dependency PRs",
+      "matchManagers": ["npm"],
+      "rangeStrategy": "pin"
+    }
+  ]
+}

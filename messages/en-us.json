@@ -1,0 +1,11 @@
+{
+  "Baseline": {
+    "metadataTitle": "TungChiaHui Website V2",
+    "metadataDescription": "The Website V2 engineering and quality baseline.",
+    "eyebrow": "Website V2",
+    "heading": "Engineering baseline ready",
+    "description": "This page only verifies the Next.js, TypeScript, Tailwind CSS, and next-intl toolchain.",
+    "statusLabel": "Current stage",
+    "statusValue": "Awaiting Phase 2 authorization"
+  }
+}

@@ -55,3 +55,8 @@ docs/planning/implementation-plan.md
 - `migration/legacy-risk-register.md` — Legacy Migration Risk 与 Owner Blocker。
 - `planning/phase-0-traceability.md` — Architecture、Requirement、Acceptance Criteria 与 ADR 到实施 Phase 的追踪。
 - `migration/phase-0-verification-report.md` — Phase 0 实际检查结果与 Owner Exit Gate 状态。
+
+## Phase 1 Engineering Baseline
+
+- `development/phase-1-engineering-baseline.md` — 锁定 Toolchain、质量命令、CI/Placeholder、Source Boundary 与 Renovate Policy。
+- `development/phase-1-verification-report.md` — Phase 1 实际安装、质量 Gate、Clean Checkout 与 Exit 状态。

@@ -191,6 +191,18 @@ push/merge to main
 
 `./site deploy [git-sha-or-release]` 保留为人工触发、重试或指定版本部署入口，并调用完全相同的 Control Plane 与 Deployment Engine。Content Repository 的 Markdown Push 只触发 Content Sync，不触发 Next.js Image Build 或 Blue-Green Deployment。
 
+## Phase 1 工程入口
+
+使用 Node.js `24.19.0` 与 pnpm `11.23.0`：
+
+```bash
+pnpm install --frozen-lockfile
+./site check
+./site test
+```
+
+Phase 1 只提供工程与质量基线。完整的 `./site dev` Hermetic Stack 在 Phase 2 实现；当前不得用不完整的手工基础设施替代它。版本、Placeholder 和 CI Policy 见 `docs/development/phase-1-engineering-baseline.md`。
+
 ## 文档地图
 
 ### 项目治理

@@ -1,0 +1,57 @@
+{
+  "name": "tungchiahui-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.23.0",
+  "engines": {
+    "node": "24.19.0",
+    "pnpm": "11.23.0"
+  },
+  "scripts": {
+    "build": "next build",
+    "check:biome": "biome check .",
+    "check:source": "tsx tools/quality/source-policy.ts",
+    "dev": "next dev",
+    "format": "biome format --write .",
+    "lint": "biome lint .",
+    "phase1:check": "pnpm run check:biome && pnpm run check:source && pnpm run typecheck && pnpm run renovate:validate && pnpm run build",
+    "phase1:test": "pnpm run test:unit && pnpm run test:integration:placeholder && pnpm run test:migration:placeholder && pnpm run test:e2e:placeholder",
+    "renovate:validate": "renovate-config-validator renovate.json",
+    "start": "next start",
+    "test:e2e:placeholder": "tsx tools/quality/placeholder.ts e2e",
+    "test:integration:placeholder": "tsx tools/quality/placeholder.ts integration",
+    "test:migration:placeholder": "tsx tools/quality/placeholder.ts migration",
+    "test:unit": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@base-ui/react": "1.7.0",
+    "clsx": "2.1.1",
+    "lucide-react": "1.33.0",
+    "next": "16.3.2",
+    "next-intl": "4.13.7",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "server-only": "0.0.1",
+    "tailwind-merge": "3.6.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.10",
+    "@playwright/test": "1.62.1",
+    "@tailwindcss/postcss": "4.3.3",
+    "@testing-library/jest-dom": "7.0.1",
+    "@testing-library/react": "16.3.2",
+    "@testing-library/user-event": "14.6.6",
+    "@types/node": "24.13.3",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.5",
+    "jsdom": "30.0.1",
+    "renovate": "44.39.3",
+    "tailwindcss": "4.3.3",
+    "tsx": "4.23.12",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
+  }
+}

@@ -36,6 +36,8 @@
 - `docs/development/code-quality.md`
 - `docs/development/configuration-and-secrets.md`
 - `docs/development/local-development.md`
+- `docs/development/phase-1-engineering-baseline.md`
+- `docs/development/phase-1-verification-report.md`
 - `docs/development/testing-strategy.md`
 - `docs/migration/nuxt-to-next.md`
 - `docs/migration/legacy-discovery-baseline.md`

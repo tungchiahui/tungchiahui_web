@@ -1,0 +1,11 @@
+{
+  "Baseline": {
+    "metadataTitle": "TungChiaHui Website V2",
+    "metadataDescription": "Website V2 工程與品質基線。",
+    "eyebrow": "Website V2",
+    "heading": "工程基線已準備好",
+    "description": "此頁面僅用於驗證 Next.js、TypeScript、Tailwind CSS 和 next-intl 工程流程。",
+    "statusLabel": "目前階段",
+    "statusValue": "等待 Phase 2 授權"
+  }
+}

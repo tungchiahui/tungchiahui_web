@@ -1,7 +1,7 @@
 # Website V2 分阶段实施计划
 
 > Status: Planned
-> Current Phase: Awaiting Owner authorization for Phase 1
+> Current Phase: Awaiting Owner authorization for Phase 2
 > Execution Model: Hard-gated, one Phase at a time
 > Scope: 从新的 Next.js V2 Repository 基线推进到替换旧 Nuxt Production Site
 
@@ -10,7 +10,7 @@
 ## Overall Progress
 
 - [x] Phase 0 — Legacy Discovery 与实施基线
-- [ ] Phase 1 — Next.js 工程与质量基线
+- [x] Phase 1 — Next.js 工程与质量基线
 - [ ] Phase 2 — Hermetic Local Development Platform
 - [ ] Phase 3 — PostgreSQL、Drizzle 与持久化基础
 - [ ] Phase 4 — 独立 Control Plane 与 Job Boundary
@@ -198,16 +198,16 @@ Legacy URL、Pinyin、Frontmatter 和功能保留会影响 Schema、Routing、Co
 
 ### Task Checklist
 
-- [ ] 初始化新的 Next.js 16.x App Router Project，不从 Nuxt 原地迁移。
-- [ ] 固定 Node.js 24 LTS、pnpm 与所有初始 Dependency Version，提交 `pnpm-lock.yaml`。
-- [ ] 配置 `strict`、`noUncheckedIndexedAccess`、`exactOptionalPropertyTypes`、`noImplicitOverride`。
-- [ ] 建立 Server-first Module Boundary，禁止 `.js`/`.jsx` Application Source。
-- [ ] 配置 Tailwind CSS 4、shadcn/ui Base UI Primitive 和最小 next-intl Skeleton。
-- [ ] 配置 Biome、Vitest、Testing Library、Playwright 与 Production Build Command。
-- [ ] 建立 Typed Zod Configuration Boundary 与 `.env.example`，不包含 Secret。
-- [ ] 实现薄 `./site` Bootstrap Wrapper 和 TypeScript CLI 的 `check`、`test` 基础命令。
-- [ ] 配置 PR CI Gate：format/lint、typecheck、unit、integration placeholder、migration placeholder、build、affected E2E placeholder。
-- [ ] 配置 Renovate 仅创建 PR、同步 Lockfile、Security Update 优先、Core Major 不默认 Auto-merge、Stable/LTS Only。
+- [x] 初始化新的 Next.js 16.x App Router Project，不从 Nuxt 原地迁移。
+- [x] 固定 Node.js 24 LTS、pnpm 与所有初始 Dependency Version，提交 `pnpm-lock.yaml`。
+- [x] 配置 `strict`、`noUncheckedIndexedAccess`、`exactOptionalPropertyTypes`、`noImplicitOverride`。
+- [x] 建立 Server-first Module Boundary，禁止 `.js`/`.jsx` Application Source。
+- [x] 配置 Tailwind CSS 4、shadcn/ui Base UI Primitive 和最小 next-intl Skeleton。
+- [x] 配置 Biome、Vitest、Testing Library、Playwright 与 Production Build Command。
+- [x] 建立 Typed Zod Configuration Boundary 与 `.env.example`，不包含 Secret。
+- [x] 实现薄 `./site` Bootstrap Wrapper 和 TypeScript CLI 的 `check`、`test` 基础命令。
+- [x] 配置 PR CI Gate：format/lint、typecheck、unit、integration placeholder、migration placeholder、build、affected E2E placeholder。
+- [x] 配置 Renovate 仅创建 PR、同步 Lockfile、Security Update 优先、Core Major 不默认 Auto-merge、Stable/LTS Only。
 
 ### 本 Phase 明确不做什么
 
@@ -217,24 +217,24 @@ Legacy URL、Pinyin、Frontmatter 和功能保留会影响 Schema、Routing、Co
 
 ### Tests / Verification
 
-- [ ] Biome、Typecheck、Unit Skeleton 和 Production Build 在 Clean Checkout 通过。
-- [ ] Repository 中不存在 `.js`/`.jsx` Application File、`@ts-ignore` 或未记录 `any`。
-- [ ] Server-only Module 无法从 Client Boundary 导入。
-- [ ] Renovate Configuration Validation 通过，且没有 Direct-to-`main` Rule。
-- [ ] `./site check` 与 `./site test` 具有可靠 Exit Code。
+- [x] Biome、Typecheck、Unit Skeleton 和 Production Build 在 Clean Checkout 通过。
+- [x] Repository 中不存在 `.js`/`.jsx` Application File、`@ts-ignore` 或未记录 `any`。
+- [x] Server-only Module 无法从 Client Boundary 导入。
+- [x] Renovate Configuration Validation 通过，且没有 Direct-to-`main` Rule。
+- [x] `./site check` 与 `./site test` 具有可靠 Exit Code。
 
 ### Acceptance Criteria
 
-- [ ] Clean Checkout 使用锁定 Toolchain 可重复安装、检查和构建。
-- [ ] CI Gate 失败会阻止 Merge/后续 Production Workflow。
-- [ ] 技术栈与 Accepted ADR 完全一致，没有平行 Framework/Tool。
+- [x] Clean Checkout 使用锁定 Toolchain 可重复安装、检查和构建。
+- [x] CI Gate 失败会阻止 Merge/后续 Production Workflow。
+- [x] 技术栈与 Accepted ADR 完全一致，没有平行 Framework/Tool。
 
 ### Exit Gate
 
-- [ ] 所有 Phase 1 Test/Verification 与 Acceptance Criteria 通过。
-- [ ] 临时 Integration/E2E Placeholder 有 Owner、替换 Phase 和不可误判为真实通过的状态。
-- [ ] 创建聚焦 Commit，建议：`chore(v2): complete phase 1 engineering baseline`。
-- [ ] Commit 后停止并向 Owner 报告，不自动进入 Phase 2。
+- [x] 所有 Phase 1 Test/Verification 与 Acceptance Criteria 通过。
+- [x] 临时 Integration/E2E Placeholder 有 Owner、替换 Phase 和不可误判为真实通过的状态。
+- [x] 创建聚焦 Commit，建议：`chore(v2): complete phase 1 engineering baseline`。
+- [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 2。
 
 ### 本阶段完成后形成的 Artifact / Capability
 
