@@ -47,3 +47,11 @@ docs/planning/implementation-plan.md
 - `migration/` — 从旧 Nuxt 实现迁移到 V2
 - `planning/` — 阶段化实施顺序、依赖、Gate 与进度
 - `decisions/` — 不可随意重写的架构决策记录
+
+## Phase 0 Legacy Baseline
+
+- `migration/legacy-discovery-baseline.md` — Legacy Feature/Content/Integration Inventory 与 Compatibility Matrix。
+- `migration/legacy-route-and-pinyin-fixtures.md` — Public Route、Pinyin、Alias 与 Static Archive Fixture。
+- `migration/legacy-risk-register.md` — Legacy Migration Risk 与 Owner Blocker。
+- `planning/phase-0-traceability.md` — Architecture、Requirement、Acceptance Criteria 与 ADR 到实施 Phase 的追踪。
+- `migration/phase-0-verification-report.md` — Phase 0 实际检查结果与 Owner Exit Gate 状态。

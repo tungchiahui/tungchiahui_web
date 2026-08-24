@@ -1,15 +1,15 @@
 # Website V2 分阶段实施计划
 
-> Status: Planned  
-> Current Phase: Phase 0  
-> Execution Model: Hard-gated, one Phase at a time  
+> Status: Planned
+> Current Phase: Awaiting Owner authorization for Phase 1
+> Execution Model: Hard-gated, one Phase at a time
 > Scope: 从新的 Next.js V2 Repository 基线推进到替换旧 Nuxt Production Site
 
 本文档只定义实施顺序、依赖、完成条件和 Agent 执行纪律。架构、技术栈与运维契约仍以最新 Accepted ADR、`AGENTS.md` 和对应规范文档为准；这里不复制或重新解释它们。
 
 ## Overall Progress
 
-- [ ] Phase 0 — Legacy Discovery 与实施基线
+- [x] Phase 0 — Legacy Discovery 与实施基线
 - [ ] Phase 1 — Next.js 工程与质量基线
 - [ ] Phase 2 — Hermetic Local Development Platform
 - [ ] Phase 3 — PostgreSQL、Drizzle 与持久化基础
@@ -117,15 +117,15 @@ Legacy URL、Pinyin、Frontmatter 和功能保留会影响 Schema、Routing、Co
 
 ### Task Checklist
 
-- [ ] 确认 V2 与旧 Nuxt Repository 的物理边界，并记录旧仓库只读规则。
-- [ ] 盘点全部 Public Route、Locale Prefix、Blog/Wiki Route 和 Analytics-sensitive Route。
-- [ ] 提取 Chinese-to-pinyin Behavior、冲突处理和代表性输入/输出 Fixture。
-- [ ] 盘点 Page、Component、Visual Identity、Interaction、Search、Edge Function 与 External Integration。
-- [ ] 盘点现有 Content Directory、Minimal Frontmatter、Metadata、Delete/Move Convention 和 Asset Reference。
-- [ ] 将 Feature 分类为 MUST KEEP、SHOULD KEEP、MAY REDESIGN、MAY REMOVE。
-- [ ] 将无法可靠分类的用户可见行为提交 Owner 决定，不自行删除或重做。
-- [ ] 建立 Legacy Compatibility Matrix、Risk Register 和 Acceptance-to-Phase Traceability Matrix。
-- [ ] 记录只允许在确实无法保留原 Route 时使用 Alias/Redirect 的例外审批流程。
+- [x] 确认 V2 与旧 Nuxt Repository 的物理边界，并记录旧仓库只读规则。
+- [x] 盘点全部 Public Route、Locale Prefix、Blog/Wiki Route 和 Analytics-sensitive Route。
+- [x] 提取 Chinese-to-pinyin Behavior、冲突处理和代表性输入/输出 Fixture。
+- [x] 盘点 Page、Component、Visual Identity、Interaction、Search、Edge Function 与 External Integration。
+- [x] 盘点现有 Content Directory、Minimal Frontmatter、Metadata、Delete/Move Convention 和 Asset Reference。
+- [x] 将 Feature 分类为 MUST KEEP、SHOULD KEEP、MAY REDESIGN、MAY REMOVE。
+- [x] 将无法可靠分类的用户可见行为提交 Owner 决定，不自行删除或重做。
+- [x] 建立 Legacy Compatibility Matrix、Risk Register 和 Acceptance-to-Phase Traceability Matrix。
+- [x] 记录只允许在确实无法保留原 Route 时使用 Alias/Redirect 的例外审批流程。
 
 ### 本 Phase 明确不做什么
 
@@ -135,24 +135,24 @@ Legacy URL、Pinyin、Frontmatter 和功能保留会影响 Schema、Routing、Co
 
 ### Tests / Verification
 
-- [ ] Inventory 覆盖旧站可发现的 Route、Page、Locale、Content Type 和 Asset 类别。
-- [ ] Pinyin Fixture 包含普通中文、混合 Identifier、重复/冲突、标点和 Legacy Edge Case。
-- [ ] 随机抽样旧内容文件，确认 Directory/Frontmatter 记录准确。
-- [ ] Traceability 检查确认全部现有 Acceptance Criteria 已分配到至少一个 Phase。
+- [x] Inventory 覆盖旧站可发现的 Route、Page、Locale、Content Type 和 Asset 类别。
+- [x] Pinyin Fixture 包含普通中文、混合 Identifier、重复/冲突、标点和 Legacy Edge Case。
+- [x] 随机抽样旧内容文件，确认 Directory/Frontmatter 记录准确。
+- [x] Traceability 检查确认全部现有 Acceptance Criteria 已分配到至少一个 Phase。
 
 ### Acceptance Criteria
 
-- [ ] 每个已知 Legacy Feature 都有分类、证据和目标 Phase。
-- [ ] 每个必须保留的 Public Route 都有测试 Fixture 或明确验证方法。
-- [ ] 所有歧义项均已由 Owner 决定或明确标记为 Blocker。
-- [ ] 没有把旧实现架构误当成 V2 实现要求。
+- [x] 每个已知 Legacy Feature 都有分类、证据和目标 Phase。
+- [x] 每个必须保留的 Public Route 都有测试 Fixture 或明确验证方法。
+- [x] 所有歧义项均已由 Owner 决定或明确标记为 Blocker。
+- [x] 没有把旧实现架构误当成 V2 实现要求。
 
 ### Exit Gate
 
-- [ ] Owner 接受 Legacy Compatibility Matrix 和 Feature 分类。
-- [ ] Phase 1 所需的版本、Route、Content 与测试输入没有未决 Blocker。
-- [ ] 创建聚焦 Commit，建议：`docs(v2): complete phase 0 legacy discovery baseline`。
-- [ ] Commit 后停止并向 Owner 报告，不自动进入 Phase 1。
+- [x] Owner 接受 Legacy Compatibility Matrix 和 Feature 分类。
+- [x] Phase 1 所需的版本、Route、Content 与测试输入没有未决 Blocker。
+- [x] 创建聚焦 Commit，建议：`docs(v2): complete phase 0 legacy discovery baseline`。
+- [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 1。
 
 ### 本阶段完成后形成的 Artifact / Capability
 

@@ -38,6 +38,10 @@
 - `docs/development/local-development.md`
 - `docs/development/testing-strategy.md`
 - `docs/migration/nuxt-to-next.md`
+- `docs/migration/legacy-discovery-baseline.md`
+- `docs/migration/legacy-risk-register.md`
+- `docs/migration/legacy-route-and-pinyin-fixtures.md`
+- `docs/migration/phase-0-verification-report.md`
 - `docs/operations/backup-and-recovery.md`
 - `docs/operations/blue-green-deployment.md`
 - `docs/operations/command-interface.md`
@@ -48,6 +52,7 @@
 - `docs/operations/server-migration.md`
 - `docs/operations/translation-operations.md`
 - `docs/planning/implementation-plan.md`
+- `docs/planning/phase-0-traceability.md`
 - `docs/specification/acceptance-criteria.md`
 - `docs/specification/non-functional-requirements.md`
 - `docs/specification/project-requirements.md`
