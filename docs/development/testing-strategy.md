@@ -81,6 +81,8 @@ Test Command 必须：
 8. 运行 Playwright
 9. 即使失败也执行 Cleanup
 
+Phase 2 已实现上述 Disposable Infrastructure Entry Point 的基础部分：PostgreSQL 18/PGroonga、PgBouncer、S3Mock、Local `control-api`、Control-state SQLite、Fake Deploy Agent 和 Next.js Skeleton 使用唯一 Compose Project 与动态 Host Port。Migration/E2E 在对应 Phase 到来前继续以 `NOT_IMPLEMENTED` 明确报告，不会伪装为已通过。
+
 ## Migration Test
 
 CI 必须测试：

@@ -8,3 +8,9 @@ allowBuilds:
   dtrace-provider: false
   esbuild: true
   re2: true
+
+# Exact Phase 1 versions reviewed before the registry minimum-release-age window elapsed.
+# Keep this list version-specific; Renovate must remove/update entries through a reviewed PR.
+minimumReleaseAgeExclude:
+  - '@types/react-dom@19.2.5'
+  - renovate@44.39.3

@@ -1,3 +1,4 @@
+import { resetDevelopmentStack, startDevelopmentStack, stopDevelopmentStack } from './dev/runtime'
 import {
   assertToolchain,
   executePackageScript,
@@ -7,32 +8,47 @@ import {
 
 const usage = `Usage: ./site <command>
 
-Phase 1 commands:
-  check  Run formatting, lint, source policy, typecheck, Renovate validation, and build
-  test   Run unit tests and explicit not-yet-implemented test placeholders
-  help   Show this help
+Development:
+  dev       Start or reconcile the isolated local stack
+  dev stop  Stop the stack without deleting local data
+  dev reset --environment local --confirm RESET-LOCAL-DATA
+            Delete only the displayed local Compose volumes and control-state directory
 
-The dev command is implemented in Phase 2.`
+Validation:
+  check     Run formatting, lint, source policy, typecheck, Renovate validation, and build
+  test      Run unit, disposable integration, and honest future-suite placeholders
+  help      Show this help`
 
-function main() {
+async function main() {
   assertToolchain(process.versions.node)
   const command = parseSiteCommand(process.argv.slice(2))
 
-  switch (command) {
+  switch (command.kind) {
     case 'check':
-      return executePackageScript('phase1:check')
-    case 'test':
-      return executePackageScript('phase1:test')
+      return executePackageScript('site:check')
+    case 'dev-reset':
+      resetDevelopmentStack()
+      return 0
+    case 'dev-start':
+      await startDevelopmentStack()
+      return 0
+    case 'dev-stop':
+      stopDevelopmentStack()
+      return 0
     case 'help':
       console.log(usage)
       return 0
+    case 'test':
+      return executePackageScript('site:test')
   }
 }
 
-try {
-  process.exitCode = main()
-} catch (error: unknown) {
-  const message = error instanceof Error ? error.message : 'Unknown CLI failure'
-  console.error(error instanceof SiteUsageError ? `${message}\n\n${usage}` : message)
-  process.exitCode = 2
-}
+main()
+  .then((exitCode) => {
+    process.exitCode = exitCode
+  })
+  .catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : 'Unknown CLI failure'
+    console.error(error instanceof SiteUsageError ? `${message}\n\n${usage}` : message)
+    process.exitCode = 2
+  })

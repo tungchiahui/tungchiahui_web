@@ -1,5 +1,6 @@
 node_modules/
 .next/
+.local/
 out/
 coverage/
 playwright-report/

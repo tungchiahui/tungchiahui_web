@@ -60,3 +60,8 @@ docs/planning/implementation-plan.md
 
 - `development/phase-1-engineering-baseline.md` — 锁定 Toolchain、质量命令、CI/Placeholder、Source Boundary 与 Renovate Policy。
 - `development/phase-1-verification-report.md` — Phase 1 实际安装、质量 Gate、Clean Checkout 与 Exit 状态。
+
+## Phase 2 Hermetic Local Platform
+
+- `development/phase-2-hermetic-local-platform.md` — Compose 拓扑、镜像 Digest、CLI 生命周期、SQLite/Fake Boundary 与 Disposable Test Contract。
+- `development/phase-2-verification-report.md` — Phase 2 Clean Start、重复测试、失败清理、Stop/Restart、Safe Reset 与隔离 Gate 证据。

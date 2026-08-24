@@ -1,10 +1,12 @@
 import { spawnSync } from 'node:child_process'
 
-import { z } from 'zod'
-
-const siteCommandSchema = z.enum(['check', 'test', 'help'])
-
-export type SiteCommand = z.infer<typeof siteCommandSchema>
+export type SiteCommand =
+  | Readonly<{ kind: 'check' }>
+  | Readonly<{ kind: 'dev-reset' }>
+  | Readonly<{ kind: 'dev-start' }>
+  | Readonly<{ kind: 'dev-stop' }>
+  | Readonly<{ kind: 'help' }>
+  | Readonly<{ kind: 'test' }>
 
 export class SiteUsageError extends Error {
   override readonly name = 'SiteUsageError'
@@ -18,23 +20,48 @@ export function assertToolchain(nodeVersion: string) {
 
 export function parseSiteCommand(arguments_: readonly string[]): SiteCommand {
   if (arguments_.length === 0) {
-    return 'help'
+    return Object.freeze({ kind: 'help' })
   }
 
-  if (arguments_.length !== 1) {
-    throw new SiteUsageError('Expected exactly one command')
+  if (arguments_.length === 1) {
+    switch (arguments_[0]) {
+      case 'check':
+        return Object.freeze({ kind: 'check' })
+      case 'dev':
+        return Object.freeze({ kind: 'dev-start' })
+      case 'help':
+        return Object.freeze({ kind: 'help' })
+      case 'test':
+        return Object.freeze({ kind: 'test' })
+      default:
+        throw new SiteUsageError(`Unknown command: ${arguments_[0]}`)
+    }
   }
 
-  const result = siteCommandSchema.safeParse(arguments_[0])
-
-  if (!result.success) {
-    throw new SiteUsageError(`Unknown command: ${arguments_[0]}`)
+  if (arguments_.length === 2 && arguments_[0] === 'dev' && arguments_[1] === 'stop') {
+    return Object.freeze({ kind: 'dev-stop' })
   }
 
-  return result.data
+  if (
+    arguments_.length === 6 &&
+    arguments_[0] === 'dev' &&
+    arguments_[1] === 'reset' &&
+    arguments_[2] === '--environment' &&
+    arguments_[3] === 'local' &&
+    arguments_[4] === '--confirm' &&
+    arguments_[5] === 'RESET-LOCAL-DATA'
+  ) {
+    return Object.freeze({ kind: 'dev-reset' })
+  }
+
+  if (arguments_[0] === 'dev' && arguments_[1] === 'reset') {
+    throw new SiteUsageError('Local reset requires: --environment local --confirm RESET-LOCAL-DATA')
+  }
+
+  throw new SiteUsageError('Invalid or ambiguous command arguments')
 }
 
-export function executePackageScript(script: 'phase1:check' | 'phase1:test') {
+export function executePackageScript(script: 'site:check' | 'site:test') {
   const executable = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
   const result = spawnSync(executable, ['run', script], { stdio: 'inherit' })
 

@@ -10,10 +10,6 @@ describe('temporary test placeholders', () => {
   })
 
   it('assigns an owner and replacement phase to every placeholder', () => {
-    expect(placeholderPolicies.integration).toMatchObject({
-      owner: 'Repository Owner',
-      replacementPhase: 2,
-    })
     expect(placeholderPolicies.migration).toMatchObject({
       owner: 'Repository Owner',
       replacementPhase: 3,

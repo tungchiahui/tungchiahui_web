@@ -65,6 +65,8 @@ Secret 在 Runtime/Deployment 时注入，不得通过 Docker Build Argument、L
 
 Invalid Configuration 必须在 Startup 时 Fail Fast，并给出安全 Error，指出缺失/非法变量，但不打印 Secret Value。
 
+Phase 2 Local/Test Infrastructure 使用固定、公开、仅本机有效的 Dummy DB/S3 Credential；它们不是 Secret，也不能由 Production Credential 覆盖。Local/Test Parser 只允许 Loopback/Docker Service DNS、`tungchiahui-local-*`/`tungchiahui-test-*` Bucket 和专用 Control-state Directory，并固定使用 Fake Translation Provider。
+
 ## Secret Lifecycle
 
 Production Secret Change 应当是有意且可审计的。

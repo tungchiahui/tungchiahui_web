@@ -191,17 +191,24 @@ push/merge to main
 
 `./site deploy [git-sha-or-release]` 保留为人工触发、重试或指定版本部署入口，并调用完全相同的 Control Plane 与 Deployment Engine。Content Repository 的 Markdown Push 只触发 Content Sync，不触发 Next.js Image Build 或 Blue-Green Deployment。
 
-## Phase 1 工程入口
+## 本地工程入口
 
 使用 Node.js `24.19.0` 与 pnpm `11.23.0`：
 
 ```bash
 pnpm install --frozen-lockfile
+./site dev
 ./site check
 ./site test
 ```
 
-Phase 1 只提供工程与质量基线。完整的 `./site dev` Hermetic Stack 在 Phase 2 实现；当前不得用不完整的手工基础设施替代它。版本、Placeholder 和 CI Policy 见 `docs/development/phase-1-engineering-baseline.md`。
+`./site dev` 启动只绑定 Loopback 的 PostgreSQL 18 + PGroonga、PgBouncer、Adobe S3Mock、Next.js、Local `control-api`、Control-state SQLite 和 Fake Deploy Agent。它不读取 Production DB/S3/AI Credential。使用 `./site dev stop` 保留数据；删除数据必须显式执行：
+
+```bash
+./site dev reset --environment local --confirm RESET-LOCAL-DATA
+```
+
+完整端口、隔离、测试生命周期和镜像锁定见 `docs/development/phase-2-hermetic-local-platform.md`。
 
 ## 文档地图
 

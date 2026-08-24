@@ -1,21 +1,15 @@
-export const placeholderKinds = ['integration', 'migration', 'e2e'] as const
+export const placeholderKinds = ['migration', 'e2e'] as const
 
 export type PlaceholderKind = (typeof placeholderKinds)[number]
 
 export type PlaceholderPolicy = Readonly<{
   owner: 'Repository Owner'
-  replacementPhase: 2 | 3 | 6
+  replacementPhase: 3 | 6
   scope: string
   status: 'NOT_IMPLEMENTED'
 }>
 
 export const placeholderPolicies: Readonly<Record<PlaceholderKind, PlaceholderPolicy>> = {
-  integration: {
-    owner: 'Repository Owner',
-    replacementPhase: 2,
-    scope: 'Disposable PostgreSQL and S3Mock integration suite',
-    status: 'NOT_IMPLEMENTED',
-  },
   migration: {
     owner: 'Repository Owner',
     replacementPhase: 3,

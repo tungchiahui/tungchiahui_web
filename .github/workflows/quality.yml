@@ -54,8 +54,8 @@ jobs:
       - name: Unit tests
         run: pnpm run test:unit
 
-      - name: Integration suite placeholder (NOT_IMPLEMENTED; replacement Phase 2)
-        run: pnpm run test:integration:placeholder
+      - name: Disposable infrastructure integration tests
+        run: pnpm run test:integration
 
       - name: Migration suite placeholder (NOT_IMPLEMENTED; replacement Phase 3)
         run: pnpm run test:migration:placeholder

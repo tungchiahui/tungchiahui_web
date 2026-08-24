@@ -32,6 +32,7 @@
     "vitest.config.ts",
     "src/**/*.ts",
     "src/**/*.tsx",
+    "services/**/*.ts",
     "tests/**/*.ts",
     "tests/**/*.tsx",
     "tools/**/*.ts",

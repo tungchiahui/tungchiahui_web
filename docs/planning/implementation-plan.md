@@ -1,7 +1,7 @@
 # Website V2 分阶段实施计划
 
 > Status: Planned
-> Current Phase: Awaiting Owner authorization for Phase 2
+> Current Phase: Awaiting Owner authorization for Phase 3
 > Execution Model: Hard-gated, one Phase at a time
 > Scope: 从新的 Next.js V2 Repository 基线推进到替换旧 Nuxt Production Site
 
@@ -11,7 +11,7 @@
 
 - [x] Phase 0 — Legacy Discovery 与实施基线
 - [x] Phase 1 — Next.js 工程与质量基线
-- [ ] Phase 2 — Hermetic Local Development Platform
+- [x] Phase 2 — Hermetic Local Development Platform
 - [ ] Phase 3 — PostgreSQL、Drizzle 与持久化基础
 - [ ] Phase 4 — 独立 Control Plane 与 Job Boundary
 - [ ] Phase 5 — GitHub 单向 Content Ingestion
@@ -279,15 +279,15 @@ Legacy URL、Pinyin、Frontmatter 和功能保留会影响 Schema、Routing、Co
 
 ### Task Checklist
 
-- [ ] 定义 Development/Test Compose Project，使用 Docker Service DNS 而非 Container IP。
-- [ ] 固定 PostgreSQL 18、PGroonga、PgBouncer、Adobe S3Mock Image Version/Digest。
-- [ ] 实现 `./site dev` 的 Prerequisite、Health Wait、Bucket Init、Migration Hook、Seed Hook 和 Status Output。
-- [ ] 建立独立 Local `control-api` Skeleton 与专用 Control-state SQLite Directory。
-- [ ] 提供无 Docker/OpenResty Production Permission 的 Fake Deploy Agent。
-- [ ] 实现 `./site dev stop` 和需要明确 Environment/Confirmation 的 `./site dev reset`。
-- [ ] 让 `./site test` 使用唯一 Compose Project、Disposable Volume/Database/Bucket 并保证 Failure Cleanup。
-- [ ] 配置 Local Fake/No-cost Translation Provider Boundary。
-- [ ] 增加防误连保护，拒绝在 Local/Test Mode 使用 Production Host、Bucket 或 Credential。
+- [x] 定义 Development/Test Compose Project，使用 Docker Service DNS 而非 Container IP。
+- [x] 固定 PostgreSQL 18、PGroonga、PgBouncer、Adobe S3Mock Image Version/Digest。
+- [x] 实现 `./site dev` 的 Prerequisite、Health Wait、Bucket Init、Migration Hook、Seed Hook 和 Status Output。
+- [x] 建立独立 Local `control-api` Skeleton 与专用 Control-state SQLite Directory。
+- [x] 提供无 Docker/OpenResty Production Permission 的 Fake Deploy Agent。
+- [x] 实现 `./site dev stop` 和需要明确 Environment/Confirmation 的 `./site dev reset`。
+- [x] 让 `./site test` 使用唯一 Compose Project、Disposable Volume/Database/Bucket 并保证 Failure Cleanup。
+- [x] 配置 Local Fake/No-cost Translation Provider Boundary。
+- [x] 增加防误连保护，拒绝在 Local/Test Mode 使用 Production Host、Bucket 或 Credential。
 
 ### 本 Phase 明确不做什么
 
@@ -297,24 +297,24 @@ Legacy URL、Pinyin、Frontmatter 和功能保留会影响 Schema、Routing、Co
 
 ### Tests / Verification
 
-- [ ] `./site dev` 从 Clean State 一键启动并报告全部 Local Endpoint/Health。
-- [ ] Stop/Restart Deterministic；普通 Start 不会隐式 Reset Data。
-- [ ] `./site test` 连续运行两次无 Port、Volume、Database 或 Bucket Collision。
-- [ ] Failure Injection 后 Test Cleanup 仍执行。
-- [ ] Local/Test Config 无法解析为 Production Endpoint/Credential。
+- [x] `./site dev` 从 Clean State 一键启动并报告全部 Local Endpoint/Health。
+- [x] Stop/Restart Deterministic；普通 Start 不会隐式 Reset Data。
+- [x] `./site test` 连续运行两次无 Port、Volume、Database 或 Bucket Collision。
+- [x] Failure Injection 后 Test Cleanup 仍执行。
+- [x] Local/Test Config 无法解析为 Production Endpoint/Credential。
 
 ### Acceptance Criteria
 
-- [ ] Local PostgreSQL、S3Mock、Control-state SQLite 与 Production 完全隔离。
-- [ ] Developer 不需要 Production DB、S3 或 AI Credential。
-- [ ] 所有后续 Integration Test 有统一 Disposable Infrastructure Entry Point。
+- [x] Local PostgreSQL、S3Mock、Control-state SQLite 与 Production 完全隔离。
+- [x] Developer 不需要 Production DB、S3 或 AI Credential。
+- [x] 所有后续 Integration Test 有统一 Disposable Infrastructure Entry Point。
 
 ### Exit Gate
 
-- [ ] 从 Clean Checkout 演示 `./site dev`、`./site test`、Stop/Restart 和 Safe Reset。
-- [ ] 隔离与 Destructive Guard Test 全部通过。
-- [ ] 创建聚焦 Commit，建议：`feat(dev): complete phase 2 hermetic local platform`。
-- [ ] Commit 后停止并向 Owner 报告，不自动进入 Phase 3。
+- [x] 从 Clean Checkout 演示 `./site dev`、`./site test`、Stop/Restart 和 Safe Reset。
+- [x] 隔离与 Destructive Guard Test 全部通过。
+- [x] 创建聚焦 Commit，建议：`feat(dev): complete phase 2 hermetic local platform`。
+- [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 3。
 
 ### 本阶段完成后形成的 Artifact / Capability
 
