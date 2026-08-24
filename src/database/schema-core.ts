@@ -84,6 +84,11 @@ export const operationalJobs = applicationSchema.table(
     payload: jsonb().$type<Readonly<Record<string, JsonValue>>>().notNull(),
     progress: jsonb().$type<Readonly<Record<string, JsonValue>>>().notNull().default({}),
     attemptCount: integer('attempt_count').notNull().default(0),
+    maxAttempts: integer('max_attempts').notNull().default(3),
+    availableAt: timestamp('available_at', { withTimezone: true }).notNull().defaultNow(),
+    claimedAt: timestamp('claimed_at', { withTimezone: true }),
+    claimedBy: text('claimed_by'),
+    claimExpiresAt: timestamp('claim_expires_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     startedAt: timestamp('started_at', { withTimezone: true }),
     finishedAt: timestamp('finished_at', { withTimezone: true }),
@@ -91,11 +96,20 @@ export const operationalJobs = applicationSchema.table(
   },
   (table) => [
     uniqueIndex('operational_jobs_idempotency_key_unique').on(table.idempotencyKey),
-    index('operational_jobs_claim_idx').on(table.status, table.createdAt),
+    index('operational_jobs_claim_idx').on(table.status, table.availableAt, table.createdAt),
     check('operational_jobs_requested_by_not_empty', sql`length(${table.requestedBy}) > 0`),
     check('operational_jobs_payload_object', sql`jsonb_typeof(${table.payload}) = 'object'`),
     check('operational_jobs_progress_object', sql`jsonb_typeof(${table.progress}) = 'object'`),
     check('operational_jobs_attempt_nonnegative', sql`${table.attemptCount} >= 0`),
+    check('operational_jobs_max_attempts_positive', sql`${table.maxAttempts} > 0`),
+    check(
+      'operational_jobs_attempt_within_limit',
+      sql`${table.attemptCount} <= ${table.maxAttempts}`,
+    ),
+    check(
+      'operational_jobs_claim_consistent',
+      sql`(${table.status} = 'running' AND ${table.claimedAt} IS NOT NULL AND ${table.claimedBy} IS NOT NULL AND ${table.claimExpiresAt} IS NOT NULL) OR (${table.status} <> 'running' AND ${table.claimedAt} IS NULL AND ${table.claimedBy} IS NULL AND ${table.claimExpiresAt} IS NULL)`,
+    ),
   ],
 )
 

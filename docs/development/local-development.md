@@ -59,7 +59,9 @@ Local content-worker   Docker network only
 
 Phase 3 已用真实 Drizzle Runner 和 Deterministic Seed 替换零 Migration Hook。每次 Start 直接连接 PostgreSQL 执行 Policy/Role/PGroonga/Migration Gate，再通过 transaction-mode PgBouncer 以 `site_content_worker` 权限 Seed 两个 Document、Translation/Job/Ingestion Fixture，以及空的 `tech_footprint`/`weight_loss` Development Dataset。重复 Start 不重复 Row，也不重置已有数据。
 
-Phase 4 的 `control-api` 已是独立 TypeScript HTTP Service：Local Operator 使用签名 Fixture，Application Job/Owner Dataset 走 PostgreSQL，Infrastructure Operation/Replay/Audit 走 SQLite。Local OpenResty 把 `/api/ops/*` 直接送往该 Service，普通请求送往 Next.js。`content-worker` 当前只声明权限边界和 Health；真正 Claim/执行 Job 属于 Phase 5。
+Phase 4 的 `control-api` 已是独立 TypeScript HTTP Service：Local Operator 使用签名 Fixture，Application Job/Owner Dataset 走 PostgreSQL，Infrastructure Operation/Replay/Audit 走 SQLite。Local OpenResty 把 `/api/ops/*` 直接送往该 Service，普通请求送往 Next.js。
+
+Phase 5 的 `content-worker` 已实现 PostgreSQL Claim/Retry/Progress 和 GitHub 单向 Ingestion。普通 `./site dev` 不隐式访问外部 GitHub，因此 Polling 默认 Idle；Disposable Integration 使用同一 Worker/Repository 和本地只读 Snapshot 执行真实 Job。开发者只有在明确配置 `GITHUB_CONTENT_REPOSITORY` 并启用 Polling 后才读取外部 Repository；Public Repository 不需要 Token，Private Token 必须 Read-only。
 
 ## 隔离
 

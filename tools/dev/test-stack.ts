@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 
 import { z } from 'zod'
+import { verifyPhase5Ingestion } from '../content/test-ingestion'
 import { assertDockerPrerequisites, ComposeProject } from './compose'
 import { documentedLocalCredentials, parseLocalInfrastructureConfig } from './config'
 import { createLocalOperatorHeaders } from './control-auth-fixture'
@@ -195,6 +196,7 @@ async function verifyApplicationJobBoundary(controlApiUrl: URL) {
   if (conflict.status !== 409) {
     throw new Error(`Owner dataset revision conflict returned HTTP ${conflict.status}`)
   }
+  return created.job.id
 }
 
 async function verifyOpenRestyAndFailureBoundaries(
@@ -278,7 +280,7 @@ async function verifyOpenRestyAndFailureBoundaries(
 async function run() {
   assertDockerPrerequisites()
   const repositoryRoot = process.cwd()
-  const temporaryRoot = mkdtempSync(join(tmpdir(), 'tungchiahui-phase4-'))
+  const temporaryRoot = mkdtempSync(join(tmpdir(), 'tungchiahui-phase5-'))
   const suffix = basename(temporaryRoot)
     .replaceAll(/[^a-z0-9]/g, '')
     .slice(-12)
@@ -301,7 +303,7 @@ async function run() {
     stackStarted = true
     compose.up()
     if (process.env.SITE_TEST_INJECT_FAILURE === 'after-start') {
-      throw new Error('Injected Phase 4 failure after disposable stack start')
+      throw new Error('Injected Phase 5 failure after disposable stack start')
     }
 
     const configuration = parseLocalInfrastructureConfig(
@@ -349,7 +351,8 @@ async function run() {
     requireHardenedLocalService(compose, 'control-api')
     requireHardenedLocalService(compose, 'content-worker')
     requireHardenedLocalService(compose, 'fake-deploy-agent')
-    await verifyApplicationJobBoundary(configuration.controlApiUrl)
+    const firstContentJobId = await verifyApplicationJobBoundary(configuration.controlApiUrl)
+    await verifyPhase5Ingestion(configuration.databaseUrl.toString(), firstContentJobId)
     const restartedControlApiUrl = await verifyControlStatePersistence(
       compose,
       configuration.controlApiUrl,

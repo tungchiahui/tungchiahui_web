@@ -15,6 +15,13 @@
       "when": 1787542858469,
       "tag": "0001_phase3_translation_and_ingestion",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787549541307,
+      "tag": "0002_phase5_job_claiming",
+      "breakpoints": true
     }
   ]
 }

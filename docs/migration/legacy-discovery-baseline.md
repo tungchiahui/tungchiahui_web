@@ -262,14 +262,14 @@ Legacy Site 的事实：
 | Contract | Legacy evidence | 分类 | Verification / target |
 | --- | --- | --- | --- |
 | Repository physical separation | 两个独立 Git Repository | MUST KEEP | Phase 0/1/18；Legacy status check |
-| Canonical zh-CN only | 237 tracked source + ignored generated locales | MUST KEEP | Phase 5 Directionality/Import |
-| Directory/Minimal Frontmatter | 18 Wiki dirs；237/237 parse；仅 4 种 Key | MUST KEEP | Phase 5 Fixture/Integration |
-| Explicit Blog `path` | 4/4 Blog 有 `path` | MUST KEEP exact | Phase 5/6 Route Fixture |
-| Pinyin Route | `pinyin-pro` options + sanitizer | MUST KEEP behavior | Phase 5/6 Fixture |
+| Canonical zh-CN only | 237 tracked source + ignored generated locales | MUST KEEP | Phase 5 PASS：GitHub Adapter 只枚举 Canonical Path/GET Tree+Blob，忽略 `_i18n`，无 Write Capability |
+| Directory/Minimal Frontmatter | 18 Wiki dirs；237/237 parse；仅 4 种 Key | MUST KEEP | Phase 5 PASS：Blog/Wiki Grammar、全部四种已记录 Frontmatter Shape 与 `title`-only Integration；Phase 18 刷新全量 Corpus |
+| Explicit Blog `path` | 4/4 Blog 有 `path` | MUST KEEP exact | Phase 5 PASS：四条 Blog Exact Path Fixture；Phase 6 真实 Router 待验证 |
+| Pinyin Route | `pinyin-pro` options + sanitizer | MUST KEEP behavior | Phase 5 PASS：完整 Representative Slug/Route 与 Collision Fixture；Phase 6 App Router 待验证 |
 | Unprefixed zh-CN Route | Query candidate fallback | MUST KEEP | Phase 6 E2E |
 | Four approved Locale | `zh-cn`、`zh-hk`、`zh-tw`、`en-us` | MUST KEEP | Phase 7 E2E |
 | Legacy `zh-hant` | Fifth old Locale | MAY REMOVE；不 Redirect | O-001 RESOLVED；Phase 7/18 Negative Test |
-| Seven Wiki Alias | explicit alias map | MUST KEEP unless Owner changes | Phase 5/6/18 |
+| Seven Wiki Alias | explicit alias map | MUST KEEP unless Owner changes | Phase 5 PASS：精确 7 条 Allowlist、Approval Reference、真实 Document FK 与 Alias Collision Gate；Phase 6/18 响应待验证 |
 | Blog/Wiki reading/navigation | Page/Component evidence | MUST KEEP behavior | Phase 6 E2E |
 | Search experience | `/search` + Header Search | MUST KEEP outcome | Phase 10 relevance/locale/E2E |
 | Client-side Corpus Search | Legacy implementation | MAY REMOVE; prohibited in V2 | Phase 10 bundle/test |

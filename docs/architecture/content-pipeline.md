@@ -141,3 +141,17 @@ Content Sync 永远不会自动调用付费 AI 翻译。
 尽可能只使受影响的 Document/List/Search Cache 失效。
 
 内容发布不得要求 Application Blue-Green Deployment。
+
+## Phase 5 executable baseline
+
+Phase 5 将上述 Pipeline 实现为以下边界：
+
+- `GitHubContentSource` 只有 `fetchSnapshot(commit)` 能力，只对 GitHub Tree/Blob API 发出 `GET`；Tree 被截断、Blob SHA 不一致或 Commit/Input 不合法时拒绝继续，避免把不完整 Snapshot 当作删除。
+- Markdown 使用 unified + remark-parse + remark-frontmatter + remark-rehype 建立并校验 AST；YAML Frontmatter 使用安全 Schema 解析并由 Zod 严格接受当前 `title`、`date`、`path`、`description` 四种 Minimal Shape。
+- Blog 显式 `path` 原样优先；Wiki 与 Blog Fallback 使用 Phase 0 固定的 `pinyin-pro` Contract。完整候选 Route 和 7 条批准 Alias 在任何写入前检查冲突。
+- Snapshot Apply 在单个 PostgreSQL Transaction 中完成。Source Path 优先保持 Identity；相同 Public Route 或唯一 Source Hash 可证明的 Rename/Move 复用 Document ID；歧义 Hash 不静默合并。
+- 删除使用可审计 Soft-delete；同 Path/Route 的恢复复用原 Identity。相同 Commit/Content 重放不更新 Document、Translation 或 Hook Side Effect。
+- `content-worker` 使用 `FOR UPDATE SKIP LOCKED` Claim、Lease Expiry Recovery、Attempt Limit、`retry_wait`、Progress 和有界 Error Summary。Application Job 与 `ingestion_runs` 仍只位于 PostgreSQL。
+- Translation Diff、zh-CN Revalidation 与 Search Refresh 是明确 Typed Hook。Phase 5 实现只记录零成本 Deferred Event，分别由 Phase 8、6、10 替换；没有 AI Provider、Image Build、Deploy 或 GitHub Write Path。
+
+Local/Test Compose 默认让外部 GitHub Polling 处于 Idle，避免本地启动产生网络调用；Disposable Integration 以同一个 Worker/Repository 实现和内存只读 Snapshot 验证完整执行路径。配置明确的 Repository 后，Service 可启用 Polling；私有 Repository 的可选 Token 必须只有读取权限。

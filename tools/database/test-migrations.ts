@@ -261,7 +261,7 @@ async function run() {
     const cleanUrl = databaseUrl(postgresPort)
 
     const clean = await runPostgresMigrations(cleanUrl, { repositoryRoot })
-    if (clean.migrationCount !== 2) {
+    if (clean.migrationCount !== 3) {
       throw new Error('Empty database did not reach the latest migration')
     }
     const repeated = await runPostgresMigrations(cleanUrl, { repositoryRoot })
@@ -325,7 +325,7 @@ async function run() {
       await upgradedClient.end()
     }
 
-    console.log('Phase 3 migration suite: PASS')
+    console.log('PostgreSQL migration suite: PASS (through Phase 5)')
   } finally {
     if (stackStarted) {
       compose.down(true)

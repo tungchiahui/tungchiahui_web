@@ -1,0 +1,301 @@
+import { Client } from 'pg'
+import { z } from 'zod'
+import type { ContentSnapshot, ReadonlyContentSource } from '../../src/content/contracts'
+import { RecordingContentHooks } from '../../src/content/hooks'
+import { ContentIngestionRepository } from '../../src/content/ingestion'
+import { ContentJobRepository } from '../../src/content/jobs'
+import { ContentWorker } from '../../src/content/worker'
+import { ApplicationJobRepository } from '../../src/control-plane/application-jobs'
+import type { ActorIdentity } from '../../src/control-plane/contracts'
+
+const commitA = 'a'.repeat(40)
+const commitB = 'b'.repeat(40)
+const commitC = 'c'.repeat(40)
+const commitD = 'd'.repeat(40)
+const commitE = 'e'.repeat(40)
+
+const actor: ActorIdentity = {
+  capabilities: ['application-job:create'],
+  id: 'phase5-integration',
+  kind: 'service',
+}
+
+function markdown(frontmatter: readonly string[], body: string) {
+  return `---\n${frontmatter.join('\n')}\n---\n\n${body}\n`
+}
+
+const snapshotAFiles = [
+  {
+    path: 'content/posts/2026-01-06-新博客启用.md',
+    contents: markdown(
+      ['title: 新博客启用', 'date: 2026-01-06', 'path: newblogenable!'],
+      '# 新博客启用',
+    ),
+  },
+  {
+    path: 'content/posts/2026-01-14-W311MI_AX300驱动.md',
+    contents: markdown(
+      ['title: W311MI AX300 驱动', 'date: 2026-01-14', 'path: w311mi_ax300'],
+      '# 驱动',
+    ),
+  },
+  {
+    path: 'content/posts/2026-02-09-新的todolist界面.md',
+    contents: markdown(
+      [
+        'title: 新的 todolist 界面',
+        'date: 2026-02-09',
+        'path: newtodolist',
+        'description: Legacy four-key frontmatter fixture',
+      ],
+      '# Todo',
+    ),
+  },
+  {
+    path: 'content/posts/2026-07-21-VSCode任务栏启动Codex插件打不开.md',
+    contents: markdown(
+      [
+        'title: VSCode 任务栏启动 Codex 插件打不开',
+        'date: 2026-07-21',
+        'path: vscode-taskbar-codex-fix',
+      ],
+      '# Codex',
+    ),
+  },
+  {
+    path: 'content/wiki/2024-10-03-Docker教程/index.md',
+    contents: markdown(['title: Docker 教程'], '# Docker'),
+  },
+  {
+    path: 'content/wiki/2023-10-05-Cplusplus教学/0100-C++开发环境搭建与测试.md',
+    contents: markdown(['title: C++ 开发环境搭建与测试'], '# C++'),
+  },
+  {
+    path: 'content/wiki/2021-09-16-OpenWrt编译教学/0500-其他参考资料添加USB和硬盘格式还有网卡教程：.md',
+    contents: markdown(['title: 其他参考资料'], '# OpenWrt'),
+  },
+] as const
+
+function snapshot(
+  sourceCommit: string,
+  files: readonly Readonly<{ contents: string; path: string }>[],
+) {
+  return { files: [...files], sourceCommit }
+}
+
+const snapshotA = snapshot(commitA, snapshotAFiles)
+const snapshotB = snapshot(commitB, [
+  {
+    ...snapshotAFiles[0],
+    contents: markdown(
+      ['title: 新博客启用', 'date: 2026-01-06', 'path: newblogenable!'],
+      '# 新博客启用\n\nModified at commit B.',
+    ),
+  },
+  snapshotAFiles[1],
+  snapshotAFiles[2],
+  snapshotAFiles[3],
+  snapshotAFiles[4],
+  {
+    ...snapshotAFiles[5],
+    path: 'content/wiki/2023-10-05-Cplusplus教学/0200-C++开发环境搭建与测试.md',
+  },
+  {
+    path: 'content/wiki/2023-12-30-ros2-tutorial/1300-0100-0100-Boost.Aiso.md',
+    contents: markdown(['title: Boost Aiso'], '# Boost'),
+  },
+])
+const snapshotC = snapshot(commitC, [
+  ...snapshotB.files,
+  {
+    path: 'content/wiki/重复 标题/index.md',
+    contents: markdown(['title: 重复 标题'], '# First'),
+  },
+  {
+    path: 'content/wiki/重复-标题/index.md',
+    contents: markdown(['title: 重复-标题'], '# Second'),
+  },
+])
+const snapshotD = snapshot(commitD, snapshotB.files)
+
+class FixtureContentSource implements ReadonlyContentSource {
+  readonly #snapshots: ReadonlyMap<string, ContentSnapshot>
+  readonly #transientFailures = new Map<string, number>()
+
+  constructor(snapshots: ReadonlyMap<string, ContentSnapshot>) {
+    this.#snapshots = snapshots
+  }
+
+  failNext(sourceCommit: string) {
+    this.#transientFailures.set(sourceCommit, (this.#transientFailures.get(sourceCommit) ?? 0) + 1)
+  }
+
+  async fetchSnapshot(sourceCommit: string) {
+    const failures = this.#transientFailures.get(sourceCommit) ?? 0
+    if (failures > 0) {
+      this.#transientFailures.set(sourceCommit, failures - 1)
+      throw new Error('Injected transient read-only GitHub failure')
+    }
+    const result = this.#snapshots.get(sourceCommit)
+    if (!result) throw new Error(`Missing fixture snapshot ${sourceCommit}`)
+    return result
+  }
+}
+
+async function createJob(
+  repository: ApplicationJobRepository,
+  sourceCommit: string,
+  suffix: string,
+) {
+  return repository.createJob(
+    { jobType: 'content_sync', payload: { sourceCommit } },
+    actor,
+    `phase5:content-sync:${suffix}`,
+  )
+}
+
+const jobStateSchema = z.object({
+  attempt_count: z.number().int(),
+  progress: z.record(z.string(), z.unknown()),
+  status: z.enum(['queued', 'running', 'retry_wait', 'completed', 'failed', 'cancelled']),
+})
+
+export async function verifyPhase5Ingestion(connectionString: string, firstJobId: string) {
+  const hooks = new RecordingContentHooks()
+  const ingestion = new ContentIngestionRepository(connectionString, hooks)
+  const jobs = new ContentJobRepository(connectionString)
+  const jobCreator = new ApplicationJobRepository(connectionString)
+  const source = new FixtureContentSource(
+    new Map([
+      [commitA, snapshotA],
+      [commitB, snapshotB],
+      [commitC, snapshotC],
+      [commitD, snapshotD],
+    ]),
+  )
+  const worker = new ContentWorker({
+    contentSource: source,
+    ingestion,
+    jobs,
+    retryDelayMilliseconds: 0,
+    workerId: 'phase5-integration-worker',
+  })
+  const client = new Client({ connectionString })
+  await client.connect()
+
+  try {
+    const first = await worker.runOnce()
+    if (!first.claimed || !first.completed || first.jobId !== firstJobId) {
+      throw new Error('content-worker did not claim and complete the durable control-api job')
+    }
+    if (first.result.filesSeen !== snapshotA.files.length || hooks.calls.length !== 3) {
+      throw new Error('Initial ingestion did not materialize all representative Legacy fixtures')
+    }
+    const activeA = await client.query<{ count: string }>(
+      'SELECT count(*) FROM app.documents WHERE NOT is_deleted',
+    )
+    if (Number(activeA.rows[0]?.count) !== snapshotA.files.length) {
+      throw new Error('Initial ingestion left an unexpected active document count')
+    }
+    const alias = await client.query<{ approval_reference: string; created_at: Date }>(
+      "SELECT approval_reference, created_at FROM app.content_aliases WHERE alias_path = '/wiki/docker-tutorial'",
+    )
+    if (alias.rows.length !== 1 || !alias.rows[0]?.approval_reference.includes('Phase 0')) {
+      throw new Error('Approved Legacy alias was not linked to the materialized Wiki document')
+    }
+
+    await createJob(jobCreator, commitA, 'replay')
+    const replay = await worker.runOnce()
+    if (!replay.claimed || !replay.completed || replay.result.filesChanged !== 0) {
+      throw new Error('Same-commit replay was not an idempotent content no-op')
+    }
+    if (hooks.calls.length !== 3) {
+      throw new Error(
+        'Same-commit replay emitted duplicate translation/search/revalidation effects',
+      )
+    }
+    const replayedAlias = await client.query<{ created_at: Date }>(
+      "SELECT created_at FROM app.content_aliases WHERE alias_path = '/wiki/docker-tutorial'",
+    )
+    if (replayedAlias.rows[0]?.created_at.getTime() !== alias.rows[0]?.created_at.getTime()) {
+      throw new Error('Same-commit replay rewrote an unchanged approved alias')
+    }
+
+    const movedBefore = await client.query<{ id: string }>(
+      "SELECT id FROM app.documents WHERE source_path = 'content/wiki/2023-10-05-Cplusplus教学/0100-C++开发环境搭建与测试.md'",
+    )
+    await createJob(jobCreator, commitB, 'delta')
+    const delta = await worker.runOnce()
+    if (
+      !delta.claimed ||
+      !delta.completed ||
+      delta.result.filesChanged !== 3 ||
+      delta.result.filesDeleted !== 1
+    ) {
+      throw new Error('Add/modify/delete/move reconciliation returned unexpected counts')
+    }
+    const movedAfter = await client.query<{ id: string }>(
+      "SELECT id FROM app.documents WHERE source_path = 'content/wiki/2023-10-05-Cplusplus教学/0200-C++开发环境搭建与测试.md' AND NOT is_deleted",
+    )
+    if (!movedBefore.rows[0] || movedBefore.rows[0].id !== movedAfter.rows[0]?.id) {
+      throw new Error('Safe content-hash move did not preserve internal document identity')
+    }
+
+    await createJob(jobCreator, commitC, 'collision')
+    const collision = await worker.runOnce()
+    if (!collision.claimed || collision.completed || collision.retryScheduled) {
+      throw new Error('Deterministic Pinyin collision was not recorded as a permanent job failure')
+    }
+    const afterCollision = await client.query<{ count: string }>(
+      'SELECT count(*) FROM app.documents WHERE NOT is_deleted AND source_commit = $1',
+      [commitB],
+    )
+    if (Number(afterCollision.rows[0]?.count) !== snapshotB.files.length) {
+      throw new Error('Failed collision ingestion changed the previously valid runtime snapshot')
+    }
+
+    source.failNext(commitD)
+    const retryJob = await createJob(jobCreator, commitD, 'retry')
+    const failedAttempt = await worker.runOnce()
+    if (!failedAttempt.claimed || failedAttempt.completed || !failedAttempt.retryScheduled) {
+      throw new Error('Transient source failure did not schedule a durable retry')
+    }
+    const successfulRetry = await worker.runOnce()
+    if (!successfulRetry.claimed || !successfulRetry.completed) {
+      throw new Error('Durable content job retry did not complete')
+    }
+    const retryState = jobStateSchema.parse(
+      (
+        await client.query(
+          'SELECT status, attempt_count, progress FROM app.operational_jobs WHERE id = $1',
+          [retryJob.job.id],
+        )
+      ).rows[0],
+    )
+    if (retryState.status !== 'completed' || retryState.attempt_count !== 2) {
+      throw new Error('Retry attempt/progress state was not persisted')
+    }
+
+    await createJob(jobCreator, commitE, 'concurrent-claim')
+    const secondJobs = new ContentJobRepository(connectionString)
+    try {
+      const claims = await Promise.all([
+        jobs.claimNext('phase5-claim-a', 30_000),
+        secondJobs.claimNext('phase5-claim-b', 30_000),
+      ])
+      const claimed = claims.filter((value) => value !== null)
+      if (claimed.length !== 1 || !claimed[0]) {
+        throw new Error('SKIP LOCKED claim did not grant a content job to exactly one worker')
+      }
+      await jobs.fail(claimed[0], new Error('Concurrency test cleanup'), {
+        retryable: false,
+        retryDelayMilliseconds: 0,
+      })
+    } finally {
+      await secondJobs.close()
+    }
+  } finally {
+    await client.end()
+    await Promise.all([ingestion.close(), jobs.close(), jobCreator.close()])
+  }
+}

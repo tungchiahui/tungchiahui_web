@@ -1,7 +1,7 @@
 # Website V2 分阶段实施计划
 
 > Status: Planned
-> Current Phase: Awaiting Owner authorization for Phase 5
+> Current Phase: Awaiting Owner authorization for Phase 6
 > Execution Model: Hard-gated, one Phase at a time
 > Scope: 从新的 Next.js V2 Repository 基线推进到替换旧 Nuxt Production Site
 
@@ -14,7 +14,7 @@
 - [x] Phase 2 — Hermetic Local Development Platform
 - [x] Phase 3 — PostgreSQL、Drizzle 与持久化基础
 - [x] Phase 4 — 独立 Control Plane 与 Job Boundary
-- [ ] Phase 5 — GitHub 单向 Content Ingestion
+- [x] Phase 5 — GitHub 单向 Content Ingestion
 - [ ] Phase 6 — zh-CN Website Vertical Slice
 - [ ] Phase 7 — UI i18n 与 zh-HK/zh-TW
 - [ ] Phase 8 — Translation Memory 与 en-US Fallback
@@ -525,16 +525,16 @@ Schema、Local Infrastructure 和 Control Plane 已稳定，现在可以形成�
 
 ### Task Checklist
 
-- [ ] 实现只读 Fetch 指定 Git Commit/File 的 GitHub Adapter，不包含 Write API。
-- [ ] 使用 unified/remark/rehype 解析 Markdown，并对 Frontmatter/AST 做 Runtime Validation。
-- [ ] 保持当前 Content Directory 与 Minimal Frontmatter，不强迫作者增加内部 ID。
-- [ ] 实现 Source Hash、Stable Internal Identity 和 Legacy-compatible Pinyin Route Algorithm。
-- [ ] 实现新增、修改、删除、移动/重命名 Detection 与 Transactional Apply。
-- [ ] 实现同一 Commit/Configuration 重放为 No-op 的 Idempotency。
-- [ ] 实现 PostgreSQL Job Claim、Retry、Failure/Progress 和 `ingestion_runs` Audit。
-- [ ] 实现翻译 Diff、Search Refresh、Cache Invalidation 的 Typed Interface；未到对应 Phase 只使用最小 Fake。
-- [ ] 实现 Content Sync 后只发布/revalidate zh-CN，不触发 Application Build/Deployment。
-- [ ] 从结构上证明 Production Content Code 无 Commit/Push/Open PR/Edit/Delete GitHub Path。
+- [x] 实现只读 Fetch 指定 Git Commit/File 的 GitHub Adapter，不包含 Write API。
+- [x] 使用 unified/remark/rehype 解析 Markdown，并对 Frontmatter/AST 做 Runtime Validation。
+- [x] 保持当前 Content Directory 与 Minimal Frontmatter，不强迫作者增加内部 ID。
+- [x] 实现 Source Hash、Stable Internal Identity 和 Legacy-compatible Pinyin Route Algorithm。
+- [x] 实现新增、修改、删除、移动/重命名 Detection 与 Transactional Apply。
+- [x] 实现同一 Commit/Configuration 重放为 No-op 的 Idempotency。
+- [x] 实现 PostgreSQL Job Claim、Retry、Failure/Progress 和 `ingestion_runs` Audit。
+- [x] 实现翻译 Diff、Search Refresh、Cache Invalidation 的 Typed Interface；未到对应 Phase 只使用最小 Fake。
+- [x] 实现 Content Sync 后只发布/revalidate zh-CN，不触发 Application Build/Deployment。
+- [x] 从结构上证明 Production Content Code 无 Commit/Push/Open PR/Edit/Delete GitHub Path。
 
 ### 本 Phase 明确不做什么
 
@@ -544,26 +544,26 @@ Schema、Local Infrastructure 和 Control Plane 已稳定，现在可以形成�
 
 ### Tests / Verification
 
-- [ ] Representative Legacy Content 与 Frontmatter Fixture 全部导入。
-- [ ] 同 Commit 重复 Sync 不产生重复 Row、Translation 或 Side Effect。
-- [ ] Add/Modify/Delete/Move/Rename Integration Test 通过并保留可判断的 Identity Continuity。
-- [ ] Pinyin/Route Fixture 与 Phase 0 Legacy Behavior 一致。
-- [ ] Partial Failure 保留此前有效 Runtime Version，Transaction 不留下半成品。
-- [ ] Directionality Test 证明无 GitHub Write Credential/Capability。
-- [ ] Sync Test 证明没有 AI Provider Call 和 Next.js Image Build。
+- [x] Representative Legacy Content 与 Frontmatter Fixture 全部导入。
+- [x] 同 Commit 重复 Sync 不产生重复 Row、Translation 或 Side Effect。
+- [x] Add/Modify/Delete/Move/Rename Integration Test 通过并保留可判断的 Identity Continuity。
+- [x] Pinyin/Route Fixture 与 Phase 0 Legacy Behavior 一致。
+- [x] Partial Failure 保留此前有效 Runtime Version，Transaction 不留下半成品。
+- [x] Directionality Test 证明无 GitHub Write Credential/Capability。
+- [x] Sync Test 证明没有 AI Provider Call 和 Next.js Image Build。
 
 ### Acceptance Criteria
 
-- [ ] GitHub zh-CN Markdown 是唯一 Canonical Authoring Source。
-- [ ] Runtime PostgreSQL 可由精确 Git Commit Deterministically Materialize。
-- [ ] Content Push 快速完成且不等待翻译或 Application Deployment。
+- [x] GitHub zh-CN Markdown 是唯一 Canonical Authoring Source。
+- [x] Runtime PostgreSQL 可由精确 Git Commit Deterministically Materialize。
+- [x] Content Push 快速完成且不等待翻译或 Application Deployment。
 
 ### Exit Gate
 
-- [ ] Ingestion、Idempotency、Move/Delete、Pinyin 和 Directionality Gate 全部通过。
-- [ ] Legacy Compatibility Matrix 中 Content/Route 项已更新实际结果。
-- [ ] 创建聚焦 Commit，建议：`feat(content): complete phase 5 one-way ingestion`。
-- [ ] Commit 后停止并向 Owner 报告，不自动进入 Phase 6。
+- [x] Ingestion、Idempotency、Move/Delete、Pinyin 和 Directionality Gate 全部通过。
+- [x] Legacy Compatibility Matrix 中 Content/Route 项已更新实际结果。
+- [x] 创建聚焦 Commit，建议：`feat(content): complete phase 5 one-way ingestion`。
+- [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 6。
 
 ### 本阶段完成后形成的 Artifact / Capability
 

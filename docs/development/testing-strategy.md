@@ -117,6 +117,8 @@ Phase 4 已把以下项纳入 Unit 与 Disposable Integration；后续 Phase 在
 - SQLite Transaction、Lock/Lease、Crash Restart/Resume 与 Audit Record
 - Content/Translation/Search Job 仍使用 PostgreSQL，且在数据库不可用时安全失败
 
+Phase 5 在同一 Disposable Integration 增加 PostgreSQL Application-job Execution Gate：`FOR UPDATE SKIP LOCKED` 并发 Claim、Retry/Attempt/Progress、Representative Minimal Frontmatter、同 Commit Idempotency、Add/Modify/Delete/Move、Identity Continuity、批准 Alias、Pinyin Collision 原子失败与旧 Runtime Snapshot 保留。GitHub Adapter Unit Test 断言精确 Tree/Blob Snapshot 只发出 `GET`，拒绝 Truncated Tree/Blob Hash Drift，且 Content Execution Module 不导入 AI Provider、Build/Deploy Process 或 GitHub Write Capability。
+
 ## Deployment Pipeline Test
 
 验证 Web Application Repository 的 `main` Workflow 必须在全部 CI Quality Gates 通过后才 Build Git-SHA-tagged Immutable Image，并调用与 `./site deploy` 相同的 Control Plane/Deployment Engine。验证 Content Repository Push 只触发 Content Sync，不触发 Next.js Build 或 Blue-Green Deployment。

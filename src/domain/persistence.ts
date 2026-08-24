@@ -58,11 +58,11 @@ export type TranslationScope = z.infer<typeof translationScopeSchema>
 export type OwnerDatasetKey = z.infer<typeof ownerDatasetKeySchema>
 export type JsonValue = z.infer<typeof jsonValueSchema>
 
-const sourceCommitSchema = z
+export const sourceCommitSchema = z
   .string()
   .regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/, 'Expected a lowercase Git commit hash')
-const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/, 'Expected a lowercase SHA-256 hash')
-const routePathSchema = z.string().startsWith('/').min(2)
+export const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/, 'Expected a lowercase SHA-256 hash')
+export const routePathSchema = z.string().startsWith('/').min(2)
 const jsonObjectSchema = z.record(z.string(), jsonValueSchema)
 
 export const documentWriteSchema = z.object({

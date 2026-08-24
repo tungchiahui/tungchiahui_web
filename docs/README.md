@@ -72,6 +72,16 @@ docs/planning/implementation-plan.md
 - `development/phase-3-persistence-foundation.md` — PostgreSQL/Drizzle Schema、Migration Policy、Role、Seed、PgBouncer 与 SQLite Boundary。
 - `development/phase-3-verification-report.md` — Clean/Previous/Repeat Migration、Role、Validation、Integration 与质量 Gate 证据。
 
+## Phase 4 Independent Control Plane
+
+- `development/phase-4-independent-control-plane.md` — 独立 Control API、Authentication/Authorization、PostgreSQL/SQLite 状态分流与权限边界。
+- `development/phase-4-verification-report.md` — Routing、Security、Crash/Lease、PostgreSQL-down、Next-down 与权限 Gate 证据。
+
+## Phase 5 One-way Content Ingestion
+
+- `development/phase-5-one-way-content-ingestion.md` — GitHub GET-only Snapshot、Markdown/Route/Identity、Transactional Apply、Job Claim/Retry 与 Deferred Hook Contract。
+- `development/phase-5-verification-report.md` — Directionality、Pinyin、Idempotency、Add/Modify/Delete/Move、Collision、Retry/Concurrency 与质量 Gate 证据。
+
 ## Current implementation handoff
 
 - `planning/current-state.md` — 已完成 Phase、实际能力、Stub/Fake、已知限制、Legacy 回查规则与下一 Phase Prerequisite。

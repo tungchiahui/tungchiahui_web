@@ -42,6 +42,10 @@
 - `docs/development/phase-2-verification-report.md`
 - `docs/development/phase-3-persistence-foundation.md`
 - `docs/development/phase-3-verification-report.md`
+- `docs/development/phase-4-independent-control-plane.md`
+- `docs/development/phase-4-verification-report.md`
+- `docs/development/phase-5-one-way-content-ingestion.md`
+- `docs/development/phase-5-verification-report.md`
 - `docs/development/testing-strategy.md`
 - `docs/migration/nuxt-to-next.md`
 - `docs/migration/legacy-discovery-baseline.md`

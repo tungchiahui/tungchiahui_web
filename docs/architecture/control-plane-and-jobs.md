@@ -136,6 +136,19 @@ Operation State Machine 是 `queued -> claimed -> running -> completed|failed`�
 
 Local/Test OpenResty 在选择 Web Upstream 前直接把 `/api/ops/*` 路由到 `control-api`，隐藏 Upstream Cache Header 后强制单一 `Cache-Control: no-store`，并设置 Cache Bypass、Method/Rate-limit Test Boundary。当前 Baseline 只创建/查询 Application Job、验证 Owner Dataset Write，以及创建/查询 Infrastructure Operation；没有执行真实 Content、AI、Deploy、Cutover 或 Restore。
 
+### Phase 5 application-job execution baseline
+
+Phase 5 保留 Phase 4 HTTP/Store 分流，并让 `content-worker` 执行 `content_sync`：
+
+- Claim 只选择 `queued`/到期 `retry_wait` 的 Content Job，并使用 `FOR UPDATE SKIP LOCKED` 防止并发重复执行；
+- Claim 记录 Worker、开始时间、Lease Expiry 与递增 Attempt；过期 Claim 转入 Retry 或在达到 Limit 后失败；
+- Progress 与 Completion/Failure 必须匹配当前 Worker Claim，完成后清除 Lease；
+- 瞬时 GitHub Read Failure 可重试；Frontmatter/AST/Route Collision/Identity 歧义属于确定性失败，不进行无意义重试；
+- `ingestion_runs`、Document Snapshot 和 Alias 均留在 PostgreSQL，SQLite Schema/Scope 没有变化；
+- `content-worker` 仍无 Docker Socket、OpenResty Admin、Host Shell 或 Control-state SQLite Write。
+
+Translation/Search/Cache Job 仍只创建/查询，不在 Phase 5 提前执行。Phase 5 Content Handler 只调用标明替换阶段的零成本 Typed Hook。
+
 ## Normal 与 Break-glass Path
 
 正常情况下所有操作仍优先通过：

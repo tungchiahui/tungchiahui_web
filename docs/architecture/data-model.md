@@ -152,6 +152,8 @@ finished_at
 error_summary
 ```
 
+Phase 5 在该表增加 `max_attempts`、`available_at`、`claimed_at`、`claimed_by` 和 `claim_expires_at`，以支持 PostgreSQL Transaction 内的 `FOR UPDATE SKIP LOCKED` Claim、Retry Schedule、Expired-claim Recovery 和单 Worker Completion Guard。`running` Row 必须同时具有完整 Claim/Lease；Terminal/Queued/Retry Row 不得残留 Claim。`attempt_count` 不得超过 `max_attempts`。
+
 它可以实现成一个通用表，并在关联表中保存 Translation-specific Detail；也可以实现成多个 Specialized Table。最终 Relational Design 应保持 Durable、Inspectable State。
 
 Deploy、Rollback、PostgreSQL Restore/Recovery 与基础 Disaster-recovery Operation 不使用此表作为唯一状态，因为这些操作必须能在 Production PostgreSQL 不可用时启动、恢复和查询。它们的最小状态属于 ADR 0015 定义的 host-local SQLite Control-state Schema，包括 Active/Previous Slot、Deployment SHA、Operation Phase、Lock/Lease 与 Audit Record。该 Schema 不属于业务 PostgreSQL Data Model，也不得承载 Content/Translation/Search Data。
@@ -174,13 +176,17 @@ files_deleted
 error_summary
 ```
 
+每个 Content-sync Operational Job 有一个可重试更新的 Run Summary。失败保存有界 Error，成功保存最终 Seen/Changed/Deleted Count。Document Materialization 与成功 Summary 在同一个 Transaction 中提交；Parse/Collision/Identity 歧义不会留下半成品。
+
+Phase 5 Identity Rule：先匹配 Source Path，再匹配相同 Public Route，最后只在 Source Hash 唯一时把纯 Move/Rename 关联到原 Document ID。不能证明唯一性的 Hash Move 整次失败；不得用自动 Alias、后缀或覆盖掩盖歧义。
+
 ### content_aliases
 
 只有在无法通过新的 Deterministic Router 保留 Legacy Route 时才使用。
 
 该表是最后手段，而不是默认用来堆 Redirect Map 的地方。
 
-每条 Alias 必须保存非空 `approval_reference`。Phase 3 不 Seed Alias；Phase 5 只能写入 Phase 0 已批准的 7 个 Legacy Wiki Alias，新增例外仍需 Owner 单项批准。Locale-prefixed Alias 从同一 Logical Route 派生，不复制为无边界 Redirect Row。
+每条 Alias 必须保存非空 `approval_reference`。Phase 3 不 Seed Alias；Phase 5 只物化 Phase 0 已批准的 7 个 Legacy Wiki Alias，并且只在当前 Snapshot 中存在真实 Canonical Document 时建立 Foreign Key。Alias 路径也参与写前 Route Collision Gate；新增例外仍需 Owner 单项批准。Locale-prefixed Alias 从同一 Logical Route 派生，不复制为无边界 Redirect Row。
 
 ### owner_managed_datasets
 

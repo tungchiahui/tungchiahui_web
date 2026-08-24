@@ -16,6 +16,8 @@ Phase 3 的实现入口：
 
 `drizzle-kit generate` 只生成可 Review Artifact；`drizzle-kit push` 不是受支持的 Production Path。Checked-in Migration 被应用后不得改写：Runner 会把数据库中保存的 Hash/Timestamp 与当前 Artifact 比较并拒绝 Drift。
 
+Phase 5 增加 `0002_phase5_job_claiming`：为既有 Application Job 添加带安全 Default 的 Attempt/Available/Claim/Lease Column，并把 Claim Support Index 替换为包含 `available_at` 的 Superset Index。Phase 4 不会创建 `running` Application Job，因此新增 Claim-consistency Constraint 与相邻 Phase 4/5 Code 兼容；该变更按 Expand、Low Risk、No Fresh Backup Required 记录。
+
 ## 禁止 Production Push
 
 不要通过未版本化的 Convenience Command 修改 Production Schema。
@@ -87,4 +89,4 @@ Migration CI 验证：
 - Representative Production-like Data
 - Compatibility Assumption
 
-Phase 3 真实 Migration Suite 使用 Disposable PostgreSQL 18，分别验证 Empty -> Latest、由 `tests/fixtures/database/previous-schema.json` 固定的 Previous -> Latest、重复执行、Applied Hash、Representative Data Preservation、Role Boundary、数据库 Enum/JSON Constraint 和 transaction-mode PgBouncer + Drizzle Query。任何成功或失败路径都删除 Test Container、Network 和 Volume。
+当前 Migration Suite 使用 Disposable PostgreSQL 18，分别验证 Empty -> Phase 5 Latest、由 `tests/fixtures/database/previous-schema.json` 固定的 Previous -> Latest、重复执行、Applied Hash、Representative Data Preservation、Role Boundary、数据库 Enum/JSON/Claim Constraint 和 transaction-mode PgBouncer + Drizzle Query。任何成功或失败路径都删除 Test Container、Network 和 Volume。

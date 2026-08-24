@@ -16,6 +16,14 @@
       "requiresFreshRecoverableBackup": false,
       "reason": "Adds translation, ingestion, and explicitly approved alias structures without changing existing rows.",
       "recovery": "Retain the additive structures for blue-green compatibility and use a reviewed forward-fix migration if needed."
+    },
+    {
+      "tag": "0002_phase5_job_claiming",
+      "changeKind": "expand",
+      "risk": "low",
+      "requiresFreshRecoverableBackup": false,
+      "reason": "Adds backward-compatible claim, lease, retry scheduling, and attempt-limit columns to PostgreSQL application jobs; replaces only the supporting claim index with a superset key.",
+      "recovery": "Retain the nullable/defaulted columns and superset index for blue-green compatibility; use a reviewed forward-fix migration if claim policy needs adjustment."
     }
   ]
 }
