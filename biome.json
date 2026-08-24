@@ -10,6 +10,7 @@
       "**",
       "!!node_modules",
       "!!.next",
+      "!!public/docs/ros2",
       "!!next-env.d.ts",
       "!!coverage",
       "!!playwright-report",

@@ -1,7 +1,7 @@
 # Website V2 分阶段实施计划
 
-> Status: Planned
-> Current Phase: Awaiting Owner authorization for Phase 6
+> Status: In progress — Phase 0–6 complete
+> Current Phase: Awaiting Owner authorization for Phase 7
 > Execution Model: Hard-gated, one Phase at a time
 > Scope: 从新的 Next.js V2 Repository 基线推进到替换旧 Nuxt Production Site
 
@@ -15,7 +15,7 @@
 - [x] Phase 3 — PostgreSQL、Drizzle 与持久化基础
 - [x] Phase 4 — 独立 Control Plane 与 Job Boundary
 - [x] Phase 5 — GitHub 单向 Content Ingestion
-- [ ] Phase 6 — zh-CN Website Vertical Slice
+- [x] Phase 6 — zh-CN Website Vertical Slice
 - [ ] Phase 7 — UI i18n 与 zh-HK/zh-TW
 - [ ] Phase 8 — Translation Memory 与 en-US Fallback
 - [ ] Phase 9 — 显式付费 AI Translation
@@ -608,15 +608,15 @@ Content Pipeline 已可信，此时先验证最核心的作者到读者路径，
 
 ### Task Checklist
 
-- [ ] 建立 Locale-prefixed zh-CN Application Layout 和 Server-first Data Access Layer。
-- [ ] 实现 Homepage、Blog List/Article、Wiki List/Article 与必要 Error/Not-found Page。
-- [ ] 使用 unified/remark/rehype + Shiki 安全渲染 Runtime Markdown，保护 Code/URL/Identifier。
-- [ ] 实现 Phase 0/5 确认的 Legacy URL/Pinyin Routing，不默认建立 Redirect Map。
-- [ ] 使用 Tailwind CSS 4 和 shadcn/ui Base UI Primitive 重建必要 Visual Identity/Interaction。
-- [ ] 所有可复用用户可见文本使用 next-intl Message Key，即使当前只交付 zh-CN。
-- [ ] 实现 Asset URL/Metadata Boundary，Local 使用 S3Mock/CDN Fixture。
-- [ ] 定义 Cache Owner、Key、TTL（如有）与精确 Revalidation Behavior。
-- [ ] 实现 `/api/health`、`/api/ready`、`/api/version`，并保持它们属于 Next.js。
+- [x] 建立 Locale-prefixed zh-CN Application Layout 和 Server-first Data Access Layer。
+- [x] 实现 Homepage、Blog List/Article、Wiki List/Article 与必要 Error/Not-found Page。
+- [x] 使用 unified/remark/rehype + Shiki 安全渲染 Runtime Markdown，保护 Code/URL/Identifier。
+- [x] 实现 Phase 0/5 确认的 Legacy URL/Pinyin Routing，不默认建立 Redirect Map。
+- [x] 使用 Tailwind CSS 4 和 shadcn/ui Base UI Primitive 重建必要 Visual Identity/Interaction。
+- [x] 所有可复用用户可见文本使用 next-intl Message Key，即使当前只交付 zh-CN。
+- [x] 实现 Asset URL/Metadata Boundary，Local 使用 S3Mock/CDN Fixture。
+- [x] 定义 Cache Owner、Key、TTL（如有）与精确 Revalidation Behavior。
+- [x] 实现 `/api/health`、`/api/ready`、`/api/version`，并保持它们属于 Next.js。
 
 ### 本 Phase 明确不做什么
 
@@ -626,25 +626,25 @@ Content Pipeline 已可信，此时先验证最核心的作者到读者路径，
 
 ### Tests / Verification
 
-- [ ] Homepage、Blog/Wiki、Representative Article、Error Page E2E 通过。
-- [ ] Legacy URL/Pinyin Fixture 在真实 App Router 中通过。
-- [ ] Markdown Code Fence、Inline Code、Link、Heading、Image 和 Unicode Fixture 正确渲染。
-- [ ] Server/Client Boundary Test 证明 Server Secret 不进入 Client Bundle。
-- [ ] Health/Ready/Version 返回正确语义与 Deployment Metadata Stub。
-- [ ] Content Sync 后受影响 Route 更新，不要求 Application Rebuild。
+- [x] Homepage、Blog/Wiki、Representative Article、Error Page E2E 通过。
+- [x] Legacy URL/Pinyin Fixture 在真实 App Router 中通过。
+- [x] Markdown Code Fence、Inline Code、Link、Heading、Image 和 Unicode Fixture 正确渲染。
+- [x] Server/Client Boundary Test 证明 Server Secret 不进入 Client Bundle。
+- [x] Health/Ready/Version 返回正确语义与 Deployment Metadata Stub。
+- [x] Content Sync 后受影响 Route 更新，不要求 Application Rebuild。
 
 ### Acceptance Criteria
 
-- [ ] zh-CN 核心公开网站可以从 PostgreSQL Runtime Content 完整工作。
-- [ ] 代表性 Legacy Route 与重要用户可见行为保留。
-- [ ] 缓存失效、Asset Loading 和 Error Behavior 可测试且可观察。
+- [x] zh-CN 核心公开网站可以从 PostgreSQL Runtime Content 完整工作。
+- [x] 代表性 Legacy Route 与重要用户可见行为保留。
+- [x] 缓存失效、Asset Loading 和 Error Behavior 可测试且可观察。
 
 ### Exit Gate
 
-- [ ] zh-CN Critical E2E、Legacy Route 与 Rendering Gate 全部通过。
-- [ ] Phase 0 MUST KEEP 的核心 zh-CN Vertical Slice 无未决 Blocker。
-- [ ] 创建聚焦 Commit，建议：`feat(web): complete phase 6 zh-cn vertical slice`。
-- [ ] Commit 后停止并向 Owner 报告，不自动进入 Phase 7。
+- [x] zh-CN Critical E2E、Legacy Route 与 Rendering Gate 全部通过。
+- [x] Phase 0 MUST KEEP 的核心 zh-CN Vertical Slice 无未决 Blocker。
+- [x] 创建聚焦 Commit，建议：`feat(web): complete phase 6 zh-cn vertical slice`。
+- [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 7。
 
 ### 本阶段完成后形成的 Artifact / Capability
 

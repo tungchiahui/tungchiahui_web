@@ -82,6 +82,11 @@ docs/planning/implementation-plan.md
 - `development/phase-5-one-way-content-ingestion.md` — GitHub GET-only Snapshot、Markdown/Route/Identity、Transactional Apply、Job Claim/Retry 与 Deferred Hook Contract。
 - `development/phase-5-verification-report.md` — Directionality、Pinyin、Idempotency、Add/Modify/Delete/Move、Collision、Retry/Concurrency 与质量 Gate 证据。
 
+## Phase 6 zh-CN Website Vertical Slice
+
+- `development/phase-6-zh-cn-vertical-slice.md` — App Router/RSC、Runtime Markdown、Legacy Route、Asset、Cache/Revalidation 与 Public Health Contract。
+- `development/phase-6-verification-report.md` — zh-CN Critical E2E、311 条 ROS2 Route、Secret Boundary、Side-effect Retry 与质量 Gate 证据。
+
 ## Current implementation handoff
 
 - `planning/current-state.md` — 已完成 Phase、实际能力、Stub/Fake、已知限制、Legacy 回查规则与下一 Phase Prerequisite。

@@ -178,6 +178,10 @@ export class ComposeProject {
     return first
   }
 
+  logs(service: string) {
+    this.#run(['logs', '--no-color', '--tail', '200', service], true)
+  }
+
   assertRemoved() {
     const output = runCommand(
       'docker',

@@ -41,6 +41,9 @@ function readRepositoryFiles(root: string) {
 
       const path = join(directory, entry.name)
       if (entry.isDirectory()) {
+        if (normalizePath(relative(root, path)) === 'public/docs/ros2') {
+          continue
+        }
         visit(path)
       } else if (entry.isFile()) {
         const extension = extname(path)
@@ -198,6 +201,10 @@ export function analyzeSourceFiles(
   for (const [file, source] of files) {
     const extension = extname(file)
     const displayFile = normalizePath(relative(repositoryRoot, file))
+
+    if (displayFile.startsWith('public/docs/ros2/')) {
+      continue
+    }
 
     if (extension === '.js' || extension === '.jsx') {
       violations.push({

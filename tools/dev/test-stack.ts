@@ -4,11 +4,13 @@ import { basename, join, resolve } from 'node:path'
 
 import { z } from 'zod'
 import { verifyPhase5Ingestion } from '../content/test-ingestion'
+import { verifyPhase6Revalidation } from '../web/test-revalidation'
 import { assertDockerPrerequisites, ComposeProject } from './compose'
 import { documentedLocalCredentials, parseLocalInfrastructureConfig } from './config'
 import { createLocalOperatorHeaders } from './control-auth-fixture'
 import { runInfrastructureHooks, verifyPostgresAndPgBouncer } from './hooks'
 import { fetchServiceHealth, waitForHttp } from './http'
+import { runCommand } from './process'
 import { ensureBucket, runS3Smoke, waitForS3 } from './s3'
 
 const controlStatusSchema = z.object({
@@ -275,12 +277,36 @@ async function verifyOpenRestyAndFailureBoundaries(
   if (application.status !== 503) {
     throw new Error(`PostgreSQL-down Application Job returned HTTP ${application.status}`)
   }
+  const health = await fetch(new URL('/api/health', restartedSiteBaseUrl), {
+    signal: AbortSignal.timeout(5_000),
+  })
+  const ready = await fetch(new URL('/api/ready', restartedSiteBaseUrl), {
+    signal: AbortSignal.timeout(5_000),
+  })
+  const version = await fetch(new URL('/api/version', restartedSiteBaseUrl), {
+    signal: AbortSignal.timeout(5_000),
+  })
+  if (!health.ok || ready.status !== 503 || !version.ok) {
+    throw new Error(
+      'Web health/ready/version did not distinguish liveness from PostgreSQL readiness',
+    )
+  }
+}
+
+function runPlaywright(siteBaseUrl: URL) {
+  runCommand('pnpm', ['exec', 'playwright', 'test'], {
+    environment: {
+      ...process.env,
+      PLAYWRIGHT_BASE_URL: siteBaseUrl.toString(),
+    },
+    inheritOutput: true,
+  })
 }
 
 async function run() {
   assertDockerPrerequisites()
   const repositoryRoot = process.cwd()
-  const temporaryRoot = mkdtempSync(join(tmpdir(), 'tungchiahui-phase5-'))
+  const temporaryRoot = mkdtempSync(join(tmpdir(), 'tungchiahui-phase6-'))
   const suffix = basename(temporaryRoot)
     .replaceAll(/[^a-z0-9]/g, '')
     .slice(-12)
@@ -353,6 +379,8 @@ async function run() {
     requireHardenedLocalService(compose, 'fake-deploy-agent')
     const firstContentJobId = await verifyApplicationJobBoundary(configuration.controlApiUrl)
     await verifyPhase5Ingestion(configuration.databaseUrl.toString(), firstContentJobId)
+    await verifyPhase6Revalidation(configuration.databaseUrl.toString(), configuration.siteBaseUrl)
+    runPlaywright(configuration.siteBaseUrl)
     const restartedControlApiUrl = await verifyControlStatePersistence(
       compose,
       configuration.controlApiUrl,
@@ -363,7 +391,10 @@ async function run() {
       configuration.openRestyUrl,
       configuration.siteBaseUrl,
     )
-    console.log(`Disposable infrastructure: PASS (${projectName})`)
+    console.log(`Disposable infrastructure and Phase 6 E2E: PASS (${projectName})`)
+  } catch (error: unknown) {
+    if (stackStarted) compose.logs('web')
+    throw error
   } finally {
     if (stackStarted) {
       compose.down(true)

@@ -10,6 +10,7 @@ RUN pnpm install --frozen-lockfile
 
 COPY --chown=node:node next-env.d.ts next.config.ts postcss.config.mjs tsconfig.json ./
 COPY --chown=node:node messages ./messages
+COPY --chown=node:node public ./public
 COPY --chown=node:node services ./services
 COPY --chown=node:node src ./src
 COPY --chown=node:node tools ./tools

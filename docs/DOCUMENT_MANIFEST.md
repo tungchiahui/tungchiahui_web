@@ -46,6 +46,8 @@
 - `docs/development/phase-4-verification-report.md`
 - `docs/development/phase-5-one-way-content-ingestion.md`
 - `docs/development/phase-5-verification-report.md`
+- `docs/development/phase-6-verification-report.md`
+- `docs/development/phase-6-zh-cn-vertical-slice.md`
 - `docs/development/testing-strategy.md`
 - `docs/migration/nuxt-to-next.md`
 - `docs/migration/legacy-discovery-baseline.md`

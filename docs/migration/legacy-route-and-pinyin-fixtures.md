@@ -110,6 +110,8 @@ Owner 已接受正式 Collision Strategy：在任何写入前检测完整候选 
 
 Phase 5/6 必须验证 Alias 仅在需要时存在且不扩张为默认 Redirect Map。
 
+Phase 6 结果：真实 App Router 通过代表性 Canonical/Alias 响应；精确七条 Allowlist 继续由 Unit Fixture 固定，Runtime 只为当前 Snapshot 中存在的 Canonical Document 建立 Alias。未增加 Redirect Map。
+
 ## 7. Static ROS2 Route Fixture
 
 权威集合定义为 Legacy Evidence Commit 上：
@@ -141,5 +143,7 @@ git -C /home/tungchiahui/UserFolder/MySource/my-blog \
 6. 加入 7 个显式 Wiki Alias。
 7. 加入全部 311 个 MUST KEEP Static ROS2 HTML Route。
 8. Phase 5 用同一 Input 验证 Ingestion Route；Phase 6 用 App Router/E2E 验证真实响应；Phase 18 从最新 Legacy HEAD 刷新并全量 Diff。
+
+Phase 6 真实响应结果：四条显式 Blog Route、代表性 Pinyin Wiki Route、unprefixed 与 `/zh-cn` Route 通过；311 条 Static ROS2 HTML Route 全量通过。Phase 18 仍负责基于届时 Legacy HEAD 的最终全量 Content/Route Delta。
 
 Analytics-sensitive 验证必须覆盖 Canonical、Locale、unprefixed 和 Alias Path，因为旧 Blog/Wiki 统计会把 `path`、`sourcePath`、`legacyPath` 和 Alias 聚合。Phase 0 不执行 Production Crawl 或读取实际 Traffic Ranking。

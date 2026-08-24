@@ -81,7 +81,7 @@ Test Command 必须：
 8. 运行 Playwright
 9. 即使失败也执行 Cleanup
 
-Phase 2 已实现 Disposable Infrastructure Entry Point；Phase 3 已加入真实 Migration/Role/PgBouncer Suite 和真实 Migration/Seed Hook。Affected Critical-flow E2E 在 Phase 6 到来前继续以 `NOT_IMPLEMENTED` 明确报告，不会伪装为已通过。
+Phase 2 已实现 Disposable Infrastructure Entry Point；Phase 3 已加入真实 Migration/Role/PgBouncer Suite 和真实 Migration/Seed Hook。Phase 6 已用真实 Playwright Suite 替换 Placeholder，覆盖 zh-CN Home/Blog/Wiki、Legacy Route、Markdown、S3Mock Asset、Special Page、Health/Ready/Version、404、Metadata 与 Client Secret Negative Scan。该 Suite 对共享的 Disposable Runtime/Cache 串行执行，并在任一失败时输出 Web Log 后清理全部资源。
 
 ## Migration Test
 
@@ -118,6 +118,8 @@ Phase 4 已把以下项纳入 Unit 与 Disposable Integration；后续 Phase 在
 - Content/Translation/Search Job 仍使用 PostgreSQL，且在数据库不可用时安全失败
 
 Phase 5 在同一 Disposable Integration 增加 PostgreSQL Application-job Execution Gate：`FOR UPDATE SKIP LOCKED` 并发 Claim、Retry/Attempt/Progress、Representative Minimal Frontmatter、同 Commit Idempotency、Add/Modify/Delete/Move、Identity Continuity、批准 Alias、Pinyin Collision 原子失败与旧 Runtime Snapshot 保留。GitHub Adapter Unit Test 断言精确 Tree/Blob Snapshot 只发出 `GET`，拒绝 Truncated Tree/Blob Hash Drift，且 Content Execution Module 不导入 AI Provider、Build/Deploy Process 或 GitHub Write Capability。
+
+Phase 6 在此基础上增加缓存副作用 Failure Gate：预热 Route Cache，提交新 Snapshot，注入一次 Revalidation Failure，断言 PostgreSQL Job 保存 `side_effects` Progress、Retry 不重复 Fetch/Materialize，并在无 Rebuild/Restart 下读到新正文。
 
 ## Deployment Pipeline Test
 

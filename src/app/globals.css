@@ -8,6 +8,7 @@
   --primary: oklch(0.546 0.245 262.881);
   --primary-foreground: oklch(0.985 0.002 247.839);
   --border: oklch(0.929 0.013 255.508);
+  --muted-foreground: oklch(0.446 0.03 256.802);
   --ring: oklch(0.623 0.214 259.815);
   --radius: 0.75rem;
 }
@@ -20,6 +21,7 @@
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-border: var(--border);
+  --color-muted-foreground: var(--muted-foreground);
   --color-ring: var(--ring);
   --radius-sm: calc(var(--radius) - 0.25rem);
   --radius-md: calc(var(--radius) - 0.125rem);
@@ -35,8 +37,32 @@
     --primary: oklch(0.707 0.165 254.624);
     --primary-foreground: oklch(0.129 0.042 264.695);
     --border: oklch(1 0 0 / 12%);
+    --muted-foreground: oklch(0.707 0.022 261.325);
     --ring: oklch(0.623 0.214 259.815);
   }
+}
+
+:root.dark {
+  --background: oklch(0.129 0.042 264.695);
+  --foreground: oklch(0.968 0.007 247.896);
+  --card: oklch(0.208 0.042 265.755);
+  --card-foreground: oklch(0.968 0.007 247.896);
+  --primary: oklch(0.707 0.165 254.624);
+  --primary-foreground: oklch(0.129 0.042 264.695);
+  --border: oklch(1 0 0 / 12%);
+  --muted-foreground: oklch(0.707 0.022 261.325);
+}
+
+:root.light {
+  --background: oklch(0.985 0.002 247.839);
+  --foreground: oklch(0.208 0.042 265.755);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.208 0.042 265.755);
+  --primary: oklch(0.546 0.245 262.881);
+  --primary-foreground: oklch(0.985 0.002 247.839);
+  --border: oklch(0.929 0.013 255.508);
+  --muted-foreground: oklch(0.446 0.03 256.802);
+  --ring: oklch(0.623 0.214 259.815);
 }
 
 @layer base {
@@ -46,5 +72,67 @@
 
   body {
     @apply bg-background text-foreground antialiased;
+  }
+}
+
+@layer components {
+  .prose-site {
+    @apply text-base/8;
+  }
+
+  .prose-site :where(h1, h2, h3, h4) {
+    @apply mt-10 scroll-mt-24 font-semibold tracking-tight;
+  }
+
+  .prose-site h1 {
+    @apply text-3xl;
+  }
+
+  .prose-site h2 {
+    @apply text-2xl;
+  }
+
+  .prose-site h3 {
+    @apply text-xl;
+  }
+
+  .prose-site :where(p, ul, ol, blockquote, table, pre) {
+    @apply mt-5;
+  }
+
+  .prose-site :where(ul, ol) {
+    @apply pl-6;
+  }
+
+  .prose-site ul {
+    @apply list-disc;
+  }
+
+  .prose-site ol {
+    @apply list-decimal;
+  }
+
+  .prose-site a {
+    @apply text-primary underline underline-offset-4;
+  }
+
+  .prose-site img {
+    @apply h-auto max-w-full rounded-xl border;
+  }
+
+  .prose-site :not(pre) > code {
+    @apply rounded bg-card px-1.5 py-0.5 font-mono text-sm;
+  }
+
+  .prose-site pre {
+    @apply overflow-x-auto rounded-xl border p-4 text-sm;
+  }
+
+  .prose-site table {
+    @apply w-full border-collapse;
+  }
+
+  .prose-site :where(th, td) {
+    @apply border p-2 text-left;
   }
 }

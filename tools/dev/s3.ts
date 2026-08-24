@@ -72,6 +72,15 @@ export async function ensureBucket(configuration: LocalInfrastructureConfig) {
 
       await client.send(new CreateBucketCommand({ Bucket: configuration.s3Bucket }))
     }
+    await client.send(
+      new PutObjectCommand({
+        Body: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 240"><rect width="640" height="240" rx="28" fill="#2563eb"/><circle cx="170" cy="120" r="68" fill="#dbeafe"/><path d="M290 82h210v28H290zm0 48h150v28H290z" fill="#eff6ff"/></svg>',
+        Bucket: configuration.s3Bucket,
+        CacheControl: 'public, max-age=300',
+        ContentType: 'image/svg+xml; charset=utf-8',
+        Key: 'fixtures/phase-6.svg',
+      }),
+    )
   } finally {
     client.destroy()
   }

@@ -42,6 +42,9 @@ jobs:
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+
       - name: Format and lint
         run: pnpm run check:biome
 
@@ -57,7 +60,7 @@ jobs:
       - name: Unit tests
         run: pnpm run test:unit
 
-      - name: Disposable infrastructure integration tests
+      - name: Disposable infrastructure integration and critical E2E tests
         run: pnpm run test:integration
 
       - name: PostgreSQL migration suite
@@ -68,6 +71,3 @@ jobs:
 
       - name: Production build
         run: pnpm run build
-
-      - name: Affected E2E placeholder (NOT_IMPLEMENTED; replacement Phase 6)
-        run: pnpm run test:e2e:placeholder

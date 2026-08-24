@@ -4,9 +4,9 @@ import { hostname } from 'node:os'
 import { z } from 'zod'
 
 import { GitHubContentSource } from '../../src/content/github-source'
-import { DeferredPhaseContentHooks } from '../../src/content/hooks'
 import { ContentIngestionRepository } from '../../src/content/ingestion'
 import { ContentJobRepository } from '../../src/content/jobs'
+import { Phase6ContentHooks } from '../../src/content/revalidation'
 import { ContentWorker } from '../../src/content/worker'
 import { serviceIdentityContracts } from '../../src/control-plane/contracts'
 
@@ -27,6 +27,8 @@ const configuration = z
       z.string().min(1).optional(),
     ),
     GITHUB_CONTENT_REPOSITORY: z.string().min(3).optional(),
+    SITE_REVALIDATION_ENDPOINT: z.url().optional(),
+    SITE_REVALIDATION_SECRET: z.string().min(32).optional(),
     SITE_RUNTIME_MODE: z.enum(['local', 'test']),
   })
   .superRefine((value, context) => {
@@ -35,6 +37,18 @@ const configuration = z
         code: 'custom',
         message: 'GITHUB_CONTENT_REPOSITORY is required when content-worker polling is enabled',
         path: ['GITHUB_CONTENT_REPOSITORY'],
+      })
+    }
+    if (
+      value.CONTENT_WORKER_POLLING_ENABLED &&
+      (value.SITE_REVALIDATION_ENDPOINT === undefined ||
+        value.SITE_REVALIDATION_SECRET === undefined)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message:
+          'SITE_REVALIDATION_ENDPOINT and SITE_REVALIDATION_SECRET are required when polling is enabled',
+        path: ['SITE_REVALIDATION_ENDPOINT'],
       })
     }
   })
@@ -104,7 +118,10 @@ if (configuration.CONTENT_WORKER_POLLING_ENABLED) {
   jobs = new ContentJobRepository(configuration.DATABASE_URL)
   ingestion = new ContentIngestionRepository(
     configuration.DATABASE_URL,
-    new DeferredPhaseContentHooks(),
+    new Phase6ContentHooks(
+      configuration.SITE_REVALIDATION_ENDPOINT ?? '',
+      configuration.SITE_REVALIDATION_SECRET ?? '',
+    ),
   )
   const sourceOptions = {
     apiBaseUrl: configuration.GITHUB_API_BASE_URL,

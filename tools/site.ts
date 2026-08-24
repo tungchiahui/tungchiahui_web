@@ -16,7 +16,7 @@ Development:
 
 Validation:
   check     Run formatting, lint, source policy, typecheck, Renovate validation, and build
-  test      Run unit, disposable integration, and honest future-suite placeholders
+  test      Run unit, disposable integration, critical E2E, and migration suites
   help      Show this help`
 
 async function main() {

@@ -1,12 +1,12 @@
 # Website V2 Current Implementation State
 
-> Status: Phase 0–5 completed; Phase 6 not started
-> Current Phase: Awaiting Owner authorization for Phase 6
+> Status: Phase 0–6 completed; Phase 7 not started
+> Current Phase: Awaiting Owner authorization for Phase 7
 > Handoff audit date: 2026-08-24
 
 本文件是新 Claude Code/Codex 会话的简洁交接入口。它索引当前实际状态和容易遗漏的实施事实，不替代 `AGENTS.md`、Accepted ADR、架构规范或 `implementation-plan.md`。
 
-维护规则：每个 Phase 完成时，Agent 自动复核并沉淀后续实施所需事实；有状态变化时更新本文件，没有变化时也应在最终报告确认已完成交接审计。完成沉淀只表示下一 Phase 依赖可供 Owner 评估，不授权 Agent 自动继续。
+维护规则：每个 Phase 完成时，Agent 自动复核并沉淀后续实施所需事实；完成沉淀只表示下一 Phase 依赖可供 Owner 评估，不授权 Agent 自动继续。
 
 ## 1. 新会话读取顺序
 
@@ -19,96 +19,78 @@
 
 | Phase | Focused commit | Durable evidence | Gate status |
 | --- | --- | --- | --- |
-| 0 — Legacy Discovery | `abd7b7e962a600f1405d5649fae225a46758b168` | Legacy Baseline、Route/Pinyin Fixture、Risk Register、Traceability、Verification | 可靠通过；Owner Decisions O-001–O-007 已关闭 |
-| 1 — Engineering Baseline | `f59d49f425c684e13b87397933d064061bb9c673` | `phase-1-engineering-baseline.md` 与 Verification Report | 可靠通过；锁定工具链、CI、Branch Protection、Clean Checkout Gate 已建立 |
-| 2 — Hermetic Local Platform | `58ec725f7d5f6b92dad63767a7cc8146446c5c43` | `phase-2-hermetic-local-platform.md` 与 Verification Report | 可靠通过；Clean Start/Test/Restart/Reset/Failure Cleanup/Isolation Gate 已验证 |
-| 3 — Persistence Foundation | `feat(db): complete phase 3 persistence foundation` | `phase-3-persistence-foundation.md` 与 Verification Report | 可靠通过；Clean/Previous/Repeat Migration、Role、PgBouncer、Validation Gate 已验证 |
-| 4 — Independent Control Plane | `feat(ops): complete phase 4 independent control plane` | `phase-4-independent-control-plane.md` 与 Verification Report | 可靠通过；Auth/Replay、OpenResty、SQLite Crash/Lease、Next-down、PostgreSQL-down 与 Permission Gate 已验证 |
-| 5 — One-way Content Ingestion | `feat(content): complete phase 5 one-way ingestion` | `phase-5-one-way-content-ingestion.md` 与 Verification Report | 可靠通过；GET-only、Markdown/Route、Idempotency、Delta/Move/Delete、Collision、Retry/Claim 与 Directionality Gate 已验证 |
+| 0 — Legacy Discovery | `abd7b7e962a600f1405d5649fae225a46758b168` | Legacy Baseline、Route/Pinyin Fixture、Risk Register、Traceability、Verification | PASS；Owner Decisions O-001–O-007 closed |
+| 1 — Engineering Baseline | `f59d49f425c684e13b87397933d064061bb9c673` | Phase 1 Baseline 与 Verification | PASS；toolchain/CI/source policy established |
+| 2 — Hermetic Local Platform | `58ec725f7d5f6b92dad63767a7cc8146446c5c43` | Phase 2 Platform 与 Verification | PASS；isolated lifecycle/failure cleanup established |
+| 3 — Persistence Foundation | `feat(db): complete phase 3 persistence foundation` | Phase 3 Foundation 与 Verification | PASS；schema/migration/role/PgBouncer gates |
+| 4 — Independent Control Plane | `feat(ops): complete phase 4 independent control plane` | Phase 4 Control Plane 与 Verification | PASS；auth/replay/SQLite/Next-down/PostgreSQL-down gates |
+| 5 — One-way Content Ingestion | `c2b0b07` | Phase 5 Ingestion 与 Verification | PASS；GET-only/idempotency/delta/route/job gates |
+| 6 — zh-CN Vertical Slice | `feat(web): complete phase 6 zh-cn vertical slice` | Phase 6 Vertical Slice 与 Verification | PASS；public E2E/Legacy/Markdown/cache/asset/health gates |
 
-`implementation-plan.md` 中 Phase 0–5 的 Checklist 与 Overall Progress 已完成，Phase 6 保持未开始。任何后续 Agent 不得根据本文件自行越过 Owner 授权 Gate。
+`implementation-plan.md` 中 Phase 0–6 的 Checklist 与 Overall Progress 已完成，Phase 7 保持未开始。任何后续 Agent 不得根据本文件自行越过 Owner 授权 Gate。
 
 ## 3. Legacy durable baseline
 
-Phase 0 行为证据固定在旧 Nuxt Commit `d33e9ee5f90a266207f9f9658a47031eafdb981a`：
-
-- 237 个 Canonical zh-CN Markdown（4 Blog、233 Wiki），18 个 Wiki 根目录；
-- Minimal Frontmatter 只有四种已记录 Shape，Wiki 必须接受 `title`-only；
-- Blog 显式 `path` 优先；Wiki 使用已固定的 Pinyin Algorithm；Collision 在写入前使整次 Ingestion 失败；
-- Unprefixed Route 保留为 zh-CN Compatibility Surface；批准 Locale 只有 `zh-cn`、`zh-hk`、`zh-tw`、`en-us`；`zh-hant` 移除且不 Redirect；
-- 7 个 Wiki Alias 是显式 Allowlist；Phase 5 已实现真实 Document FK、Approval Reference 与 Alias Collision Gate；
-- `/about`、`/cv`、`/friend`、`/more`、`/mylogo`、Music、Start、公开 Stats/Page Traffic、`tech-footprint`、`weight-loss` 和完整 `/docs/ros2/**` 均按 Owner 决定保留；
-- `tech-footprint`/`weight-loss` 的 PostgreSQL Authority 与 Phase 4 精确 API Payload/Auth/Revision Boundary 已建立；字段级 Shape 已沉淀在 `docs/architecture/data-model.md`；
-- GitHub 仍只保存 zh-CN Canonical Markdown；Runtime PostgreSQL 不能反向成为 GitHub Authoring Source。
+- Phase 0 权威 Evidence Commit 仍是 `d33e9ee5f90a266207f9f9658a47031eafdb981a`：237 个 Canonical zh-CN Markdown、18 个 Wiki 根目录、4 条显式 Blog Path、Pinyin 契约、7 条 Alias 和 311 条 ROS2 HTML Route。
+- Unprefixed Route 与 `/zh-cn/**` 都是 zh-CN Public Surface；批准 Locale 只有 `zh-cn`、`zh-hk`、`zh-tw`、`en-us`。`zh-hant` 移除且不 Redirect，Phase 7/18 需保留 Negative Test。
+- Phase 6 只做两个具体的 Legacy 定点只读检查：精确 Footer 备案值；确认当前 clean Legacy HEAD 的 ROS2 Archive 自 Phase 0 Commit 未变化。V2 `public/docs/ros2` 与旧目录 byte-identical（958 files / 311 HTML / 85 MiB）。旧仓库未修改。
+- Filing 固定为 `鲁ICP备2025185601号-2`、`鲁公网安备37030302001121号`，公安 Record Code `37030302001121`。
+- GitHub 只保存 zh-CN Canonical Markdown；PostgreSQL 是 Runtime Materialization，禁止 Production-to-GitHub Write。
 
 完整证据：`docs/migration/legacy-discovery-baseline.md`、`legacy-route-and-pinyin-fixtures.md`、`legacy-risk-register.md`、`docs/planning/phase-0-traceability.md`。
 
-Phase 5 没有读取旧仓库；仓库内 Phase 0 Artifact 足以回答全部实现问题。
-
 ## 4. 当前仓库实际能力
 
-- Next.js 16.3.2 App Router Skeleton；目前仍不是 Website V2 Public Vertical Slice。
-- Node.js `24.19.0`、pnpm `11.23.0`、严格 TypeScript、Tailwind CSS 4、Base UI-based shadcn/ui、next-intl 四 Locale Skeleton。
-- `./site check` 执行 Biome、Source Policy、Drizzle Migration Consistency、Typecheck、Renovate Validation 和 Production Build。
-- `./site test` 执行 63 个 Unit、Disposable Infrastructure Integration 和 Dedicated PostgreSQL Migration Suite；只有 Phase 6 E2E 仍诚实报告 `NOT_IMPLEMENTED`。
-- PostgreSQL `app` Schema 有 8 个 Table；3 个 Checked-in Expand Migration 覆盖 Content/Translation/Job/Ingestion/Alias/Dataset 与 Phase 5 Application-job Claim/Lease/Retry。
-- `site_app`、`site_migrator`、`site_content_worker`、`site_control_api`、`site_backup`、`site_replication` NOLOGIN Group Role 与 Grant Boundary 已建立并测试。
-- `./site dev` 对 PostgreSQL 直接 Migrate，再经 transaction-mode PgBouncer 使用 Content-worker Role 应用 Deterministic/Idempotent Seed。
-- PostgreSQL Application Job Enum 不包含 Deploy/Rollback/Restore/Recovery；这些 Operation 继续严格属于 ADR 0015 SQLite Boundary。
-- 独立 `control-api` 提供 Operator/OIDC Auth、Capability、Validation、Replay/Idempotency、PostgreSQL Application Job 与 SQLite Recovery Operation Boundary。
-- `GitHubContentSource` 只读精确 Commit Tree/Blob，拒绝 Truncated Tree 和 Blob Hash Drift；没有 Commit/Push/PR/Edit/Delete Path。
-- Markdown 经 unified/remark/rehype + YAML/Zod Runtime Validation，接受 Phase 0 Minimal Frontmatter，产生固定 Legacy Pinyin/Route。
-- Content Snapshot Transaction 支持 Add/Modify/Soft-delete/安全 Move、Source Hash、Stable Runtime ID、7 条 Allowlist Alias 与 Collision-before-write。
-- `content-worker` 对 `content_sync` 实现 `FOR UPDATE SKIP LOCKED` Claim、Lease Expiry、Retry、Attempt Limit、Progress、Failure 与 `ingestion_runs` Audit；同 Commit 重放不重复 Hook。
-- Translation Diff、zh-CN Revalidation、Search Refresh 是 Deferred Typed Hook，当前只记录零成本结构化事件；无 AI/Build/Deploy 调用。
-- SQLite Control-state Version 2 使用 WAL/FULL/Checkpoint、Transaction、Nonce、Operation State Machine、Lease/Fencing/Heartbeat、Restart Reconciliation 与 Append-only Audit；与 `deploy-agent` Fake 保持 Phase 4 边界，未扩大到 Content Job。
-- Local OpenResty 直接分流 `/api/ops/*` 到独立 Control API；Next.js 全停与 PostgreSQL/PgBouncer 停机 Scenario 均在 Disposable Integration 验证。
-- Local/Test Container 保持 Read-only Root、Drop-all Capability、`no-new-privileges`，`content-worker`/`control-api` 无 Docker Socket、OpenResty Admin 或 Host Shell。
+- Next.js 16.3.2 App Router Public Surface：unprefixed + `/zh-cn` Home、Blog/Wiki List/Article、10 个 Special Page、Error/404、content-derived Metadata。
+- Server-only PostgreSQL DAL 使用 `site_app`，过滤 Soft-delete，并在 DB 与 Next Cache 反序列化边界执行 Zod Validation。Public Request 不读取 GitHub/File Corpus。
+- Runtime Markdown 使用 unified/remark/GFM/rehype、Raw HTML Drop、Sanitizer、Shiki 与 validated link/image metadata；提供 TOC、Unicode Anchor、Reading Time、Previous/Next。
+- Tailwind CSS 4、Base UI Primitive、blue/light-dark identity、responsive Header/Footer；Theme、Print、Start bookmark/search 是仅有的交互 Client Components。Web UI strings 全部进入四个等形 next-intl Catalog。
+- Phase 0/5 exact Blog/Pinyin/approved Alias routes 已由真实 App Router E2E 覆盖；没有默认 Redirect Map。
+- 完整 frozen ROS2 Archive 位于 `public/docs/ros2`；Biome/Source Policy 只对该精确第三方输出目录豁免，不放宽应用 `.js/.jsx` 禁令。
+- Local S3Mock Seed 写入 deterministic SVG；`/api/assets/**` 是 server-only validated read gateway。Production AList Contract 仍未验证。
+- Next Cache 无任意 TTL：Article Route Tag、Content-type List Tag 与 Home/List/Article Path 精确失效。HMAC Endpoint 位于 `/api/internal/revalidate`，不属于 Privileged Ops Control Plane。
+- Content materialization 后 Hook 失败会把精确 `side_effects` Payload 存入 PostgreSQL Job Progress；Retry 不再次 Fetch/Materialize。Translation/Search Hook 仍只记录 Phase 8/10 deferred event。
+- `/api/health` 是 liveness；`/api/ready` 检查 PostgreSQL；`/api/version` 输出 validated Git SHA/development stub；均 `no-store`。
+- `./site check` 覆盖 Biome、Source Policy、Drizzle、Typecheck、Renovate 与 webpack Production Build。`./site test` 覆盖 66 Unit、Disposable Integration、7 个真实 Playwright E2E 和 3-Migration Dedicated Suite。
+- Phase 4 Control API/SQLite Recovery 与 Phase 5 GitHub Ingestion/Worker 权限边界均保持不变；`/api/ops/*` 没有进入 Next.js。
 
 ## 5. 当前 Stub/Fake 与替换责任
 
 | Current boundary | 当前真实含义 | Replacement Phase |
 | --- | --- | --- |
-| `content_sync` Job | Control API 创建/查询；content-worker 真实 Claim/Retry/执行 | 已在 Phase 5 完成 |
-| Translation/Search/Cache Job | 仍只创建/查询；无执行 Handler | Phase 8–10 |
-| Translation Diff Hook | Phase 5 Typed zero-cost deferred event | Phase 8 |
-| zh-CN Revalidation Hook | Phase 5 Typed deferred event；没有 Public Cache | Phase 6 |
-| Search Refresh Hook | Phase 5 Typed deferred event；无 PGroonga Index | Phase 10 |
-| GitHub Polling in default local Compose | 为防隐式网络访问而 Idle；Disposable Test 用同一 Worker + in-memory source | 明确配置 Repository 后可启用；Phase 15 绑定 Workflow |
-| Owner-managed Dataset | 精确 Payload/Auth/Revision Write Boundary 已有；没有 Public View | Phase 6 |
-| Fake Deploy Agent | 独立 Identity/Capability Contract，真实 Operation 禁用 | Phase 14 |
-| Fake Translation Provider | Deterministic、Cost 0 | Phase 8/9 |
-| E2E Placeholder | `NOT_IMPLEMENTED`，不是通过的 Playwright Suite | Phase 6 |
-| S3Mock | Local API Integration，不能证明 AList 完整兼容 | Phase 11 |
+| zh-CN Web/Cache/Revalidation | Phase 6 production-shaped local implementation | completed in Phase 6 |
+| UI catalogs beyond zh-CN behavior | Catalog key shape exists；conversion/switching not implemented | Phase 7 |
+| Translation Diff/Execution | zero-cost deferred event；no provider call | Phase 8/9 |
+| Search Refresh/Query | deferred event；no PGroonga public search | Phase 10 |
+| S3Mock/Public Asset Gateway | local S3 API evidence only | Phase 11 AList non-production contract |
+| GitHub polling default | idle to prevent implicit network; explicit repository enables read-only polling | Phase 15 workflow binding |
+| Owner Dataset | validated PostgreSQL public read + Phase 4 authorized CAS write | Phase 16 final trust/privacy review |
+| Fake Deploy Agent | health/identity only; no production capability | Phase 14 |
+| Fake Translation Provider | deterministic cost 0 | Phase 8/9 |
 
-## 6. 已知实施限制与踩坑
+## 6. 已知限制与踩坑
 
-- Host 默认 RPM 工具链仍是 Node.js `24.18.0`、pnpm `11.19.0`；仓库精确要求 `24.19.0` / `11.23.0`。Phase 5 Gate 使用 Codex bundled Node `24.19.0` 与临时精确 pnpm `11.23.0`，不得放宽 Guard。
-- PostgreSQL 18 固定 Image Data Volume 目标是 `/var/lib/postgresql`。
-- Migration 直连 PostgreSQL；Application/Seed/Worker Query 走 PgBouncer `pool_mode=transaction`。所有 Worker Transaction 使用 `SET LOCAL ROLE site_content_worker`；不得依赖跨 Transaction Session State 或 Named Prepared Statement。
-- Database Role 是 NOLOGIN Group Role；Production Login/Member、Credential 注入和 Rotation 属于 Phase 12。
-- `owner_managed_datasets.payload` 在 DB 层只接受 JSON Object，外部写边界复用 `src/control-plane/contracts.ts` 的两个精确 Zod Schema 与 CAS Revision；不得扩张为任意 Blob Store，或把 `revision` 重复放入 Payload。
-- Drizzle Applied Hash/Timestamp Gate 会拒绝改写已应用 Migration；后续 Schema 变化必须新增 Migration。
-- Phase 5 Migration `0002_phase5_job_claiming` 是 Additive，只有 Claim Support Index 被 Superset Index 替换；不得回改 Migration SQL/Metadata。
-- GitHub Tree `truncated=true` 或 Blob SHA Drift 必须失败，不能把缺失 Path 当 Delete。Private Token 必须 Read-only，且不得记录。
-- Move Continuity 只在 Source Path、相同 Route 或唯一 Hash 能证明时保持；Hash 歧义必须失败等待 Owner，不得发明 Alias/ID。
-- `content_aliases` 只允许 7 条 Phase 0 Allowlist；新增任何 Alias 仍需 Owner 单项批准。
-- Test Compose 使用随机宿主端口；Container Restart 后必须重新解析 Published Port。
-- PgBouncer 会拒绝未允许的 Startup Parameter；Control API 使用 Client-side Query Timeout，不发送 `statement_timeout` Startup Parameter。
-- OpenResty 代理 `/api/ops/*` 时隐藏 Upstream `Cache-Control` 再写入单一 `no-store`；Next Upstream 不可用时使用 2 秒 Proxy Timeout。
-- Phase 5 验证后 Disposable Compose Project/Volume/Network 已清理；没有执行 Production、GitHub、AList、DNS、付费 AI 或旧站操作。
+- Host default Node/pnpm may differ; repository requires exactly Node `24.19.0` and pnpm `11.23.0`. Do not loosen `./site` guard.
+- Managed sandbox blocks `tsx` IPC/local HTTP and Turbopack worker ports. Verification used the exact toolchain with allowed local execution. `build` uses `next build --webpack`; this is still the approved Next.js stack.
+- Next Cache serializes `Date`; every cached public document is reparsed with coercion before use. Do not bypass this boundary.
+- Local Compose must quote the all-zero development SHA. Next dev explicitly allows only loopback `127.0.0.1` for the disposable browser origin.
+- Playwright uses one worker because the suite intentionally shares one mutable Disposable PostgreSQL/cache lifecycle, including a mid-run revalidation mutation。
+- `content-worker` side-effect replay depends on Hooks being idempotent. Future Translation/Search implementations must preserve exact-input idempotency and must not turn Public requests into paid/provider calls.
+- PostgreSQL migrations remain at three; Phase 6 adds no schema. New schema work must create a new Expand migration and never rewrite applied SQL/metadata.
+- S3Mock cannot prove AList metadata, ETag, Unicode-key and overwrite compatibility; Phase 11 must run the designated non-production contract before Production Infrastructure.
+- Static ROS2 files are frozen third-party generated output. Do not run formatters or source analyzers inside that exact directory; Phase 18 refreshes/diffs from the then-current Legacy HEAD.
+- No Production, GitHub write, AList, DNS, paid AI, deploy, backup/restore or old-repository mutation occurred through Phase 6.
 
-## 7. Phase 6 开始前 Prerequisite
+## 7. Phase 7 开始前 Prerequisite
 
-- Owner 明确授权 Phase 6；本文件本身不是授权。
-- Worktree 干净，Phase 0–5 Focused Commit 可见；先报告任何来源不明的改动。
-- 阅读 Phase 6 计划、Architecture Overview、Caching、Migration Guide、Acceptance Criteria、Phase 0 Route/Feature/SEO Artifact，以及 Phase 5 Content/Verification Artifact。
-- Public Page 只能读取 PostgreSQL Runtime Content；不得绕过 Phase 5 回到 Build-time 文件扫描或 GitHub Hot-path Read。
-- 实现 unprefixed zh-CN 与 Locale-prefixed zh-CN App Router、Blog/Wiki/Home/Special Page Vertical Slice、Runtime Markdown Render、Asset Boundary、Health/Ready/Version 和真实 Revalidation Hook。
-- 继续保持 `/api/ops/*` 独立于 Next.js；不得提前实现 Phase 7 Locale Conversion、Phase 8 Translation Memory、Phase 10 Search 或 Production Deploy。
-- 用 Phase 0 Exact URL/Pinyin/Alias/SEO Fixture 和 Phase 5 Materialized Route 做真实 App Router E2E；E2E Placeholder 必须在本阶段被替换。
+- Owner must explicitly authorize Phase 7; this handoff is not authorization.
+- Start from a clean worktree with the focused Phase 6 commit visible; report unknown changes before editing.
+- Read Phase 7 plan plus Internationalization Architecture, project requirements/acceptance criteria, Phase 0 Locale/SEO artifacts and Phase 6 implementation/verification reports.
+- Preserve both unprefixed and `/zh-cn` behavior while adding `zh-hk`/`zh-tw`; keep `zh-hant` as a tested negative route with no Redirect.
+- Use deterministic OpenCC-style conversion where applicable and keep UI i18n separate from Content i18n. Do not start Translation Memory, paid AI, PGroonga Search, AList production work or deployment.
+- Reuse the Server DAL, Markdown renderer, cache tags and exact route identity. Locale work must not duplicate Shared Domain Types or add client-side content corpus loading.
 
-当前没有 Phase 6 依赖 Blocker；唯一环境注意项仍是解析精确 Node.js/pnpm 工具链。
+Phase 7 has no dependency blocker. Phase 6 leaves explicit deferred boundaries for locale expansion without granting permission to begin it.
 
 ## 8. 回查旧 myblog 的规则
 

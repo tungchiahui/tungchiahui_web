@@ -1,14 +1,24 @@
-export type ContentChange = Readonly<{
-  documentId: string
-  routePath: string
-  sourceHash: string
-  type: 'added' | 'deleted' | 'modified' | 'moved'
-}>
+import { z } from 'zod'
 
-export type ContentHookInput = Readonly<{
-  changes: readonly ContentChange[]
-  sourceCommit: string
-}>
+export const contentChangeSchema = z
+  .object({
+    documentId: z.uuid(),
+    previousRoutePath: z.string().startsWith('/').optional(),
+    routePath: z.string().startsWith('/'),
+    sourceHash: z.string().regex(/^[a-f0-9]{64}$/),
+    type: z.enum(['added', 'deleted', 'modified', 'moved']),
+  })
+  .strict()
+
+export const contentHookInputSchema = z
+  .object({
+    changes: z.array(contentChangeSchema),
+    sourceCommit: z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/),
+  })
+  .strict()
+
+export type ContentChange = Readonly<z.infer<typeof contentChangeSchema>>
+export type ContentHookInput = Readonly<z.infer<typeof contentHookInputSchema>>
 
 export interface ContentIngestionHooks {
   diffTranslations(input: ContentHookInput): Promise<void>
@@ -38,6 +48,26 @@ export class DeferredPhaseContentHooks implements ContentIngestionHooks {
         sourceCommit: input.sourceCommit,
       }),
     )
+  }
+}
+
+export class CompositeContentHooks implements ContentIngestionHooks {
+  readonly #hooks: readonly ContentIngestionHooks[]
+
+  constructor(hooks: readonly ContentIngestionHooks[]) {
+    this.#hooks = hooks
+  }
+
+  async diffTranslations(input: ContentHookInput) {
+    await Promise.all(this.#hooks.map((hook) => hook.diffTranslations(input)))
+  }
+
+  async refreshSearch(input: ContentHookInput) {
+    await Promise.all(this.#hooks.map((hook) => hook.refreshSearch(input)))
+  }
+
+  async revalidateZhCn(input: ContentHookInput) {
+    await Promise.all(this.#hooks.map((hook) => hook.revalidateZhCn(input)))
   }
 }
 

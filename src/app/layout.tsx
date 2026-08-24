@@ -6,7 +6,7 @@ import type { ReactNode } from 'react'
 import './globals.css'
 
 export async function generateMetadata(): Promise<Metadata> {
-  const t = await getTranslations('Baseline')
+  const t = await getTranslations('Web')
 
   return {
     title: t('metadataTitle'),
@@ -19,7 +19,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const messages = await getMessages()
 
   return (
-    <html lang={locale}>
+    <html lang={locale} suppressHydrationWarning>
       <body>
         <NextIntlClientProvider messages={messages}>{children}</NextIntlClientProvider>
       </body>

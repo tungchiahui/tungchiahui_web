@@ -5,7 +5,12 @@ import { createDatabaseClient } from '../database/client'
 import { contentAliases, documents, ingestionRuns } from '../database/schema'
 import { sourceCommitSchema } from '../domain/persistence'
 import type { PreparedContentDocument } from './contracts'
-import type { ContentChange, ContentIngestionHooks } from './hooks'
+import {
+  type ContentChange,
+  type ContentHookInput,
+  type ContentIngestionHooks,
+  contentHookInputSchema,
+} from './hooks'
 import { legacyAliasApprovalReference, legacyWikiAliases } from './legacy-aliases'
 import { ContentRouteCollisionError, prepareContentSnapshot } from './markdown'
 
@@ -127,6 +132,16 @@ export type IngestionResult = Readonly<{
   sourceCommit: string
 }>
 
+export class ContentHookDeliveryError extends Error {
+  override readonly name = 'ContentHookDeliveryError'
+  readonly result: IngestionResult
+
+  constructor(result: IngestionResult, cause: unknown) {
+    super('Content materialization completed but downstream hooks were not delivered', { cause })
+    this.result = result
+  }
+}
+
 export class ContentIngestionRepository {
   readonly #client: ReturnType<typeof createDatabaseClient>
   readonly #hooks: ContentIngestionHooks
@@ -143,6 +158,13 @@ export class ContentIngestionRepository {
 
   async close() {
     await this.#client.close()
+  }
+
+  async deliverHooks(input: ContentHookInput) {
+    const validated = contentHookInputSchema.parse(input)
+    await this.#hooks.diffTranslations(validated)
+    await this.#hooks.refreshSearch(validated)
+    await this.#hooks.revalidateZhCn(validated)
   }
 
   async recordFailure(jobIdInput: unknown, sourceCommitInput: unknown, error: unknown) {
@@ -253,6 +275,10 @@ export class ContentIngestionRepository {
         if (changed) {
           changes.push({
             documentId,
+            ...(item.existing?.routePath !== undefined &&
+            item.existing.routePath !== item.incoming.routePath
+              ? { previousRoutePath: item.existing.routePath }
+              : {}),
             routePath: item.incoming.routePath,
             sourceHash: item.incoming.sourceHash,
             type: changeType(item.existing, item.incoming),
@@ -276,6 +302,7 @@ export class ContentIngestionRepository {
         changes.push(
           ...deleted.map((document) => ({
             documentId: document.id,
+            previousRoutePath: document.routePath,
             routePath: document.routePath,
             sourceHash: document.sourceHash,
             type: 'deleted' as const,
@@ -386,9 +413,11 @@ export class ContentIngestionRepository {
     })
 
     if (result.changes.length > 0) {
-      await this.#hooks.diffTranslations(result)
-      await this.#hooks.refreshSearch(result)
-      await this.#hooks.revalidateZhCn(result)
+      try {
+        await this.deliverHooks({ changes: [...result.changes], sourceCommit: result.sourceCommit })
+      } catch (error: unknown) {
+        throw new ContentHookDeliveryError(result, error)
+      }
     }
     return result
   }

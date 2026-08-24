@@ -41,7 +41,8 @@ export async function seedDevelopmentDatabase(connectionString: string) {
     sourceCommit,
     title: 'Phase 3 Development Seed',
     rawFrontmatter: { title: 'Phase 3 Development Seed', path: '/blog/phase-3-seed' },
-    rawMarkdown: '# Phase 3 Development Seed\n\nDeterministic local content.',
+    rawMarkdown:
+      '# Phase 6 Development Seed\n\nDeterministic local content with `inline-code`.\n\n## Asset\n\n![Local fixture](/api/assets/fixtures/phase-6.svg)\n\n```ts\nconst phase = 6\n```',
     sourceHash,
     routePath: '/blog/phase-3-seed',
     sourceUpdatedAt: seedTimestamp,
@@ -68,13 +69,13 @@ export async function seedDevelopmentDatabase(connectionString: string) {
   })
   const techFootprint = ownerDatasetWriteSchema.parse({
     datasetKey: 'tech_footprint',
-    payload: { entries: [] },
+    payload: { records: {}, version: 2 },
     revision: 0,
     updatedBy: 'phase3-seed',
   })
   const weightLoss = ownerDatasetWriteSchema.parse({
     datasetKey: 'weight_loss',
-    payload: { entries: [] },
+    payload: { records: [], version: 2 },
     revision: 0,
     updatedBy: 'phase3-seed',
   })

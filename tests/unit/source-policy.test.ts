@@ -75,4 +75,15 @@ describe('source policy', () => {
       }),
     ])
   })
+
+  it('keeps the checked-in ROS2 archive outside the application source policy', () => {
+    const violations = analyzeSourceFiles(
+      repositoryRoot,
+      virtualFiles({
+        'public/docs/ros2/gitbook/app.js': 'window.legacyArchive = true',
+      }),
+    )
+
+    expect(violations).toEqual([])
+  })
 })

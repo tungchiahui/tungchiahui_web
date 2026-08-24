@@ -63,6 +63,8 @@ Phase 4 的 `control-api` 已是独立 TypeScript HTTP Service：Local Operator 
 
 Phase 5 的 `content-worker` 已实现 PostgreSQL Claim/Retry/Progress 和 GitHub 单向 Ingestion。普通 `./site dev` 不隐式访问外部 GitHub，因此 Polling 默认 Idle；Disposable Integration 使用同一 Worker/Repository 和本地只读 Snapshot 执行真实 Job。开发者只有在明确配置 `GITHUB_CONTENT_REPOSITORY` 并启用 Polling 后才读取外部 Repository；Public Repository 不需要 Token，Private Token 必须 Read-only。
 
+Phase 6 的 Next.js Dev Server 提供真实 zh-CN Public Surface、`/api/health`、`/api/ready`、`/api/version` 和签名的内部 Revalidation Endpoint。S3Mock Start Hook 幂等写入 `/api/assets/fixtures/phase-6.svg` 使用的确定性对象；本地 Secret 只用于隔离环境。Content Worker 在 Polling 启用时必须同时配置 Revalidation Endpoint/Secret，失败交付通过 PostgreSQL Job Progress 重放。
+
 ## 隔离
 
 本地开发不得要求：

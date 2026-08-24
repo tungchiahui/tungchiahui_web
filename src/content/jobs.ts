@@ -11,6 +11,7 @@ const claimedJobSchema = z.object({
   job_type: z.literal('content_sync'),
   max_attempts: z.number().int().positive(),
   payload: z.unknown(),
+  progress: z.unknown(),
 })
 
 export type ClaimedContentJob = Readonly<{
@@ -19,6 +20,7 @@ export type ClaimedContentJob = Readonly<{
   claimedBy: string
   id: string
   maxAttempts: number
+  progress: unknown
   request: Extract<z.infer<typeof applicationJobRequestSchema>, { jobType: 'content_sync' }>
 }>
 
@@ -94,7 +96,7 @@ export class ContentJobRepository {
              error_summary = NULL
          FROM candidate
          WHERE jobs.id = candidate.id
-         RETURNING jobs.id, jobs.job_type, jobs.payload, jobs.attempt_count, jobs.max_attempts,
+         RETURNING jobs.id, jobs.job_type, jobs.payload, jobs.progress, jobs.attempt_count, jobs.max_attempts,
                    jobs.claimed_by, jobs.claim_expires_at`,
         [claimedBy, lease],
       )
@@ -114,6 +116,7 @@ export class ContentJobRepository {
         claimedBy: claimed.claimed_by,
         id: claimed.id,
         maxAttempts: claimed.max_attempts,
+        progress: claimed.progress,
         request,
       })
     })
@@ -147,7 +150,11 @@ export class ContentJobRepository {
   async fail(
     job: ClaimedContentJob,
     error: unknown,
-    options: Readonly<{ retryable: boolean; retryDelayMilliseconds: number }>,
+    options: Readonly<{
+      progress?: Readonly<Record<string, unknown>> | undefined
+      retryable: boolean
+      retryDelayMilliseconds: number
+    }>,
   ) {
     const errorSummary =
       error instanceof Error ? error.message.slice(0, 2_000) : 'Unknown content-worker failure'
@@ -158,7 +165,8 @@ export class ContentJobRepository {
          SET status = $3::app.application_job_status,
              available_at = CASE WHEN $3 = 'retry_wait' THEN clock_timestamp() + ($4 * interval '1 millisecond') ELSE available_at END,
              finished_at = CASE WHEN $3 = 'failed' THEN clock_timestamp() ELSE NULL END,
-             claimed_at = NULL, claimed_by = NULL, claim_expires_at = NULL, error_summary = $5
+             claimed_at = NULL, claimed_by = NULL, claim_expires_at = NULL, error_summary = $5,
+             progress = COALESCE($6::jsonb, progress)
          WHERE id = $1 AND status = 'running' AND claimed_by = $2`,
         [
           job.id,
@@ -166,6 +174,7 @@ export class ContentJobRepository {
           retry ? 'retry_wait' : 'failed',
           options.retryDelayMilliseconds,
           errorSummary,
+          options.progress === undefined ? null : JSON.stringify(options.progress),
         ],
       ),
     )

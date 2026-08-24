@@ -148,6 +148,8 @@ Legacy Client-side Search Implementation 违反 V2 的 Server-side PostgreSQL + 
 - Blog/Wiki 作为两个主要 Content Channel。
 - ICP 与公安备案信息及其合法链接。
 
+Phase 6 为避免猜测而定点只读复核了 Legacy Footer，固定当前值为 `鲁ICP备2025185601号-2` 与 `鲁公网安备37030302001121号`，公安备案链接 Record Code 为 `37030302001121`。这些值已进入 next-intl Message Catalog；Phase 16/18 仍负责最终法律信息审计。
+
 ### MAY REDESIGN
 
 - 精确像素、旧 CSS Class、Card Shape、Spacing、Animation 和 Vue Component 切分。
@@ -264,17 +266,17 @@ Legacy Site 的事实：
 | Repository physical separation | 两个独立 Git Repository | MUST KEEP | Phase 0/1/18；Legacy status check |
 | Canonical zh-CN only | 237 tracked source + ignored generated locales | MUST KEEP | Phase 5 PASS：GitHub Adapter 只枚举 Canonical Path/GET Tree+Blob，忽略 `_i18n`，无 Write Capability |
 | Directory/Minimal Frontmatter | 18 Wiki dirs；237/237 parse；仅 4 种 Key | MUST KEEP | Phase 5 PASS：Blog/Wiki Grammar、全部四种已记录 Frontmatter Shape 与 `title`-only Integration；Phase 18 刷新全量 Corpus |
-| Explicit Blog `path` | 4/4 Blog 有 `path` | MUST KEEP exact | Phase 5 PASS：四条 Blog Exact Path Fixture；Phase 6 真实 Router 待验证 |
-| Pinyin Route | `pinyin-pro` options + sanitizer | MUST KEEP behavior | Phase 5 PASS：完整 Representative Slug/Route 与 Collision Fixture；Phase 6 App Router 待验证 |
-| Unprefixed zh-CN Route | Query candidate fallback | MUST KEEP | Phase 6 E2E |
+| Explicit Blog `path` | 4/4 Blog 有 `path` | MUST KEEP exact | Phase 5 Fixture + Phase 6 真实 App Router 四条 Exact Route PASS |
+| Pinyin Route | `pinyin-pro` options + sanitizer | MUST KEEP behavior | Phase 5 Slug/Collision + Phase 6 Representative App Router PASS；Phase 18 刷新全量 Corpus |
+| Unprefixed zh-CN Route | Query candidate fallback | MUST KEEP | Phase 6 unprefixed 与 `/zh-cn` E2E PASS |
 | Four approved Locale | `zh-cn`、`zh-hk`、`zh-tw`、`en-us` | MUST KEEP | Phase 7 E2E |
 | Legacy `zh-hant` | Fifth old Locale | MAY REMOVE；不 Redirect | O-001 RESOLVED；Phase 7/18 Negative Test |
-| Seven Wiki Alias | explicit alias map | MUST KEEP unless Owner changes | Phase 5 PASS：精确 7 条 Allowlist、Approval Reference、真实 Document FK 与 Alias Collision Gate；Phase 6/18 响应待验证 |
-| Blog/Wiki reading/navigation | Page/Component evidence | MUST KEEP behavior | Phase 6 E2E |
+| Seven Wiki Alias | explicit alias map | MUST KEEP unless Owner changes | Phase 5 精确 Allowlist/FK/Collision + Phase 6 Representative Canonical/Alias Response PASS；Phase 18 final audit |
+| Blog/Wiki reading/navigation | Page/Component evidence | MUST KEEP behavior | Phase 6 List/Article/TOC/Previous-next E2E PASS；Phase 16/18 final interaction audit |
 | Search experience | `/search` + Header Search | MUST KEEP outcome | Phase 10 relevance/locale/E2E |
 | Client-side Corpus Search | Legacy implementation | MAY REMOVE; prohibited in V2 | Phase 10 bundle/test |
 | Recognizable identity | Logo、blue accent、theme、IA | MUST KEEP identity; MAY REDESIGN pixels | Phase 6/18 visual audit |
-| Static ROS2 GitBook | 311 HTML + direct Canonical links | MUST KEEP | O-005 RESOLVED；Phase 6/11/18 |
+| Static ROS2 GitBook | 311 HTML + direct Canonical links | MUST KEEP | Phase 6 byte-identical 958-file archive + all 311 HTML response PASS；Phase 11/18 final contract/delta |
 | Special pages/integrations | Source evidence in section 3.3 | MUST KEEP outcomes；MAY REDESIGN implementations | O-002–O-004 RESOLVED |
 | Static Nuxt/Pages architecture | Nuxt config/package/docs | MAY REMOVE implementation | Replaced by ADR-defined V2 phases |
 

@@ -53,7 +53,7 @@ services:
       - s3-data:/s3mock-data
 
   control-api:
-    image: tungchiahui-web-local:phase5
+    image: tungchiahui-web-local:phase6
     build:
       context: ../..
       dockerfile: ops/dev/Dockerfile
@@ -89,7 +89,7 @@ services:
         target: /control-state
 
   fake-deploy-agent:
-    image: tungchiahui-web-local:phase5
+    image: tungchiahui-web-local:phase6
     pull_policy: never
     command: ["pnpm", "exec", "tsx", "services/fake-deploy-agent/main.ts"]
     environment:
@@ -115,7 +115,7 @@ services:
       - /tmp:size=16m,mode=1777
 
   content-worker:
-    image: tungchiahui-web-local:phase5
+    image: tungchiahui-web-local:phase6
     pull_policy: never
     command: ["pnpm", "exec", "tsx", "services/content-worker/main.ts"]
     environment:
@@ -124,6 +124,8 @@ services:
       CONTENT_WORKER_PORT: 8083
       DATABASE_URL: postgresql://tungchiahui:local-only-postgres@pgbouncer:6432/tungchiahui
       SITE_RUNTIME_MODE: ${SITE_RUNTIME_MODE:?SITE_RUNTIME_MODE is required}
+      SITE_REVALIDATION_ENDPOINT: http://web:3000/api/internal/revalidate
+      SITE_REVALIDATION_SECRET: local-only-phase6-revalidation-secret
     healthcheck:
       test:
         [
@@ -143,7 +145,7 @@ services:
       - /tmp:size=16m,mode=1777
 
   web:
-    image: tungchiahui-web-local:phase5
+    image: tungchiahui-web-local:phase6
     pull_policy: never
     command: ["pnpm", "dev", "--hostname", "0.0.0.0"]
     depends_on:
@@ -161,6 +163,8 @@ services:
       S3_ENDPOINT: http://s3mock:9090
       S3_SECRET_ACCESS_KEY: local-only-secret-key
       SITE_BASE_URL: http://localhost:${SITE_WEB_PORT:-3000}
+      SITE_DEPLOYMENT_SHA: "0000000000000000000000000000000000000000"
+      SITE_REVALIDATION_SECRET: local-only-phase6-revalidation-secret
       SITE_RUNTIME_MODE: ${SITE_RUNTIME_MODE:?SITE_RUNTIME_MODE is required}
       TRANSLATION_PROVIDER: fake
     healthcheck:
@@ -169,7 +173,7 @@ services:
           "CMD",
           "node",
           "-e",
-          "fetch('http://127.0.0.1:3000').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+          "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
         ]
       interval: 2s
       timeout: 3s
