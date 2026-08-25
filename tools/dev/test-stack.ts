@@ -306,7 +306,7 @@ function runPlaywright(siteBaseUrl: URL) {
 async function run() {
   assertDockerPrerequisites()
   const repositoryRoot = process.cwd()
-  const temporaryRoot = mkdtempSync(join(tmpdir(), 'tungchiahui-phase7-'))
+  const temporaryRoot = mkdtempSync(join(tmpdir(), 'tungchiahui-phase8-'))
   const suffix = basename(temporaryRoot)
     .replaceAll(/[^a-z0-9]/g, '')
     .slice(-12)

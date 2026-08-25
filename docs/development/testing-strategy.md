@@ -121,6 +121,8 @@ Phase 5 在同一 Disposable Integration 增加 PostgreSQL Application-job Execu
 
 Phase 6 在此基础上增加缓存副作用 Failure Gate：预热 Route Cache，提交新 Snapshot，注入一次 Revalidation Failure，断言 PostgreSQL Job 保存 `side_effects` Progress、Retry 不重复 Fetch/Materialize，并在无 Rebuild/Restart 下读到新正文。
 
+Phase 8 增加 Semantic-block/Translation Memory Gate：位置变化不改变身份；AST/Code/URL/Identifier 必须保持；Hash Hit 全局复用；Hash Miss Pending；局部 Change 只回退当前 Block；Superseded Pending 变 Stale；Targeted Patch Context 保留；同 Snapshot/Delta 重放不重复 Row、Mapping 或 Hook。真实 Public E2E 同时覆盖 full fallback 与 mixed en-US State。所有这些 Path 结构上不导入 Provider，并记录 `providerCalls: 0`。
+
 ## Deployment Pipeline Test
 
 验证 Web Application Repository 的 `main` Workflow 必须在全部 CI Quality Gates 通过后才 Build Git-SHA-tagged Immutable Image，并调用与 `./site deploy` 相同的 Control Plane/Deployment Engine。验证 Content Repository Push 只触发 Content Sync，不触发 Next.js Build 或 Blue-Green Deployment。

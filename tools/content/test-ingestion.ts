@@ -7,6 +7,7 @@ import { ContentJobRepository } from '../../src/content/jobs'
 import { ContentWorker } from '../../src/content/worker'
 import { ApplicationJobRepository } from '../../src/control-plane/application-jobs'
 import type { ActorIdentity } from '../../src/control-plane/contracts'
+import { TranslationMemoryRepository } from '../../src/translation/repository'
 
 const commitA = 'a'.repeat(40)
 const commitB = 'b'.repeat(40)
@@ -29,7 +30,7 @@ const snapshotAFiles = [
     path: 'content/posts/2026-01-06-新博客启用.md',
     contents: markdown(
       ['title: 新博客启用', 'date: 2026-01-06', 'path: newblogenable!'],
-      '# 新博客启用',
+      '# 新博客启用\n\n这是当前段落。\n\n这个区块保持待翻译。',
     ),
   },
   {
@@ -95,7 +96,13 @@ export const phase5FinalSnapshot = snapshot(commitB, [
       '# 新博客启用\n\nModified at commit B.',
     ),
   },
-  snapshotAFiles[1],
+  {
+    ...snapshotAFiles[1],
+    contents: markdown(
+      ['title: W311MI AX300 驱动', 'date: 2026-01-14', 'path: w311mi_ax300'],
+      '# 新博客启用',
+    ),
+  },
   snapshotAFiles[2],
   snapshotAFiles[3],
   snapshotAFiles[4],
@@ -168,6 +175,7 @@ export async function verifyPhase5Ingestion(connectionString: string, firstJobId
   const ingestion = new ContentIngestionRepository(connectionString, hooks)
   const jobs = new ContentJobRepository(connectionString)
   const jobCreator = new ApplicationJobRepository(connectionString)
+  const translationMemory = new TranslationMemoryRepository(connectionString)
   const source = new FixtureContentSource(
     new Map([
       [commitA, snapshotA],
@@ -193,6 +201,37 @@ export async function verifyPhase5Ingestion(connectionString: string, firstJobId
     }
     if (first.result.filesSeen !== snapshotA.files.length || hooks.calls.length !== 3) {
       throw new Error('Initial ingestion did not materialize all representative Legacy fixtures')
+    }
+    if (
+      first.result.translation.pendingSegments === 0 ||
+      first.result.translation.fallbackSegments !== first.result.translation.pendingSegments ||
+      first.result.translation.memoryHits !== 0
+    ) {
+      throw new Error('Initial English backfill did not expose pending/fallback metrics')
+    }
+    const englishBackfill = await client.query<{
+      count: string
+      current: boolean
+      pending_segment_count: number
+      translated_markdown: string
+    }>(`SELECT count(*) OVER () AS count,
+              translation.source_hash = document.source_hash AS current,
+              translation.pending_segment_count,
+              translation.translated_markdown
+         FROM app.documents document
+         JOIN app.document_translations translation ON translation.document_id = document.id
+        WHERE NOT document.is_deleted AND translation.locale = 'en-us'`)
+    if (
+      englishBackfill.rows.length !== snapshotA.files.length ||
+      englishBackfill.rows.some((row) => !row.current || row.pending_segment_count < 1)
+    ) {
+      throw new Error('Safe Phase 8 backfill did not bind every English row to current zh-CN')
+    }
+    const initialEnglishBlog = englishBackfill.rows.find((row) =>
+      row.translated_markdown.includes('# 新博客启用'),
+    )
+    if (!initialEnglishBlog?.translated_markdown.includes('这是当前段落。')) {
+      throw new Error('Pending English blocks did not render the latest canonical zh-CN fallback')
     }
     const activeA = await client.query<{ count: string }>(
       'SELECT count(*) FROM app.documents WHERE NOT is_deleted',
@@ -267,6 +306,76 @@ export async function verifyPhase5Ingestion(connectionString: string, firstJobId
         'Same-commit replay emitted duplicate translation/search/revalidation effects',
       )
     }
+    const segmentCountBeforeReuse = await client.query<{ count: string }>(
+      "SELECT count(*) FROM app.translation_segments WHERE locale = 'en-us'",
+    )
+    const mappingCountBeforeReuse = await client.query<{ count: string }>(
+      "SELECT count(*) FROM app.document_translation_segments WHERE locale = 'en-us'",
+    )
+    await client.query(
+      `UPDATE app.translation_segments segment
+          SET translated_text = CASE segment.source_text
+                WHEN '# 新博客启用' THEN '# New blog enabled'
+                WHEN '这是当前段落。' THEN 'This is the current paragraph.'
+              END,
+              status = 'reviewed',
+              provider = 'phase8-test-fixture',
+              model = 'no-provider-call',
+              updated_at = now()
+         FROM app.document_translation_segments mapping
+         JOIN app.documents document ON document.id = mapping.document_id
+        WHERE mapping.segment_id = segment.id
+          AND document.route_path = '/blog/newblogenable!'
+          AND segment.source_text IN ('# 新博客启用', '这是当前段落。')`,
+    )
+    await createJob(jobCreator, commitA, 'translation-memory-reuse')
+    const reused = await worker.runOnce()
+    if (
+      !reused.claimed ||
+      !reused.completed ||
+      reused.result.translation.memoryHits < 2 ||
+      Number(hooks.calls.length) !== 6
+    ) {
+      throw new Error('Reviewed Translation Memory blocks were not reused deterministically')
+    }
+    const translatedBlog = await client.query<{
+      fallback_segment_count: number
+      translated_markdown: string
+      translated_segment_count: number
+    }>(`SELECT translation.translated_markdown,
+              translation.fallback_segment_count,
+              translation.translated_segment_count
+         FROM app.document_translations translation
+         JOIN app.documents document ON document.id = translation.document_id
+        WHERE document.route_path = '/blog/newblogenable!'
+          AND translation.locale = 'en-us'`)
+    if (
+      translatedBlog.rows[0]?.fallback_segment_count !== 1 ||
+      translatedBlog.rows[0]?.translated_segment_count !== 2 ||
+      !translatedBlog.rows[0]?.translated_markdown.includes('# New blog enabled') ||
+      !translatedBlog.rows[0]?.translated_markdown.includes('This is the current paragraph.') ||
+      !translatedBlog.rows[0]?.translated_markdown.includes('这个区块保持待翻译。')
+    ) {
+      throw new Error('English materialization did not combine reviewed Translation Memory blocks')
+    }
+    await createJob(jobCreator, commitA, 'translation-memory-idempotent')
+    const memoryReplay = await worker.runOnce()
+    const segmentCountAfterReuse = await client.query<{ count: string }>(
+      "SELECT count(*) FROM app.translation_segments WHERE locale = 'en-us'",
+    )
+    const mappingCountAfterReuse = await client.query<{ count: string }>(
+      "SELECT count(*) FROM app.document_translation_segments WHERE locale = 'en-us'",
+    )
+    if (
+      !memoryReplay.claimed ||
+      !memoryReplay.completed ||
+      memoryReplay.result.changes.length !== 0 ||
+      Number(hooks.calls.length) !== 6 ||
+      segmentCountAfterReuse.rows[0]?.count !== segmentCountBeforeReuse.rows[0]?.count ||
+      mappingCountAfterReuse.rows[0]?.count !== mappingCountBeforeReuse.rows[0]?.count
+    ) {
+      throw new Error('Translation Memory replay duplicated rows, mappings, or downstream effects')
+    }
     const replayedMaterializations = await client.query<{
       generated_at: Date
       locale: 'zh-hk' | 'zh-tw'
@@ -299,7 +408,7 @@ export async function verifyPhase5Ingestion(connectionString: string, firstJobId
     if (
       !delta.claimed ||
       !delta.completed ||
-      delta.result.filesChanged !== 3 ||
+      delta.result.filesChanged !== 4 ||
       delta.result.filesDeleted !== 1
     ) {
       throw new Error('Add/modify/delete/move reconciliation returned unexpected counts')
@@ -309,6 +418,86 @@ export async function verifyPhase5Ingestion(connectionString: string, firstJobId
     )
     if (!movedBefore.rows[0] || movedBefore.rows[0].id !== movedAfter.rows[0]?.id) {
       throw new Error('Safe content-hash move did not preserve internal document identity')
+    }
+    const globalReuse = await client.query<{
+      translated_markdown: string
+      translation_memory_hits: number
+    }>(`SELECT translation.translated_markdown, translation.translation_memory_hits
+         FROM app.document_translations translation
+         JOIN app.documents document ON document.id = translation.document_id
+        WHERE document.route_path = '/blog/w311mi_ax300'
+          AND translation.locale = 'en-us'`)
+    if (
+      globalReuse.rows[0]?.translation_memory_hits !== 1 ||
+      !globalReuse.rows[0]?.translated_markdown.includes('# New blog enabled')
+    ) {
+      throw new Error('Unchanged semantic block was not safely reused across documents')
+    }
+    const mixedEnglish = await client.query<{
+      fallback_segment_count: number
+      pending_segment_count: number
+      translated_markdown: string
+      translation_memory_hits: number
+    }>(`SELECT translation.translated_markdown,
+              translation.pending_segment_count,
+              translation.fallback_segment_count,
+              translation.translation_memory_hits
+         FROM app.document_translations translation
+         JOIN app.documents document ON document.id = translation.document_id
+        WHERE document.route_path = '/blog/newblogenable!'
+          AND translation.locale = 'en-us'`)
+    if (
+      mixedEnglish.rows[0]?.pending_segment_count !== 1 ||
+      mixedEnglish.rows[0]?.fallback_segment_count !== 1 ||
+      mixedEnglish.rows[0]?.translation_memory_hits !== 1 ||
+      !mixedEnglish.rows[0]?.translated_markdown.includes('# New blog enabled') ||
+      !mixedEnglish.rows[0]?.translated_markdown.includes('Modified at commit B.') ||
+      mixedEnglish.rows[0]?.translated_markdown.includes('This is the current paragraph.')
+    ) {
+      throw new Error(
+        'Changed English block did not use current zh-CN fallback with safe hash reuse',
+      )
+    }
+    const newBlog = await client.query<{ id: string }>(
+      "SELECT id FROM app.documents WHERE route_path = '/blog/newblogenable!'",
+    )
+    const patchContexts = await translationMemory.listTargetedPatchContexts(newBlog.rows[0]?.id)
+    if (
+      patchContexts.length !== 1 ||
+      patchContexts[0]?.patch.oldSource !== '这是当前段落。' ||
+      patchContexts[0]?.patch.oldTranslation !== 'This is the current paragraph.' ||
+      patchContexts[0]?.patch.newSource !== 'Modified at commit B.'
+    ) {
+      throw new Error('Targeted patch context did not preserve old zh-CN/en-US/new zh-CN')
+    }
+    const hookCountBeforeDeltaReplay = hooks.calls.length
+    await createJob(jobCreator, commitB, 'translation-delta-idempotent')
+    const deltaReplay = await worker.runOnce()
+    const replayedPatchContexts = await translationMemory.listTargetedPatchContexts(
+      newBlog.rows[0]?.id,
+    )
+    if (
+      !deltaReplay.claimed ||
+      !deltaReplay.completed ||
+      deltaReplay.result.changes.length !== 0 ||
+      hooks.calls.length !== hookCountBeforeDeltaReplay ||
+      replayedPatchContexts[0]?.patch.oldTranslation !== 'This is the current paragraph.'
+    ) {
+      throw new Error('Delta replay changed mappings, hooks, or targeted patch context')
+    }
+    const memoryMetrics = await translationMemory.readMetrics()
+    if (memoryMetrics.pending_segments < 1 || memoryMetrics.memory_hits < 1) {
+      throw new Error('Translation Memory metrics did not expose pending and hit counts')
+    }
+    const stalePending = await client.query<{ count: string }>(
+      `SELECT count(*)
+         FROM app.translation_segments
+        WHERE locale = 'en-us'
+          AND source_text = '这个区块保持待翻译。'
+          AND status = 'stale'`,
+    )
+    if (Number(stalePending.rows[0]?.count) !== 1) {
+      throw new Error('Superseded pending block did not transition to stale')
     }
 
     await createJob(jobCreator, commitC, 'collision')
@@ -366,6 +555,11 @@ export async function verifyPhase5Ingestion(connectionString: string, firstJobId
     }
   } finally {
     await client.end()
-    await Promise.all([ingestion.close(), jobs.close(), jobCreator.close()])
+    await Promise.all([
+      ingestion.close(),
+      jobs.close(),
+      jobCreator.close(),
+      translationMemory.close(),
+    ])
   }
 }

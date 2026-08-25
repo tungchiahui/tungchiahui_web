@@ -77,6 +77,7 @@ export class ContentWorker {
           changes: pendingSideEffects.data.hookInput.changes,
           ...pendingSideEffects.data.result,
           sourceCommit,
+          translation: pendingSideEffects.data.hookInput.translation,
         })
         await this.#jobs.complete(job, {
           ...pendingSideEffects.data.result,
@@ -133,6 +134,7 @@ export class ContentWorker {
                 hookInput: {
                   changes: [...error.result.changes],
                   sourceCommit: error.result.sourceCommit,
+                  translation: error.result.translation,
                 },
                 phase: 'side_effects',
                 result: {

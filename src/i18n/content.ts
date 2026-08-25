@@ -2,7 +2,7 @@ import OpenCC from 'opencc-js'
 import { contentGlossary } from './content-glossary'
 import type { AppLocale } from './locales'
 
-export type ContentLocaleState = 'converted' | 'fallback' | 'source'
+export type ContentLocaleState = 'converted' | 'fallback' | 'mixed' | 'source' | 'translated'
 
 const converters = {
   'zh-hk': OpenCC.Converter({ from: 'cn', to: 'hk' }),

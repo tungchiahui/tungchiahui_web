@@ -64,6 +64,13 @@ test('routes all approved locales, preserves logical switching and exposes conte
     '/en-us',
   )
 
+  await page.goto('/en-us/blog/newblogenable!')
+  await expect(page.getByRole('heading', { name: 'New blog enabled' })).toBeVisible()
+  await expect(page.getByText('Revalidated without rebuilding.')).toBeVisible()
+  await expect(page.locator('[data-content-locale-state="mixed"]')).toContainText(
+    '1 current source blocks remain',
+  )
+
   for (const locale of ['zh-cn', 'zh-hk', 'zh-tw', 'en-us']) {
     const response = await page.goto(`/${locale}/blog`)
     expect(response?.status(), locale).toBe(200)

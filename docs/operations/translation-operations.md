@@ -171,6 +171,8 @@ new zh-CN
 
 不得因为一个 Block 改变就重新翻译整个 Document。
 
+Phase 8 已建立纯数据层：Pending/Translated/Reviewed/Stale、Current Document Mapping、Mixed Materialization、Current-source Binding、Pending/Fallback/Hit Metric，以及 validated Targeted Patch Context。它不会调用 Provider。Phase 9 的显式 Job 执行必须复用这些 Row/Mapping，不得另建 Whole-document Translation Path。
+
 ## Public Request
 
 Public `/en-us/...` Page Request 永远不得触发 Paid Translation。

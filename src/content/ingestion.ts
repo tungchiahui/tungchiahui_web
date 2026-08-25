@@ -7,6 +7,7 @@ import { contentAliases, documents, documentTranslations, ingestionRuns } from '
 import { sourceCommitSchema } from '../domain/persistence'
 import { contentGlossary } from '../i18n/content-glossary'
 import { localizeContentMarkdown } from '../i18n/content-markdown'
+import { reconcileEnglishTranslation, retireEnglishTranslations } from '../translation/memory'
 import type { PreparedContentDocument } from './contracts'
 import {
   type ContentChange,
@@ -139,6 +140,12 @@ export type IngestionResult = Readonly<{
   filesDeleted: number
   filesSeen: number
   sourceCommit: string
+  translation: Readonly<{
+    fallbackSegments: number
+    memoryHits: number
+    pendingSegments: number
+    translatedSegments: number
+  }>
 }>
 
 export class ContentHookDeliveryError extends Error {
@@ -260,6 +267,12 @@ export class ContentIngestionRepository {
       }
 
       const changes: ContentChange[] = []
+      const translation = {
+        fallbackSegments: 0,
+        memoryHits: 0,
+        pendingSegments: 0,
+        translatedSegments: 0,
+      }
       const documentIdsByRoute = new Map<string, string>()
       for (const item of plan) {
         const changed = item.existing
@@ -324,6 +337,17 @@ export class ContentIngestionRepository {
               },
             })
         }
+        const english = await reconcileEnglishTranslation(transaction, {
+          documentId,
+          rawMarkdown: item.incoming.rawMarkdown,
+          sourceHash: item.incoming.sourceHash,
+          timestamp: startedAt,
+        })
+        materializationChanged ||= english.changed
+        translation.fallbackSegments += english.metrics.fallbackSegmentCount
+        translation.memoryHits += english.metrics.translationMemoryHits
+        translation.pendingSegments += english.metrics.pendingSegmentCount
+        translation.translatedSegments += english.metrics.translatedSegmentCount
         if (changed) {
           changes.push({
             documentId,
@@ -366,6 +390,10 @@ export class ContentIngestionRepository {
             sourceHash: document.sourceHash,
             type: 'deleted' as const,
           })),
+        )
+        await retireEnglishTranslations(
+          transaction,
+          deleted.map((document) => document.id),
         )
       }
 
@@ -473,12 +501,17 @@ export class ContentIngestionRepository {
         filesDeleted,
         filesSeen: prepared.documents.length,
         sourceCommit: prepared.sourceCommit,
+        translation: Object.freeze(translation),
       })
     })
 
     if (result.changes.length > 0) {
       try {
-        await this.deliverHooks({ changes: [...result.changes], sourceCommit: result.sourceCommit })
+        await this.deliverHooks({
+          changes: [...result.changes],
+          sourceCommit: result.sourceCommit,
+          translation: result.translation,
+        })
       } catch (error: unknown) {
         throw new ContentHookDeliveryError(result, error)
       }

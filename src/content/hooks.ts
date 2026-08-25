@@ -14,6 +14,14 @@ export const contentHookInputSchema = z
   .object({
     changes: z.array(contentChangeSchema),
     sourceCommit: z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/),
+    translation: z
+      .object({
+        fallbackSegments: z.number().int().nonnegative(),
+        memoryHits: z.number().int().nonnegative(),
+        pendingSegments: z.number().int().nonnegative(),
+        translatedSegments: z.number().int().nonnegative(),
+      })
+      .strict(),
   })
   .strict()
 
@@ -28,7 +36,18 @@ export interface ContentIngestionHooks {
 
 export class DeferredPhaseContentHooks implements ContentIngestionHooks {
   async diffTranslations(input: ContentHookInput) {
-    this.#log('translation_diff_deferred', 8, input)
+    console.log(
+      JSON.stringify({
+        changedDocuments: input.changes.length,
+        event: 'translation_memory_materialized',
+        fallbackSegments: input.translation.fallbackSegments,
+        memoryHits: input.translation.memoryHits,
+        pendingSegments: input.translation.pendingSegments,
+        providerCalls: 0,
+        sourceCommit: input.sourceCommit,
+        translatedSegments: input.translation.translatedSegments,
+      }),
+    )
   }
 
   async refreshSearch(input: ContentHookInput) {

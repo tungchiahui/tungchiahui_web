@@ -46,6 +46,7 @@
     "readingTime": "About {minutes} min read",
     "contentStateConverted": "This article is deterministically converted from Simplified Chinese with a versioned glossary.",
     "contentStateFallback": "An English translation is not available yet. The latest Simplified Chinese source is shown without triggering paid translation.",
+    "contentStateMixed": "Existing English translations were reused. {count} current source blocks remain in Simplified Chinese, without triggering paid translation.",
     "tableOfContents": "On this page",
     "previous": "Previous",
     "next": "Next",

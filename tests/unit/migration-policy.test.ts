@@ -7,14 +7,14 @@ import { describe, expect, it } from 'vitest'
 import { validateMigrationPolicy } from '../../src/database/migration-policy'
 
 describe('migration policy', () => {
-  it('covers every checked-in migration and permits the Phase 3 expand set', () => {
+  it('covers every checked-in migration through Phase 8 and permits the expand set', () => {
     const policy = validateMigrationPolicy(
       'drizzle/migration-policy.json',
       'drizzle/meta/_journal.json',
       { allowContract: false, hasFreshRecoverableBackup: false },
     )
 
-    expect(policy.migrations).toHaveLength(3)
+    expect(policy.migrations).toHaveLength(4)
     expect(policy.migrations.every((migration) => migration.changeKind === 'expand')).toBe(true)
   })
 

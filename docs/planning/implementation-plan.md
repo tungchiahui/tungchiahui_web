@@ -1,7 +1,7 @@
 # Website V2 分阶段实施计划
 
-> Status: In progress — Phase 0–7 complete
-> Current Phase: Awaiting Owner authorization for Phase 8
+> Status: In progress — Phase 0–8 complete
+> Current Phase: Awaiting Owner authorization for Phase 9
 > Execution Model: Hard-gated, one Phase at a time
 > Scope: 从新的 Next.js V2 Repository 基线推进到替换旧 Nuxt Production Site
 
@@ -17,7 +17,7 @@
 - [x] Phase 5 — GitHub 单向 Content Ingestion
 - [x] Phase 6 — zh-CN Website Vertical Slice
 - [x] Phase 7 — UI i18n 与 zh-HK/zh-TW
-- [ ] Phase 8 — Translation Memory 与 en-US Fallback
+- [x] Phase 8 — Translation Memory 与 en-US Fallback
 - [ ] Phase 9 — 显式付费 AI Translation
 - [ ] Phase 10 — PGroonga Search 与 Cache Correctness
 - [ ] Phase 11 — AList S3 Asset Contract
@@ -767,14 +767,14 @@ Locale Contract 已稳定，先把 Incremental Translation Correctness 与 Fallb
 
 ### Task Checklist
 
-- [ ] 定义稳定 Semantic Block Boundary、Normalization 和 Context Fingerprint。
-- [ ] 对 Code Fence、Inline Code、URL、Identifier、Markdown Syntax 和受保护 Frontmatter 做不可翻译标记。
-- [ ] 实现 Hash Hit Reuse、Hash Miss Pending、Changed/Stale 和 Reviewed-like State Transition。
-- [ ] 确保 Segment Position 不是 Identity，局部改变不使整篇 Translation 失效。
-- [ ] 实现已有英文 Block + Pending zh-CN Block 的混合 Materialized en-US Document。
-- [ ] Content Sync 时只 Diff/Reuse/Mark Pending，绝不调用 Provider。
-- [ ] 实现 Old zh-CN + Old en-US + New zh-CN 的 Targeted Patch Context Interface，不执行真实翻译。
-- [ ] 暴露 Pending Count、Fallback State 和 Translation Memory Hit Metric。
+- [x] 定义稳定 Semantic Block Boundary、Normalization 和 Context Fingerprint。
+- [x] 对 Code Fence、Inline Code、URL、Identifier、Markdown Syntax 和受保护 Frontmatter 做不可翻译标记。
+- [x] 实现 Hash Hit Reuse、Hash Miss Pending、Changed/Stale 和 Reviewed-like State Transition。
+- [x] 确保 Segment Position 不是 Identity，局部改变不使整篇 Translation 失效。
+- [x] 实现已有英文 Block + Pending zh-CN Block 的混合 Materialized en-US Document。
+- [x] Content Sync 时只 Diff/Reuse/Mark Pending，绝不调用 Provider。
+- [x] 实现 Old zh-CN + Old en-US + New zh-CN 的 Targeted Patch Context Interface，不执行真实翻译。
+- [x] 暴露 Pending Count、Fallback State 和 Translation Memory Hit Metric。
 
 ### 本 Phase 明确不做什么
 
@@ -784,25 +784,25 @@ Locale Contract 已稳定，先把 Incremental Translation Correctness 与 Fallb
 
 ### Tests / Verification
 
-- [ ] Unchanged Block 全局安全复用，局部 Change 只影响对应 Segment。
-- [ ] Code/URL/Identifier/AST Shape Preservation Test 通过。
-- [ ] Hash Miss 变 Pending，en-US 只对该 Block 显示最新 zh-CN。
-- [ ] 旧英文不得伪装成新 zh-CN 的有效 Translation。
-- [ ] Content Sync/Public Request 的 Provider Call Count 恒为零。
-- [ ] Re-run Deterministic 且不会重复 Segment/Translation。
+- [x] Unchanged Block 全局安全复用，局部 Change 只影响对应 Segment。
+- [x] Code/URL/Identifier/AST Shape Preservation Test 通过。
+- [x] Hash Miss 变 Pending，en-US 只对该 Block 显示最新 zh-CN。
+- [x] 旧英文不得伪装成新 zh-CN 的有效 Translation。
+- [x] Content Sync/Public Request 的 Provider Call Count 恒为零。
+- [x] Re-run Deterministic 且不会重复 Segment/Translation。
 
 ### Acceptance Criteria
 
-- [ ] Translation Memory 达到 Block-level Incremental Reuse。
-- [ ] Pending Fallback Correct、可观察且不阻塞发布。
-- [ ] GitHub 仍只保存 Canonical zh-CN。
+- [x] Translation Memory 达到 Block-level Incremental Reuse。
+- [x] Pending Fallback Correct、可观察且不阻塞发布。
+- [x] GitHub 仍只保存 Canonical zh-CN。
 
 ### Exit Gate
 
-- [ ] Segmentation、Hash Reuse、AST Preservation、Fallback 与 Zero-cost Gate 全部通过。
-- [ ] Translation State Migration/Backfill 对当前数据安全。
-- [ ] 创建聚焦 Commit，建议：`feat(i18n): complete phase 8 translation memory`。
-- [ ] Commit 后停止并向 Owner 报告，不自动进入 Phase 9。
+- [x] Segmentation、Hash Reuse、AST Preservation、Fallback 与 Zero-cost Gate 全部通过。
+- [x] Translation State Migration/Backfill 对当前数据安全。
+- [x] 创建聚焦 Commit，建议：`feat(i18n): complete phase 8 translation memory`。
+- [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 9。
 
 ### 本阶段完成后形成的 Artifact / Capability
 

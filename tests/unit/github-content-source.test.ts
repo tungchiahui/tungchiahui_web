@@ -84,6 +84,9 @@ describe('read-only GitHub content source', () => {
     const files = [
       'src/content/github-source.ts',
       'src/content/worker.ts',
+      'src/translation/memory.ts',
+      'src/translation/repository.ts',
+      'src/translation/segmentation.ts',
       'services/content-worker/main.ts',
     ]
     const source = files

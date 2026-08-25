@@ -105,3 +105,7 @@ Unprefixed Route 与 `/zh-cn/**` 均为 zh-CN。其余批准 Prefix 为 `/zh-hk/
 - 从 Public Page Request 触发付费翻译
 
 Phase 7 在 Block-level State 建立前使用更严格的全 Document zh-CN Fallback，并明确忽略已有 en-US Materialization；Phase 8 才负责把该基线替换为 Semantic-block Translation Memory 与混合 Fallback。
+
+Phase 8 已实现该替换：顶层 mdast Semantic Block 使用版本化 Normalization、Source Hash 和 AST/受保护值 Context Fingerprint 建立全局 Translation Memory；Document Ordinal 仅用于当前拼装，不是翻译身份。en-US Materialization 必须绑定当前 Canonical `source_hash`，并记录 Pending、Fallback、Translated 与 Memory-hit Count。Public DAL 只读取 Source Hash 匹配的当前行，按实际内容暴露 `fallback`、`mixed` 或 `translated`；缺失/旧行继续安全回退到最新完整 zh-CN。
+
+实现与安全 Backfill 见 `docs/development/phase-8-translation-memory.md`。Paid Provider 仍只属于 Phase 9。

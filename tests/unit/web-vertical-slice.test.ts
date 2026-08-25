@@ -39,7 +39,16 @@ describe('Phase 6 public web boundaries', () => {
   })
 
   it('signs and validates the internal revalidation trust boundary', () => {
-    const body = JSON.stringify({ changes: [change], sourceCommit: 'b'.repeat(40) })
+    const body = JSON.stringify({
+      changes: [change],
+      sourceCommit: 'b'.repeat(40),
+      translation: {
+        fallbackSegments: 1,
+        memoryHits: 2,
+        pendingSegments: 1,
+        translatedSegments: 2,
+      },
+    })
     const secret = 'phase-6-test-revalidation-secret'
     const signature = signRevalidationPayload(body, secret)
 

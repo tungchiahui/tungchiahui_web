@@ -87,6 +87,16 @@ docs/planning/implementation-plan.md
 - `development/phase-6-zh-cn-vertical-slice.md` — App Router/RSC、Runtime Markdown、Legacy Route、Asset、Cache/Revalidation 与 Public Health Contract。
 - `development/phase-6-verification-report.md` — zh-CN Critical E2E、311 条 ROS2 Route、Secret Boundary、Side-effect Retry 与质量 Gate 证据。
 
+## Phase 7 Deterministic Locales
+
+- `development/phase-7-deterministic-locales.md` — 四 Locale Route/UI、OpenCC 物化、Glossary 与受保护 Markdown Contract。
+- `development/phase-7-verification-report.md` — Locale、转换、Fallback、Route 与完整质量 Gate 证据。
+
+## Phase 8 Translation Memory
+
+- `development/phase-8-translation-memory.md` — Semantic Block、Hash/Context Identity、Document Mapping、Mixed Fallback、Targeted Patch 与零成本边界。
+- `development/phase-8-verification-report.md` — Segmentation、Reuse/Pending/Stale、AST、安全 Backfill、E2E 与 Migration Gate 证据。
+
 ## Current implementation handoff
 
 - `planning/current-state.md` — 已完成 Phase、实际能力、Stub/Fake、已知限制、Legacy 回查规则与下一 Phase Prerequisite。

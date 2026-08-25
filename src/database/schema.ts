@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm'
 import {
+  boolean,
   check,
   index,
   integer,
@@ -50,6 +51,11 @@ export const documentTranslations = applicationSchema.table(
     translatedMarkdown: text('translated_markdown').notNull(),
     translationHash: text('translation_hash').notNull(),
     translationVersion: integer('translation_version').notNull(),
+    sourceHash: text('source_hash'),
+    pendingSegmentCount: integer('pending_segment_count').notNull().default(0),
+    translatedSegmentCount: integer('translated_segment_count').notNull().default(0),
+    fallbackSegmentCount: integer('fallback_segment_count').notNull().default(0),
+    translationMemoryHits: integer('translation_memory_hits').notNull().default(0),
     generatedAt: timestamp('generated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
@@ -57,6 +63,17 @@ export const documentTranslations = applicationSchema.table(
     check('document_translations_noncanonical_locale', sql`${table.locale} <> 'zh-cn'`),
     check('document_translations_hash_sha256', sql`${table.translationHash} ~ '^[a-f0-9]{64}$'`),
     check('document_translations_version_positive', sql`${table.translationVersion} > 0`),
+    check(
+      'document_translations_source_hash_sha256',
+      sql`${table.sourceHash} IS NULL OR ${table.sourceHash} ~ '^[a-f0-9]{64}$'`,
+    ),
+    check('document_translations_pending_nonnegative', sql`${table.pendingSegmentCount} >= 0`),
+    check(
+      'document_translations_translated_nonnegative',
+      sql`${table.translatedSegmentCount} >= 0`,
+    ),
+    check('document_translations_fallback_nonnegative', sql`${table.fallbackSegmentCount} >= 0`),
+    check('document_translations_hits_nonnegative', sql`${table.translationMemoryHits} >= 0`),
   ],
 )
 
@@ -69,6 +86,8 @@ export const translationSegments = applicationSchema.table(
     sourceAstType: text('source_ast_type').notNull(),
     locale: localeEnum().notNull(),
     translatedText: text('translated_text'),
+    isTranslatable: boolean('is_translatable').notNull().default(true),
+    normalizationVersion: integer('normalization_version').notNull().default(1),
     contextFingerprint: text('context_fingerprint').notNull(),
     status: translationSegmentStatusEnum().notNull(),
     provider: text(),
@@ -89,9 +108,55 @@ export const translationSegments = applicationSchema.table(
     check('translation_segments_noncanonical_locale', sql`${table.locale} <> 'zh-cn'`),
     check('translation_segments_source_hash_sha256', sql`${table.sourceHash} ~ '^[a-f0-9]{64}$'`),
     check('translation_segments_context_not_empty', sql`length(${table.contextFingerprint}) > 0`),
+    check(
+      'translation_segments_normalization_version_positive',
+      sql`${table.normalizationVersion} > 0`,
+    ),
     check('translation_segments_input_tokens_nonnegative', sql`${table.inputTokens} >= 0`),
     check('translation_segments_output_tokens_nonnegative', sql`${table.outputTokens} >= 0`),
     check('translation_segments_cost_nonnegative', sql`${table.costUsd} >= 0`),
+  ],
+)
+
+export const documentTranslationSegments = applicationSchema.table(
+  'document_translation_segments',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    documentId: uuid('document_id')
+      .notNull()
+      .references(() => documents.id, { onDelete: 'cascade' }),
+    locale: localeEnum().notNull(),
+    segmentId: uuid('segment_id')
+      .notNull()
+      .references(() => translationSegments.id, { onDelete: 'restrict' }),
+    previousSegmentId: uuid('previous_segment_id').references(() => translationSegments.id, {
+      onDelete: 'set null',
+    }),
+    ordinal: integer().notNull(),
+    sourceStart: integer('source_start').notNull(),
+    sourceEnd: integer('source_end').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('document_translation_segments_ordinal_unique').on(
+      table.documentId,
+      table.locale,
+      table.ordinal,
+    ),
+    index('document_translation_segments_segment_idx').on(table.segmentId),
+    index('document_translation_segments_previous_idx').on(table.previousSegmentId),
+    check('document_translation_segments_english_only', sql`${table.locale} = 'en-us'`),
+    check('document_translation_segments_ordinal_nonnegative', sql`${table.ordinal} >= 0`),
+    check('document_translation_segments_start_nonnegative', sql`${table.sourceStart} >= 0`),
+    check(
+      'document_translation_segments_range_valid',
+      sql`${table.sourceEnd} > ${table.sourceStart}`,
+    ),
+    check(
+      'document_translation_segments_previous_distinct',
+      sql`${table.previousSegmentId} IS NULL OR ${table.previousSegmentId} <> ${table.segmentId}`,
+    ),
   ],
 )
 
@@ -186,6 +251,7 @@ export const contentAliases = applicationSchema.table(
 
 export const persistenceSchema = {
   contentAliases,
+  documentTranslationSegments,
   documentTranslations,
   documents,
   ingestionRuns,

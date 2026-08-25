@@ -152,6 +152,15 @@ Phase 5 将上述 Pipeline 实现为以下边界：
 - Snapshot Apply 在单个 PostgreSQL Transaction 中完成。Source Path 优先保持 Identity；相同 Public Route 或唯一 Source Hash 可证明的 Rename/Move 复用 Document ID；歧义 Hash 不静默合并。
 - 删除使用可审计 Soft-delete；同 Path/Route 的恢复复用原 Identity。相同 Commit/Content 重放不更新 Document、Translation 或 Hook Side Effect。
 - `content-worker` 使用 `FOR UPDATE SKIP LOCKED` Claim、Lease Expiry Recovery、Attempt Limit、`retry_wait`、Progress 和有界 Error Summary。Application Job 与 `ingestion_runs` 仍只位于 PostgreSQL。
-- Translation Diff、zh-CN Revalidation 与 Search Refresh 是明确 Typed Hook。Phase 5 实现只记录零成本 Deferred Event，分别由 Phase 8、6、10 替换；没有 AI Provider、Image Build、Deploy 或 GitHub Write Path。
+- Translation Diff、zh-CN Revalidation 与 Search Refresh 是明确 Typed Hook。Phase 6 已替换 Public Revalidation，Phase 8 已在同一 Ingestion Transaction 内替换 Translation Diff/Materialization；Search Refresh 继续由 Phase 10 替换。没有 AI Provider、Image Build、Deploy 或 GitHub Write Path。
+
+## Phase 8 Translation Memory baseline
+
+- unified/remark 顶层 mdast Node 形成稳定 Semantic Block；Normalization Version、Source Hash 与 AST/受保护值 Context Fingerprint 形成全局 Memory Identity，Ordinal 只负责当前文档拼装。
+- 受保护 Frontmatter、Code、HTML、URL、Identifier 与 Markdown Shape 在复用前重新验证；不安全 Target 回到 Pending/当前 zh-CN Fallback。
+- `document_translation_segments` 保存当前 Mapping 和可选 Previous Segment，支持 old zh-CN + old en-US + new zh-CN Targeted Patch Context。
+- Hash Hit 复用 reviewed/translated Block；Miss 创建 Pending；被替换且不再 Current 的 Pending 变 Stale。单个 Block 改变不会使其他 Translation 失效。
+- `document_translations.source_hash` 证明 Mixed Materialization 对应当前 Canonical Document。旧/未 Backfill 行不会被 Public DAL 当成有效英文。
+- Content Sync 只执行纯数据 Diff/Reuse/Pending/Fallback，结构上不导入 Provider；同 Snapshot 重放不重复 Segment/Mapping/Hook。
 
 Local/Test Compose 默认让外部 GitHub Polling 处于 Idle，避免本地启动产生网络调用；Disposable Integration 以同一个 Worker/Repository 实现和内存只读 Snapshot 验证完整执行路径。配置明确的 Repository 后，Service 可启用 Polling；私有 Repository 的可选 Token 必须只有读取权限。

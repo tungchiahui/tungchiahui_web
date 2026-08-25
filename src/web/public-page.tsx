@@ -9,7 +9,7 @@ import { BookmarkWorkspace } from '@/components/bookmark-workspace'
 import { PrintButton } from '@/components/print-button'
 import { SiteShell } from '@/components/site-shell'
 import { techFootprintPayloadSchema, weightLossPayloadSchema } from '@/control-plane/contracts'
-import { contentLocaleState, localizeContentText } from '@/i18n/content'
+import { localizeContentText } from '@/i18n/content'
 import type { AppLocale } from '@/i18n/locales'
 import {
   listCachedDocuments,
@@ -174,7 +174,7 @@ async function ArticlePage({
     document.localizedMarkdown ? 'zh-cn' : context.locale,
   )
   const localizedTitle = localizeContentText(document.title, context.locale)
-  const presentationState = contentLocaleState(context.locale)
+  const presentationState = document.contentLocaleState
 
   return (
     <article className="mx-auto max-w-4xl">
@@ -187,7 +187,7 @@ async function ArticlePage({
           ) : null}
           <span>{t('readingTime', { minutes: rendered.readingMinutes })}</span>
         </div>
-        {presentationState === 'source' ? null : (
+        {presentationState === 'source' || presentationState === 'translated' ? null : (
           <p
             className="mt-4 rounded-lg border bg-muted/40 px-3 py-2 text-muted-foreground text-sm"
             data-content-locale={context.locale}
@@ -195,7 +195,9 @@ async function ArticlePage({
           >
             {presentationState === 'converted'
               ? t('contentStateConverted')
-              : t('contentStateFallback')}
+              : presentationState === 'mixed'
+                ? t('contentStateMixed', { count: document.fallbackSegmentCount })
+                : t('contentStateFallback')}
           </p>
         )}
       </header>

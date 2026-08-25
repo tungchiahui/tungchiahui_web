@@ -95,6 +95,25 @@ reviewed
 - Segment Position 本身不是 Identity
 - Pending Block 不会自动调用 AI
 
+Phase 8 物理实现增加 `is_translatable` 与 `normalization_version`。全局 Memory Identity 使用 Source Hash、Locale 与 Context Fingerprint；Document Position 不进入该 Identity。
+
+### document_translation_segments
+
+Phase 8 新增的 Current-document Mapping：
+
+```text
+id
+document_id
+locale                  en-us
+segment_id
+previous_segment_id     optional targeted-patch predecessor
+ordinal                 assembly only
+source_start/source_end assembly only
+created_at/updated_at
+```
+
+Ordinal/Offset 只重建当前 Markdown，不是 Segment Identity。Mapping 可在局部修改时指向一个新 Pending Segment，同时保留旧 reviewed/translated Segment 供 targeted patch context 使用。
+
 ### translation_jobs
 
 追踪显式付费 Translation Operation。
@@ -214,6 +233,8 @@ weight_loss
 | host-local SQLite | Phase 4 Version 2 Control-state、Nonce、Infrastructure Operation/Lease/Fencing 与 Append-only Audit | Content、Translation、Search、Ingestion、Application Job |
 
 `src/domain/persistence.ts` 是 Locale、Content/Job/Translation Status、Dataset Key 和 External Write Schema 的唯一 Shared Domain 定义。Drizzle Schema 从这些 Closed Union 建立 PostgreSQL Enum，Repository/API 不得再次手写平行 Union。
+
+Phase 8 Migration `0003_phase8_translation_memory` 是 additive Expand：新增 Document Mapping，并为 `document_translations` 增加 nullable Current-source Hash 与零默认指标。旧行不执行破坏性 Migration-time Backfill；显式 Content Sync 在 Canonical Transaction 内安全重建。
 
 ## 搜索
 

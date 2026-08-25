@@ -24,6 +24,14 @@
       "requiresFreshRecoverableBackup": false,
       "reason": "Adds backward-compatible claim, lease, retry scheduling, and attempt-limit columns to PostgreSQL application jobs; replaces only the supporting claim index with a superset key.",
       "recovery": "Retain the nullable/defaulted columns and superset index for blue-green compatibility; use a reviewed forward-fix migration if claim policy needs adjustment."
+    },
+    {
+      "tag": "0003_phase8_translation_memory",
+      "changeKind": "expand",
+      "risk": "low",
+      "requiresFreshRecoverableBackup": false,
+      "reason": "Adds backward-compatible document-to-segment mapping plus nullable source binding and zero-default materialization metrics; existing translations remain readable by older application code and are only trusted by Phase 8 after explicit content-sync backfill.",
+      "recovery": "Retain the additive table and columns for blue-green compatibility. If reconciliation policy needs correction, deploy a reviewed forward fix and replay an explicit idempotent content sync from the canonical GitHub commit."
     }
   ]
 }

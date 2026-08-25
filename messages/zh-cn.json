@@ -46,6 +46,7 @@
     "readingTime": "约 {minutes} 分钟阅读",
     "contentStateConverted": "本文由简体中文内容确定性转换，并受版本化术语表保护。",
     "contentStateFallback": "英文翻译尚未提供；当前显示最新的简体中文原文，不会触发付费翻译。",
+    "contentStateMixed": "本文已复用现有英文翻译；仍有 {count} 个内容块显示最新简体中文原文，且不会触发付费翻译。",
     "tableOfContents": "本文目录",
     "previous": "上一篇",
     "next": "下一篇",

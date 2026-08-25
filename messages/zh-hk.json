@@ -46,6 +46,7 @@
     "readingTime": "約 {minutes} 分鐘閱讀",
     "contentStateConverted": "本文由簡體中文內容確定性轉換，並受版本化術語表保護。",
     "contentStateFallback": "英文翻譯尚未提供；目前顯示最新的簡體中文原文，不會觸發付費翻譯。",
+    "contentStateMixed": "本文已重用現有英文翻譯；仍有 {count} 個內容區塊顯示最新簡體中文原文，且不會觸發付費翻譯。",
     "tableOfContents": "本文目錄",
     "previous": "上一篇",
     "next": "下一篇",
