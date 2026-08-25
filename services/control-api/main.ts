@@ -5,6 +5,8 @@ import {
 } from '../../src/control-plane/control-state'
 import { createControlApiServer } from '../../src/control-plane/http-server'
 
+process.umask(0o007)
+
 const configuration = parseControlApiConfiguration(process.env)
 
 initializeControlState(configuration.statePath, configuration.mode)

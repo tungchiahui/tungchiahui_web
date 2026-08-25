@@ -1,5 +1,11 @@
 import { resetDevelopmentStack, startDevelopmentStack, stopDevelopmentStack } from './dev/runtime'
 import {
+  createBackup,
+  createBreakGlassRestore,
+  createRestore,
+  readBackupStatus,
+} from './recovery/control-client'
+import {
   assertToolchain,
   executePackageScript,
   parseSiteCommand,
@@ -25,6 +31,12 @@ Validation:
   test      Run unit, disposable integration, critical E2E, and migration suites
   help      Show this help
 
+Recovery:
+  backup --environment <local|test|production> --type <full|diff|incr> --reason <text>
+  backup status
+  restore <backup-id-or-ISO-time> --environment <environment> --confirm RESTORE-<ENV> --reason <text>
+  restore ... --break-glass --inventory-host <stable-ssh-alias>
+
 Translation:
   translate pending|changed|all --dry-run
   translate article <source-path> --dry-run
@@ -41,6 +53,14 @@ async function main() {
   const command = parseSiteCommand(process.argv.slice(2))
 
   switch (command.kind) {
+    case 'backup-create': {
+      console.log(JSON.stringify(await createBackup(command), null, 2))
+      return 0
+    }
+    case 'backup-status': {
+      console.log(JSON.stringify(await readBackupStatus(), null, 2))
+      return 0
+    }
     case 'check':
       return executePackageScript('site:check')
     case 'dev-reset':
@@ -60,6 +80,19 @@ async function main() {
     case 'storage-contract-s3':
       await runExternalS3ContractFromEnvironment()
       return 0
+    case 'restore': {
+      const request = {
+        confirmation: command.confirmation,
+        environment: command.environment,
+        reason: command.reason,
+        selector: command.selector,
+      }
+      const result = command.breakGlass
+        ? await createBreakGlassRestore(request, command.inventoryHost ?? '')
+        : await createRestore(request)
+      console.log(JSON.stringify(result, null, 2))
+      return 0
+    }
     case 'translate': {
       const result =
         command.action === 'create'

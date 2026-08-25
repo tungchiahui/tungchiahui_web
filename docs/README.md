@@ -112,6 +112,16 @@ docs/planning/implementation-plan.md
 - `development/phase-11-s3-compatible-asset-contract.md` — Provider-neutral Adapter、Object/Cache/CDN Policy、Credential Split、Contract Suite 与安全 Cleanup。
 - `development/phase-11-verification-report.md` — S3Mock、真实 AList 非生产 Evidence、应用加载、清理与完整质量 Gate 证据。
 
+## Phase 12 Production Foundation
+
+- `development/phase-12-production-foundation.md` — Ansible、Hardened Compose、SOPS/age、OpenResty、数据库 Identity 与独立控制路由。
+- `development/phase-12-verification-report.md` — Idempotent Provision、Container/Secret/Network/IPv4+IPv6 与 Next/PostgreSQL-down Gate 证据。
+
+## Phase 13 Tested Recovery
+
+- `development/phase-13-tested-recovery.md` — pgBackRest Policy、Repository 决策、双副本、PITR、SQLite 与 Break-glass Recovery Contract。
+- `development/phase-13-verification-report.md` — Disposable Restore Drill、PG-down、R2、Control-state、安全失败与质量 Gate 证据。
+
 ## Current implementation handoff
 
 - `planning/current-state.md` — 已完成 Phase、实际能力、Stub/Fake、已知限制、Legacy 回查规则与下一 Phase Prerequisite。

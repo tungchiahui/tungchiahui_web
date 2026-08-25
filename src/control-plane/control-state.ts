@@ -1,6 +1,14 @@
-import { randomUUID } from 'node:crypto'
-import { mkdirSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { createHash, randomUUID } from 'node:crypto'
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  renameSync,
+  rmSync,
+  statSync,
+} from 'node:fs'
+import { dirname, resolve } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
 import { z } from 'zod'
@@ -12,7 +20,7 @@ import {
   infrastructureOperationTypeSchema,
 } from './contracts'
 
-const CONTROL_STATE_SCHEMA_VERSION = 3
+const CONTROL_STATE_SCHEMA_VERSION = 4
 
 const controlStateSummarySchema = z.object({
   environment: z.enum(['local', 'test', 'production']),
@@ -59,7 +67,7 @@ export type ControlStateSummary = Readonly<{
   incompleteOperations: number
   initializedAt: string
   journalMode: 'wal'
-  schemaVersion: 3
+  schemaVersion: 4
   synchronous: 2
 }>
 
@@ -89,6 +97,51 @@ export type ControlAuditEvent = Readonly<{
   eventType: string
   operationId: string | null
   outcome: 'accepted' | 'denied' | 'failed' | 'succeeded'
+}>
+
+const backupRecordSchema = z.object({
+  backup_id: z.string().min(1),
+  backup_type: z.enum(['full', 'diff', 'incr']),
+  completed_at: z.string(),
+  created_at: z.string(),
+  manifest_sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  measured_bytes: z.number().int().nonnegative(),
+  measured_seconds: z.number().nonnegative(),
+  primary_replica_status: z.enum(['fresh', 'failed', 'pending']),
+  r2_replica_status: z.enum(['fresh', 'failed', 'pending']),
+  repository_generation: z.string().min(1),
+  stanza: z.string().min(1),
+  valid: z.union([z.literal(0), z.literal(1)]),
+  wal_archive_max: z.string().nullable(),
+})
+
+export type RecoveryBackupRecord = Readonly<{
+  backupId: string
+  backupType: 'diff' | 'full' | 'incr'
+  completedAt: string
+  createdAt: string
+  manifestSha256: string
+  measuredBytes: number
+  measuredSeconds: number
+  primaryReplicaStatus: 'failed' | 'fresh' | 'pending'
+  r2ReplicaStatus: 'failed' | 'fresh' | 'pending'
+  repositoryGeneration: string
+  stanza: string
+  valid: boolean
+  walArchiveMax: string | null
+}>
+
+export type ControlStateSnapshotEvidence = Readonly<{
+  activeSlot: 'blue' | 'green' | 'none'
+  auditDigest: string
+  auditEventCount: number
+  auditEventMaxId: number
+  currentSha: string | null
+  environment: ControlStateEnvironment
+  integrity: 'ok'
+  lastSha: string | null
+  previousSlot: 'blue' | 'green' | 'none'
+  schemaVersion: 4
 }>
 
 export class ControlStateConflictError extends Error {
@@ -201,6 +254,29 @@ const migrations = [
       FROM local_control_metadata_v2;
     `,
     version: 3,
+  },
+  {
+    sql: `
+      CREATE TABLE recovery_backup_records (
+        backup_id TEXT PRIMARY KEY,
+        backup_type TEXT NOT NULL CHECK (backup_type IN ('full', 'diff', 'incr')),
+        stanza TEXT NOT NULL,
+        repository_generation TEXT NOT NULL,
+        manifest_sha256 TEXT NOT NULL CHECK (manifest_sha256 GLOB '[0-9a-f]*' AND length(manifest_sha256) = 64),
+        wal_archive_max TEXT,
+        primary_replica_status TEXT NOT NULL CHECK (primary_replica_status IN ('pending', 'fresh', 'failed')),
+        r2_replica_status TEXT NOT NULL CHECK (r2_replica_status IN ('pending', 'fresh', 'failed')),
+        valid INTEGER NOT NULL CHECK (valid IN (0, 1)),
+        measured_seconds REAL NOT NULL CHECK (measured_seconds >= 0),
+        measured_bytes INTEGER NOT NULL CHECK (measured_bytes >= 0),
+        created_at TEXT NOT NULL,
+        completed_at TEXT NOT NULL
+      ) STRICT;
+
+      CREATE INDEX recovery_backup_freshness_idx
+        ON recovery_backup_records (completed_at DESC, backup_id);
+    `,
+    version: 4,
   },
 ] as const
 
@@ -325,6 +401,11 @@ export function initializeControlState(
     return summary
   } finally {
     database.close()
+    for (const sharedPath of [path, `${path}-wal`, `${path}-shm`]) {
+      if (existsSync(sharedPath) && statSync(sharedPath).uid === process.getuid?.()) {
+        chmodSync(sharedPath, 0o660)
+      }
+    }
   }
 }
 
@@ -497,20 +578,39 @@ export function claimNextInfrastructureOperation(
   leaseOwner: string,
   leaseSeconds: number,
   now = new Date(),
+  allowedOperationTypes?: readonly InfrastructureOperation['operationType'][],
 ) {
   const owner = z.string().min(1).max(200).parse(leaseOwner)
   const duration = z.number().int().min(1).max(3_600).parse(leaseSeconds)
+  const allowed =
+    allowedOperationTypes === undefined
+      ? null
+      : z
+          .array(z.enum(['deploy', 'rollback', 'restore', 'recovery', 'server-migration']))
+          .min(1)
+          .parse(allowedOperationTypes)
   const database = openControlState(path)
   try {
     return transaction(database, () => {
-      const row = database
-        .prepare(
-          `SELECT * FROM infrastructure_operations
-           WHERE status = 'queued'
-           ORDER BY created_at, id
-           LIMIT 1`,
-        )
-        .get()
+      const row =
+        allowed === null
+          ? database
+              .prepare(
+                `SELECT * FROM infrastructure_operations
+                 WHERE status = 'queued'
+                 ORDER BY created_at, id
+                 LIMIT 1`,
+              )
+              .get()
+          : database
+              .prepare(
+                `SELECT * FROM infrastructure_operations
+                 WHERE status = 'queued'
+                   AND operation_type IN (${allowed.map(() => '?').join(', ')})
+                 ORDER BY created_at, id
+                 LIMIT 1`,
+              )
+              .get(...allowed)
       if (!row) {
         return null
       }
@@ -781,10 +881,247 @@ export function listControlAuditEvents(path: string, operationId?: string) {
 export function checkpointControlState(path: string) {
   const database = openControlState(path)
   try {
-    database.exec('PRAGMA wal_checkpoint(PASSIVE);')
+    const result = z
+      .object({ busy: z.literal(0), checkpointed: z.number().int(), log: z.number().int() })
+      .parse(database.prepare('PRAGMA wal_checkpoint(TRUNCATE)').get())
+    if (result.checkpointed !== result.log) {
+      throw new Error('Control-state WAL checkpoint did not copy every frame')
+    }
   } finally {
     database.close()
   }
+}
+
+function mapBackupRecord(row: unknown): RecoveryBackupRecord {
+  const parsed = backupRecordSchema.parse(row)
+  return Object.freeze({
+    backupId: parsed.backup_id,
+    backupType: parsed.backup_type,
+    completedAt: parsed.completed_at,
+    createdAt: parsed.created_at,
+    manifestSha256: parsed.manifest_sha256,
+    measuredBytes: parsed.measured_bytes,
+    measuredSeconds: parsed.measured_seconds,
+    primaryReplicaStatus: parsed.primary_replica_status,
+    r2ReplicaStatus: parsed.r2_replica_status,
+    repositoryGeneration: parsed.repository_generation,
+    stanza: parsed.stanza,
+    valid: parsed.valid === 1,
+    walArchiveMax: parsed.wal_archive_max,
+  })
+}
+
+export function recordRecoveryBackup(path: string, record: RecoveryBackupRecord) {
+  const validated = z
+    .object({
+      backupId: z.string().min(1).max(200),
+      backupType: z.enum(['full', 'diff', 'incr']),
+      completedAt: z.iso.datetime({ offset: true }),
+      createdAt: z.iso.datetime({ offset: true }),
+      manifestSha256: z.string().regex(/^[a-f0-9]{64}$/),
+      measuredBytes: z.number().int().nonnegative(),
+      measuredSeconds: z.number().nonnegative(),
+      primaryReplicaStatus: z.enum(['fresh', 'failed', 'pending']),
+      r2ReplicaStatus: z.enum(['fresh', 'failed', 'pending']),
+      repositoryGeneration: z.string().min(1).max(200),
+      stanza: z.string().min(1).max(100),
+      valid: z.boolean(),
+      walArchiveMax: z.string().min(1).max(200).nullable(),
+    })
+    .strict()
+    .parse(record)
+  const database = openControlState(path)
+  try {
+    transaction(database, () => {
+      database
+        .prepare(
+          `INSERT INTO recovery_backup_records
+            (backup_id, backup_type, stanza, repository_generation, manifest_sha256,
+             wal_archive_max, primary_replica_status, r2_replica_status, valid,
+             measured_seconds, measured_bytes, created_at, completed_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT (backup_id) DO UPDATE SET
+             primary_replica_status = excluded.primary_replica_status,
+             r2_replica_status = excluded.r2_replica_status,
+             valid = excluded.valid,
+             measured_seconds = excluded.measured_seconds,
+             measured_bytes = excluded.measured_bytes,
+             completed_at = excluded.completed_at`,
+        )
+        .run(
+          validated.backupId,
+          validated.backupType,
+          validated.stanza,
+          validated.repositoryGeneration,
+          validated.manifestSha256,
+          validated.walArchiveMax,
+          validated.primaryReplicaStatus,
+          validated.r2ReplicaStatus,
+          validated.valid ? 1 : 0,
+          validated.measuredSeconds,
+          validated.measuredBytes,
+          validated.createdAt,
+          validated.completedAt,
+        )
+      appendAudit(database, {
+        actorId: 'deploy-agent:recovery',
+        createdAt: validated.completedAt,
+        details: {
+          backupId: validated.backupId,
+          manifestSha256: validated.manifestSha256,
+          primaryReplicaStatus: validated.primaryReplicaStatus,
+          r2ReplicaStatus: validated.r2ReplicaStatus,
+          valid: validated.valid,
+        },
+        eventType: 'recovery_backup_recorded',
+        operationId: null,
+        outcome: validated.valid ? 'succeeded' : 'failed',
+      })
+    })
+  } finally {
+    database.close()
+  }
+}
+
+export function listRecoveryBackups(path: string, limit = 20) {
+  const parsedLimit = z.number().int().min(1).max(100).parse(limit)
+  const database = openControlState(path)
+  try {
+    return database
+      .prepare(
+        `SELECT * FROM recovery_backup_records
+         ORDER BY completed_at DESC, backup_id DESC
+         LIMIT ?`,
+      )
+      .all(parsedLimit)
+      .map(mapBackupRecord)
+  } finally {
+    database.close()
+  }
+}
+
+function inspectControlStateDatabase(database: DatabaseSync): ControlStateSnapshotEvidence {
+  const integrityRows = database.prepare('PRAGMA integrity_check').all()
+  const integrity = z.array(z.object({ integrity_check: z.literal('ok') })).parse(integrityRows)
+  if (integrity.length !== 1) throw new Error('Control-state SQLite integrity check failed')
+  const foreignKeyViolations = database.prepare('PRAGMA foreign_key_check').all()
+  if (foreignKeyViolations.length !== 0) {
+    throw new Error('Control-state SQLite foreign-key check failed')
+  }
+  const metadata = z
+    .object({
+      active_slot: z.enum(['none', 'blue', 'green']),
+      audit_event_count: z.number().int().nonnegative(),
+      audit_event_max_id: z.number().int().nonnegative(),
+      current_sha: z.string().nullable(),
+      environment: z.enum(['local', 'test', 'production']),
+      last_sha: z.string().nullable(),
+      previous_slot: z.enum(['none', 'blue', 'green']),
+      schema_version: z.literal(CONTROL_STATE_SCHEMA_VERSION),
+    })
+    .parse(
+      database
+        .prepare(
+          `SELECT
+             runtime.active_slot,
+             runtime.previous_slot,
+             runtime.current_sha,
+             runtime.last_sha,
+             metadata.environment,
+             (SELECT MAX(version) FROM control_schema_migrations) AS schema_version,
+             (SELECT count(*) FROM control_audit_events) AS audit_event_count,
+             COALESCE((SELECT MAX(event_id) FROM control_audit_events), 0) AS audit_event_max_id
+           FROM control_runtime_state AS runtime
+           CROSS JOIN local_control_metadata AS metadata
+           WHERE runtime.singleton_id = 1 AND metadata.singleton_id = 1`,
+        )
+        .get(),
+    )
+  const auditRows = database
+    .prepare(
+      `SELECT event_id, operation_id, actor_id, event_type, outcome, details_json, created_at
+       FROM control_audit_events ORDER BY event_id`,
+    )
+    .all()
+  const auditDigest = createHash('sha256').update(JSON.stringify(auditRows)).digest('hex')
+  return Object.freeze({
+    activeSlot: metadata.active_slot,
+    auditDigest,
+    auditEventCount: metadata.audit_event_count,
+    auditEventMaxId: metadata.audit_event_max_id,
+    currentSha: metadata.current_sha,
+    environment: metadata.environment,
+    integrity: 'ok',
+    lastSha: metadata.last_sha,
+    previousSlot: metadata.previous_slot,
+    schemaVersion: CONTROL_STATE_SCHEMA_VERSION,
+  })
+}
+
+export function inspectControlStateSnapshot(path: string) {
+  const database = new DatabaseSync(resolve(path), { readOnly: true })
+  try {
+    database.exec('PRAGMA foreign_keys = ON;')
+    return inspectControlStateDatabase(database)
+  } finally {
+    database.close()
+  }
+}
+
+function sqliteString(value: string) {
+  return `'${value.replaceAll("'", "''")}'`
+}
+
+export function createConsistentControlStateSnapshot(sourcePath: string, snapshotPath: string) {
+  const source = resolve(sourcePath)
+  const snapshot = resolve(snapshotPath)
+  if (source === snapshot) throw new Error('Control-state snapshot target must differ from source')
+  mkdirSync(dirname(snapshot), { mode: 0o700, recursive: true })
+  rmSync(snapshot, { force: true })
+  const database = openControlState(source)
+  let sourceEvidence: ControlStateSnapshotEvidence
+  try {
+    const checkpoint = z
+      .object({ busy: z.literal(0), checkpointed: z.number().int(), log: z.number().int() })
+      .parse(database.prepare('PRAGMA wal_checkpoint(TRUNCATE)').get())
+    if (checkpoint.checkpointed !== checkpoint.log) {
+      throw new Error('Control-state WAL checkpoint did not copy every frame')
+    }
+    sourceEvidence = inspectControlStateDatabase(database)
+    database.exec(`VACUUM INTO ${sqliteString(snapshot)};`)
+  } finally {
+    database.close()
+  }
+  const snapshotEvidence = inspectControlStateSnapshot(snapshot)
+  if (JSON.stringify(snapshotEvidence) !== JSON.stringify(sourceEvidence)) {
+    rmSync(snapshot, { force: true })
+    throw new Error('Control-state snapshot does not preserve runtime state or audit continuity')
+  }
+  return snapshotEvidence
+}
+
+export function restoreControlStateSnapshot(
+  snapshotPath: string,
+  targetPath: string,
+  expectedEnvironment: ControlStateEnvironment,
+) {
+  const evidence = inspectControlStateSnapshot(snapshotPath)
+  if (evidence.environment !== expectedEnvironment) {
+    throw new Error('Control-state snapshot environment does not match restore target')
+  }
+  const target = resolve(targetPath)
+  const temporary = `${target}.restore-${randomUUID()}`
+  mkdirSync(dirname(target), { mode: 0o700, recursive: true })
+  copyFileSync(resolve(snapshotPath), temporary)
+  const copiedEvidence = inspectControlStateSnapshot(temporary)
+  if (copiedEvidence.auditDigest !== evidence.auditDigest) {
+    rmSync(temporary, { force: true })
+    throw new Error('Control-state restored copy failed audit continuity validation')
+  }
+  renameSync(temporary, target)
+  rmSync(`${target}-wal`, { force: true })
+  rmSync(`${target}-shm`, { force: true })
+  return copiedEvidence
 }
 
 export function assertAuditAppendOnly(path: string) {

@@ -87,6 +87,8 @@ Phase 2 已实现 Disposable Infrastructure Entry Point；Phase 3 已加入真�
 
 Phase 12 在 Unit 与 Disposable Application Integration 之间加入独立 Production-foundation Gate。它使用提交锁定的 Ansible/SOPS/age/Compose Toolchain，在临时 Host Root 上生成真实 age 密文、构建 Git-SHA 标识的 Production Image、执行两次 Provision，并验证第二次 `changed=0`。同一 Gate 检查 Image History、Container User/Readonly/Capability/Socket、四个数据库登录身份、OpenResty Validation/Reload、IPv4+IPv6 和 Next Slots 全停后的独立 Control Route；只绑定临时本机端口，不承载 Public Traffic。
 
+Phase 13 另加入 `test:recovery`：构建固定 pgBackRest 版本的 PostgreSQL/Recovery Image，启动一次性 PostgreSQL 和两套独立 S3Mock，执行真实 Full/Differential/Incremental、WAL Archive、双副本逐对象校验、从异地副本重建 Repository、指定时间 PITR、Version/Schema/代表性应用读取，以及加密 Control-state SQLite Restore。所有 Destructive 操作都要求一次性 Target Marker；Gate 不读取生产 Credential，也不访问真实 AList/R2。
+
 ## Migration Test
 
 CI 必须测试：
@@ -103,6 +105,8 @@ Phase 3 还验证 Migration Metadata/Backup Policy、Applied SQL Hash/Timestamp�
 Restore Drill 属于 Operations，但它们是 Backup Validity 的自动化测试。
 
 从未被恢复过的 Backup 不可信。
+
+Phase 13 Unit/HTTP Gate 还覆盖 Repository Corruption、Restore Target Marker/Environment/Confirmation、PostgreSQL-down Operation Create/Query/Claim、Lease/Reconcile、Break-glass 共用 SQLite/Audit，以及 Control-state Snapshot Integrity/Schema/Audit Continuity。
 
 ## Control-plane Test
 

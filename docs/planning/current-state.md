@@ -1,7 +1,7 @@
 # Website V2 Current Implementation State
 
-> Status: Phase 0–12 completed
-> Current Phase: Awaiting Owner authorization for Phase 13
+> Status: Phase 0–13 completed
+> Current Phase: Awaiting Owner authorization for Phase 14
 > Handoff audit date: 2026-08-25
 
 本文件是新 Claude Code/Codex 会话的简洁交接入口。它索引当前实际状态和容易遗漏的实施事实，不替代 `AGENTS.md`、Accepted ADR、架构规范或 `implementation-plan.md`。
@@ -32,8 +32,9 @@
 | 10 — PostgreSQL + PGroonga Search | `feat(search): complete phase 10 pgroonga search` | Phase 10 Search 与 Verification | PASS；relevance/locale/migration/reindex/cache/client-corpus gates |
 | 11 — S3-compatible Asset Contract | `test(storage): complete phase 11 s3 contract` | Generic S3 Adapter、Policy、S3Mock/AList Contract 与 Verification | PASS；8-case AList `TEST` Bucket/CDN evidence and cleanup complete |
 | 12 — Production Foundation | `feat(infra): complete phase 12 production foundation` | Ansible、Hardened Compose、SOPS/age、OpenResty、DB Login Boundary 与 Verification | PASS；idempotent provision、IPv4/IPv6、Next/PostgreSQL-down control route、privilege separation |
+| 13 — Tested Recovery | `feat(recovery): complete phase 13 tested recovery` | pgBackRest、WAL/PITR、双副本、Control-state、PG-independent/Break-glass Recovery 与 Verification | PASS；disposable restore/PITR、R2、PG-down、SQLite continuity gates |
 
-`implementation-plan.md` 中 Phase 0–12 的 Checklist 与 Overall Progress 已完成。Phase 13 尚未获得 Owner 授权，任何后续 Agent 不得根据本文件自行开始。
+`implementation-plan.md` 中 Phase 0–13 的 Checklist 与 Overall Progress 已完成。Phase 14 尚未获得 Owner 授权，任何后续 Agent 不得根据本文件自行开始。
 
 ## 3. Legacy durable baseline
 
@@ -71,8 +72,12 @@
 - Phase 12 新增 digest/Git-SHA-pinned Production Image、Next Standalone Runtime、Ansible Inventory/Role/Playbook、Hardened Compose、SOPS + age Secret Injection 和 dual-stack OpenResty。Production-like Gate 在临时 Host Root 上两次 Provision，第二次 `changed=0`；实际容器证明 Non-root、Readonly Root、Drop-all Capability、Socket/Network Separation 和无 Secret Layer。
 - OpenResty 在 Active Slot 选择前将 `/api/ops/*` 直接送入独立 `control-api` 并强制 `no-store`；IPv4/IPv6 使用同一配置，两个 Next Slot 全停或 PostgreSQL 停止时仍返回控制面的预期认证响应。Inventory 只保存 `tungchiahui-production-origin` Alias，内部只使用 Docker Service DNS。
 - Production 数据库使用不同 `*_login` 身份，经 Hardened One-shot Bootstrap 绑定到 `site_app`、`site_control_api`、`site_content_worker`、`site_migrator` NOLOGIN Group Role；Runtime Service 不共享 PostgreSQL Bootstrap Identity。
-- Control-state SQLite 已以向后兼容 Version 3 支持 `production` Environment，并挂载到 `/var/lib/tungchiahui/control-state`；Phase 13 Backup Hook 仅声明 Source/Checkpoint/Integrity Contract，不代表备份或 Restore Drill 已实现。
-- `./site check` 覆盖 Biome、Source Policy、Drizzle、Typecheck、Renovate 与 webpack Production Build。`./site test` 现额外包含 Production-foundation Infrastructure Gate，之后继续运行 Disposable Application Integration、10 个真实 Playwright E2E 和 6-Migration Dedicated Suite。
+- Control-state SQLite 已向后兼容升级到 Version 4，新增 Backup Freshness/Manifest/WAL/Measurement Record；一致 Snapshot 执行 WAL Checkpoint + `VACUUM INTO`，记录 Integrity/Schema/Environment/Active-Previous SHA/Audit Digest，经 age 加密后复制到主 Backup Target 与 R2，并可验证/原子恢复。
+- pgBackRest 2.59.1 固定在 PostgreSQL/Recovery Image；Production Policy 为 encrypted Local Repository、Full/Differential/Incremental、WAL/PITR、2 Full/4 Differential/2 Full-range WAL Retention。Phase 11 Evidence 不足以证明 Direct AList Repository，因此 Phase 13 采用逐文件/符号链接 SHA-256 Manifest 的 Local Repository + Verified Sync。
+- `BACKUP_S3_*` 主目标与 `BACKUP_R2_*` 异地目标必须相互独立且不复用 `ASSET_S3_*`；只有两套副本完整读回校验均通过才把 Backup 标记 `valid=true`。Restore 从 R2 重建 Repository，不依赖本地副本仍存在。
+- `./site backup --environment ... --type ... --reason ...`、`backup status` 与 `restore <id-or-time> --environment ... --confirm ... --reason ...` 使用独立 Control API/SQLite；PostgreSQL Down 时仍可 Create/Query/Claim。Control API Down 时显式 stable-inventory SSH Break-glass 仍写入同一 SQLite/Audit 并由同一 Agent/Lease/Engine 执行。
+- Phase 13 `deploy-agent` 只 Claim `recovery`/`restore`，只允许 Docker Ping 与指定 PostgreSQL Container Stop/Start；仍报告 Deployment Engine 未实现，不 Claim Phase 14 deploy/rollback Operation。
+- `./site check` 覆盖 Biome、Source Policy、Drizzle、Typecheck、Renovate 与 webpack Production Build。`./site test` 现在依次包含 Unit、Production-foundation、真实 Disposable Recovery Drill、Application Integration/10 个 Playwright E2E 和 6-Migration Dedicated Suite。
 - Phase 4 Control API/SQLite Recovery 与 Phase 5 GitHub Ingestion/Worker 权限边界均保持不变；`/api/ops/*` 没有进入 Next.js。
 
 ## 5. 当前 Stub/Fake 与替换责任
@@ -88,7 +93,7 @@
 | Generic S3/Public Asset Gateway | production-shaped generic Adapter plus S3Mock and AList `TEST` Bucket/CDN evidence | completed in Phase 11 |
 | GitHub polling default | idle to prevent implicit network; explicit repository enables read-only polling | Phase 15 workflow binding |
 | Owner Dataset | validated PostgreSQL public read + Phase 4 authorized CAS write | Phase 16 final trust/privacy review |
-| Phase 12 Deploy Agent | Production container/identity + Docker `GET /_ping` only；`productionOperations: false`、无 Mutation Endpoint | Phase 14 shared deployment/rollback engine |
+| Phase 13 Deploy Agent | Recovery-only SQLite claim + PostgreSQL stop/start + pgBackRest；`productionOperations: false`、Deployment Engine 未实现 | Phase 14 shared deployment/rollback engine |
 | Fake Translation Provider | isolated deterministic default for Local/Test; production must inject a validated paid adapter | retained permanent test boundary |
 
 ## 6. 已知限制与踩坑
@@ -111,18 +116,22 @@
 - Filesystem-backed AList synthesizes an empty `tungchiahui-contract/` namespace directory without ETag/Last-Modified. It is not an object and is not removed by S3 DELETE. UUID-flat prefixes prevent per-run directory accumulation; final exact-prefix cleanup was empty.
 - Static ROS2 files are frozen third-party generated output. Do not run formatters or source analyzers inside that exact directory; Phase 18 refreshes/diffs from the then-current Legacy HEAD.
 - Phase 12 没有执行 Production、GitHub Write、AList、DNS/EdgeOne、付费 AI、Deploy/Cutover、Backup/Restore 或旧仓库操作。Production-like Test 只使用临时本机目录、高端口、自签名证书、临时 age Key 与 Disposable Password；本阶段没有重新扫描或定点读取旧仓库。
+- Phase 13 也没有执行 Production、真实 AList/R2、DNS/EdgeOne、付费 AI、Deploy/Cutover 或旧仓库操作。Recovery Gate 只使用临时 PostgreSQL 18、两个独立 S3Mock、随机 Host Root/Key/Credential，并要求 Disposable Target Marker。
+- pgBackRest Repository Generation 是完整 Snapshot 而非增量对象同步；这优先保证可独立验证/恢复，后续优化不得削弱逐对象 Hash 或双副本有效性条件。
+- Disposable Drill 已输出实际 Backup Bytes/Seconds 与 Restore-to-ready Seconds，但小数据集/S3Mock 不代表 Production。Production RPO/RTO 仍未定义，需明确授权的代表性多次演练后才能提出。
 - 真实 Translation Provider Contract Test 未运行：Owner 没有提供明确的非生产 Provider Target/Credential/付费授权。此为 Phase 9 Exit Gate 要求的安全分支，不是 S3 缺口；未来启用具体付费翻译 Provider 前必须补做。
 
-## 7. Phase 13 开始前 Prerequisite
+## 7. Phase 14 开始前 Prerequisite
 
-- Owner must explicitly authorize Phase 13; this handoff is not authorization.
-- Start from the focused Phase 12 commit and a clean tracked worktree; `.env.local` remains Owner-owned, Gitignored and must never be staged.
-- Read the Phase 13 plan plus Backup/Recovery、Deployment、Server Migration、Security、ADR 0002/0003/0015 and Phase 3/4/11/12 verification evidence.
-- Reuse `/var/lib/tungchiahui/control-state` and its installed backup-hook declaration. Phase 13 must implement SQLite WAL checkpoint/snapshot/integrity and audit-continuity validation; the hook alone is not recovery evidence.
-- Preserve separate Asset/Contract/Backup credentials. `BACKUP_S3_*` must not reuse `ASSET_S3_*` or the Phase 11 `S3_CONTRACT_*` identity, and destructive testing still requires an explicit non-production target.
-- Do not extend Phase 12 deploy-agent into the Phase 14 deployment engine while implementing backup/recovery. Break-glass must call the same recovery engine and leave the SQLite audit record.
+- Owner must explicitly authorize Phase 14; this handoff is not authorization.
+- Start from the focused Phase 13 commit and a clean tracked worktree; `.env.local` remains Owner-owned, Gitignored and must never be staged.
+- Read the Phase 14 plan plus Deployment、Blue-Green、Database Migration、Control-plane/Security、ADR 0004/0008/0013/0014/0015 and Phase 3/4/6/10/12/13 verification evidence.
+- Reuse the Phase 13 recovery-only `deploy-agent`, SQLite Version 4 operation/lease/audit model and verified backup preflight. Extend the same Agent/Engine; do not create a parallel deployment state or root script.
+- Preserve the existing recovery claim filter while adding deploy/rollback handling. Phase 14 must not allow a deployment failure to consume or corrupt queued Recovery Operations.
+- Treat Backup Freshness as a tested preflight input. Do not hardcode a Production RPO/RTO that Phase 13 intentionally left undefined.
+- Phase 14 must use Git-SHA/digest immutable images and keep `productionOperations: false` until its own complete blue-green/rollback gate passes.
 
-Phase 13 has no Phase 12 dependency blocker. The production-like host, durable directory, privilege boundary and control-state Version 3 are ready, but this handoff does not authorize Phase 13.
+Phase 14 has no Phase 13 dependency blocker: tested recovery, PostgreSQL-independent state, minimal Docker capability and production-like topology are ready. This handoff does not authorize Phase 14.
 
 ## 8. 回查旧 myblog 的规则
 

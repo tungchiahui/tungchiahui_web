@@ -12,15 +12,24 @@ x-node-tmpfs: &node-tmpfs
 
 services:
   postgres:
-    image: groonga/pgroonga:4.0.8-alpine-18@sha256:b5c92fa3d86ad76ce75ddd8095f60542cf025348a58b8a38cd0b4a580fe4ce68
+    image: ${TUNGCHIAHUI_POSTGRES_IMAGE:?immutable PostgreSQL image is required}
     restart: unless-stopped
     read_only: true
     cap_drop: [ALL]
     security_opt:
       - no-new-privileges:true
     user: "70:70"
+    group_add: ["10050"]
     env_file:
       - ${TUNGCHIAHUI_SECRET_DIRECTORY:?secret directory is required}/postgres.env
+    command:
+      - postgres
+      - -c
+      - archive_mode=on
+      - -c
+      - archive_command=pgbackrest --config=/etc/pgbackrest/pgbackrest.conf --stanza=tungchiahui archive-push %p
+      - -c
+      - archive_timeout=60
     healthcheck:
       test: [CMD-SHELL, "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
@@ -29,11 +38,15 @@ services:
     networks: [database]
     tmpfs:
       - /tmp:size=32m,mode=1777,noexec,nosuid,nodev
-      - /run/postgresql:size=8m,mode=3775,uid=70,gid=70,nosuid,nodev
     volumes:
       - type: bind
         source: ${TUNGCHIAHUI_DATA_ROOT:?data root is required}/postgres
         target: /var/lib/postgresql
+      - type: bind
+        source: ${TUNGCHIAHUI_DATA_ROOT:?data root is required}/backup-repository
+        target: /var/lib/pgbackrest
+      - ${TUNGCHIAHUI_CONFIG_ROOT:?config root is required}/pgbackrest.conf:/etc/pgbackrest/pgbackrest.conf:ro
+      - postgres-socket:/run/postgresql
 
   pgbouncer:
     <<: *hardened-service
@@ -158,27 +171,53 @@ services:
 
   deploy-agent:
     <<: *hardened-service
-    image: ${TUNGCHIAHUI_SERVICE_IMAGE:?immutable service image is required}
-    user: "10004:10050"
+    image: ${TUNGCHIAHUI_RECOVERY_IMAGE:?immutable recovery image is required}
+    user: "70:10050"
     group_add:
       - ${TUNGCHIAHUI_DOCKER_SOCKET_GID:?Docker socket GID is required}
     command: [node, dist/deploy-agent.cjs]
+    depends_on:
+      control-api:
+        condition: service_healthy
+    env_file:
+      - ${TUNGCHIAHUI_SECRET_DIRECTORY:?secret directory is required}/backup.env
     environment:
+      BACKUP_AGE_IDENTITY_PATH: /run/secrets/backup-age-identity.txt
+      BACKUP_LOCAL_REPOSITORY_PATH: /var/lib/pgbackrest
+      BACKUP_PGBACKREST_CONFIG_PATH: /etc/pgbackrest/pgbackrest.conf
+      BACKUP_PGBACKREST_STANZA: tungchiahui
+      BACKUP_POSTGRES_DATA_PATH: /var/lib/postgresql/18/docker
+      BACKUP_WORK_DIRECTORY: /var/lib/tungchiahui-backup-work
+      CONTROL_STATE_PATH: /control-state/control.db
       DEPLOY_AGENT_HOST: 0.0.0.0
       DEPLOY_AGENT_PORT: "8081"
       DOCKER_SOCKET_PATH: /run/deploy-capability/docker.sock
+      POSTGRES_CONTAINER_NAME: ${TUNGCHIAHUI_POSTGRES_CONTAINER_NAME:?PostgreSQL container name is required}
+      RECOVERY_POLLING_ENABLED: "true"
       SITE_RUNTIME_MODE: production
     healthcheck:
       test: [CMD, node, -e, "fetch('http://127.0.0.1:8081/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 5s
       timeout: 3s
       retries: 30
-    networks: [deploy-control]
+    networks: [backup-egress, deploy-control]
     tmpfs: *node-tmpfs
     volumes:
       - type: bind
         source: ${TUNGCHIAHUI_DATA_ROOT:?data root is required}/control-state
         target: /control-state
+      - type: bind
+        source: ${TUNGCHIAHUI_DATA_ROOT:?data root is required}/postgres
+        target: /var/lib/postgresql
+      - type: bind
+        source: ${TUNGCHIAHUI_DATA_ROOT:?data root is required}/backup-repository
+        target: /var/lib/pgbackrest
+      - type: bind
+        source: ${TUNGCHIAHUI_DATA_ROOT:?data root is required}/backup-work
+        target: /var/lib/tungchiahui-backup-work
+      - ${TUNGCHIAHUI_CONFIG_ROOT:?config root is required}/pgbackrest.conf:/etc/pgbackrest/pgbackrest.conf:ro
+      - ${TUNGCHIAHUI_SECRET_DIRECTORY:?secret directory is required}/backup-age-identity.txt:/run/secrets/backup-age-identity.txt:ro
+      - postgres-socket:/run/postgresql
       - /var/run/docker.sock:/run/deploy-capability/docker.sock:ro
 
   openresty:
@@ -212,5 +251,9 @@ networks:
     internal: true
   deploy-control:
     internal: true
+  backup-egress:
   edge:
     enable_ipv6: true
+
+volumes:
+  postgres-socket:

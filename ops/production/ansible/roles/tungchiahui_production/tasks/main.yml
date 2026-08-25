@@ -8,8 +8,12 @@
       - tungchiahui_deployment_sha != '0000000000000000000000000000000000000000'
       - tungchiahui_web_image is match('^.+:[a-f0-9]{40}$')
       - tungchiahui_service_image is match('^.+:[a-f0-9]{40}$')
+      - tungchiahui_recovery_image is match('^.+:[a-f0-9]{40}$')
+      - tungchiahui_postgres_image is match('^.+:[a-f0-9]{40}$')
       - "':latest' not in tungchiahui_web_image"
       - "':latest' not in tungchiahui_service_image"
+      - "':latest' not in tungchiahui_recovery_image"
+      - "':latest' not in tungchiahui_postgres_image"
       - tungchiahui_secret_file | length > 0
     fail_msg: Production provisioning requires a hostname/SSH alias, exact Git SHA images and an encrypted SOPS file.
 
@@ -47,7 +51,9 @@
     - { path: "{{ tungchiahui_config_root }}", owner: root, group: tungchiahui-runtime, mode: "0750" }
     - { path: "{{ tungchiahui_config_root }}/backup-hooks.d", owner: root, group: tungchiahui-runtime, mode: "0750" }
     - { path: "{{ tungchiahui_data_root }}", owner: root, group: tungchiahui-runtime, mode: "0750" }
-    - { path: "{{ tungchiahui_data_root }}/control-state", owner: "10002", group: tungchiahui-runtime, mode: "0770" }
+    - { path: "{{ tungchiahui_data_root }}/control-state", owner: "10002", group: tungchiahui-runtime, mode: "2770" }
+    - { path: "{{ tungchiahui_data_root }}/backup-repository", owner: "70", group: tungchiahui-runtime, mode: "0750" }
+    - { path: "{{ tungchiahui_data_root }}/backup-work", owner: "70", group: tungchiahui-runtime, mode: "0750" }
     - { path: "{{ tungchiahui_data_root }}/postgres", owner: "70", group: "70", mode: "0700" }
     - { path: "{{ tungchiahui_secret_root }}", owner: root, group: tungchiahui-runtime, mode: "0750" }
 
@@ -76,6 +82,8 @@
       - (tungchiahui_decrypted_secret.stdout | from_json).content_worker_env is string
       - (tungchiahui_decrypted_secret.stdout | from_json).database_role_bootstrap_env is string
       - (tungchiahui_decrypted_secret.stdout | from_json).postgres_env is string
+      - (tungchiahui_decrypted_secret.stdout | from_json).backup_env is string
+      - (tungchiahui_decrypted_secret.stdout | from_json).backup_age_identity is string
       - (tungchiahui_decrypted_secret.stdout | from_json).pgbouncer_userlist is string
       - (tungchiahui_decrypted_secret.stdout | from_json).origin_certificate is string
       - (tungchiahui_decrypted_secret.stdout | from_json).origin_private_key is string
@@ -95,6 +103,8 @@
     - { source: content_worker_env, destination: content-worker.env, mode: "0640" }
     - { source: database_role_bootstrap_env, destination: database-role-bootstrap.env, mode: "0640" }
     - { source: postgres_env, destination: postgres.env, mode: "0640" }
+    - { source: backup_env, destination: backup.env, mode: "0640" }
+    - { source: backup_age_identity, destination: backup-age-identity.txt, mode: "0640" }
     - { source: pgbouncer_userlist, destination: pgbouncer-userlist.txt, mode: "0640" }
     - { source: origin_certificate, destination: origin.crt, mode: "0644" }
     - { source: origin_private_key, destination: origin.key, mode: "0640" }
@@ -113,19 +123,22 @@
     - { source: openresty.conf, destination: openresty.conf }
     - { source: active-slot.conf, destination: active-slot.conf }
     - { source: pgbouncer.ini, destination: pgbouncer.ini }
+    - { source: pgbackrest.conf, destination: pgbackrest.conf }
   notify: Reload validated OpenResty configuration
 
-- name: Install declared backup-source hook
+- name: Install implemented control-state backup hook
   ansible.builtin.copy:
     dest: "{{ tungchiahui_config_root }}/backup-hooks.d/control-state.yml"
     owner: root
     group: tungchiahui-runtime
     mode: "0640"
     content: |
-      version: 1
+      version: 2
       owner_phase: 13
       source: {{ tungchiahui_data_root }}/control-state/control.db
-      consistency: sqlite-wal-checkpoint-required
+      consistency: sqlite-wal-checkpoint-vacuum-snapshot
+      encryption: age
+      replicas: primary-s3-and-r2
       restore_validation: schema-integrity-audit-continuity
 
 - name: Read Docker socket ownership
@@ -149,6 +162,9 @@
       TUNGCHIAHUI_DEPLOYMENT_SHA: "{{ tungchiahui_deployment_sha }}"
       TUNGCHIAHUI_DOCKER_SOCKET_GID: "{{ tungchiahui_docker_socket.stat.gid }}"
       TUNGCHIAHUI_ORIGIN_PORT: "{{ tungchiahui_origin_port }}"
+      TUNGCHIAHUI_POSTGRES_CONTAINER_NAME: "{{ tungchiahui_compose_project_name }}-postgres-1"
+      TUNGCHIAHUI_POSTGRES_IMAGE: "{{ tungchiahui_postgres_image }}"
+      TUNGCHIAHUI_RECOVERY_IMAGE: "{{ tungchiahui_recovery_image }}"
       TUNGCHIAHUI_SECRET_DIRECTORY: "{{ tungchiahui_secret_root }}"
       TUNGCHIAHUI_SERVICE_IMAGE: "{{ tungchiahui_service_image }}"
       TUNGCHIAHUI_SEARCH_POLLING_ENABLED: "{{ tungchiahui_search_polling_enabled }}"
@@ -187,6 +203,46 @@
     'Created' in tungchiahui_postgres_up.stderr or
     'Started' in tungchiahui_postgres_up.stderr or
     'Recreated' in tungchiahui_postgres_up.stderr
+  when: tungchiahui_manage_stack | bool
+
+- name: Initialize the encrypted pgBackRest stanza
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-name
+      - "{{ tungchiahui_compose_project_name }}"
+      - --file
+      - "{{ tungchiahui_config_root }}/compose.yaml"
+      - exec
+      - --no-TTY
+      - postgres
+      - pgbackrest
+      - --config=/etc/pgbackrest/pgbackrest.conf
+      - --stanza=tungchiahui
+      - stanza-create
+  environment: "{{ tungchiahui_compose_environment }}"
+  changed_when: false
+  when: tungchiahui_manage_stack | bool
+
+- name: Verify PostgreSQL and WAL archive repository connectivity
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-name
+      - "{{ tungchiahui_compose_project_name }}"
+      - --file
+      - "{{ tungchiahui_config_root }}/compose.yaml"
+      - exec
+      - --no-TTY
+      - postgres
+      - pgbackrest
+      - --config=/etc/pgbackrest/pgbackrest.conf
+      - --stanza=tungchiahui
+      - check
+  environment: "{{ tungchiahui_compose_environment }}"
+  changed_when: false
   when: tungchiahui_manage_stack | bool
 
 - name: Check database role bootstrap marker

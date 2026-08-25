@@ -19,6 +19,8 @@ const input = z
 const projectName = `tungchiahui-phase12-${process.pid}`
 const webImage = `tungchiahui-web:${input.PHASE12_GIT_SHA}`
 const serviceImage = `tungchiahui-services:${input.PHASE12_GIT_SHA}`
+const recoveryImage = `tungchiahui-recovery:${input.PHASE12_GIT_SHA}`
+const postgresImage = `tungchiahui-postgres:${input.PHASE12_GIT_SHA}`
 const configRoot = join(input.PHASE12_HOST_ROOT, 'etc')
 const dataRoot = join(input.PHASE12_HOST_ROOT, 'var')
 const secretRoot = join(input.PHASE12_HOST_ROOT, 'run', 'secrets')
@@ -72,6 +74,9 @@ function composeEnvironment() {
     TUNGCHIAHUI_DEPLOYMENT_SHA: input.PHASE12_GIT_SHA,
     TUNGCHIAHUI_DOCKER_SOCKET_GID: socket,
     TUNGCHIAHUI_ORIGIN_PORT: String(input.PHASE12_ORIGIN_PORT),
+    TUNGCHIAHUI_POSTGRES_CONTAINER_NAME: `${projectName}-postgres-1`,
+    TUNGCHIAHUI_POSTGRES_IMAGE: postgresImage,
+    TUNGCHIAHUI_RECOVERY_IMAGE: recoveryImage,
     TUNGCHIAHUI_SEARCH_POLLING_ENABLED: 'false',
     TUNGCHIAHUI_SECRET_DIRECTORY: secretRoot,
     TUNGCHIAHUI_SERVICE_IMAGE: serviceImage,
@@ -154,6 +159,23 @@ function createEncryptedSecret() {
   const migratorPassword = 'phase12-disposable-migrator-password-0001'
   const workerPassword = 'phase12-disposable-worker-password-0001'
   const payload = {
+    backup_age_identity: readFileSync(identityPath, 'utf8'),
+    backup_env: [
+      `PGBACKREST_REPO1_CIPHER_PASS=phase13-disposable-pgbackrest-cipher-${'x'.repeat(48)}`,
+      `BACKUP_AGE_RECIPIENT=${recipient}`,
+      'BACKUP_S3_ENDPOINT=https://primary-backup.example.invalid',
+      'BACKUP_S3_REGION=us-east-1',
+      'BACKUP_S3_BUCKET=phase13-primary-backup',
+      'BACKUP_S3_ACCESS_KEY_ID=phase13-primary-only-access',
+      'BACKUP_S3_SECRET_ACCESS_KEY=phase13-primary-only-secret',
+      'BACKUP_S3_FORCE_PATH_STYLE=true',
+      'BACKUP_R2_ENDPOINT=https://phase13.r2.cloudflarestorage.com',
+      'BACKUP_R2_REGION=auto',
+      'BACKUP_R2_BUCKET=phase13-r2-offsite',
+      'BACKUP_R2_ACCESS_KEY_ID=phase13-r2-only-access',
+      'BACKUP_R2_SECRET_ACCESS_KEY=phase13-r2-only-secret',
+      'BACKUP_R2_FORCE_PATH_STYLE=false',
+    ].join('\n'),
     content_worker_env: [
       `DATABASE_URL=postgresql://site_content_worker_login:${workerPassword}@pgbouncer:6432/tungchiahui`,
       'GITHUB_CONTENT_REPOSITORY=tungchiahui/content',
@@ -187,6 +209,7 @@ function createEncryptedSecret() {
       'POSTGRES_DB=tungchiahui',
       'POSTGRES_USER=tungchiahui',
       `POSTGRES_PASSWORD=${testPassword}`,
+      `PGBACKREST_REPO1_CIPHER_PASS=phase13-disposable-pgbackrest-cipher-${'x'.repeat(48)}`,
     ].join('\n'),
     web_env: [
       `DATABASE_URL=postgresql://site_app_login:${appPassword}@pgbouncer:6432/tungchiahui`,
@@ -238,6 +261,22 @@ function buildImages() {
   ])
   execute('docker', [
     'build',
+    '--file',
+    'ops/production/images/postgres.Dockerfile',
+    '--tag',
+    postgresImage,
+    '.',
+  ])
+  execute('docker', [
+    'build',
+    '--file',
+    'ops/production/images/recovery.Dockerfile',
+    '--tag',
+    recoveryImage,
+    '.',
+  ])
+  execute('docker', [
+    'build',
     '--build-arg',
     `SITE_DEPLOYMENT_SHA=${input.PHASE12_GIT_SHA}`,
     '--file',
@@ -278,6 +317,8 @@ function runProvision(identityPath: string) {
       tungchiahui_install_packages: false,
       tungchiahui_manage_stack: true,
       tungchiahui_origin_port: String(input.PHASE12_ORIGIN_PORT),
+      tungchiahui_postgres_image: postgresImage,
+      tungchiahui_recovery_image: recoveryImage,
       tungchiahui_repository_root: '/workspace',
       tungchiahui_search_polling_enabled: 'false',
       tungchiahui_secret_file: encryptedSecretPath,
@@ -307,7 +348,7 @@ function runProvision(identityPath: string) {
 }
 
 function inspectHardening() {
-  for (const image of [webImage, serviceImage]) {
+  for (const image of [webImage, serviceImage, recoveryImage, postgresImage]) {
     const user = execute('docker', [
       'image',
       'inspect',

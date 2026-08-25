@@ -95,17 +95,19 @@ Force 重译还要求 `--force --confirm-retranslation RETRANSLATE`。Execute �
 ### Backup
 
 ```bash
-./site backup
+./site backup --environment <local|test|production> --type <full|diff|incr> --reason <text>
 ./site backup status
 ```
+
+`--environment` 与 `--reason` 必填；Type 默认 `full`，但生产自动化应显式写出 Policy 类型。命令只创建可审计 SQLite Recovery Operation，不在 CLI Process 内直接备份。
 
 ### Restore
 
 ```bash
-./site restore <backup-or-time>
+./site restore <backup-id-or-ISO-time> --environment <environment> --confirm RESTORE-<ENV> --reason <text>
 ```
 
-Restore 必须要求显式 Target Environment。
+Restore 必须要求显式 Target Environment、匹配 Environment 的 Confirmation 和非空 Reason。Production 固定要求 `RESTORE-PRODUCTION`。
 
 Production PostgreSQL 不可用时，正常 `./site restore` 仍通过 `control-api` 在 PostgreSQL-independent SQLite 中创建/查询 Recovery Operation，并由 `deploy-agent` 执行。
 
@@ -143,6 +145,14 @@ Web Application Repository 的 `push/merge to main` 在 CI Quality Gates 全部�
 - 不要求 Production PostgreSQL
 - 不把家庭公网数字 IP 变成 Durable CLI Configuration
 - 不提供无审计的任意 Root Shell Shortcut
+
+当前显式形式为：
+
+```bash
+./site restore <backup-id-or-ISO-time> --environment production \
+  --confirm RESTORE-PRODUCTION --reason <text> \
+  --break-glass --inventory-host <stable-ssh-alias>
+```
 
 ## 输出
 

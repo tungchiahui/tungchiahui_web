@@ -1,7 +1,7 @@
 # Website V2 分阶段实施计划
 
-> Status: In progress — Phase 0–12 complete
-> Current Phase: Awaiting Owner authorization for Phase 13
+> Status: In progress — Phase 0–13 complete
+> Current Phase: Awaiting Owner authorization for Phase 14
 > Execution Model: Hard-gated, one Phase at a time
 > Scope: 从新的 Next.js V2 Repository 基线推进到替换旧 Nuxt Production Site
 
@@ -22,7 +22,7 @@
 - [x] Phase 10 — PGroonga Search 与 Cache Correctness
 - [x] Phase 11 — S3-compatible Asset Contract（AList Evidence）
 - [x] Phase 12 — Production Infrastructure、Ansible 与 Container Hardening
-- [ ] Phase 13 — Backup、PITR 与 PostgreSQL-independent Recovery
+- [x] Phase 13 — Backup、PITR 与 PostgreSQL-independent Recovery
 - [ ] Phase 14 — Shared Deployment Engine 与 Full Blue-Green
 - [ ] Phase 15 — GitHub Actions OIDC 与 `main` 自动部署
 - [ ] Phase 16 — Observability、Security 与 Production Readiness
@@ -1166,16 +1166,16 @@ Production-like Infrastructure 已存在，但在可恢复性经过真实 Drill 
 
 ### Task Checklist
 
-- [ ] 配置 pgBackRest Full/Differential/Incremental Policy、WAL Archive、Retention 和 Integrity Check。
-- [ ] 使用 Phase 11 证据验证 pgBackRest-to-AList Semantics；决定 Direct S3 或 Local Repository + Verified Sync。
-- [ ] 实现独立 Cloudflare R2 Off-site Replica 与 Freshness/Failure Report。
-- [ ] 实现 `./site backup`、`backup status` 的 Environment Identification、Metadata、WAL 与 Replica Validation。
-- [ ] 实现 `./site restore <backup-or-time>` 的 Target Environment、Confirmation、Lock/Lease 和 Audit。
-- [ ] 确保 `control-api`/`deploy-agent`/SQLite 在 Production PostgreSQL Down 时可创建、恢复和查询 Restore Operation。
-- [ ] 实现 Control-state SQLite Consistent Checkpoint/Snapshot、Encrypted Backup、Integrity/Schema/Audit Restore。
-- [ ] 实现通过稳定 Inventory/SSH Alias 的显式 Break-glass Mode，调用同一 Recovery Engine/State/Audit。
-- [ ] 建立 Disposable Restore Drill：Backup -> Restore/PITR -> Migration/Version -> Integrity -> Representative App Read。
-- [ ] 收集真实 Backup/WAL/Restore Measurement；若数据充分再提出 RPO/RTO，否则保留未定义状态。
+- [x] 配置 pgBackRest Full/Differential/Incremental Policy、WAL Archive、Retention 和 Integrity Check。
+- [x] 使用 Phase 11 证据验证 pgBackRest-to-AList Semantics；决定 Direct S3 或 Local Repository + Verified Sync。
+- [x] 实现独立 Cloudflare R2 Off-site Replica 与 Freshness/Failure Report。
+- [x] 实现 `./site backup`、`backup status` 的 Environment Identification、Metadata、WAL 与 Replica Validation。
+- [x] 实现 `./site restore <backup-or-time>` 的 Target Environment、Confirmation、Lock/Lease 和 Audit。
+- [x] 确保 `control-api`/`deploy-agent`/SQLite 在 Production PostgreSQL Down 时可创建、恢复和查询 Restore Operation。
+- [x] 实现 Control-state SQLite Consistent Checkpoint/Snapshot、Encrypted Backup、Integrity/Schema/Audit Restore。
+- [x] 实现通过稳定 Inventory/SSH Alias 的显式 Break-glass Mode，调用同一 Recovery Engine/State/Audit。
+- [x] 建立 Disposable Restore Drill：Backup -> Restore/PITR -> Migration/Version -> Integrity -> Representative App Read。
+- [x] 收集真实 Backup/WAL/Restore Measurement；若数据充分再提出 RPO/RTO，否则保留未定义状态。
 
 ### 本 Phase 明确不做什么
 
@@ -1185,25 +1185,25 @@ Production-like Infrastructure 已存在，但在可恢复性经过真实 Drill 
 
 ### Tests / Verification
 
-- [ ] Full Backup、WAL Archive、PITR 到指定时间点在 Disposable Target 通过。
-- [ ] Production PostgreSQL 停止时，Restore Operation 仍可 Create/Claim/Resume/Query。
-- [ ] Control API 不可用时，Break-glass 仍使用同一 Engine、SQLite Lock 和 Audit。
-- [ ] Crash/Restart、Lease Expiry、Partial Restore、Wrong Environment 和 Confirmation Failure Test 通过。
-- [ ] R2 Replica 独立性、Freshness 和 Restore Readability 有证据。
-- [ ] Control-state SQLite Backup/Restore 后 Active/Previous SHA 与 Audit Continuity 正确。
+- [x] Full Backup、WAL Archive、PITR 到指定时间点在 Disposable Target 通过。
+- [x] Production PostgreSQL 停止时，Restore Operation 仍可 Create/Claim/Resume/Query。
+- [x] Control API 不可用时，Break-glass 仍使用同一 Engine、SQLite Lock 和 Audit。
+- [x] Crash/Restart、Lease Expiry、Partial Restore、Wrong Environment 和 Confirmation Failure Test 通过。
+- [x] R2 Replica 独立性、Freshness 和 Restore Readability 有证据。
+- [x] Control-state SQLite Backup/Restore 后 Active/Previous SHA 与 Audit Continuity 正确。
 
 ### Acceptance Criteria
 
-- [ ] 至少一个真实 Backup 已成功恢复并完成 Integrity/Application Read Check。
-- [ ] PostgreSQL Failure 不会阻塞基础 Restore/Recovery Control。
-- [ ] Backup、Control State 与 Off-site Replica 不共享单一故障点。
+- [x] 至少一个真实 Backup 已成功恢复并完成 Integrity/Application Read Check。
+- [x] PostgreSQL Failure 不会阻塞基础 Restore/Recovery Control。
+- [x] Backup、Control State 与 Off-site Replica 不共享单一故障点。
 
 ### Exit Gate
 
-- [ ] Restore Drill、PITR、PG-down、Break-glass、R2 和 Control-state Gate 全部通过。
-- [ ] Recovery Validation Plan、证据和未定义/已测 RPO/RTO 状态已报告 Owner。
-- [ ] 创建聚焦 Commit，建议：`feat(recovery): complete phase 13 tested recovery`。
-- [ ] Commit 后停止并向 Owner 报告，不自动进入 Phase 14。
+- [x] Restore Drill、PITR、PG-down、Break-glass、R2 和 Control-state Gate 全部通过。
+- [x] Recovery Validation Plan、证据和未定义/已测 RPO/RTO 状态已报告 Owner。
+- [x] 创建聚焦 Commit，建议：`feat(recovery): complete phase 13 tested recovery`。
+- [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 14。
 
 ### 本阶段完成后形成的 Artifact / Capability
 

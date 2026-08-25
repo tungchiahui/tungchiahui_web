@@ -7,6 +7,8 @@ tungchiahui_deployment_sha: ""
 tungchiahui_install_packages: true
 tungchiahui_manage_stack: true
 tungchiahui_origin_port: "8443"
+tungchiahui_postgres_image: ""
+tungchiahui_recovery_image: ""
 tungchiahui_repository_root: "{{ playbook_dir }}/../../../.."
 tungchiahui_runtime_group_gid: 10050
 tungchiahui_secret_file: ""

@@ -50,10 +50,21 @@
 
 1. 如果存在 Corruption/Data-loss Risk，停止高风险 Write Operation
 2. 保留 Log/State
-3. 评估 Latest Known-good Backup/WAL
+3. 使用 `./site backup status` 评估 Latest Verified Backup、WAL Max 和两套 Replica Freshness
 4. 选择 Restore Target/Time
 5. 时间允许时，先 Restore 到 Disposable Validation Environment
-6. 使用 `./site restore <backup-or-time>` 执行 Controlled Recovery
+6. 记录批准者、Environment、Target 和 Reason
+7. 使用下列 Controlled Recovery 创建操作：
+
+```bash
+./site restore <backup-id-or-ISO-time> \
+  --environment production \
+  --confirm RESTORE-PRODUCTION \
+  --reason "<incident/change reference>"
+```
+
+8. 查询操作状态和 Audit；确认 PostgreSQL Version、Migration/Schema、Integrity、代表性应用读取与 WAL Recovery Target
+9. 确认 Application Readiness 后再恢复写流量和 PostgreSQL-backed Background Job
 
 该 Restore Path 通过独立 `control-api`、Control-state SQLite 与 `deploy-agent` 工作，不要求待恢复的 Production PostgreSQL 先健康。完成 Restore/Integrity/Readiness Check 后，再恢复 PostgreSQL-backed Content/Translation/Search Job。
 
@@ -144,3 +155,27 @@ ddns.tungchiahui.cn
 OpenResty 必须把 `/api/ops/*` 直接路由到独立 `control-api`，而不是 Next.js Blue/Green Slot。因此 Next.js 全挂时先验证 Control API 与 Control-state SQLite，再决定 Deploy/Rollback。
 
 如果 EdgeOne/OpenResty/`control-api` 也不可用，使用文档化的显式 Break-glass Mode，通过稳定 Ansible Inventory/SSH Alias 调用同一个 Recovery Engine。要求 Environment、Target、Reason、Confirmation 和 Audit；不得临时发明无审计的 Root Script。
+
+```bash
+./site restore <backup-id-or-ISO-time> \
+  --environment production \
+  --confirm RESTORE-PRODUCTION \
+  --reason "control-api unavailable: <incident reference>" \
+  --break-glass \
+  --inventory-host tungchiahui-production-origin
+```
+
+Break-glass 仅替换请求到达路径，不替换 Recovery Engine：它必须产生 `break_glass_restore_authorized` Audit、进入同一个 SQLite Queue，并由同一 Lease/Fencing Agent 执行。不要把公网数字 IP、临时 Root Script 或绕过 Confirmation 的命令写进 Runbook。
+
+## Backup Verification
+
+正常 Backup 示例：
+
+```bash
+./site backup --environment production --type full --reason "scheduled full backup"
+./site backup status
+```
+
+只有同时满足以下证据才把 Backup 视为有效：pgBackRest `check`/`verify` 成功、WAL Max 已记录、主 `BACKUP_S3_*` 与独立 R2 均为 `fresh`、Manifest/逐对象 SHA-256 读回一致。任一副本失败会保留失败记录但 `valid=false`，不得用于自动 Restore 选择。
+
+Production Restore Drill 必须另行获得明确授权；自动 `test:recovery` 只操作 Disposable Target。Control-state 恢复前必须验证 age Ciphertext Hash、SQLite Integrity/Foreign Key、Schema Version、Environment 和 Audit Digest。

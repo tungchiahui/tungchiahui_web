@@ -35,7 +35,7 @@ const compose = composeSchema.parse(parse(composeSource, { merge: true }) as unk
 describe('Phase 12 production foundation policy', () => {
   it('uses immutable images and multi-stage non-root application images', () => {
     expect(composeSource).not.toMatch(/image:\s+\S+:latest(?:\s|$)/)
-    expect(compose.services.postgres?.image).toContain('@sha256:')
+    expect(compose.services.postgres?.image).toContain('TUNGCHIAHUI_POSTGRES_IMAGE')
     expect(compose.services.pgbouncer?.image).toContain('@sha256:')
     expect(compose.services.openresty?.image).toContain('@sha256:')
 
@@ -80,7 +80,7 @@ describe('Phase 12 production foundation policy', () => {
     expect(servicesWithDockerSocket).toEqual(['deploy-agent'])
     expect(composeSource).not.toMatch(/\bprivileged:\s*true\b/)
     expect(composeSource).not.toMatch(/\b(?:ipc|pid|network)_mode:\s*host\b/)
-    expect(compose.services['deploy-agent']?.networks).toEqual(['deploy-control'])
+    expect(compose.services['deploy-agent']?.networks).toEqual(['backup-egress', 'deploy-control'])
     expect(compose.services['control-api']?.depends_on).toBeUndefined()
     expect(compose.services.openresty?.depends_on).toEqual({
       'control-api': { condition: 'service_healthy' },

@@ -39,6 +39,13 @@ export const actorKindSchema = z.enum(actorKindValues)
 export const infrastructureOperationTypeSchema = z.enum(infrastructureOperationTypeValues)
 export const infrastructureOperationStatusSchema = z.enum(infrastructureOperationStatusValues)
 
+export const backupTypeSchema = z.enum(['full', 'diff', 'incr'])
+export const recoveryEnvironmentSchema = z.enum(['local', 'test', 'production'])
+export const restoreSelectorSchema = z.union([
+  z.object({ backupId: z.string().min(1).max(200) }).strict(),
+  z.object({ targetTime: z.iso.datetime({ offset: true }) }).strict(),
+])
+
 export type Capability = z.infer<typeof capabilitySchema>
 export type ActorKind = z.infer<typeof actorKindSchema>
 export type InfrastructureOperationType = z.infer<typeof infrastructureOperationTypeSchema>
@@ -56,21 +63,65 @@ export type ActorIdentity = Readonly<z.infer<typeof actorIdentitySchema>>
 
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/)
 const gitShaSchema = z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/)
-const environmentSchema = z.enum(['local', 'test', 'production'])
+const environmentSchema = recoveryEnvironmentSchema
 const boundedReasonSchema = z.string().trim().min(1).max(1_000)
 const infrastructureTargetSchemas = {
   deploy: z
     .object({ gitSha: gitShaSchema, imageDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/) })
     .strict(),
-  recovery: z
-    .object({
-      environment: environmentSchema,
-      recoveryKind: z.enum(['control-state', 'database', 'host']),
-    })
-    .strict(),
+  recovery: z.union([
+    z
+      .object({
+        action: z.literal('backup'),
+        backupType: backupTypeSchema,
+        environment: environmentSchema,
+      })
+      .strict(),
+    z
+      .object({
+        action: z.literal('control-state-backup'),
+        environment: environmentSchema,
+      })
+      .strict(),
+    z
+      .object({
+        environment: environmentSchema,
+        recoveryKind: z.enum(['control-state', 'database', 'host']),
+      })
+      .strict(),
+  ]),
   restore: z
-    .object({ backupId: z.string().min(1).max(200), environment: environmentSchema })
-    .strict(),
+    .object({
+      confirmation: z.string().min(1).max(100).optional(),
+      environment: environmentSchema,
+      selector: restoreSelectorSchema.optional(),
+      // Backward-compatible with the Phase 4 recovery-state fixture.
+      backupId: z.string().min(1).max(200).optional(),
+    })
+    .strict()
+    .superRefine((target, context) => {
+      if (target.selector === undefined && target.backupId === undefined) {
+        context.addIssue({
+          code: 'custom',
+          message: 'restore requires a backup id or target time',
+          path: ['selector'],
+        })
+      }
+      if (target.selector !== undefined && target.backupId !== undefined) {
+        context.addIssue({
+          code: 'custom',
+          message: 'restore selector must be unambiguous',
+          path: ['selector'],
+        })
+      }
+      if (target.environment === 'production' && target.confirmation !== 'RESTORE-PRODUCTION') {
+        context.addIssue({
+          code: 'custom',
+          message: 'production restore requires RESTORE-PRODUCTION confirmation',
+          path: ['confirmation'],
+        })
+      }
+    }),
   rollback: z.object({ targetSha: gitShaSchema }).strict(),
   'server-migration': z
     .object({ inventoryHost: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,252}$/) })

@@ -8,6 +8,7 @@ COPY .npmrc package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY tools/infra ./tools/infra
 RUN pnpm exec esbuild tools/infra/test-production-foundation.ts --bundle --format=cjs --platform=node --target=node24 --outfile=/runner.cjs
+RUN pnpm exec esbuild tools/infra/test-recovery.ts --bundle --format=cjs --platform=node --target=node24 --outfile=/recovery-runner.cjs
 
 FROM python:3.12.13-slim-bookworm@sha256:4766d8b510c428e595d74b9cc5bbb2fae8e26316fffb4adc89908d79aacd58a2
 
@@ -43,5 +44,6 @@ RUN apt-get update \
 
 COPY --from=build /usr/local/bin/node /usr/local/bin/node
 COPY --from=build /runner.cjs /runner.cjs
+COPY --from=build /recovery-runner.cjs /recovery-runner.cjs
 
 ENTRYPOINT ["node", "/runner.cjs"]

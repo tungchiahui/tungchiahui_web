@@ -149,6 +149,63 @@ describe('independent control-api HTTP boundary', () => {
     expect(applicationJob.status).toBe(503)
   })
 
+  it('creates backup and guarded restore operations while PostgreSQL is unavailable', async () => {
+    const { base } = await serverFixture()
+    const backup = await signedFetch(base, '/api/ops/backups', {
+      body: {
+        backupType: 'full',
+        environment: 'test',
+        reason: 'Phase 13 PostgreSQL-down backup fixture',
+      },
+      idempotencyKey: 'phase13:http:backup:001',
+      method: 'POST',
+      nonce: 'phase13-http-backup-001',
+    })
+    expect(backup.status).toBe(202)
+    expect(await backup.json()).toMatchObject({
+      operation: {
+        operationType: 'recovery',
+        status: 'queued',
+        target: { action: 'backup', backupType: 'full', environment: 'test' },
+      },
+    })
+
+    const rejected = await signedFetch(base, '/api/ops/restores', {
+      body: {
+        confirmation: 'RESTORE-PRODUCTION',
+        environment: 'production',
+        reason: 'wrong environment confirmation fixture',
+        selector: { backupId: '20260825-120000F' },
+      },
+      idempotencyKey: 'phase13:http:restore:rejected',
+      method: 'POST',
+      nonce: 'phase13-http-restore-rejected',
+    })
+    expect(rejected.status).toBe(400)
+
+    const restore = await signedFetch(base, '/api/ops/restores', {
+      body: {
+        confirmation: 'RESTORE-TEST',
+        environment: 'test',
+        reason: 'Phase 13 PostgreSQL-down PITR fixture',
+        selector: { targetTime: '2026-08-25T12:00:00.000Z' },
+      },
+      idempotencyKey: 'phase13:http:restore:001',
+      method: 'POST',
+      nonce: 'phase13-http-restore-001',
+    })
+    expect(restore.status).toBe(202)
+    expect(await restore.json()).toMatchObject({
+      operation: { operationType: 'restore', status: 'queued' },
+    })
+
+    const status = await signedFetch(base, '/api/ops/backups/status', {
+      nonce: 'phase13-http-backup-status',
+    })
+    expect(status.status).toBe(200)
+    expect(await status.json()).toEqual({ backups: [] })
+  })
+
   it('rejects malformed payloads, request replay and abusive request rates', async () => {
     const { base } = await serverFixture(3)
     const malformed = await signedFetch(base, '/api/ops/infrastructure-operations', {

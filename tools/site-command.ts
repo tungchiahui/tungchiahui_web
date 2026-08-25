@@ -8,6 +8,13 @@ import {
 } from '../src/translation/contracts'
 
 export type SiteCommand =
+  | Readonly<{
+      backupType: 'diff' | 'full' | 'incr'
+      environment: 'local' | 'production' | 'test'
+      kind: 'backup-create'
+      reason: string
+    }>
+  | Readonly<{ kind: 'backup-status' }>
   | Readonly<{ kind: 'check' }>
   | Readonly<{ kind: 'dev-reset' }>
   | Readonly<{ kind: 'dev-start' }>
@@ -15,6 +22,15 @@ export type SiteCommand =
   | Readonly<{ kind: 'help' }>
   | Readonly<{ kind: 'storage-contract-s3' }>
   | Readonly<{ kind: 'test' }>
+  | Readonly<{
+      breakGlass: boolean
+      confirmation: string
+      environment: 'local' | 'production' | 'test'
+      inventoryHost?: string
+      kind: 'restore'
+      reason: string
+      selector: Readonly<{ backupId: string }> | Readonly<{ targetTime: string }>
+    }>
   | Readonly<{
       action: 'create'
       kind: 'translate'
@@ -55,6 +71,124 @@ export function parseSiteCommand(arguments_: readonly string[]): SiteCommand {
 
   if (arguments_.length === 2 && arguments_[0] === 'dev' && arguments_[1] === 'stop') {
     return Object.freeze({ kind: 'dev-stop' })
+  }
+
+  if (arguments_.length === 2 && arguments_[0] === 'backup' && arguments_[1] === 'status') {
+    return Object.freeze({ kind: 'backup-status' })
+  }
+
+  if (arguments_[0] === 'backup') {
+    let backupType: 'diff' | 'full' | 'incr' = 'full'
+    let environment: 'local' | 'production' | 'test' | undefined
+    let reason: string | undefined
+    let index = 1
+    while (index < arguments_.length) {
+      const argument = arguments_[index]
+      if (argument === '--environment') {
+        environment = z.enum(['local', 'test', 'production']).parse(arguments_[index + 1])
+        index += 2
+        continue
+      }
+      if (argument === '--type') {
+        backupType = z.enum(['full', 'diff', 'incr']).parse(arguments_[index + 1])
+        index += 2
+        continue
+      }
+      if (argument === '--reason') {
+        reason = z
+          .string()
+          .trim()
+          .min(1)
+          .max(1_000)
+          .parse(arguments_[index + 1])
+        index += 2
+        continue
+      }
+      throw new SiteUsageError(`Unknown backup argument: ${String(argument)}`)
+    }
+    if (!environment || !reason) {
+      throw new SiteUsageError('backup requires --environment and --reason')
+    }
+    return Object.freeze({ backupType, environment, kind: 'backup-create', reason })
+  }
+
+  if (arguments_[0] === 'restore') {
+    const selectorValue = arguments_[1]
+    if (!selectorValue || selectorValue.startsWith('--')) {
+      throw new SiteUsageError('restore requires a backup id or ISO timestamp')
+    }
+    const timestamp = z.iso.datetime({ offset: true }).safeParse(selectorValue)
+    const selector = timestamp.success
+      ? Object.freeze({ targetTime: timestamp.data })
+      : Object.freeze({ backupId: z.string().min(1).max(200).parse(selectorValue) })
+    let breakGlass = false
+    let confirmation: string | undefined
+    let environment: 'local' | 'production' | 'test' | undefined
+    let inventoryHost: string | undefined
+    let reason: string | undefined
+    let index = 2
+    while (index < arguments_.length) {
+      const argument = arguments_[index]
+      if (argument === '--environment') {
+        environment = z.enum(['local', 'test', 'production']).parse(arguments_[index + 1])
+        index += 2
+        continue
+      }
+      if (argument === '--confirm') {
+        confirmation = z
+          .string()
+          .min(1)
+          .max(100)
+          .parse(arguments_[index + 1])
+        index += 2
+        continue
+      }
+      if (argument === '--reason') {
+        reason = z
+          .string()
+          .trim()
+          .min(1)
+          .max(1_000)
+          .parse(arguments_[index + 1])
+        index += 2
+        continue
+      }
+      if (argument === '--break-glass') {
+        breakGlass = true
+        index += 1
+        continue
+      }
+      if (argument === '--inventory-host') {
+        inventoryHost = z
+          .string()
+          .regex(/^[a-zA-Z][a-zA-Z0-9._-]{0,252}$/)
+          .parse(arguments_[index + 1])
+        index += 2
+        continue
+      }
+      throw new SiteUsageError(`Unknown restore argument: ${String(argument)}`)
+    }
+    if (!environment || !confirmation || !reason) {
+      throw new SiteUsageError('restore requires --environment, --confirm, and --reason')
+    }
+    const expectedConfirmation = `RESTORE-${environment.toUpperCase()}`
+    if (confirmation !== expectedConfirmation) {
+      throw new SiteUsageError(`restore confirmation must be ${expectedConfirmation}`)
+    }
+    if (breakGlass !== (inventoryHost !== undefined)) {
+      throw new SiteUsageError(
+        'break-glass restore requires both --break-glass and --inventory-host',
+      )
+    }
+    return Object.freeze({
+      breakGlass,
+      confirmation,
+      environment,
+      ...(inventoryHost === undefined ? {} : { inventoryHost }),
+      kind: 'restore',
+      reason,
+      selector,
+    })
   }
 
   if (

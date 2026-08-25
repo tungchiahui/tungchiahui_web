@@ -13,6 +13,46 @@ describe('site command boundary', () => {
     ).toEqual({ kind: 'dev-reset' })
     expect(parseSiteCommand([])).toEqual({ kind: 'help' })
     expect(
+      parseSiteCommand([
+        'backup',
+        '--environment',
+        'test',
+        '--type',
+        'diff',
+        '--reason',
+        'disposable drill',
+      ]),
+    ).toEqual({
+      backupType: 'diff',
+      environment: 'test',
+      kind: 'backup-create',
+      reason: 'disposable drill',
+    })
+    expect(parseSiteCommand(['backup', 'status'])).toEqual({ kind: 'backup-status' })
+    expect(
+      parseSiteCommand([
+        'restore',
+        '2026-08-25T12:00:00.000Z',
+        '--environment',
+        'production',
+        '--confirm',
+        'RESTORE-PRODUCTION',
+        '--reason',
+        'database incident',
+        '--break-glass',
+        '--inventory-host',
+        'tungchiahui-production-origin',
+      ]),
+    ).toEqual({
+      breakGlass: true,
+      confirmation: 'RESTORE-PRODUCTION',
+      environment: 'production',
+      inventoryHost: 'tungchiahui-production-origin',
+      kind: 'restore',
+      reason: 'database incident',
+      selector: { targetTime: '2026-08-25T12:00:00.000Z' },
+    })
+    expect(
       parseSiteCommand(['storage', 'contract', 's3', '--confirm', 'S3-NON-PRODUCTION']),
     ).toEqual({ kind: 'storage-contract-s3' })
     expect(parseSiteCommand(['translate', 'pending', '--dry-run'])).toEqual({
@@ -53,6 +93,34 @@ describe('site command boundary', () => {
     expect(() => parseSiteCommand(['translate', 'pending', '--execute'])).toThrow()
     expect(() => parseSiteCommand(['translate', 'all', '--dry-run', '--force'])).toThrow()
     expect(() => parseSiteCommand(['storage', 'contract', 's3'])).toThrow(SiteUsageError)
+    expect(() => parseSiteCommand(['backup', '--environment', 'production'])).toThrow(
+      SiteUsageError,
+    )
+    expect(() =>
+      parseSiteCommand([
+        'restore',
+        'backup-001',
+        '--environment',
+        'production',
+        '--confirm',
+        'yes',
+        '--reason',
+        'incident',
+      ]),
+    ).toThrow(SiteUsageError)
+    expect(() =>
+      parseSiteCommand([
+        'restore',
+        'backup-001',
+        '--environment',
+        'test',
+        '--confirm',
+        'RESTORE-TEST',
+        '--reason',
+        'drill',
+        '--break-glass',
+      ]),
+    ).toThrow(SiteUsageError)
     expect(() =>
       parseSiteCommand(['storage', 'contract', 's3', '--confirm', 'PRODUCTION']),
     ).toThrow(SiteUsageError)

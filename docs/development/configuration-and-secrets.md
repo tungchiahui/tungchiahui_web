@@ -94,9 +94,9 @@ S3_CONTRACT_*
 BACKUP_S3_*
 ```
 
-`S3_CONTRACT_*` 是 Operator 验收专用的 Provider-neutral 配置，可指向任意明确授权的 S3-compatible 非生产 Target；其中没有 Provider 类型或 Label，也不允许按实现名称选择分支。External Contract 只通过显式 `./site storage contract s3 --confirm S3-NON-PRODUCTION` 读取这些值，普通 Local/Test 和 Production Application Runtime 不读取它们，也不得把这组变量部署给 Production Application、`content-worker`、`control-api` 或 `deploy-agent`。当前 Production 选用 AList，因此 Phase 11 Verification Report 需另外记录 AList 非生产实例的兼容证据，但该部署事实不进入配置边界。
+`S3_CONTRACT_*` 是 Operator 验收专用的 Provider-neutral 配置，可指向任意明确授权的 S3-compatible 非生产 Target；其中没有 Provider 类型或 Label，也不允许按实现名称选择分支。External Contract 只通过显式 `./site storage contract s3 --confirm S3-NON-PRODUCTION` 读取这些值，普通 Local/Test 和 Production Application Runtime 不读取它们，也不得把这组变量部署给 Production Application、`content-worker`、`control-api` 或 `deploy-agent`。当前 Production 选用 AList，因此 Phase 11 Verification Report 另外记录 AList 非生产实例的兼容证据，但该部署事实不进入通用 Storage Adapter。
 
-Application 使用只读 Adapter/最小权限 Asset Identity。Contract Identity 只允许操作指定 Test Bucket，并只清理随机唯一 Prefix 下自己创建的 Object。`BACKUP_S3_*` 留给 Phase 13，不得与前两者复用。
+Application 使用只读 Adapter/最小权限 Asset Identity。Contract Identity 只允许操作指定 Test Bucket，并只清理随机唯一 Prefix 下自己创建的 Object。Phase 13 使用 `BACKUP_S3_*` 作为主备份对象目标，使用 `BACKUP_R2_*` 作为独立异地目标，并为 pgBackRest Repository Cipher 与 Control-state age Key 使用单独 Secret。Runtime Validation 拒绝 Asset/Primary/R2 复用 Access Key 或相同 Target Identity；Production S3/R2 Endpoint 必须是 HTTPS。只有 `deploy-agent` 注入这组 Secret，Public App、`control-api` 和 `content-worker` 不获得它们。
 
 ## 新服务器
 

@@ -31,6 +31,7 @@ import {
   consumeControlNonce,
   createInfrastructureOperation,
   getInfrastructureOperation,
+  listRecoveryBackups,
   readControlState,
 } from './control-state'
 import { FixedWindowRateLimiter } from './rate-limit'
@@ -119,6 +120,15 @@ function routeShape(pathname: string) {
   }
   if (pathname === '/api/ops/application-jobs') {
     return Object.freeze({ allow: 'POST', kind: 'application-job-create' as const })
+  }
+  if (pathname === '/api/ops/backups') {
+    return Object.freeze({ allow: 'POST', kind: 'backup-create' as const })
+  }
+  if (pathname === '/api/ops/backups/status') {
+    return Object.freeze({ allow: 'GET', kind: 'backup-list' as const })
+  }
+  if (pathname === '/api/ops/restores') {
+    return Object.freeze({ allow: 'POST', kind: 'restore-create' as const })
   }
   if (pathname === '/api/ops/translations') {
     return Object.freeze({ allow: 'POST', kind: 'translation-create' as const })
@@ -360,6 +370,103 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
             url.pathname,
           )
           const result = await applicationJobs.createJob(parsedBody, actor, idempotencyKey)
+          sendJson(response, { body: result, status: result.created ? 202 : 200 })
+          return
+        }
+        case 'backup-create': {
+          requireCapability(actor, 'infrastructure-operation:create')
+          const input = z
+            .object({
+              backupType: z.enum(['full', 'diff', 'incr']),
+              environment: z.enum(['local', 'test', 'production']),
+              reason: z.string().trim().min(1).max(1_000),
+            })
+            .strict()
+            .parse(parseJsonBody(body, headers.get('content-type')))
+          if (readControlState(configuration.statePath).environment !== input.environment) {
+            throw new HttpError(400, 'Backup environment does not match control state')
+          }
+          const operationRequest = infrastructureOperationRequestSchema.parse({
+            operationType: 'recovery',
+            reason: input.reason,
+            target: {
+              action: 'backup',
+              backupType: input.backupType,
+              environment: input.environment,
+            },
+          })
+          const idempotencyKey = idempotencyKeySchema.parse(headers.get('idempotency-key'))
+          auditAuthorization(
+            configuration,
+            actor,
+            'infrastructure-operation:create',
+            request.method,
+            url.pathname,
+          )
+          const result = createInfrastructureOperation(
+            configuration.statePath,
+            operationRequest,
+            actor,
+            idempotencyKey,
+          )
+          sendJson(response, { body: result, status: result.created ? 202 : 200 })
+          return
+        }
+        case 'backup-list': {
+          requireCapability(actor, 'infrastructure-operation:read')
+          auditAuthorization(
+            configuration,
+            actor,
+            'infrastructure-operation:read',
+            request.method,
+            url.pathname,
+          )
+          sendJson(response, {
+            body: { backups: listRecoveryBackups(configuration.statePath) },
+            status: 200,
+          })
+          return
+        }
+        case 'restore-create': {
+          requireCapability(actor, 'infrastructure-operation:create')
+          const input = z
+            .object({
+              confirmation: z.string().min(1).max(100),
+              environment: z.enum(['local', 'test', 'production']),
+              reason: z.string().trim().min(1).max(1_000),
+              selector: z.union([
+                z.object({ backupId: z.string().min(1).max(200) }).strict(),
+                z.object({ targetTime: z.iso.datetime({ offset: true }) }).strict(),
+              ]),
+            })
+            .strict()
+            .parse(parseJsonBody(body, headers.get('content-type')))
+          if (readControlState(configuration.statePath).environment !== input.environment) {
+            throw new HttpError(400, 'Restore environment does not match control state')
+          }
+          const operationRequest = infrastructureOperationRequestSchema.parse({
+            operationType: 'restore',
+            reason: input.reason,
+            target: {
+              confirmation: input.confirmation,
+              environment: input.environment,
+              selector: input.selector,
+            },
+          })
+          const idempotencyKey = idempotencyKeySchema.parse(headers.get('idempotency-key'))
+          auditAuthorization(
+            configuration,
+            actor,
+            'infrastructure-operation:create',
+            request.method,
+            url.pathname,
+          )
+          const result = createInfrastructureOperation(
+            configuration.statePath,
+            operationRequest,
+            actor,
+            idempotencyKey,
+          )
           sendJson(response, { body: result, status: result.created ? 202 : 200 })
           return
         }
