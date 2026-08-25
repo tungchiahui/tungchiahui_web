@@ -108,4 +108,6 @@ Phase 7 在 Block-level State 建立前使用更严格的全 Document zh-CN Fall
 
 Phase 8 已实现该替换：顶层 mdast Semantic Block 使用版本化 Normalization、Source Hash 和 AST/受保护值 Context Fingerprint 建立全局 Translation Memory；Document Ordinal 仅用于当前拼装，不是翻译身份。en-US Materialization 必须绑定当前 Canonical `source_hash`，并记录 Pending、Fallback、Translated 与 Memory-hit Count。Public DAL 只读取 Source Hash 匹配的当前行，按实际内容暴露 `fallback`、`mixed` 或 `translated`；缺失/旧行继续安全回退到最新完整 zh-CN。
 
-实现与安全 Backfill 见 `docs/development/phase-8-translation-memory.md`。Paid Provider 仍只属于 Phase 9。
+实现与安全 Backfill 见 `docs/development/phase-8-translation-memory.md`。
+
+Phase 9 在该数据层之上增加显式 Translation Job。Provider Adapter 的 Request、Estimate、Response 和 Usage 都经过 Runtime Validation；Worker 逐个 Current Segment 执行，每次调用前强制 Budget，并在写入后按受影响 Document 重新物化与精确 Revalidate。Dry-run 只读取候选并估算，Provider Call Count 必须为零。Provider 厂商不是架构常量；Local/Test 固定使用 Fake Provider，具体 Production Adapter 必须通过相同 Boundary 和经授权的非生产 Contract Test。

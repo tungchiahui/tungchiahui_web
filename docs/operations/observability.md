@@ -121,6 +121,8 @@ Alert 应可操作。
 
 Durable Job/Operation 如果保持 `running` 超过预期 Execution Window，必须能够检测并告警。
 
+Phase 9 Translation Worker 每个完成 Segment 输出结构化 `translation_segment_completed`，只包含 Job/Segment ID、Provider、Model、Input/Output Token 和 Cost；Job detail 持久保存 Estimate、Actual、Provider-call、Completed/Remaining Count 与 Error Summary。不得记录 Prompt Credential、API Key、Authorization Header、Connection String 或完整 Provider Request。Budget Stop 以 `translation_jobs.status=partial` 和剩余计数观测；Revalidation Retry 通过 Durable Progress 中的精确 Document ID 恢复。
+
 ## Network/Origin Health
 
 分别监控 Public Path 和 Origin Path：

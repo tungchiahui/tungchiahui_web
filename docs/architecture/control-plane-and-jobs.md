@@ -149,6 +149,19 @@ Phase 5 保留 Phase 4 HTTP/Store 分流，并让 `content-worker` 执行 `conte
 
 Translation/Search/Cache Job 仍只创建/查询，不在 Phase 5 提前执行。Phase 5 Content Handler 只调用标明替换阶段的零成本 Typed Hook。
 
+### Phase 9 translation-job execution baseline
+
+Phase 9 在同一 PostgreSQL Application-job 边界上实现 Translation Operation：
+
+- `POST /api/ops/translations` 创建 Job；`GET /api/ops/translations/status` 与 `GET /api/ops/translations/:id` 查询状态；`POST /api/ops/translations/:id/cancel` 请求取消；
+- Estimate、Execute、Read、Cancel 使用独立 Capability；Payload、Scope、Budget、Force 和两种显式 Confirmation 都经过 Zod Validation；
+- `control-api` 只在事务中创建配对的 `operational_jobs`/`translation_jobs` Row 并快速返回，不持有 Provider Credential、不执行翻译；
+- `content-worker` 使用 PostgreSQL Claim/Lease/Attempt/Progress 执行 Segment-level Work，在每次 Provider Request 前重新读取累计 Cost 并执行 Budget Hard Stop；
+- 已完成 Segment、待重验证 Document、Usage 与 Provider/Model Audit 持久化，因此 Provider Failure 或 Revalidation Failure 可恢复而不重复已记录的付费请求；
+- Translation Job 从未进入 SQLite Recovery Store；PostgreSQL 不可用时 Endpoint 安全返回不可用。
+
+Manual GitHub Workflow 和本地 `./site translate` 都调用该 Control API。Workflow 仅获得 Translation Capability 的短期 OIDC Identity，不获得 Database、Provider 或 Host Credential。
+
 ## Normal 与 Break-glass Path
 
 正常情况下所有操作仍优先通过：

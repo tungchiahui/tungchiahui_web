@@ -1,0 +1,91 @@
+name: Manual Translation
+
+on:
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: Translation scope
+        required: true
+        type: choice
+        options: [pending, changed, article, all]
+      article_source_path:
+        description: Required only for article scope
+        required: false
+        type: string
+      dry_run:
+        description: Estimate without any provider request
+        required: true
+        default: true
+        type: boolean
+      budget_usd:
+        description: Required maximum USD budget for execution
+        required: false
+        type: string
+      force:
+        description: Retranslate current translated blocks
+        required: true
+        default: false
+        type: boolean
+      retranslation_confirmation:
+        description: Type RETRANSLATE when force is enabled
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: translation-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  create-translation-job:
+    name: create-translation-job
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    env:
+      ARTICLE_SOURCE_PATH: ${{ inputs.article_source_path }}
+      BUDGET_USD: ${{ inputs.budget_usd }}
+      FORCE_TRANSLATION: ${{ inputs.force }}
+      RETRANSLATION_CONFIRMATION: ${{ inputs.retranslation_confirmation }}
+      SITE_CONTROL_API_URL: https://www.tungchiahui.cn
+      SITE_TRANSLATION_IDEMPOTENCY_KEY: translation:workflow:${{ github.run_id }}
+      TRANSLATION_DRY_RUN: ${{ inputs.dry_run }}
+      TRANSLATION_SCOPE: ${{ inputs.scope }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@008330803749db0355799c700092d9a85fd074e9 # v6.0.9
+        with:
+          version: 11.23.0
+          run_install: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Create the server-side translation job
+        shell: bash
+        run: |
+          arguments=(translate "$TRANSLATION_SCOPE")
+          if [[ "$TRANSLATION_SCOPE" == "article" ]]; then
+            arguments+=("$ARTICLE_SOURCE_PATH")
+          fi
+          if [[ "$TRANSLATION_DRY_RUN" == "true" ]]; then
+            arguments+=(--dry-run)
+          else
+            arguments+=(--execute --budget-usd "$BUDGET_USD")
+          fi
+          if [[ "$FORCE_TRANSLATION" == "true" ]]; then
+            arguments+=(--force --confirm-retranslation "$RETRANSLATION_CONFIRMATION")
+          fi
+          ./site "${arguments[@]}"

@@ -32,6 +32,14 @@
       "requiresFreshRecoverableBackup": false,
       "reason": "Adds backward-compatible document-to-segment mapping plus nullable source binding and zero-default materialization metrics; existing translations remain readable by older application code and are only trusted by Phase 8 after explicit content-sync backfill.",
       "recovery": "Retain the additive table and columns for blue-green compatibility. If reconciliation policy needs correction, deploy a reviewed forward fix and replay an explicit idempotent content sync from the canonical GitHub commit."
+    },
+    {
+      "tag": "0004_phase9_budgeted_translation",
+      "changeKind": "expand",
+      "risk": "low",
+      "requiresFreshRecoverableBackup": false,
+      "reason": "Adds a backward-compatible execution mode, force/cancellation control, request counts and segment progress metrics to the existing translation-job table; all columns have safe defaults for Phase 8 application overlap.",
+      "recovery": "Retain the additive enum and columns for blue-green compatibility. Disable explicit translation execution, preserve completed segment rows, and deploy a reviewed forward fix before resuming jobs."
     }
   ]
 }

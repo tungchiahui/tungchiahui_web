@@ -24,13 +24,18 @@ export function parseControlApiConfiguration(input: unknown) {
   const authentication: AuthenticationConfiguration = Object.freeze({
     github: parseGitHubOidcPolicy({
       audience: 'tungchiahui-control-api',
-      capabilities: capabilityValues,
+      capabilities: [
+        'translation:dry-run',
+        'translation:execute',
+        'translation:read',
+        'translation:cancel',
+      ],
       environment: 'production',
       issuer: 'https://token.actions.githubusercontent.com',
       jwksUrl: 'https://token.actions.githubusercontent.com/.well-known/jwks',
       ref: 'refs/heads/main',
       repository: 'tungchiahui/tungchiahui_web',
-      workflowRef: 'tungchiahui/tungchiahui_web/.github/workflows/deploy.yml@refs/heads/main',
+      workflowRef: 'tungchiahui/tungchiahui_web/.github/workflows/translation.yml@refs/heads/main',
     }),
     operatorKeys: parseOperatorKeys([
       {

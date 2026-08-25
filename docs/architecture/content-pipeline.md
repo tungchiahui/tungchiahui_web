@@ -128,6 +128,8 @@ Content Sync 永远不会自动调用付费 AI 翻译。
 
 付费翻译由 `docs/operations/translation-operations.md` 中记录的显式 Translation Job 执行。
 
+Phase 9 的执行路径只选择 Current `document_translation_segments`：`pending`/`changed`/`article`/`all` 不会建立 Whole-document Provider Path。每个成功 Segment 先在 PostgreSQL Transaction 内记录 Translation 与 Usage、重新物化引用它的 Current Document，并将精确 Revalidation Input 写入 Durable Progress；随后才调用 Revalidation Hook。若 Hook 失败，Retry 先完成该精确 Revalidation，再继续剩余 Segment，不重复已记录的 Provider Request。预算不足时不发出下一请求，已完成内容保留，未覆盖 Segment 继续 Pending/Fallback。
+
 ## 失败行为
 
 可选 Translation 失败时不得破坏已有 Published Translation。

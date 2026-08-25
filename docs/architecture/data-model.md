@@ -132,6 +132,12 @@ estimated_cost
 actual_input_tokens
 actual_output_tokens
 actual_cost
+execution_mode          dry-run | execute
+force
+provider_request_count
+completed_segment_count
+remaining_segment_count
+cancel_requested_at
 created_at
 started_at
 finished_at
@@ -148,6 +154,8 @@ partial
 failed
 cancelled
 ```
+
+Phase 9 Migration `0004_phase9_budgeted_translation` 是 additive Expand：为既有 `translation_jobs` 增加 Execution、Progress、Cancellation 与 Audit Field，并用非负/状态 Constraint 保护 Budget/Usage。一个 Translation Operation 与同 ID 的 `operational_jobs` Row 配对；通用 Queue 状态负责 Claim/Lease/Retry，Translation Row 保存业务状态（包括 `partial`）和 Cost。Migration 不重写 Segment 或 Canonical Content，也不删除旧 Column。
 
 Server-side Worker 在继续发出付费 Request 前强制执行 Budget。
 

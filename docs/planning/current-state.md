@@ -1,7 +1,7 @@
 # Website V2 Current Implementation State
 
-> Status: Phase 0–8 completed; Phase 9 not started
-> Current Phase: Awaiting Owner authorization for Phase 9
+> Status: Phase 0–9 completed; Phase 10 not started
+> Current Phase: Awaiting Owner authorization for Phase 10
 > Handoff audit date: 2026-08-25
 
 本文件是新 Claude Code/Codex 会话的简洁交接入口。它索引当前实际状态和容易遗漏的实施事实，不替代 `AGENTS.md`、Accepted ADR、架构规范或 `implementation-plan.md`。
@@ -28,8 +28,9 @@
 | 6 — zh-CN Vertical Slice | `feat(web): complete phase 6 zh-cn vertical slice` | Phase 6 Vertical Slice 与 Verification | PASS；public E2E/Legacy/Markdown/cache/asset/health gates |
 | 7 — Deterministic Locales | `feat(i18n): complete phase 7 deterministic locales` | Phase 7 Deterministic Locales 与 Verification | PASS；four-locale UI/routes/OpenCC materialization/fallback gates |
 | 8 — Translation Memory | `feat(i18n): complete phase 8 translation memory` | Phase 8 Translation Memory 与 Verification | PASS；segmentation/reuse/pending/stale/mixed fallback/zero-cost gates |
+| 9 — Budgeted Translation | `feat(translation): complete phase 9 budgeted execution` | Phase 9 Budgeted Translation 与 Verification | PASS；explicit/dry-run/budget/partial/retry/authz/directionality gates |
 
-`implementation-plan.md` 中 Phase 0–8 的 Checklist 与 Overall Progress 已完成，Phase 9 保持未开始。任何后续 Agent 不得根据本文件自行越过 Owner 授权 Gate。
+`implementation-plan.md` 中 Phase 0–9 的 Checklist 与 Overall Progress 已完成，Phase 10 保持未开始。任何后续 Agent 不得根据本文件自行越过 Owner 授权 Gate。
 
 ## 3. Legacy durable baseline
 
@@ -56,8 +57,12 @@
 - Local S3Mock Seed 写入 deterministic SVG；`/api/assets/**` 是 server-only validated read gateway。Production AList Contract 仍未验证。
 - Next Cache 无任意 TTL：Article Route Tag、Content-type List Tag 与 Home/List/Article Path 精确失效。HMAC Endpoint 位于 `/api/internal/revalidate`，不属于 Privileged Ops Control Plane。
 - Content materialization 后 Hook 失败会把精确 `side_effects` Payload（含 Translation Metric）存入 PostgreSQL Job Progress；Retry 不再次 Fetch/Materialize。Phase 8 Translation Diff/Materialization 已在 Ingestion Transaction 内完成；Search Hook 继续只记录 Phase 10 deferred event。
+- Phase 9 Translation Job 使用配对的 PostgreSQL `operational_jobs`/`translation_jobs`：Control API 提供 create/read/list/cancel，`content-worker` Claim/Lease/Retry 并逐 Current Semantic Block 执行；没有进入 Control-state SQLite。
+- Provider Request/Estimate/Response/Usage 全部 Runtime Validation；Local/Test 固定 Fake Provider。四种 Scope、Force/Execute Confirmation、Dry-run Estimate、逐请求 Server Budget、Partial、Cancellation、Token/Cost/Provider/Model Audit 均已实现。
+- Segment Translation 与受影响 Document 的 en-US 重物化在同一 Transaction；精确 Revalidation Intent 先进入 Durable Progress。Provider 或 Revalidation Failure 可恢复，且不重复已持久化的 Provider Request。
+- `./site translate`、`/api/ops/translations` 与 Manual `translation.yml` 复用同一 Job Contract。Workflow 使用 Translation-only GitHub OIDC Capability，不获得 DB/AI/Host Credential；CLI 默认稳定 Public Domain，不保存数字公网 IP。
 - `/api/health` 是 liveness；`/api/ready` 检查 PostgreSQL；`/api/version` 输出 validated Git SHA/development stub；均 `no-store`。
-- `./site check` 覆盖 Biome、Source Policy、Drizzle、Typecheck、Renovate 与 webpack Production Build。`./site test` 覆盖 18 files / 76 Unit、Disposable Integration（含双区域 Locale + Translation Memory/Backfill/Targeted Patch/重放）、9 个真实 Playwright E2E 和 4-Migration Dedicated Suite。
+- `./site check` 覆盖 Biome、Source Policy、Drizzle、Typecheck、Renovate 与 webpack Production Build。`./site test` 覆盖 19 files / 80 Unit、Disposable Integration（含 Translation API/Scope/Budget/Partial/Retry/Revalidation Resume/Cancel/Audit）、9 个真实 Playwright E2E 和 5-Migration Dedicated Suite。
 - Phase 4 Control API/SQLite Recovery 与 Phase 5 GitHub Ingestion/Worker 权限边界均保持不变；`/api/ops/*` 没有进入 Next.js。
 
 ## 5. 当前 Stub/Fake 与替换责任
@@ -68,13 +73,13 @@
 | Four-locale UI/Route/OpenCC | Phase 7 production-shaped deterministic implementation | completed in Phase 7 |
 | en-US block-level Translation Memory/Fallback | Phase 8 production-shaped local implementation | completed in Phase 8 |
 | Translation Diff | Phase 8 transactional zero-cost reconcile | completed in Phase 8 |
-| Translation Provider/Dry-run/Budget Execution | fake provider only；no implicit or paid call | Phase 9 |
+| Translation Provider/Dry-run/Budget Execution | validated vendor-neutral adapter + complete Fake/no-cost execution；concrete paid vendor unselected | production provider binding requires explicit non-production contract authorization |
 | Search Refresh/Query | deferred event；no PGroonga public search | Phase 10 |
 | S3Mock/Public Asset Gateway | local S3 API evidence only | Phase 11 AList non-production contract |
 | GitHub polling default | idle to prevent implicit network; explicit repository enables read-only polling | Phase 15 workflow binding |
 | Owner Dataset | validated PostgreSQL public read + Phase 4 authorized CAS write | Phase 16 final trust/privacy review |
 | Fake Deploy Agent | health/identity only; no production capability | Phase 14 |
-| Fake Translation Provider | isolated deterministic cost 0；not imported by Phase 8 sync/public path | Phase 9 |
+| Fake Translation Provider | isolated deterministic default for Local/Test; production must inject a validated paid adapter | retained permanent test boundary |
 
 ## 6. 已知限制与踩坑
 
@@ -84,26 +89,27 @@
 - Local Compose must quote the all-zero development SHA. Next dev explicitly allows only loopback `127.0.0.1` for the disposable browser origin.
 - Playwright uses one worker because the suite intentionally shares one mutable Disposable PostgreSQL/cache lifecycle, including a mid-run revalidation mutation。
 - `content-worker` side-effect replay depends on Hooks being idempotent. Future Translation/Search implementations must preserve exact-input idempotency and must not turn Public requests into paid/provider calls.
-- PostgreSQL migrations are now four. `0003_phase8_translation_memory` is additive Expand：新增 Document-Segment Mapping、nullable Current-source Binding 和零默认 Metric；不得重写已应用 SQL/Metadata。
+- PostgreSQL migrations are now five. `0004_phase9_budgeted_translation` is additive Expand：新增 Translation Execution/Force/Progress/Cancellation/Audit Column 与 Constraint；不重写 Segment/Document Content，不得修改已应用 SQL/Metadata。
 - Existing Runtime DB 在 Phase 7 应用代码发布后需要一次显式 Content Sync 才会回填区域物化；回填前 Server Renderer 使用相同确定性 Converter 作为只读 View。Public Request 绝不触发 Backfill。
 - Phase 8 Migration 不在 Migration-time 猜测/回填旧 English。现有 en-US Row 的 `source_hash` 为 NULL 时 Public DAL 忽略；应用 Phase 8 后必须显式 Content Sync 才会建立 Segment Mapping、Pending 和 Current Mixed Materialization。zh-CN 发布不等待该 Backfill，Public Request 也不写 DB。
 - Normalization Version 当前固定为 1。任何改变 Identity/Normalization 的实现必须显式提升版本、提供安全重放/迁移计划，并更新稳定身份与重复 Block Fixture。
 - Glossary 任何会改变输出的编辑必须同时提升 `version` 与正整数 `revision`，并更新代表性 Unit/Integration Evidence。
 - S3Mock cannot prove AList metadata, ETag, Unicode-key and overwrite compatibility; Phase 11 must run the designated non-production contract before Production Infrastructure.
 - Static ROS2 files are frozen third-party generated output. Do not run formatters or source analyzers inside that exact directory; Phase 18 refreshes/diffs from the then-current Legacy HEAD.
-- No Production, GitHub write, AList, DNS, paid AI, deploy, backup/restore or old-repository mutation occurred through Phase 8。Phase 8 完全依赖仓库内既有 Fixture，没有重新扫描或定点读取旧仓库。
+- No Production, GitHub write, AList, DNS, paid AI, deploy, backup/restore or old-repository mutation occurred through Phase 9。Phase 9 完全依赖仓库内既有 Fixture，没有重新扫描或定点读取旧仓库。
+- 真实 Provider Contract Test 未运行：Owner 没有提供明确的非生产 Provider Target/Credential/付费授权。此为 Phase 9 Exit Gate 要求的安全分支，不是自动测试缺口；未来启用具体 Provider 前必须补做。
 
-## 7. Phase 9 开始前 Prerequisite
+## 7. Phase 10 开始前 Prerequisite
 
-- Owner must explicitly authorize Phase 9; this handoff is not authorization.
-- Start from a clean worktree with the focused Phase 8 commit visible; report unknown changes before editing.
-- Read Phase 9 plan plus Translation Operations、Control Plane/Jobs、Internationalization/Data Model/Content Pipeline、Security、Testing Strategy、ADR 0010/0013 and Phase 8 implementation/verification reports.
-- Preserve Phase 8 Segment Identity、AST/protected validator、Current-source Binding、Mapping ancestry、Pending/Stale/Reviewed State、Mixed Fallback 和 zero-cost sync/public contracts。
-- Provider Request/Response 必须 Zod Validation；Automated Test 默认只使用 Fake/No-cost Provider。未获 Owner 明确付费授权，不得执行真实 Provider Contract/Execute。
-- Dry-run 必须零次 Paid Call；每个实际 Request 前由 Server-side `content-worker` 强制 Budget，并保留 Partial/Retry/Audit。CLI、Control API 与 Manual Workflow 必须创建同一 PostgreSQL-backed Job，不得回写 GitHub。
-- 不得把 Phase 8 的 Block-level Pipeline 退化为 Whole-document Retranslation，也不得把 AI Credential 给 GitHub Actions、Next.js、Developer Machine 或 `deploy-agent`。
+- Owner must explicitly authorize Phase 10; this handoff is not authorization.
+- Start from a clean worktree with the focused Phase 9 commit visible; report unknown changes before editing.
+- Read Phase 10 plan plus Search/Caching/Data Model/Content Pipeline、Security、Testing Strategy、ADR 0002/0013 and Phase 8/9 implementation/verification reports.
+- PGroonga Search 必须 Server-side/PostgreSQL-backed，不能下载全文到 Browser、不能新增第二 Search Engine，Search/Reindex Job 继续使用 PostgreSQL。
+- Search Locale/Ranking/Snippet/Route 需要 deterministic Fixture；Cache Correctness 使用精确 Invalidation，不得依赖任意 TTL。
+- Preserve Phase 8/9 Current-source English Materialization 与 mixed/fallback state。Search 不应等待 Pending Translation 或付费执行完成；Translation Job 的精确 Revalidation 不等同于 Phase 10 Search Refresh。
+- `content-worker` 当前 Search Hook 仍记录 Phase 10 deferred event；Phase 10 只替换该边界，不扩大 SQLite 或 Provider Credential Scope。
 
-Phase 9 has no dependency blocker. Phase 8 leaves a validated zero-cost data foundation and isolated Fake Provider without granting permission to begin paid execution work.
+Phase 10 has no dependency blocker. Phase 8 supplies the required multilingual materialized data and Phase 9 preserves its current-source/fallback contract; this handoff does not authorize Search implementation.
 
 ## 8. 回查旧 myblog 的规则
 

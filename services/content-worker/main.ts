@@ -9,6 +9,8 @@ import { ContentJobRepository } from '../../src/content/jobs'
 import { PublicContentHooks } from '../../src/content/revalidation'
 import { ContentWorker } from '../../src/content/worker'
 import { serviceIdentityContracts } from '../../src/control-plane/contracts'
+import { TranslationJobRepository, TranslationWorker } from '../../src/translation/jobs'
+import { createFakeTranslationProvider } from '../../src/translation/provider'
 
 const configuration = z
   .object({
@@ -30,6 +32,11 @@ const configuration = z
     SITE_REVALIDATION_ENDPOINT: z.url().optional(),
     SITE_REVALIDATION_SECRET: z.string().min(32).optional(),
     SITE_RUNTIME_MODE: z.enum(['local', 'test']),
+    TRANSLATION_PROVIDER: z.literal('fake').default('fake'),
+    TRANSLATION_WORKER_POLLING_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
   })
   .superRefine((value, context) => {
     if (value.CONTENT_WORKER_POLLING_ENABLED && value.GITHUB_CONTENT_REPOSITORY === undefined) {
@@ -40,7 +47,7 @@ const configuration = z
       })
     }
     if (
-      value.CONTENT_WORKER_POLLING_ENABLED &&
+      (value.CONTENT_WORKER_POLLING_ENABLED || value.TRANSLATION_WORKER_POLLING_ENABLED) &&
       (value.SITE_REVALIDATION_ENDPOINT === undefined ||
         value.SITE_REVALIDATION_SECRET === undefined)
     ) {
@@ -75,6 +82,7 @@ const server = createServer((request, response) => {
       productionOperations: false,
       service: 'content-worker',
       status: 'ok',
+      translationExecution: configuration.TRANSLATION_WORKER_POLLING_ENABLED ? 'enabled' : 'idle',
     })
     return
   }
@@ -84,6 +92,7 @@ const server = createServer((request, response) => {
 let stopping = false
 let jobs: ContentJobRepository | undefined
 let ingestion: ContentIngestionRepository | undefined
+let translationJobs: TranslationJobRepository | undefined
 
 async function poll(worker: ContentWorker) {
   while (!stopping) {
@@ -102,6 +111,33 @@ async function poll(worker: ContentWorker) {
       console.error(
         JSON.stringify({
           event: 'content_worker_poll_failed',
+          message: error instanceof Error ? error.message : 'unknown error',
+        }),
+      )
+    }
+    await new Promise<void>((resolveWait) =>
+      setTimeout(resolveWait, configuration.CONTENT_WORKER_POLL_INTERVAL_MS),
+    )
+  }
+}
+
+async function pollTranslations(worker: TranslationWorker) {
+  while (!stopping) {
+    try {
+      const result = await worker.runOnce()
+      if (result.claimed) {
+        console.log(
+          JSON.stringify({
+            event: 'translation_job_processed',
+            jobId: result.jobId,
+            status: result.status,
+          }),
+        )
+      }
+    } catch (error: unknown) {
+      console.error(
+        JSON.stringify({
+          event: 'translation_worker_poll_failed',
           message: error instanceof Error ? error.message : 'unknown error',
         }),
       )
@@ -140,6 +176,26 @@ if (configuration.CONTENT_WORKER_POLLING_ENABLED) {
   void poll(worker)
 }
 
+if (configuration.TRANSLATION_WORKER_POLLING_ENABLED) {
+  if (
+    configuration.SITE_REVALIDATION_ENDPOINT === undefined ||
+    configuration.SITE_REVALIDATION_SECRET === undefined
+  ) {
+    throw new Error('Translation execution requires the validated revalidation endpoint and secret')
+  }
+  translationJobs = new TranslationJobRepository(configuration.DATABASE_URL)
+  const worker = new TranslationWorker({
+    hooks: new PublicContentHooks(
+      configuration.SITE_REVALIDATION_ENDPOINT,
+      configuration.SITE_REVALIDATION_SECRET,
+    ),
+    jobs: translationJobs,
+    provider: createFakeTranslationProvider(),
+    workerId: configuration.CONTENT_WORKER_ID ?? `${hostname()}:${process.pid}:translation`,
+  })
+  void pollTranslations(worker)
+}
+
 server.listen(configuration.CONTENT_WORKER_PORT, configuration.CONTENT_WORKER_HOST, () => {
   console.log(
     JSON.stringify({
@@ -147,6 +203,7 @@ server.listen(configuration.CONTENT_WORKER_PORT, configuration.CONTENT_WORKER_HO
       mode: configuration.SITE_RUNTIME_MODE,
       pollingEnabled: configuration.CONTENT_WORKER_POLLING_ENABLED,
       port: configuration.CONTENT_WORKER_PORT,
+      translationPollingEnabled: configuration.TRANSLATION_WORKER_POLLING_ENABLED,
     }),
   )
 })
@@ -154,7 +211,7 @@ server.listen(configuration.CONTENT_WORKER_PORT, configuration.CONTENT_WORKER_HO
 function shutdown() {
   stopping = true
   server.close(async (error) => {
-    await Promise.all([jobs?.close(), ingestion?.close()])
+    await Promise.all([jobs?.close(), ingestion?.close(), translationJobs?.close()])
     if (error) {
       console.error(
         JSON.stringify({ event: 'content_worker_shutdown_failed', message: error.message }),

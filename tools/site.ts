@@ -5,6 +5,11 @@ import {
   parseSiteCommand,
   SiteUsageError,
 } from './site-command'
+import {
+  cancelTranslationJob,
+  createTranslationJob,
+  readTranslationStatus,
+} from './translation/control-client'
 
 const usage = `Usage: ./site <command>
 
@@ -17,7 +22,14 @@ Development:
 Validation:
   check     Run formatting, lint, source policy, typecheck, Renovate validation, and build
   test      Run unit, disposable integration, critical E2E, and migration suites
-  help      Show this help`
+  help      Show this help
+
+Translation:
+  translate pending|changed|all --dry-run
+  translate article <source-path> --dry-run
+  translate <scope> --execute --budget-usd <amount>
+  translate status [job-id]
+  translate cancel <job-id>`
 
 async function main() {
   assertToolchain(process.versions.node)
@@ -40,6 +52,16 @@ async function main() {
       return 0
     case 'test':
       return executePackageScript('site:test')
+    case 'translate': {
+      const result =
+        command.action === 'create'
+          ? await createTranslationJob(command.request)
+          : command.action === 'cancel'
+            ? await cancelTranslationJob(command.jobId)
+            : await readTranslationStatus(command.jobId)
+      console.log(JSON.stringify(result, null, 2))
+      return 0
+    }
   }
 }
 

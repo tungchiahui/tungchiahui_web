@@ -1,7 +1,7 @@
 # Website V2 分阶段实施计划
 
-> Status: In progress — Phase 0–8 complete
-> Current Phase: Awaiting Owner authorization for Phase 9
+> Status: In progress — Phase 0–9 complete
+> Current Phase: Awaiting Owner authorization for Phase 10
 > Execution Model: Hard-gated, one Phase at a time
 > Scope: 从新的 Next.js V2 Repository 基线推进到替换旧 Nuxt Production Site
 
@@ -18,7 +18,7 @@
 - [x] Phase 6 — zh-CN Website Vertical Slice
 - [x] Phase 7 — UI i18n 与 zh-HK/zh-TW
 - [x] Phase 8 — Translation Memory 与 en-US Fallback
-- [ ] Phase 9 — 显式付费 AI Translation
+- [x] Phase 9 — 显式付费 AI Translation
 - [ ] Phase 10 — PGroonga Search 与 Cache Correctness
 - [ ] Phase 11 — AList S3 Asset Contract
 - [ ] Phase 12 — Production Infrastructure、Ansible 与 Container Hardening
@@ -846,16 +846,16 @@ Translation Memory 和 Fallback 已证明不会意外消费成本，现在才能
 
 ### Task Checklist
 
-- [ ] 定义经过 Zod Validation 的 Provider Request/Response Boundary 和 Usage Metadata。
-- [ ] 保留 Fake/No-cost Provider 作为默认 Automated Test Provider。
-- [ ] 实现 `pending`、`changed`、`article`、`all` Scope 与显式 Force/Retranslation Confirmation。
-- [ ] 实现 Dry-run Token/Cost Estimate，保证零次 Paid Call。
-- [ ] 在每次 Paid Request 前由 `content-worker` 强制检查剩余 Budget。
-- [ ] 实现 Budget Stop、`partial`、Retry、Cancellation、Actual Token/Cost Record。
-- [ ] 实现 `./site translate ... --dry-run/--execute --budget-usd` 和 Status Output。
-- [ ] 实现 `control-api` Translation Job Create/Status，实际工作由 `content-worker` 执行。
-- [ ] 实现 GitHub Manual `workflow_dispatch` 的 Typed Input 与 OIDC Auth，不将 DB/AI/Host Credential 放入 Workflow。
-- [ ] Translation 完成后只更新 Runtime State 并精确 Revalidate，不回写 GitHub。
+- [x] 定义经过 Zod Validation 的 Provider Request/Response Boundary 和 Usage Metadata。
+- [x] 保留 Fake/No-cost Provider 作为默认 Automated Test Provider。
+- [x] 实现 `pending`、`changed`、`article`、`all` Scope 与显式 Force/Retranslation Confirmation。
+- [x] 实现 Dry-run Token/Cost Estimate，保证零次 Paid Call。
+- [x] 在每次 Paid Request 前由 `content-worker` 强制检查剩余 Budget。
+- [x] 实现 Budget Stop、`partial`、Retry、Cancellation、Actual Token/Cost Record。
+- [x] 实现 `./site translate ... --dry-run/--execute --budget-usd` 和 Status Output。
+- [x] 实现 `control-api` Translation Job Create/Status，实际工作由 `content-worker` 执行。
+- [x] 实现 GitHub Manual `workflow_dispatch` 的 Typed Input 与 OIDC Auth，不将 DB/AI/Host Credential 放入 Workflow。
+- [x] Translation 完成后只更新 Runtime State 并精确 Revalidate，不回写 GitHub。
 
 ### 本 Phase 明确不做什么
 
@@ -865,25 +865,25 @@ Translation Memory 和 Fallback 已证明不会意外消费成本，现在才能
 
 ### Tests / Verification
 
-- [ ] Dry-run 与 Public/Content Sync Path 的 Paid Call Count 为零。
-- [ ] Server-side Budget 在下一请求超限前停止，并保留已完成 Segment。
-- [ ] Retry/Partial/Failure 不破坏已有 Published Translation。
-- [ ] Manual Workflow 与 Local CLI 创建相同 Job Contract。
-- [ ] Capability Test 证明只有授权 Translation Actor 可 Execute。
-- [ ] Token/Cost/Provider/Model Audit 不包含 Secret。
+- [x] Dry-run 与 Public/Content Sync Path 的 Paid Call Count 为零。
+- [x] Server-side Budget 在下一请求超限前停止，并保留已完成 Segment。
+- [x] Retry/Partial/Failure 不破坏已有 Published Translation。
+- [x] Manual Workflow 与 Local CLI 创建相同 Job Contract。
+- [x] Capability Test 证明只有授权 Translation Actor 可 Execute。
+- [x] Token/Cost/Provider/Model Audit 不包含 Secret。
 
 ### Acceptance Criteria
 
-- [ ] Paid Translation 只能显式触发并受 Server-side Budget Enforcement。
-- [ ] Hash Hit 继续复用，Hash Miss/预算未覆盖部分保持 Pending/Fallback。
-- [ ] GitHub Content Push 和 Public Rendering 成本安全。
+- [x] Paid Translation 只能显式触发并受 Server-side Budget Enforcement。
+- [x] Hash Hit 继续复用，Hash Miss/预算未覆盖部分保持 Pending/Fallback。
+- [x] GitHub Content Push 和 Public Rendering 成本安全。
 
 ### Exit Gate
 
-- [ ] Fake Provider 全套测试通过；真实 Provider Contract Test 仅在显式非生产授权下通过。
-- [ ] Dry-run、Budget、Partial、Authz 和 Directionality Gate 全部通过。
-- [ ] 创建聚焦 Commit，建议：`feat(translation): complete phase 9 budgeted execution`。
-- [ ] Commit 后停止并向 Owner 报告，不自动进入 Phase 10。
+- [x] Fake Provider 全套测试通过；真实 Provider Contract Test 仅在显式非生产授权下通过。
+- [x] Dry-run、Budget、Partial、Authz 和 Directionality Gate 全部通过。
+- [x] 创建聚焦 Commit，建议：`feat(translation): complete phase 9 budgeted execution`。
+- [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 10。
 
 ### 本阶段完成后形成的 Artifact / Capability
 

@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { parseControlApiConfiguration } from '../../src/control-plane/configuration'
+import type { Capability } from '../../src/control-plane/contracts'
 import {
   initializeControlState,
   listControlAuditEvents,
@@ -21,7 +22,7 @@ afterEach(async () => {
   }
 })
 
-async function serverFixture(rateLimitPerMinute = 120) {
+async function serverFixture(rateLimitPerMinute = 120, capabilities?: readonly Capability[]) {
   const directory = mkdtempSync(join(tmpdir(), 'control-http-unit-'))
   const statePath = join(directory, 'control.db')
   initializeControlState(statePath, 'test')
@@ -33,7 +34,19 @@ async function serverFixture(rateLimitPerMinute = 120) {
     CONTROL_STATE_PATH: '/control-state/control.db',
     SITE_RUNTIME_MODE: 'test',
   })
-  const controlApi = createControlApiServer({ ...baseline, statePath })
+  const operator = baseline.authentication.operatorKeys[0]
+  if (!operator) throw new Error('Missing local operator fixture')
+  const controlApi = createControlApiServer({
+    ...baseline,
+    authentication:
+      capabilities === undefined
+        ? baseline.authentication
+        : {
+            ...baseline.authentication,
+            operatorKeys: [{ ...operator, capabilities: [...capabilities] }],
+          },
+    statePath,
+  })
   await new Promise<void>((resolve) => controlApi.server.listen(0, '127.0.0.1', resolve))
   const address = controlApi.server.address() as AddressInfo
   cleanup.push(async () => {
@@ -155,5 +168,31 @@ describe('independent control-api HTTP boundary', () => {
     expect(limited.status).toBe(429)
     expect(limited.headers.get('retry-after')).toBeTruthy()
     expect(limited.headers.get('cache-control')).toBe('no-store')
+  })
+
+  it('separates translation estimate and paid-execution capabilities', async () => {
+    const { base } = await serverFixture(120, ['translation:dry-run'])
+    const dryRun = await signedFetch(base, '/api/ops/translations', {
+      body: { force: false, mode: 'dry-run', scope: 'pending' },
+      idempotencyKey: 'translation:http:dry-run',
+      method: 'POST',
+      nonce: 'translation-http-dry-run-001',
+    })
+    expect(dryRun.status).toBe(503)
+    expect(dryRun.headers.get('cache-control')).toBe('no-store')
+
+    const execute = await signedFetch(base, '/api/ops/translations', {
+      body: {
+        budgetUsd: 0.5,
+        executionConfirmation: 'EXECUTE_PAID_TRANSLATION',
+        force: false,
+        mode: 'execute',
+        scope: 'pending',
+      },
+      idempotencyKey: 'translation:http:execute',
+      method: 'POST',
+      nonce: 'translation-http-execute-001',
+    })
+    expect(execute.status).toBe(403)
   })
 })

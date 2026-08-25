@@ -12,6 +12,32 @@ describe('site command boundary', () => {
       parseSiteCommand(['dev', 'reset', '--environment', 'local', '--confirm', 'RESET-LOCAL-DATA']),
     ).toEqual({ kind: 'dev-reset' })
     expect(parseSiteCommand([])).toEqual({ kind: 'help' })
+    expect(parseSiteCommand(['translate', 'pending', '--dry-run'])).toEqual({
+      action: 'create',
+      kind: 'translate',
+      request: { force: false, mode: 'dry-run', scope: 'pending' },
+    })
+    expect(
+      parseSiteCommand([
+        'translate',
+        'article',
+        'content/posts/example.md',
+        '--execute',
+        '--budget-usd',
+        '0.50',
+      ]),
+    ).toEqual({
+      action: 'create',
+      kind: 'translate',
+      request: {
+        articleSourcePath: 'content/posts/example.md',
+        budgetUsd: 0.5,
+        executionConfirmation: 'EXECUTE_PAID_TRANSLATION',
+        force: false,
+        mode: 'execute',
+        scope: 'article',
+      },
+    })
   })
 
   it('rejects unknown or ambiguous commands', () => {
@@ -21,6 +47,8 @@ describe('site command boundary', () => {
     expect(() =>
       parseSiteCommand(['dev', 'reset', '--environment', 'production', '--confirm', 'yes']),
     ).toThrow(SiteUsageError)
+    expect(() => parseSiteCommand(['translate', 'pending', '--execute'])).toThrow()
+    expect(() => parseSiteCommand(['translate', 'all', '--dry-run', '--force'])).toThrow()
   })
 
   it('pins the Node.js runtime', () => {

@@ -23,6 +23,7 @@ import {
   ownerDatasetPathSchema,
   ownerDatasetUpdateSchema,
   serviceIdentityContracts,
+  translationJobCreateSchema,
 } from './contracts'
 import {
   appendControlAuditEvent,
@@ -33,6 +34,11 @@ import {
   readControlState,
 } from './control-state'
 import { FixedWindowRateLimiter } from './rate-limit'
+import {
+  TranslationArticleNotFoundError,
+  TranslationControlRepository,
+  TranslationJobNotFoundError,
+} from './translation-jobs'
 
 const idempotencyKeySchema = z
   .string()
@@ -113,6 +119,28 @@ function routeShape(pathname: string) {
   }
   if (pathname === '/api/ops/application-jobs') {
     return Object.freeze({ allow: 'POST', kind: 'application-job-create' as const })
+  }
+  if (pathname === '/api/ops/translations') {
+    return Object.freeze({ allow: 'POST', kind: 'translation-create' as const })
+  }
+  if (pathname === '/api/ops/translations/status') {
+    return Object.freeze({ allow: 'GET', kind: 'translation-list' as const })
+  }
+  const translationCancellation = /^\/api\/ops\/translations\/([^/]+)\/cancel$/.exec(pathname)
+  if (translationCancellation?.[1]) {
+    return Object.freeze({
+      allow: 'POST',
+      id: translationCancellation[1],
+      kind: 'translation-cancel' as const,
+    })
+  }
+  const translationJob = /^\/api\/ops\/translations\/([^/]+)$/.exec(pathname)
+  if (translationJob?.[1]) {
+    return Object.freeze({
+      allow: 'GET',
+      id: translationJob[1],
+      kind: 'translation-read' as const,
+    })
   }
   const applicationJob = /^\/api\/ops\/application-jobs\/([^/]+)$/.exec(pathname)
   if (applicationJob?.[1]) {
@@ -199,6 +227,12 @@ function errorResponse(error: unknown): JsonResponse {
       status: 409,
     }
   }
+  if (
+    error instanceof TranslationArticleNotFoundError ||
+    error instanceof TranslationJobNotFoundError
+  ) {
+    return { body: { error: 'translation_job_not_found' }, status: 404 }
+  }
   if (error instanceof ApplicationJobStoreUnavailableError) {
     return { body: { error: 'application_job_store_unavailable' }, status: 503 }
   }
@@ -208,6 +242,9 @@ function errorResponse(error: unknown): JsonResponse {
 export function createControlApiServer(configuration: ControlApiConfiguration) {
   const applicationJobs = configuration.databaseUrl
     ? new ApplicationJobRepository(configuration.databaseUrl)
+    : null
+  const translationJobs = configuration.databaseUrl
+    ? new TranslationControlRepository(configuration.databaseUrl)
     : null
   const rateLimiter = new FixedWindowRateLimiter(configuration.rateLimitPerMinute)
 
@@ -347,6 +384,66 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
           )
           return
         }
+        case 'translation-create': {
+          const parsedBody = translationJobCreateSchema.parse(
+            parseJsonBody(body, headers.get('content-type')),
+          )
+          const capability =
+            parsedBody.mode === 'dry-run' ? 'translation:dry-run' : 'translation:execute'
+          requireCapability(actor, capability)
+          if (!translationJobs) {
+            throw new ApplicationJobStoreUnavailableError('Database is not configured')
+          }
+          const idempotencyKey = idempotencyKeySchema.parse(headers.get('idempotency-key'))
+          auditAuthorization(configuration, actor, capability, request.method, url.pathname)
+          const result = await translationJobs.create(parsedBody, actor, idempotencyKey)
+          sendJson(response, { body: result, status: result.created ? 202 : 200 })
+          return
+        }
+        case 'translation-list': {
+          requireCapability(actor, 'translation:read')
+          if (!translationJobs) {
+            throw new ApplicationJobStoreUnavailableError('Database is not configured')
+          }
+          auditAuthorization(configuration, actor, 'translation:read', request.method, url.pathname)
+          const jobs = await translationJobs.list(url.searchParams.get('limit') ?? 10)
+          sendJson(response, { body: { jobs }, status: 200 })
+          return
+        }
+        case 'translation-read': {
+          requireCapability(actor, 'translation:read')
+          if (!translationJobs) {
+            throw new ApplicationJobStoreUnavailableError('Database is not configured')
+          }
+          auditAuthorization(configuration, actor, 'translation:read', request.method, url.pathname)
+          const job = await translationJobs.get(route.id)
+          sendJson(
+            response,
+            job
+              ? { body: { job }, status: 200 }
+              : { body: { error: 'translation_job_not_found' }, status: 404 },
+          )
+          return
+        }
+        case 'translation-cancel': {
+          requireCapability(actor, 'translation:cancel')
+          if (!translationJobs) {
+            throw new ApplicationJobStoreUnavailableError('Database is not configured')
+          }
+          z.object({})
+            .strict()
+            .parse(parseJsonBody(body, headers.get('content-type')))
+          auditAuthorization(
+            configuration,
+            actor,
+            'translation:cancel',
+            request.method,
+            url.pathname,
+          )
+          const job = await translationJobs.cancel(route.id, actor)
+          sendJson(response, { body: { job }, status: 200 })
+          return
+        }
         case 'infrastructure-operation-create': {
           requireCapability(actor, 'infrastructure-operation:create')
           const operationRequest = infrastructureOperationRequestSchema.parse(
@@ -442,7 +539,7 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
 
   return Object.freeze({
     close: async () => {
-      await applicationJobs?.close()
+      await Promise.all([applicationJobs?.close(), translationJobs?.close()])
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()))
       })

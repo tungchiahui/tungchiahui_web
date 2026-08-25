@@ -111,6 +111,8 @@ Local CLI Control 应指向 Public Site Control Namespace，而不是直接指�
 https://www.tungchiahui.cn/api/ops/*
 ```
 
+Phase 9 CLI 使用 `SITE_CONTROL_API_URL`；远程 Human Operator 通过 `SITE_OPERATOR_KEY_ID` 和仓库外 `SITE_OPERATOR_PRIVATE_KEY_PATH` 指向 Ed25519 JWK。Loopback Local/Test 使用固定测试签名，GitHub Actions 使用短期 OIDC。以上 Client 都不读取 Production Database 或 Translation Provider Secret。Production Provider Credential 只允许在 `content-worker` Runtime 注入；具体 Provider 尚未由 Accepted ADR 选定，不得为便利把 Vendor Key 加入 Workflow 或 Developer 默认环境。
+
 ## GitHub Actions Credential
 
 在可行情况下，GitHub Actions 应优先使用短期 OIDC Credential 做 Production Control-plane Authentication。

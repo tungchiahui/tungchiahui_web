@@ -73,9 +73,11 @@ OpenResty 将该 Namespace 直接路由到独立 `control-api`，不经过 Next.
 ./site translate changed --dry-run
 ./site translate article <source-path> --dry-run
 ./site translate status
+./site translate status <job-id>
+./site translate cancel <job-id>
 ```
 
-该命令创建/查询 Production-side Translation Job，不直接连接 Production PostgreSQL。
+Force 重译还要求 `--force --confirm-retranslation RETRANSLATE`。Execute 模式在请求 Contract 中加入显式 Paid Confirmation；Operator CLI 不直接连接 Production PostgreSQL，也不持有 Provider Credential。输出为结构化 JSON，包含 Job、Estimate、Progress、Usage/Cost 与 Error State，供 Human/Workflow 使用可靠 Exit Code 处理。
 
 ### Deployment
 

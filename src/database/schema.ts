@@ -15,6 +15,7 @@ import {
 import {
   ingestionRunStatusValues,
   localeValues,
+  translationExecutionModeValues,
   translationJobStatusValues,
   translationScopeValues,
   translationSegmentStatusValues,
@@ -31,6 +32,10 @@ export const translationSegmentStatusEnum = applicationSchema.enum(
 export const translationJobStatusEnum = applicationSchema.enum(
   'translation_job_status',
   translationJobStatusValues,
+)
+export const translationExecutionModeEnum = applicationSchema.enum(
+  'translation_execution_mode',
+  translationExecutionModeValues,
 )
 export const ingestionRunStatusEnum = applicationSchema.enum(
   'ingestion_run_status',
@@ -167,9 +172,11 @@ export const translationJobs = applicationSchema.table(
       .primaryKey()
       .references(() => operationalJobs.id, { onDelete: 'cascade' }),
     status: translationJobStatusEnum().notNull().default('queued'),
+    executionMode: translationExecutionModeEnum('execution_mode').notNull().default('dry-run'),
     scope: translationScopeEnum().notNull(),
     documentId: uuid('document_id').references(() => documents.id, { onDelete: 'set null' }),
     requestedBy: text('requested_by').notNull(),
+    force: boolean().notNull().default(false),
     budgetUsd: numeric('budget_usd', { precision: 12, scale: 6 }).notNull(),
     estimatedInputTokens: integer('estimated_input_tokens').notNull().default(0),
     estimatedOutputTokens: integer('estimated_output_tokens').notNull().default(0),
@@ -179,6 +186,10 @@ export const translationJobs = applicationSchema.table(
     actualInputTokens: integer('actual_input_tokens').notNull().default(0),
     actualOutputTokens: integer('actual_output_tokens').notNull().default(0),
     actualCostUsd: numeric('actual_cost_usd', { precision: 12, scale: 6 }).notNull().default('0'),
+    providerRequestCount: integer('provider_request_count').notNull().default(0),
+    completedSegmentCount: integer('completed_segment_count').notNull().default(0),
+    remainingSegmentCount: integer('remaining_segment_count').notNull().default(0),
+    cancelRequestedAt: timestamp('cancel_requested_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     startedAt: timestamp('started_at', { withTimezone: true }),
     finishedAt: timestamp('finished_at', { withTimezone: true }),
@@ -196,6 +207,18 @@ export const translationJobs = applicationSchema.table(
     check('translation_jobs_actual_input_nonnegative', sql`${table.actualInputTokens} >= 0`),
     check('translation_jobs_actual_output_nonnegative', sql`${table.actualOutputTokens} >= 0`),
     check('translation_jobs_actual_cost_nonnegative', sql`${table.actualCostUsd} >= 0`),
+    check(
+      'translation_jobs_provider_requests_nonnegative',
+      sql`${table.providerRequestCount} >= 0`,
+    ),
+    check(
+      'translation_jobs_completed_segments_nonnegative',
+      sql`${table.completedSegmentCount} >= 0`,
+    ),
+    check(
+      'translation_jobs_remaining_segments_nonnegative',
+      sql`${table.remainingSegmentCount} >= 0`,
+    ),
     check(
       'translation_jobs_article_scope_document',
       sql`(${table.scope} = 'article' AND ${table.documentId} IS NOT NULL) OR (${table.scope} <> 'article' AND ${table.documentId} IS NULL)`,

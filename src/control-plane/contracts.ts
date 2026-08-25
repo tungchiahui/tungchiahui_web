@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { applicationJobRequestSchema, ownerDatasetKeySchema } from '../domain/persistence'
+import { translationOperationRequestSchema } from '../translation/contracts'
 
 export const capabilityValues = [
   'status:read',
@@ -9,6 +10,10 @@ export const capabilityValues = [
   'infrastructure-operation:create',
   'infrastructure-operation:read',
   'owner-dataset:write',
+  'translation:dry-run',
+  'translation:execute',
+  'translation:read',
+  'translation:cancel',
 ] as const
 
 export const actorKindValues = ['operator', 'github-actions', 'service'] as const
@@ -208,6 +213,7 @@ export const ownerDatasetUpdateSchema = z.discriminatedUnion('datasetKey', [
 
 export const ownerDatasetPathSchema = ownerDatasetKeySchema
 export const applicationJobCreateSchema = applicationJobRequestSchema
+export const translationJobCreateSchema = translationOperationRequestSchema
 
 export type InfrastructureOperationRequest = z.infer<typeof infrastructureOperationRequestSchema>
 export type OwnerDatasetUpdate = z.infer<typeof ownerDatasetUpdateSchema>

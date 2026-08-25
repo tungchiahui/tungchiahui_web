@@ -18,6 +18,7 @@ export const translationJobStatusValues = [
   'failed',
   'cancelled',
 ] as const
+export const translationExecutionModeValues = ['dry-run', 'execute'] as const
 export const applicationJobTypeValues = [
   'content_sync',
   'translation',
@@ -40,6 +41,7 @@ export const localeSchema = z.enum(localeValues)
 export const contentTypeSchema = z.enum(contentTypeValues)
 export const translationSegmentStatusSchema = z.enum(translationSegmentStatusValues)
 export const translationJobStatusSchema = z.enum(translationJobStatusValues)
+export const translationExecutionModeSchema = z.enum(translationExecutionModeValues)
 export const applicationJobTypeSchema = z.enum(applicationJobTypeValues)
 export const applicationJobStatusSchema = z.enum(applicationJobStatusValues)
 export const ingestionRunStatusSchema = z.enum(ingestionRunStatusValues)
@@ -51,6 +53,7 @@ export type Locale = z.infer<typeof localeSchema>
 export type ContentType = z.infer<typeof contentTypeSchema>
 export type TranslationSegmentStatus = z.infer<typeof translationSegmentStatusSchema>
 export type TranslationJobStatus = z.infer<typeof translationJobStatusSchema>
+export type TranslationExecutionMode = z.infer<typeof translationExecutionModeSchema>
 export type ApplicationJobType = z.infer<typeof applicationJobTypeSchema>
 export type ApplicationJobStatus = z.infer<typeof applicationJobStatusSchema>
 export type IngestionRunStatus = z.infer<typeof ingestionRunStatusSchema>

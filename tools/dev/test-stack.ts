@@ -4,6 +4,7 @@ import { basename, join, resolve } from 'node:path'
 
 import { z } from 'zod'
 import { verifyPhase5Ingestion } from '../content/test-ingestion'
+import { verifyPhase9Translation } from '../translation/test-execution'
 import { verifyPhase6Revalidation } from '../web/test-revalidation'
 import { assertDockerPrerequisites, ComposeProject } from './compose'
 import { documentedLocalCredentials, parseLocalInfrastructureConfig } from './config'
@@ -35,6 +36,11 @@ const controlStatusSchema = z.object({
 const applicationJobResponseSchema = z.object({
   created: z.boolean(),
   job: z.object({ id: z.uuid(), jobType: z.literal('content_sync') }),
+})
+
+const translationJobResponseSchema = z.object({
+  created: z.boolean(),
+  job: z.object({ id: z.uuid() }),
 })
 
 function requireHardenedLocalService(compose: ComposeProject, service: string) {
@@ -201,6 +207,47 @@ async function verifyApplicationJobBoundary(controlApiUrl: URL) {
   return created.job.id
 }
 
+async function verifyTranslationJobBoundary(controlApiUrl: URL) {
+  const body = { force: false, mode: 'dry-run', scope: 'pending' }
+  const createResponse = await signedFetch(controlApiUrl, '/api/ops/translations', {
+    body,
+    idempotencyKey: 'integration:translation:dry-run:001',
+    method: 'POST',
+    nonce: 'integration-translation-create-001',
+  })
+  if (createResponse.status !== 202) {
+    throw new Error(`Translation Job creation returned HTTP ${createResponse.status}`)
+  }
+  const created = translationJobResponseSchema.parse((await createResponse.json()) as unknown)
+  const duplicateResponse = await signedFetch(controlApiUrl, '/api/ops/translations', {
+    body,
+    idempotencyKey: 'integration:translation:dry-run:001',
+    method: 'POST',
+    nonce: 'integration-translation-create-002',
+  })
+  const duplicate = translationJobResponseSchema.parse((await duplicateResponse.json()) as unknown)
+  if (
+    duplicateResponse.status !== 200 ||
+    duplicate.created ||
+    duplicate.job.id !== created.job.id
+  ) {
+    throw new Error('Translation Job idempotency did not return the original durable job')
+  }
+  const queried = await signedFetch(controlApiUrl, `/api/ops/translations/${created.job.id}`, {
+    nonce: 'integration-translation-query-001',
+  })
+  if (!queried.ok) {
+    throw new Error(`Translation Job query returned HTTP ${queried.status}`)
+  }
+  const listed = await signedFetch(controlApiUrl, '/api/ops/translations/status', {
+    nonce: 'integration-translation-list-001',
+  })
+  if (!listed.ok) {
+    throw new Error(`Translation Job list returned HTTP ${listed.status}`)
+  }
+  return created.job.id
+}
+
 async function verifyOpenRestyAndFailureBoundaries(
   compose: ComposeProject,
   controlApiUrl: URL,
@@ -306,7 +353,7 @@ function runPlaywright(siteBaseUrl: URL) {
 async function run() {
   assertDockerPrerequisites()
   const repositoryRoot = process.cwd()
-  const temporaryRoot = mkdtempSync(join(tmpdir(), 'tungchiahui-phase8-'))
+  const temporaryRoot = mkdtempSync(join(tmpdir(), 'tungchiahui-phase9-'))
   const suffix = basename(temporaryRoot)
     .replaceAll(/[^a-z0-9]/g, '')
     .slice(-12)
@@ -380,7 +427,9 @@ async function run() {
     const firstContentJobId = await verifyApplicationJobBoundary(configuration.controlApiUrl)
     await verifyPhase5Ingestion(configuration.databaseUrl.toString(), firstContentJobId)
     await verifyPhase6Revalidation(configuration.databaseUrl.toString(), configuration.siteBaseUrl)
+    const firstTranslationJobId = await verifyTranslationJobBoundary(configuration.controlApiUrl)
     runPlaywright(configuration.siteBaseUrl)
+    await verifyPhase9Translation(configuration.databaseUrl.toString(), firstTranslationJobId)
     const restartedControlApiUrl = await verifyControlStatePersistence(
       compose,
       configuration.controlApiUrl,

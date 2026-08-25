@@ -123,6 +123,8 @@ Phase 6 在此基础上增加缓存副作用 Failure Gate：预热 Route Cache�
 
 Phase 8 增加 Semantic-block/Translation Memory Gate：位置变化不改变身份；AST/Code/URL/Identifier 必须保持；Hash Hit 全局复用；Hash Miss Pending；局部 Change 只回退当前 Block；Superseded Pending 变 Stale；Targeted Patch Context 保留；同 Snapshot/Delta 重放不重复 Row、Mapping 或 Hook。真实 Public E2E 同时覆盖 full fallback 与 mixed en-US State。所有这些 Path 结构上不导入 Provider，并记录 `providerCalls: 0`。
 
+Phase 9 在同一 Disposable Stack 增加 Control API Translation Create/Idempotency/Read/List、四种 Scope、Force Confirmation、Dry-run 零调用、逐请求 Budget Stop/Partial、Cancellation、Provider Failure Retry、Revalidation Failure Resume、Published reviewed Translation Preservation，以及 Token/Cost/Provider/Model Audit。Phase 9 数据变更在 Public E2E 之后运行，避免测试互相污染。Automated Suite 只使用 Fake Provider；真实 Provider Contract Test 必须先获得明确的非生产 Target 与付费授权。
+
 ## Deployment Pipeline Test
 
 验证 Web Application Repository 的 `main` Workflow 必须在全部 CI Quality Gates 通过后才 Build Git-SHA-tagged Immutable Image，并调用与 `./site deploy` 相同的 Control Plane/Deployment Engine。验证 Content Repository Push 只触发 Content Sync，不触发 Next.js Build 或 Blue-Green Deployment。

@@ -52,6 +52,8 @@
 - `docs/development/phase-7-verification-report.md`
 - `docs/development/phase-8-translation-memory.md`
 - `docs/development/phase-8-verification-report.md`
+- `docs/development/phase-9-budgeted-translation.md`
+- `docs/development/phase-9-verification-report.md`
 - `docs/development/testing-strategy.md`
 - `docs/migration/nuxt-to-next.md`
 - `docs/migration/legacy-discovery-baseline.md`

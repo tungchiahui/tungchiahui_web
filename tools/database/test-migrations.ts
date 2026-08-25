@@ -138,8 +138,12 @@ async function assertRoleBoundary(connectionString: string) {
     const controlRole = await client.query<{
       can_delete_documents: boolean
       can_insert_jobs: boolean
+      can_select_documents: boolean
+      can_update_job_status: boolean
       can_update_datasets: boolean
       can_update_jobs: boolean
+      can_update_translation_cancel: boolean
+      can_update_translation_jobs: boolean
       rolcreatedb: boolean
       rolcreaterole: boolean
       rolreplication: boolean
@@ -152,6 +156,10 @@ async function assertRoleBoundary(connectionString: string) {
         rolreplication,
         has_table_privilege('site_control_api', 'app.operational_jobs', 'INSERT') AS can_insert_jobs,
         has_table_privilege('site_control_api', 'app.operational_jobs', 'UPDATE') AS can_update_jobs,
+        has_column_privilege('site_control_api', 'app.operational_jobs', 'status', 'UPDATE') AS can_update_job_status,
+        has_table_privilege('site_control_api', 'app.translation_jobs', 'UPDATE') AS can_update_translation_jobs,
+        has_column_privilege('site_control_api', 'app.translation_jobs', 'cancel_requested_at', 'UPDATE') AS can_update_translation_cancel,
+        has_table_privilege('site_control_api', 'app.documents', 'SELECT') AS can_select_documents,
         has_table_privilege('site_control_api', 'app.owner_managed_datasets', 'UPDATE') AS can_update_datasets,
         has_table_privilege('site_control_api', 'app.documents', 'DELETE') AS can_delete_documents
        FROM pg_roles
@@ -166,6 +174,10 @@ async function assertRoleBoundary(connectionString: string) {
       control.rolreplication ||
       !control.can_insert_jobs ||
       control.can_update_jobs ||
+      !control.can_update_job_status ||
+      control.can_update_translation_jobs ||
+      !control.can_update_translation_cancel ||
+      !control.can_select_documents ||
       !control.can_update_datasets ||
       control.can_delete_documents
     ) {
@@ -206,6 +218,22 @@ async function assertDatabaseConstraints(connectionString: string) {
         (document_id, locale, translated_markdown, translation_hash, translation_version)
        VALUES
         ('10000000-0000-4000-8000-000000000001', 'zh-hant', 'invalid', '${'d'.repeat(64)}', 1)`,
+    )
+    await client.query(
+      `INSERT INTO app.operational_jobs
+        (id, job_type, status, requested_by, idempotency_key, payload, progress)
+       VALUES
+        ('60000000-0000-4000-8000-000000000003', 'translation', 'queued', 'test', 'invalid-translation-count', '{}', '{}')`,
+    )
+    await expectQueryFailure(
+      client,
+      `INSERT INTO app.translation_jobs
+        (id, scope, requested_by, budget_usd, provider_request_count)
+       VALUES
+        ('60000000-0000-4000-8000-000000000003', 'pending', 'test', 1, -1)`,
+    )
+    await client.query(
+      "DELETE FROM app.operational_jobs WHERE id = '60000000-0000-4000-8000-000000000003'",
     )
   } finally {
     await client.end()
@@ -261,7 +289,7 @@ async function run() {
     const cleanUrl = databaseUrl(postgresPort)
 
     const clean = await runPostgresMigrations(cleanUrl, { repositoryRoot })
-    if (clean.migrationCount !== 4) {
+    if (clean.migrationCount !== 5) {
       throw new Error('Empty database did not reach the latest migration')
     }
     const repeated = await runPostgresMigrations(cleanUrl, { repositoryRoot })
@@ -311,21 +339,31 @@ async function run() {
     try {
       const result = await upgradedClient.query<{
         preserved: boolean
+        translation_execution: boolean
         translation_table: string | null
       }>(
         `SELECT
           EXISTS (SELECT 1 FROM app.documents WHERE id = $1) AS preserved,
+          EXISTS (
+            SELECT 1 FROM information_schema.columns
+             WHERE table_schema = 'app' AND table_name = 'translation_jobs'
+               AND column_name = 'execution_mode'
+          ) AS translation_execution,
           to_regclass('app.document_translation_segments')::text AS translation_table`,
         [previous.fixture.representativeDocument.id],
       )
-      if (!result.rows[0]?.preserved || result.rows[0].translation_table === null) {
+      if (
+        !result.rows[0]?.preserved ||
+        !result.rows[0].translation_execution ||
+        result.rows[0].translation_table === null
+      ) {
         throw new Error('Previous production-like schema did not upgrade while preserving data')
       }
     } finally {
       await upgradedClient.end()
     }
 
-    console.log('PostgreSQL migration suite: PASS (through Phase 8)')
+    console.log('PostgreSQL migration suite: PASS (through Phase 9)')
   } finally {
     if (stackStarted) {
       compose.down(true)
