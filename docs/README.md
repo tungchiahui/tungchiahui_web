@@ -122,6 +122,11 @@ docs/planning/implementation-plan.md
 - `development/phase-13-tested-recovery.md` — pgBackRest Policy、Repository 决策、双副本、PITR、SQLite 与 Break-glass Recovery Contract。
 - `development/phase-13-verification-report.md` — Disposable Restore Drill、PG-down、R2、Control-state、安全失败与质量 Gate 证据。
 
+## Phase 14 Shared Blue-Green Deployment
+
+- `development/phase-14-blue-green-deployment.md` — Shared Engine、SQLite Phase/Cutover Intent、Migration/Smoke、Atomic OpenResty 与 Rollback Contract。
+- `development/phase-14-verification-report.md` — Production-like Blue-Green、Failure、Crash Reconcile、PG-down、Migration Compatibility 与完整质量 Gate 证据。
+
 ## Current implementation handoff
 
 - `planning/current-state.md` — 已完成 Phase、实际能力、Stub/Fake、已知限制、Legacy 回查规则与下一 Phase Prerequisite。

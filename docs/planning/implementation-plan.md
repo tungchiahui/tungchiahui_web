@@ -1,7 +1,7 @@
 # Website V2 分阶段实施计划
 
-> Status: In progress — Phase 0–13 complete
-> Current Phase: Awaiting Owner authorization for Phase 14
+> Status: In progress — Phase 0–14 complete
+> Current Phase: Awaiting Owner authorization for Phase 15
 > Execution Model: Hard-gated, one Phase at a time
 > Scope: 从新的 Next.js V2 Repository 基线推进到替换旧 Nuxt Production Site
 
@@ -23,7 +23,7 @@
 - [x] Phase 11 — S3-compatible Asset Contract（AList Evidence）
 - [x] Phase 12 — Production Infrastructure、Ansible 与 Container Hardening
 - [x] Phase 13 — Backup、PITR 与 PostgreSQL-independent Recovery
-- [ ] Phase 14 — Shared Deployment Engine 与 Full Blue-Green
+- [x] Phase 14 — Shared Deployment Engine 与 Full Blue-Green
 - [ ] Phase 15 — GitHub Actions OIDC 与 `main` 自动部署
 - [ ] Phase 16 — Observability、Security 与 Production Readiness
 - [ ] Phase 17 — Planned PostgreSQL / Server Migration Readiness
@@ -1247,18 +1247,18 @@ Production-like Infrastructure 已存在，但在可恢复性经过真实 Drill 
 
 ### Task Checklist
 
-- [ ] 实现只接受 Git SHA/固定 Digest 的 Immutable Image Identity，拒绝 `latest`。
-- [ ] 实现 Active/Inactive Detection、Target Slot、Previous Rollback Target 和 Stabilization Window。
-- [ ] 在 SQLite 持久化 Operation Phase、Current/Last SHA、Digest、Lock/Lease、Actor 和 Audit。
-- [ ] 实现统一 Deployment Engine，供 `control-api`、`./site deploy` 和后续 GitHub Actions 调用。
-- [ ] 实现 `deploy-agent` 的受控 Docker/Compose、Migration、OpenResty Validate/Reload Capability。
-- [ ] 实现 Migration Metadata、Fresh Recoverable Backup Policy、Expand/Contract Compatibility Preflight。
-- [ ] 启动 Inactive Slot 并验证 `/api/health`、`/api/ready`、`/api/version`。
-- [ ] 执行 Homepage、Article、Locale、Search、Static Asset 的 Pre-cutover Smoke。
-- [ ] 原子切换 OpenResty，执行真实 Entry 的 Post-cutover Smoke。
-- [ ] Post-cutover Failure 时在 Schema 兼容条件下切回 Previous Slot，不 Rebuild Image。
-- [ ] 实现 Restart Reconciliation、Failed Candidate Cleanup、Concurrent Deploy Rejection 和 Evidence Retention。
-- [ ] 实现 PostgreSQL Down 时仍可查询状态、创建基础 Deploy/Rollback Operation，并明确依赖失败。
+- [x] 实现只接受 Git SHA/固定 Digest 的 Immutable Image Identity，拒绝 `latest`。
+- [x] 实现 Active/Inactive Detection、Target Slot、Previous Rollback Target 和 Stabilization Window。
+- [x] 在 SQLite 持久化 Operation Phase、Current/Last SHA、Digest、Lock/Lease、Actor 和 Audit。
+- [x] 实现统一 Deployment Engine，供 `control-api`、`./site deploy` 和后续 GitHub Actions 调用。
+- [x] 实现 `deploy-agent` 的受控 Docker/Compose、Migration、OpenResty Validate/Reload Capability。
+- [x] 实现 Migration Metadata、Fresh Recoverable Backup Policy、Expand/Contract Compatibility Preflight。
+- [x] 启动 Inactive Slot 并验证 `/api/health`、`/api/ready`、`/api/version`。
+- [x] 执行 Homepage、Article、Locale、Search、Static Asset 的 Pre-cutover Smoke。
+- [x] 原子切换 OpenResty，执行真实 Entry 的 Post-cutover Smoke。
+- [x] Post-cutover Failure 时在 Schema 兼容条件下切回 Previous Slot，不 Rebuild Image。
+- [x] 实现 Restart Reconciliation、Failed Candidate Cleanup、Concurrent Deploy Rejection 和 Evidence Retention。
+- [x] 实现 PostgreSQL Down 时仍可查询状态、创建基础 Deploy/Rollback Operation，并明确依赖失败。
 
 ### 本 Phase 明确不做什么
 
@@ -1268,26 +1268,26 @@ Production-like Infrastructure 已存在，但在可恢复性经过真实 Drill 
 
 ### Tests / Verification
 
-- [ ] Inactive Deployment Failure 不影响 Active Slot。
-- [ ] Health/Ready/Version 与全部 Pre/Post Smoke Gate 通过。
-- [ ] OpenResty Invalid Config 不 Reload、不切流。
-- [ ] Rollback 切回保留 Image，过程中不 Rebuild。
-- [ ] Blue/Green Schema Overlap 与 Previous-schema Migration Test 通过。
-- [ ] Crash 在 Start/Migrate/Pre-switch/Post-switch 各 Phase 后可安全 Reconcile。
-- [ ] Permission Test 证明只有 `deploy-agent` 有受控 Docker/OpenResty Capability。
+- [x] Inactive Deployment Failure 不影响 Active Slot。
+- [x] Health/Ready/Version 与全部 Pre/Post Smoke Gate 通过。
+- [x] OpenResty Invalid Config 不 Reload、不切流。
+- [x] Rollback 切回保留 Image，过程中不 Rebuild。
+- [x] Blue/Green Schema Overlap 与 Previous-schema Migration Test 通过。
+- [x] Crash 在 Start/Migrate/Pre-switch/Post-switch 各 Phase 后可安全 Reconcile。
+- [x] Permission Test 证明只有 `deploy-agent` 有受控 Docker/OpenResty Capability。
 
 ### Acceptance Criteria
 
-- [ ] 手工 `./site deploy <sha>` 与 `rollback` 使用同一可审计 State Machine。
-- [ ] Cutover 前后 Smoke、Failure/Abort/Rollback 行为 Deterministic。
-- [ ] Previous Slot 在 Rollback Window 内完整保留。
+- [x] 手工 `./site deploy <sha>` 与 `rollback` 使用同一可审计 State Machine。
+- [x] Cutover 前后 Smoke、Failure/Abort/Rollback 行为 Deterministic。
+- [x] Previous Slot 在 Rollback Window 内完整保留。
 
 ### Exit Gate
 
-- [ ] Production-like Blue-Green、Failure Injection、Crash Recovery、Migration Compatibility 与 Rollback Gate 全部通过。
-- [ ] 尚未执行旧站 Production Cutover。
-- [ ] 创建聚焦 Commit，建议：`feat(deploy): complete phase 14 blue-green engine`。
-- [ ] Commit 后停止并向 Owner 报告，不自动进入 Phase 15。
+- [x] Production-like Blue-Green、Failure Injection、Crash Recovery、Migration Compatibility 与 Rollback Gate 全部通过。
+- [x] 尚未执行旧站 Production Cutover。
+- [x] 创建聚焦 Commit，建议：`feat(deploy): complete phase 14 blue-green engine`。
+- [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 15。
 
 ### 本阶段完成后形成的 Artifact / Capability
 

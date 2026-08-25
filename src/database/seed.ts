@@ -42,7 +42,7 @@ export async function seedDevelopmentDatabase(connectionString: string) {
     title: 'Phase 3 Development Seed',
     rawFrontmatter: { title: 'Phase 3 Development Seed', path: '/blog/phase-3-seed' },
     rawMarkdown:
-      '# Phase 6 Development Seed\n\nDeterministic local content with `inline-code`.\n\n## Asset\n\n![Local fixture](/api/assets/fixtures/phase-6.svg)\n\n```ts\nconst phase = 6\n```',
+      '# Phase 6 Development Seed\n\nDeterministic local content with `inline-code` and `ROS2_Control`.\n\n## Asset\n\n![Local fixture](/api/assets/fixtures/phase-6.svg)\n\n```ts\nconst phase = 6\n```',
     sourceHash,
     routePath: '/blog/phase-3-seed',
     sourceUpdatedAt: seedTimestamp,

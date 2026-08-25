@@ -33,6 +33,7 @@ import {
   getInfrastructureOperation,
   listRecoveryBackups,
   readControlState,
+  readDeploymentState,
 } from './control-state'
 import { FixedWindowRateLimiter } from './rate-limit'
 import {
@@ -126,6 +127,12 @@ function routeShape(pathname: string) {
   }
   if (pathname === '/api/ops/backups/status') {
     return Object.freeze({ allow: 'GET', kind: 'backup-list' as const })
+  }
+  if (pathname === '/api/ops/deployments') {
+    return Object.freeze({ allow: 'POST', kind: 'deployment-create' as const })
+  }
+  if (pathname === '/api/ops/rollbacks') {
+    return Object.freeze({ allow: 'POST', kind: 'rollback-create' as const })
   }
   if (pathname === '/api/ops/restores') {
     return Object.freeze({ allow: 'POST', kind: 'restore-create' as const })
@@ -344,13 +351,81 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
             body: {
               applicationJobs: availability,
               controlState: readControlState(configuration.statePath),
-              deployAgent: 'fake',
+              deployment: readDeploymentState(configuration.statePath),
+              deployAgent: configuration.mode === 'production' ? 'phase-14' : 'fake',
               identityContracts: serviceIdentityContracts,
               mode: configuration.mode,
-              productionOperations: false,
+              productionOperations: configuration.mode === 'production',
             },
             status: 200,
           })
+          return
+        }
+        case 'deployment-create': {
+          requireCapability(actor, 'infrastructure-operation:create')
+          const input = z
+            .object({
+              gitSha: z.string().regex(/^[a-f0-9]{40}$/),
+              imageDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+              reason: z.string().trim().min(1).max(1_000),
+            })
+            .strict()
+            .parse(parseJsonBody(body, headers.get('content-type')))
+          const operationRequest = infrastructureOperationRequestSchema.parse({
+            operationType: 'deploy',
+            reason: input.reason,
+            target: { gitSha: input.gitSha, imageDigest: input.imageDigest },
+          })
+          const idempotencyKey = idempotencyKeySchema.parse(headers.get('idempotency-key'))
+          auditAuthorization(
+            configuration,
+            actor,
+            'infrastructure-operation:create',
+            request.method,
+            url.pathname,
+          )
+          const result = createInfrastructureOperation(
+            configuration.statePath,
+            operationRequest,
+            actor,
+            idempotencyKey,
+          )
+          sendJson(response, { body: result, status: result.created ? 202 : 200 })
+          return
+        }
+        case 'rollback-create': {
+          requireCapability(actor, 'infrastructure-operation:create')
+          const input = z
+            .object({ reason: z.string().trim().min(1).max(1_000) })
+            .strict()
+            .parse(parseJsonBody(body, headers.get('content-type')))
+          const deployment = readDeploymentState(configuration.statePath)
+          if (deployment.lastSha === null || deployment.lastDigest === null) {
+            throw new HttpError(409, 'No retained rollback target is available')
+          }
+          const operationRequest = infrastructureOperationRequestSchema.parse({
+            operationType: 'rollback',
+            reason: input.reason,
+            target: {
+              targetDigest: deployment.lastDigest,
+              targetSha: deployment.lastSha,
+            },
+          })
+          const idempotencyKey = idempotencyKeySchema.parse(headers.get('idempotency-key'))
+          auditAuthorization(
+            configuration,
+            actor,
+            'infrastructure-operation:create',
+            request.method,
+            url.pathname,
+          )
+          const result = createInfrastructureOperation(
+            configuration.statePath,
+            operationRequest,
+            actor,
+            idempotencyKey,
+          )
+          sendJson(response, { body: result, status: result.created ? 202 : 200 })
           return
         }
         case 'application-job-create': {

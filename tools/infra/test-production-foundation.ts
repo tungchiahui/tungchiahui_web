@@ -6,6 +6,10 @@ import { join, resolve } from 'node:path'
 import { stringify } from 'yaml'
 import { z } from 'zod'
 
+import { seedDevelopmentDatabase } from '../../src/database/seed'
+import { SearchIndexRepository } from '../../src/search/repository'
+import { controlRequest } from '../control/client'
+
 const input = z
   .object({
     PHASE12_GIT_SHA: z.string().regex(/^[a-f0-9]{40}$/),
@@ -68,11 +72,19 @@ function execute(
 function composeEnvironment() {
   const socket = execute('stat', ['--format=%g', '/var/run/docker.sock']).stdout.trim()
   return {
+    TUNGCHIAHUI_BLUE_CONTAINER_NAME: `${projectName}-web-blue-1`,
+    TUNGCHIAHUI_BLUE_DEPLOYMENT_SHA: input.PHASE12_GIT_SHA,
     TUNGCHIAHUI_CONFIG_ROOT: configRoot,
     TUNGCHIAHUI_CONTENT_POLLING_ENABLED: 'false',
+    TUNGCHIAHUI_CONTROL_RATE_LIMIT_PER_MINUTE: '1000',
     TUNGCHIAHUI_DATA_ROOT: dataRoot,
-    TUNGCHIAHUI_DEPLOYMENT_SHA: input.PHASE12_GIT_SHA,
+    TUNGCHIAHUI_DEPLOYMENT_BACKUP_MAX_AGE_SECONDS: '86400',
+    TUNGCHIAHUI_DEPLOYMENT_STABILIZATION_SECONDS: '0',
     TUNGCHIAHUI_DOCKER_SOCKET_GID: socket,
+    TUNGCHIAHUI_GREEN_CONTAINER_NAME: `${projectName}-web-green-1`,
+    TUNGCHIAHUI_GREEN_DEPLOYMENT_SHA: input.PHASE12_GIT_SHA,
+    TUNGCHIAHUI_MIGRATION_CONTAINER_NAME: `${projectName}-database-migrate-1`,
+    TUNGCHIAHUI_OPENRESTY_CONTAINER_NAME: `${projectName}-openresty-1`,
     TUNGCHIAHUI_ORIGIN_PORT: String(input.PHASE12_ORIGIN_PORT),
     TUNGCHIAHUI_POSTGRES_CONTAINER_NAME: `${projectName}-postgres-1`,
     TUNGCHIAHUI_POSTGRES_IMAGE: postgresImage,
@@ -80,7 +92,8 @@ function composeEnvironment() {
     TUNGCHIAHUI_SEARCH_POLLING_ENABLED: 'false',
     TUNGCHIAHUI_SECRET_DIRECTORY: secretRoot,
     TUNGCHIAHUI_SERVICE_IMAGE: serviceImage,
-    TUNGCHIAHUI_WEB_IMAGE: webImage,
+    TUNGCHIAHUI_WEB_BLUE_IMAGE: webImage,
+    TUNGCHIAHUI_WEB_GREEN_IMAGE: webImage,
   }
 }
 
@@ -197,6 +210,9 @@ function createEncryptedSecret() {
       'SITE_MIGRATOR_LOGIN_NAME=site_migrator_login',
       `SITE_MIGRATOR_LOGIN_PASSWORD=${migratorPassword}`,
     ].join('\n'),
+    database_migrate_env: [
+      `DATABASE_URL=postgresql://site_migrator_login:${migratorPassword}@postgres:5432/tungchiahui`,
+    ].join('\n'),
     origin_certificate: readFileSync(certificatePath, 'utf8'),
     origin_private_key: readFileSync(privateKeyPath, 'utf8'),
     pgbouncer_userlist: [
@@ -247,7 +263,7 @@ function createEncryptedSecret() {
   ]) {
     expect(!encrypted.includes(password), 'SOPS output leaked a plaintext secret')
   }
-  return { identityPath }
+  return { identityPath, workerPassword }
 }
 
 function buildImages() {
@@ -312,8 +328,11 @@ function runProvision(identityPath: string) {
       tungchiahui_compose_project_name: projectName,
       tungchiahui_config_root: configRoot,
       tungchiahui_content_polling_enabled: 'false',
+      tungchiahui_control_rate_limit_per_minute: '1000',
       tungchiahui_data_root: dataRoot,
       tungchiahui_deployment_sha: input.PHASE12_GIT_SHA,
+      tungchiahui_deployment_backup_max_age_seconds: '86400',
+      tungchiahui_deployment_stabilization_seconds: '0',
       tungchiahui_install_packages: false,
       tungchiahui_manage_stack: true,
       tungchiahui_origin_port: String(input.PHASE12_ORIGIN_PORT),
@@ -546,6 +565,7 @@ function verifyRoutingAndIpFamilies() {
   compose(['start', 'web-blue', 'web-green'])
   compose(['stop', 'postgres'])
   curl([`https://127.0.0.1:${port}/api/ops/status`], 401)
+  compose(['start', 'postgres'])
   const config = readFileSync(join(configRoot, 'openresty.conf'), 'utf8')
   expect(config.includes('listen [::]:8443 ssl ipv6only=off;'), 'OpenResty is not dual-stack')
   expect(
@@ -559,42 +579,247 @@ function verifyRoutingAndIpFamilies() {
   )
 }
 
-const encrypted = createEncryptedSecret()
-buildImages()
+async function initializeDeploymentFixture(workerPassword: string) {
+  const migrationContainer = compose([
+    '--profile',
+    'deployment',
+    'ps',
+    '--all',
+    '--quiet',
+    'database-migrate',
+  ]).stdout.trim()
+  expect(migrationContainer.length > 0, 'Prepared migration container is missing')
+  compose(['--profile', 'deployment', 'start', 'database-migrate'])
+  const exitCode = execute('docker', ['wait', migrationContainer]).stdout.trim()
+  expect(exitCode === '0', `Initial migration runner exited with ${exitCode}`)
 
-try {
-  runProvision(encrypted.identityPath)
-  inspectHardening()
-  verifyDatabaseRoleBindings()
-  verifyRoutingAndIpFamilies()
-  console.log(
-    JSON.stringify({
-      ansibleIdempotency: 'pass',
-      containerHardening: 'pass',
-      databaseRoleSeparation: 'pass',
-      ipv4AndIpv6Origin: 'pass',
-      nextDownControlRoute: 'pass',
-      openRestyValidationAndReload: 'pass',
-      postgresDownControlRoute: 'pass',
-      productionTraffic: false,
-      secretInjection: 'sops-age-runtime-only',
-      status: 'pass',
+  const postgresContainer = compose(['ps', '--quiet', 'postgres']).stdout.trim()
+  const databaseNetwork = `${projectName}_database`
+  const postgresIp = execute('docker', [
+    'inspect',
+    '--format',
+    `{{(index .NetworkSettings.Networks "${databaseNetwork}").IPAddress}}`,
+    postgresContainer,
+  ]).stdout.trim()
+  const databaseUrl = `postgresql://site_content_worker_login:${workerPassword}@${postgresIp}:5432/tungchiahui`
+  await seedDevelopmentDatabase(databaseUrl)
+  const search = new SearchIndexRepository(databaseUrl)
+  try {
+    await search.reindexLocales(['zh-cn'])
+  } finally {
+    await search.close()
+  }
+}
+
+const operationResponseSchema = z.object({
+  operation: z
+    .object({ errorSummary: z.string().nullable().optional(), id: z.uuid(), status: z.string() })
+    .passthrough(),
+})
+
+async function waitForOperation(id: string) {
+  const deadline = Date.now() + 240_000
+  while (Date.now() < deadline) {
+    const response = operationResponseSchema.parse(
+      await controlRequest(`/api/ops/infrastructure-operations/${id}`, {
+        purpose: `phase14-operation-${id}`,
+      }),
+    )
+    if (response.operation.status === 'completed' || response.operation.status === 'failed') {
+      return response.operation
+    }
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 500))
+  }
+  throw new Error(`Deployment operation ${id} timed out`)
+}
+
+function publicVersion() {
+  const port = String(input.PHASE12_ORIGIN_PORT)
+  return z
+    .object({ gitSha: z.string(), slot: z.enum(['blue', 'green']) })
+    .passthrough()
+    .parse(
+      JSON.parse(
+        execute('curl', [
+          '--insecure',
+          '--noproxy',
+          '*',
+          '--silent',
+          `https://127.0.0.1:${port}/api/version`,
+        ]).stdout,
+      ) as unknown,
+    )
+}
+
+async function verifyBlueGreenDeployment() {
+  const controlContainer = compose(['ps', '--quiet', 'control-api']).stdout.trim()
+  const applicationNetwork = `${projectName}_application`
+  const controlIp = execute('docker', [
+    'inspect',
+    '--format',
+    `{{(index .NetworkSettings.Networks "${applicationNetwork}").IPAddress}}`,
+    controlContainer,
+  ]).stdout.trim()
+  process.env.SITE_CONTROL_API_URL = `http://${controlIp}:8080`
+  process.env.SITE_OPERATOR_KEY_ID = 'phase12-test-operator'
+  process.env.SITE_OPERATOR_PRIVATE_KEY_PATH = join(workRoot, 'operator-private.json')
+
+  const digest = execute('docker', [
+    'image',
+    'inspect',
+    '--format',
+    '{{.Id}}',
+    webImage,
+  ]).stdout.trim()
+  const candidateSha = 'c'.repeat(40)
+  const created = operationResponseSchema.parse(
+    await controlRequest('/api/ops/deployments', {
+      body: { gitSha: candidateSha, imageDigest: digest, reason: 'Phase 14 production-like gate' },
+      idempotencyKey: 'phase14-production-like-deployment-001',
+      method: 'POST',
+      purpose: 'phase14-deployment-create',
     }),
   )
-} catch (error) {
-  const diagnostics = compose(['logs', '--no-color'], true)
-  console.error(diagnostics.stdout)
-  console.error(diagnostics.stderr)
-  throw error
-} finally {
-  compose(['down', '--volumes', '--remove-orphans'], true)
-  execute(
-    'chown',
-    [
-      '--recursive',
-      `${String(input.PHASE12_HOST_UID)}:${String(input.PHASE12_HOST_GID)}`,
-      input.PHASE12_HOST_ROOT,
-    ],
-    { allowFailure: true },
+  const deployed = await waitForOperation(created.operation.id)
+  expect(
+    deployed.status === 'completed',
+    `Production-like deployment did not complete: ${JSON.stringify(deployed)}`,
   )
+  const deployedVersion = publicVersion()
+  expect(
+    deployedVersion.gitSha === candidateSha && deployedVersion.slot === 'green',
+    'Public entry did not switch to the green candidate',
+  )
+
+  const rollback = operationResponseSchema.parse(
+    await controlRequest('/api/ops/rollbacks', {
+      body: { reason: 'Phase 14 no-rebuild rollback gate' },
+      idempotencyKey: 'phase14-production-like-rollback-001',
+      method: 'POST',
+      purpose: 'phase14-rollback-create',
+    }),
+  )
+  const rolledBack = await waitForOperation(rollback.operation.id)
+  expect(
+    rolledBack.status === 'completed',
+    `Production-like rollback did not complete: ${JSON.stringify(rolledBack)}`,
+  )
+  const rollbackVersion = publicVersion()
+  expect(
+    rollbackVersion.gitSha === input.PHASE12_GIT_SHA && rollbackVersion.slot === 'blue',
+    'Rollback did not switch to the retained blue image',
+  )
+
+  const failed = operationResponseSchema.parse(
+    await controlRequest('/api/ops/deployments', {
+      body: {
+        gitSha: 'd'.repeat(40),
+        imageDigest: `sha256:${'e'.repeat(64)}`,
+        reason: 'Phase 14 missing immutable image failure gate',
+      },
+      idempotencyKey: 'phase14-production-like-deployment-failure-001',
+      method: 'POST',
+      purpose: 'phase14-deployment-failure-create',
+    }),
+  )
+  const rejected = await waitForOperation(failed.operation.id)
+  expect(rejected.status === 'failed', 'Missing immutable image was not rejected')
+  const failureVersion = publicVersion()
+  expect(
+    failureVersion.gitSha === input.PHASE12_GIT_SHA && failureVersion.slot === 'blue',
+    'Failed inactive deployment changed the active public release',
+  )
+  const retainedGreen = z
+    .array(z.object({ Image: z.string(), State: z.object({ Running: z.boolean() }) }))
+    .parse(
+      JSON.parse(execute('docker', ['inspect', `${projectName}-web-green-1`]).stdout) as unknown,
+    )[0]
+  expect(
+    retainedGreen?.Image === digest && retainedGreen.State.Running,
+    'Preflight failure removed or changed the retained rollback target',
+  )
+
+  compose(['stop', 'postgres'])
+  try {
+    const databaseUnavailable = operationResponseSchema.parse(
+      await controlRequest('/api/ops/deployments', {
+        body: {
+          gitSha: 'f'.repeat(40),
+          imageDigest: digest,
+          reason: 'Phase 14 PostgreSQL dependency failure gate',
+        },
+        idempotencyKey: 'phase14-postgres-down-deployment-001',
+        method: 'POST',
+        purpose: 'phase14-postgres-down-deployment-create',
+      }),
+    )
+    const dependencyFailure = await waitForOperation(databaseUnavailable.operation.id)
+    expect(
+      dependencyFailure.status === 'failed',
+      `PostgreSQL-down deployment did not fail explicitly: ${JSON.stringify(dependencyFailure)}`,
+    )
+    expect(
+      dependencyFailure.errorSummary?.includes('Migration container failed') === true,
+      `PostgreSQL dependency failure has no useful summary: ${JSON.stringify(dependencyFailure)}`,
+    )
+    const stillActive = publicVersion()
+    expect(
+      stillActive.gitSha === input.PHASE12_GIT_SHA && stillActive.slot === 'blue',
+      'PostgreSQL dependency failure changed the active public release',
+    )
+  } finally {
+    compose(['start', 'postgres'])
+  }
 }
+
+async function main() {
+  const encrypted = createEncryptedSecret()
+  buildImages()
+  try {
+    runProvision(encrypted.identityPath)
+    inspectHardening()
+    verifyDatabaseRoleBindings()
+    await initializeDeploymentFixture(encrypted.workerPassword)
+    await verifyBlueGreenDeployment()
+    verifyRoutingAndIpFamilies()
+    console.log(
+      JSON.stringify({
+        ansibleIdempotency: 'pass',
+        blueGreenDeployment: 'pass',
+        containerHardening: 'pass',
+        databaseRoleSeparation: 'pass',
+        immutableImageFailureIsolation: 'pass',
+        ipv4AndIpv6Origin: 'pass',
+        nextDownControlRoute: 'pass',
+        noRebuildRollback: 'pass',
+        openRestyValidationAndReload: 'pass',
+        postgresDownDeploymentDependency: 'pass',
+        postgresDownControlRoute: 'pass',
+        productionTraffic: false,
+        secretInjection: 'sops-age-runtime-only',
+        status: 'pass',
+      }),
+    )
+  } catch (error) {
+    const diagnostics = compose(['logs', '--no-color'], true)
+    console.error(diagnostics.stdout)
+    console.error(diagnostics.stderr)
+    throw error
+  } finally {
+    compose(['--profile', 'deployment', 'down', '--volumes', '--remove-orphans'], true)
+    execute(
+      'chown',
+      [
+        '--recursive',
+        `${String(input.PHASE12_HOST_UID)}:${String(input.PHASE12_HOST_GID)}`,
+        input.PHASE12_HOST_ROOT,
+      ],
+      { allowFailure: true },
+    )
+  }
+}
+
+main().catch((error: unknown) => {
+  console.error(error instanceof Error ? error.message : 'Unknown Phase 14 infrastructure failure')
+  process.exitCode = 1
+})

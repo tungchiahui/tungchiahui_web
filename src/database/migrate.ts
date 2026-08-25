@@ -10,6 +10,7 @@ import { validateMigrationPolicy } from './migration-policy'
 
 export type MigrationRunOptions = Readonly<{
   allowContract?: boolean
+  bootstrapRoles?: boolean
   hasFreshRecoverableBackup?: boolean
   migrationsDirectory?: string
   policyPath?: string
@@ -30,7 +31,13 @@ export async function runPostgresMigrations(
   const policyPath =
     options.policyPath ?? resolve(options.repositoryRoot, 'drizzle/migration-policy.json')
   const journalPath = resolve(migrationsDirectory, 'meta/_journal.json')
-  const rolesSql = readFileSync(resolve(options.repositoryRoot, 'ops/database/roles.sql'), 'utf8')
+  const bootstrapRoles = options.bootstrapRoles ?? true
+  const rolesSql = bootstrapRoles
+    ? readFileSync(resolve(options.repositoryRoot, 'ops/database/roles.sql'), 'utf8')
+    : null
+  const runtimeGrantsSql = bootstrapRoles
+    ? null
+    : readFileSync(resolve(options.repositoryRoot, 'ops/database/runtime-grants.sql'), 'utf8')
 
   const policy = validateMigrationPolicy(policyPath, journalPath, {
     allowContract: options.allowContract ?? false,
@@ -38,21 +45,24 @@ export async function runPostgresMigrations(
   })
   const client = new Client({
     application_name: configuration.applicationName,
+    connectionTimeoutMillis: configuration.connectionTimeoutMilliseconds,
     connectionString: configuration.connectionString,
+    query_timeout: configuration.queryTimeoutMilliseconds,
   })
 
   await client.connect()
   try {
     await client.query("SELECT pg_advisory_lock(hashtext('tungchiahui-schema-migration'))")
-    await client.query(rolesSql)
+    if (rolesSql !== null) await client.query(rolesSql)
     await client.query('SET ROLE site_migrator')
     await migrate(drizzle({ client }), {
       migrationsFolder: migrationsDirectory,
       migrationsSchema: 'drizzle',
       migrationsTable: '__drizzle_migrations',
     })
+    if (runtimeGrantsSql !== null) await client.query(runtimeGrantsSql)
     await client.query('RESET ROLE')
-    await client.query(rolesSql)
+    if (rolesSql !== null) await client.query(rolesSql)
     const result = await client.query<{ created_at: string; hash: string }>(
       'SELECT hash, created_at::text FROM drizzle.__drizzle_migrations ORDER BY created_at',
     )

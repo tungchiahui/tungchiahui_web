@@ -89,6 +89,8 @@ Phase 12 在 Unit 与 Disposable Application Integration 之间加入独立 Prod
 
 Phase 13 另加入 `test:recovery`：构建固定 pgBackRest 版本的 PostgreSQL/Recovery Image，启动一次性 PostgreSQL 和两套独立 S3Mock，执行真实 Full/Differential/Incremental、WAL Archive、双副本逐对象校验、从异地副本重建 Repository、指定时间 PITR、Version/Schema/代表性应用读取，以及加密 Control-state SQLite Restore。所有 Destructive 操作都要求一次性 Target Marker；Gate 不读取生产 Credential，也不访问真实 AList/R2。
 
+Phase 14 扩展 `test:infra`：在同一临时 Host Root 和 Hardened Compose 中先 Migration/Seed/Reindex，再通过签名 Control API 执行真实 Inactive Green Deploy、全部 Candidate/Public Smoke、OpenResty Cutover、Retained Blue Rollback、Missing Digest Failure 和 PostgreSQL-down Dependency Failure。Unit Gate 注入 Pre/Post Smoke、Invalid Config 与四个 Crash Phase；Migration Suite 继续证明 Previous Schema/Blue-Green Overlap。测试不启用 Public Production Traffic。
+
 ## Migration Test
 
 CI 必须测试：

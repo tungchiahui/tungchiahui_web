@@ -143,3 +143,5 @@ Phase 9 CLI 使用 `SITE_CONTROL_API_URL`；远程 Human Operator 通过 `SITE_O
 如果只是为了触发 Content Sync、Translation 或 Deployment Job。
 
 `control-api`、`deploy-agent` 与 Control-state SQLite 使用各自最小权限身份。SQLite 目录是明确的 host-local Writable Volume；不得把 Production Database Credential 当作 `control-api` 启动或执行基础 Restore/Recovery 的必需配置。
+
+Phase 14 的非 Secret Deployment Policy 必须显式提供 Backup Freshness Window、Stabilization Window、Blue/Green/Migration/OpenResty Container Name、Candidate/Public Probe URL 与代表性 Smoke Path/Query。Blue/Green Image 和 SHA 是分离的 Immutable Compose Input。`database-migrate.env` 只包含 `site_migrator_login` 直连内部 `postgres:5432` 的 `DATABASE_URL`；它与 Role-bootstrap Admin Credential 分离，也不经过 Transaction-pooling PgBouncer。动态 Active-slot Config 位于权限受限的专用目录，不进入 Secret 文件，也不允许 `content-worker` 写入。

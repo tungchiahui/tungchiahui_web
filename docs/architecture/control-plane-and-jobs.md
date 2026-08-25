@@ -134,13 +134,15 @@ Phase 4 的 Local/Test 实现把上述边界具体化为：独立 Node/TypeScrip
 
 Phase 12 Production Compose 将该 Store 挂载到权限受限的 `/var/lib/tungchiahui/control-state`，并交付独立 `control-api` 与 `deploy-agent` 容器。此阶段 deploy-agent 只允许 Docker `GET /_ping`、对外报告 Production Mutation Disabled；它不是 Phase 14 Deployment Engine，也没有提前实现 Cutover/Rollback。Docker Socket 只进入 deploy-agent，`control-api` 与 `content-worker` 没有该 Mount 或 deploy-control Network。
 
-Phase 13 以向后兼容 Version 4 Migration 新增 `recovery_backup_records`，保存 Backup ID/Type、Repository Generation/Manifest Hash、WAL Max、双 Replica Freshness、有效性和真实 Bytes/Seconds；不把业务数据搬入 SQLite。`control-api` 新增 Backup/Restore Operation 与 Backup Status 路由，仍可在 PostgreSQL Down 时使用。`deploy-agent` 只 Claim `recovery`/`restore`，以原有 Lease/Fencing/Audit 执行 pgBackRest 与指定 PostgreSQL Container Stop/Start；Phase 14 Deploy/Rollback 仍不 Claim、`productionOperations` 仍为 false。
+Phase 13 以向后兼容 Version 4 Migration 新增 `recovery_backup_records`，保存 Backup ID/Type、Repository Generation/Manifest Hash、WAL Max、双 Replica Freshness、有效性和真实 Bytes/Seconds；不把业务数据搬入 SQLite。`control-api` 新增 Backup/Restore Operation 与 Backup Status 路由，仍可在 PostgreSQL Down 时使用。
+
+Phase 14 以 Additive Version 5 Migration 为 Deployment Runtime 增加 Current/Last Digest、Pending Slot/SHA/Digest Cutover Intent、Cutover Timestamp 与 Stabilization Deadline。`control-api` 的 Deployment/Rollback Endpoint 与 `./site` 只创建/读取相同 SQLite Operation；既有 `deploy-agent` 分别 Filter Claim Deployment 与 Recovery 类型，并调用唯一 Shared Engine。Deployment Lease 到期保留精确 Persisted Phase，新的 Fencing Token 根据 Pending Intent 与实际 OpenResty Slot 对账，安全 Resume。`productionOperations` 只有在该 Engine 和 Production-like Gate 交付后才为 true。
 
 `control-api` 与 `deploy-agent` 通过 setgid/最小组写权限共享同一个 Host-local Store；各自使用 restrictive umask，不获得彼此的业务 Credential。SQLite Snapshot 执行 WAL Checkpoint + `VACUUM INTO`，验证 Schema/Integrity/Environment/Active-Previous SHA/Audit Digest，经 age 加密并复制到主 Backup Target 与独立 R2。R2 的 read-back-verified `latest.json` 允许在本地 SQLite 全损时发现最新 Artifact。显式 Break-glass 仅替换到达路径，仍向同一 Store 写 Audit/Operation 并由同一 Agent/Engine 执行。
 
-Operation State Machine 是 `queued -> claimed -> running -> completed|failed`；Claimed Lease 到期可重新排队并增加 Fencing Token，Running Lease 到期则进入 `needs-attention/reconcile-required`，避免 Restart 后盲目重放高权限副作用。Heartbeat 只能由匹配 Owner/Fencing Token 的未过期 Lease 续期，旧 Token 不能 Start、Heartbeat 或 Finish。
+Operation State Machine 是 `queued -> claimed -> running -> completed|failed`；Claimed Lease 到期可重新排队并增加 Fencing Token。Recovery 的 Running Lease 到期进入 `needs-attention/reconcile-required`；Deployment 则进入 `needs-attention` 并保留最后的精确 Phase，由 Phase 14 Reconciler 对账。Heartbeat 只能由匹配 Owner/Fencing Token 的未过期 Lease 续期，旧 Token 不能 Start、Heartbeat 或 Finish。
 
-Local/Test OpenResty 在选择 Web Upstream 前直接把 `/api/ops/*` 路由到 `control-api`，隐藏 Upstream Cache Header 后强制单一 `Cache-Control: no-store`，并设置 Cache Bypass、Method/Rate-limit Test Boundary。当前 Baseline 可创建/查询 Application Job、验证 Owner Dataset Write，以及创建/查询 Infrastructure/Backup/Restore Operation；长时间 Recovery 不在 Request 内 Inline 执行。Deploy/Cutover 仍未实现。
+Local/Test OpenResty 在选择 Web Upstream 前直接把 `/api/ops/*` 路由到 `control-api`，隐藏 Upstream Cache Header 后强制单一 `Cache-Control: no-store`，并设置 Cache Bypass、Method/Rate-limit Test Boundary。当前 Baseline 可创建/查询 Application Job、验证 Owner Dataset Write，以及创建/查询 Infrastructure/Backup/Restore/Deploy/Rollback Operation；长时间工作不在 Request 内 Inline 执行。Deployment 由独立 Agent 完成 Inactive Lifecycle、Migration、Smoke、Atomic Cutover 与 Rollback。
 
 ### Phase 5 application-job execution baseline
 

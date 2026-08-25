@@ -2,8 +2,11 @@
 tungchiahui_compose_project_name: tungchiahui-production
 tungchiahui_config_root: /etc/tungchiahui
 tungchiahui_content_polling_enabled: "false"
+tungchiahui_control_rate_limit_per_minute: "120"
 tungchiahui_data_root: /var/lib/tungchiahui
 tungchiahui_deployment_sha: ""
+tungchiahui_deployment_backup_max_age_seconds: ""
+tungchiahui_deployment_stabilization_seconds: ""
 tungchiahui_install_packages: true
 tungchiahui_manage_stack: true
 tungchiahui_origin_port: "8443"

@@ -97,12 +97,50 @@ describe('independent control-api HTTP boundary', () => {
     expect(authenticated.status).toBe(200)
     expect(await authenticated.json()).toMatchObject({
       applicationJobs: { available: false, error: 'database_not_configured' },
+      deployment: { activeSlot: 'none', previousSlot: 'none' },
       productionOperations: false,
     })
     expect(listControlAuditEvents(statePath).map((event) => event.eventType)).toEqual([
       'authentication_failed',
       'control_request_authorized',
     ])
+  })
+
+  it('accepts immutable deployment operations without a PostgreSQL dependency', async () => {
+    const { base } = await serverFixture()
+    const deployment = await signedFetch(base, '/api/ops/deployments', {
+      body: {
+        gitSha: 'a'.repeat(40),
+        imageDigest: `sha256:${'b'.repeat(64)}`,
+        reason: 'Phase 14 PostgreSQL-down deployment fixture',
+      },
+      idempotencyKey: 'phase14:http:deployment:001',
+      method: 'POST',
+      nonce: 'phase14-http-deployment-001',
+    })
+    expect(deployment.status).toBe(202)
+    expect(await deployment.json()).toMatchObject({
+      operation: {
+        operationType: 'deploy',
+        status: 'queued',
+        target: {
+          gitSha: 'a'.repeat(40),
+          imageDigest: `sha256:${'b'.repeat(64)}`,
+        },
+      },
+    })
+
+    const malformed = await signedFetch(base, '/api/ops/deployments', {
+      body: {
+        gitSha: 'not-a-git-sha',
+        imageDigest: `sha256:${'b'.repeat(64)}`,
+        reason: 'invalid immutable identity',
+      },
+      idempotencyKey: 'phase14:http:deployment:bad',
+      method: 'POST',
+      nonce: 'phase14-http-deployment-bad',
+    })
+    expect(malformed.status).toBe(400)
   })
 
   it('creates, deduplicates and queries SQLite operations without PostgreSQL', async () => {

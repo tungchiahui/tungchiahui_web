@@ -1,3 +1,4 @@
+import { createDeployment, createRollback, readDeploymentStatus } from './deployment/control-client'
 import { resetDevelopmentStack, startDevelopmentStack, stopDevelopmentStack } from './dev/runtime'
 import {
   createBackup,
@@ -31,6 +32,11 @@ Validation:
   test      Run unit, disposable integration, critical E2E, and migration suites
   help      Show this help
 
+Deployment:
+  status
+  deploy [git-sha] [--image-digest sha256:<digest>] [--reason <text>]
+  rollback [--reason <text>]
+
 Recovery:
   backup --environment <local|test|production> --type <full|diff|incr> --reason <text>
   backup status
@@ -63,6 +69,10 @@ async function main() {
     }
     case 'check':
       return executePackageScript('site:check')
+    case 'deployment-create': {
+      console.log(JSON.stringify(await createDeployment(command), null, 2))
+      return 0
+    }
     case 'dev-reset':
       resetDevelopmentStack()
       return 0
@@ -75,6 +85,14 @@ async function main() {
     case 'help':
       console.log(usage)
       return 0
+    case 'rollback-create': {
+      console.log(JSON.stringify(await createRollback(command.reason), null, 2))
+      return 0
+    }
+    case 'status': {
+      console.log(JSON.stringify(await readDeploymentStatus(), null, 2))
+      return 0
+    }
     case 'test':
       return executePackageScript('site:test')
     case 'storage-contract-s3':

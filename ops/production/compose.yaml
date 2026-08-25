@@ -83,6 +83,21 @@ services:
     networks: [database]
     tmpfs: *node-tmpfs
 
+  database-migrate:
+    <<: *hardened-service
+    image: ${TUNGCHIAHUI_SERVICE_IMAGE:?immutable service image is required}
+    restart: "no"
+    profiles: [deployment]
+    user: "10006:10050"
+    command: [node, dist/database-migrate.cjs]
+    env_file:
+      - ${TUNGCHIAHUI_SECRET_DIRECTORY:?secret directory is required}/database-migrate.env
+    environment:
+      DEPLOYMENT_HAS_FRESH_RECOVERABLE_BACKUP: "false"
+      SITE_RUNTIME_MODE: production
+    networks: [database]
+    tmpfs: *node-tmpfs
+
   control-api:
     <<: *hardened-service
     image: ${TUNGCHIAHUI_SERVICE_IMAGE:?immutable service image is required}
@@ -93,7 +108,7 @@ services:
     environment:
       CONTROL_API_HOST: 0.0.0.0
       CONTROL_API_PORT: "8080"
-      CONTROL_RATE_LIMIT_PER_MINUTE: "120"
+      CONTROL_RATE_LIMIT_PER_MINUTE: ${TUNGCHIAHUI_CONTROL_RATE_LIMIT_PER_MINUTE:-120}
       CONTROL_REPLAY_WINDOW_SECONDS: "300"
       CONTROL_STATE_PATH: /control-state/control.db
       SITE_RUNTIME_MODE: production
@@ -135,12 +150,12 @@ services:
 
   web-blue:
     <<: *hardened-service
-    image: ${TUNGCHIAHUI_WEB_IMAGE:?immutable web image is required}
+    image: ${TUNGCHIAHUI_WEB_BLUE_IMAGE:?immutable blue web image is required}
     user: "10001:10001"
     env_file:
       - ${TUNGCHIAHUI_SECRET_DIRECTORY:?secret directory is required}/web.env
     environment:
-      SITE_DEPLOYMENT_SHA: ${TUNGCHIAHUI_DEPLOYMENT_SHA:?Git SHA is required}
+      SITE_DEPLOYMENT_SHA: ${TUNGCHIAHUI_BLUE_DEPLOYMENT_SHA:?blue Git SHA is required}
       SITE_RUNTIME_MODE: production
       SITE_SLOT: blue
     healthcheck:
@@ -148,17 +163,17 @@ services:
       interval: 5s
       timeout: 3s
       retries: 45
-    networks: [edge, application]
+    networks: [edge, application, deployment-probe]
     tmpfs: *node-tmpfs
 
   web-green:
     <<: *hardened-service
-    image: ${TUNGCHIAHUI_WEB_IMAGE:?immutable web image is required}
+    image: ${TUNGCHIAHUI_WEB_GREEN_IMAGE:?immutable green web image is required}
     user: "10001:10001"
     env_file:
       - ${TUNGCHIAHUI_SECRET_DIRECTORY:?secret directory is required}/web.env
     environment:
-      SITE_DEPLOYMENT_SHA: ${TUNGCHIAHUI_DEPLOYMENT_SHA:?Git SHA is required}
+      SITE_DEPLOYMENT_SHA: ${TUNGCHIAHUI_GREEN_DEPLOYMENT_SHA:?green Git SHA is required}
       SITE_RUNTIME_MODE: production
       SITE_SLOT: green
     healthcheck:
@@ -166,7 +181,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 45
-    networks: [edge, application]
+    networks: [edge, application, deployment-probe]
     tmpfs: *node-tmpfs
 
   deploy-agent:
@@ -189,6 +204,22 @@ services:
       BACKUP_POSTGRES_DATA_PATH: /var/lib/postgresql/18/docker
       BACKUP_WORK_DIRECTORY: /var/lib/tungchiahui-backup-work
       CONTROL_STATE_PATH: /control-state/control.db
+      DEPLOYMENT_ACTIVE_SLOT_CONFIG_PATH: /deployment-config/active-slot.conf
+      DEPLOYMENT_ARTICLE_PATH: /blog/phase-3-seed
+      DEPLOYMENT_ASSET_PATH: /docs/ros2/core/index.html
+      DEPLOYMENT_BACKUP_MAX_AGE_SECONDS: ${TUNGCHIAHUI_DEPLOYMENT_BACKUP_MAX_AGE_SECONDS:?backup freshness policy is required}
+      DEPLOYMENT_BLUE_CONTAINER_NAME: ${TUNGCHIAHUI_BLUE_CONTAINER_NAME:?blue container name is required}
+      DEPLOYMENT_BLUE_URL: http://web-blue:3000
+      DEPLOYMENT_GREEN_CONTAINER_NAME: ${TUNGCHIAHUI_GREEN_CONTAINER_NAME:?green container name is required}
+      DEPLOYMENT_GREEN_URL: http://web-green:3000
+      DEPLOYMENT_JOURNAL_PATH: /app/deployment/drizzle/meta/_journal.json
+      DEPLOYMENT_MIGRATION_CONTAINER_NAME: ${TUNGCHIAHUI_MIGRATION_CONTAINER_NAME:?migration container name is required}
+      DEPLOYMENT_MIGRATION_POLICY_PATH: /app/deployment/drizzle/migration-policy.json
+      DEPLOYMENT_OPENRESTY_CONTAINER_NAME: ${TUNGCHIAHUI_OPENRESTY_CONTAINER_NAME:?OpenResty container name is required}
+      DEPLOYMENT_POLLING_ENABLED: "true"
+      DEPLOYMENT_PUBLIC_ENTRY_URL: https://openresty:8443
+      DEPLOYMENT_SEARCH_QUERY: ROS2_Control
+      DEPLOYMENT_STABILIZATION_SECONDS: ${TUNGCHIAHUI_DEPLOYMENT_STABILIZATION_SECONDS:?stabilization policy is required}
       DEPLOY_AGENT_HOST: 0.0.0.0
       DEPLOY_AGENT_PORT: "8081"
       DOCKER_SOCKET_PATH: /run/deploy-capability/docker.sock
@@ -200,12 +231,15 @@ services:
       interval: 5s
       timeout: 3s
       retries: 30
-    networks: [backup-egress, deploy-control]
+    networks: [backup-egress, deploy-control, deployment-probe]
     tmpfs: *node-tmpfs
     volumes:
       - type: bind
         source: ${TUNGCHIAHUI_DATA_ROOT:?data root is required}/control-state
         target: /control-state
+      - type: bind
+        source: ${TUNGCHIAHUI_CONFIG_ROOT:?config root is required}/deployment
+        target: /deployment-config
       - type: bind
         source: ${TUNGCHIAHUI_DATA_ROOT:?data root is required}/postgres
         target: /var/lib/postgresql
@@ -232,7 +266,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 30
-    networks: [edge]
+    networks: [edge, deployment-probe]
     ports:
       - "${TUNGCHIAHUI_ORIGIN_PORT:-8443}:8443"
     tmpfs:
@@ -240,7 +274,7 @@ services:
       - /var/run:size=8m,mode=755,nosuid,nodev
     volumes:
       - ${TUNGCHIAHUI_CONFIG_ROOT:?config root is required}/openresty.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro
-      - ${TUNGCHIAHUI_CONFIG_ROOT:?config root is required}/active-slot.conf:/etc/tungchiahui/active-slot.conf:ro
+      - ${TUNGCHIAHUI_CONFIG_ROOT:?config root is required}/deployment:/etc/tungchiahui/deployment:ro
       - ${TUNGCHIAHUI_SECRET_DIRECTORY:?secret directory is required}/origin.crt:/run/secrets/origin.crt:ro
       - ${TUNGCHIAHUI_SECRET_DIRECTORY:?secret directory is required}/origin.key:/run/secrets/origin.key:ro
 
@@ -250,6 +284,8 @@ networks:
   database:
     internal: true
   deploy-control:
+    internal: true
+  deployment-probe:
     internal: true
   backup-egress:
   edge:

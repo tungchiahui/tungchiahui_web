@@ -20,10 +20,10 @@
 ## Deploy
 
 ```bash
-./site deploy
+./site deploy <40-char-git-sha> --image-digest sha256:<digest> --reason "<change reference>"
 ```
 
-如果 Deployment 在 Cutover 前失败，Production 应继续停留在 Old Slot。
+创建后用 `./site status` 查询 SQLite Operation Phase。确认 Target Digest、Inactive Slot、Migration/Backup Policy、Candidate Smoke 与 Cutover Evidence。Deployment 在 Cutover 前失败时，Production 必须继续停留在 Old Slot；Post-cutover Smoke 失败时 Shared Engine 会切回 Previous Slot并把 Failed Candidate 移除。
 
 正常 Application Release 由 Web Application Repository 的 `main` Workflow 在 CI Gates 通过后自动发起。这里的命令用于人工触发、重试或指定版本，并调用同一个 Deployment Engine。
 
@@ -34,6 +34,8 @@
 ```
 
 当新 Application 有问题且 Database 仍保持 Backward-compatible 时使用。
+
+Rollback 只切到 Version 5 Control State 中保留的 Previous SHA/Digest，不 Rebuild Image。Stabilization Window 内不得手工删除或覆盖 Previous Container。若 PostgreSQL Incident 令 Application Smoke 失败，先以 `./site status` 确认 Traffic/SQLite State，再按 Database Incident 流程处理；不要把 Control-state Failure 与 Application Dependency Failure 混为一体。
 
 ## 手工安全规则
 

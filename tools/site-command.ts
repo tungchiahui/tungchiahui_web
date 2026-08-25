@@ -16,10 +16,18 @@ export type SiteCommand =
     }>
   | Readonly<{ kind: 'backup-status' }>
   | Readonly<{ kind: 'check' }>
+  | Readonly<{
+      gitSha?: string
+      imageDigest?: string
+      kind: 'deployment-create'
+      reason: string
+    }>
   | Readonly<{ kind: 'dev-reset' }>
   | Readonly<{ kind: 'dev-start' }>
   | Readonly<{ kind: 'dev-stop' }>
   | Readonly<{ kind: 'help' }>
+  | Readonly<{ kind: 'rollback-create'; reason: string }>
+  | Readonly<{ kind: 'status' }>
   | Readonly<{ kind: 'storage-contract-s3' }>
   | Readonly<{ kind: 'test' }>
   | Readonly<{
@@ -54,6 +62,59 @@ export function parseSiteCommand(arguments_: readonly string[]): SiteCommand {
     return Object.freeze({ kind: 'help' })
   }
 
+  if (arguments_[0] === 'deploy') {
+    let gitSha: string | undefined
+    let imageDigest: string | undefined
+    let reason = 'manual operator deployment'
+    let index = 1
+    if (arguments_[index] !== undefined && !arguments_[index]?.startsWith('--')) {
+      gitSha = z
+        .string()
+        .regex(/^[a-f0-9]{40}$/)
+        .parse(arguments_[index])
+      index += 1
+    }
+    while (index < arguments_.length) {
+      const argument = arguments_[index]
+      if (argument === '--image-digest') {
+        imageDigest = z
+          .string()
+          .regex(/^sha256:[a-f0-9]{64}$/)
+          .parse(arguments_[index + 1])
+        index += 2
+        continue
+      }
+      if (argument === '--reason') {
+        reason = z
+          .string()
+          .trim()
+          .min(1)
+          .max(1_000)
+          .parse(arguments_[index + 1])
+        index += 2
+        continue
+      }
+      throw new SiteUsageError(`Unknown deploy argument: ${String(argument)}`)
+    }
+    return Object.freeze({
+      ...(gitSha === undefined ? {} : { gitSha }),
+      ...(imageDigest === undefined ? {} : { imageDigest }),
+      kind: 'deployment-create',
+      reason,
+    })
+  }
+
+  if (arguments_[0] === 'rollback') {
+    let reason = 'manual operator rollback'
+    if (arguments_.length > 1) {
+      if (arguments_.length !== 3 || arguments_[1] !== '--reason') {
+        throw new SiteUsageError('rollback accepts only --reason <text>')
+      }
+      reason = z.string().trim().min(1).max(1_000).parse(arguments_[2])
+    }
+    return Object.freeze({ kind: 'rollback-create', reason })
+  }
+
   if (arguments_.length === 1) {
     switch (arguments_[0]) {
       case 'check':
@@ -62,6 +123,8 @@ export function parseSiteCommand(arguments_: readonly string[]): SiteCommand {
         return Object.freeze({ kind: 'dev-start' })
       case 'help':
         return Object.freeze({ kind: 'help' })
+      case 'status':
+        return Object.freeze({ kind: 'status' })
       case 'test':
         return Object.freeze({ kind: 'test' })
       default:

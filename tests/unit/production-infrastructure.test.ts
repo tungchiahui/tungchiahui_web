@@ -58,6 +58,7 @@ describe('Phase 12 production foundation policy', () => {
       'control-api',
       'content-worker',
       'database-role-bootstrap',
+      'database-migrate',
       'postgres',
       'pgbouncer',
       'web-blue',
@@ -80,7 +81,11 @@ describe('Phase 12 production foundation policy', () => {
     expect(servicesWithDockerSocket).toEqual(['deploy-agent'])
     expect(composeSource).not.toMatch(/\bprivileged:\s*true\b/)
     expect(composeSource).not.toMatch(/\b(?:ipc|pid|network)_mode:\s*host\b/)
-    expect(compose.services['deploy-agent']?.networks).toEqual(['backup-egress', 'deploy-control'])
+    expect(compose.services['deploy-agent']?.networks).toEqual([
+      'backup-egress',
+      'deploy-control',
+      'deployment-probe',
+    ])
     expect(compose.services['control-api']?.depends_on).toBeUndefined()
     expect(compose.services.openresty?.depends_on).toEqual({
       'control-api': { condition: 'service_healthy' },
@@ -94,7 +99,7 @@ describe('Phase 12 production foundation policy', () => {
     expect(openRestySource).toContain('server_name www.tungchiahui.cn ddns.tungchiahui.cn;')
     expect(openRestySource).toContain('location ^~ /api/ops/')
     expect(openRestySource).toContain('set $control_upstream control-api:8080;')
-    expect(openRestySource).toContain('include /etc/tungchiahui/active-slot.conf;')
+    expect(openRestySource).toContain('include /etc/tungchiahui/deployment/active-slot.conf;')
     expect(openRestySource).toContain('add_header Cache-Control "no-store" always;')
     expect(inventorySource).toContain('ansible_host: tungchiahui-production-origin')
     expect(inventorySource).not.toMatch(/ansible_host:\s*(?:\d{1,3}\.){3}\d{1,3}/)

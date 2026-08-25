@@ -4,10 +4,11 @@
 
 每个已部署 Application Image 都是 Immutable，并由 Git Commit SHA 标识。
 
-概念上的 Identity 示例：
+Identity 示例：
 
 ```text
-web:c904e21
+Git SHA: c904e21b...（完整 40 位）
+Digest:  sha256:2c26b46b...（完整 64 位十六进制）
 ```
 
 不得使用 `latest` 作为 Deployment 或 Rollback 的 Source of Truth。
@@ -28,8 +29,8 @@ Quality Gates 未全部通过时不得构建/发布 Production Candidate，也�
 Human-triggered/Retry/指定版本：
 
 ```bash
-./site deploy
-./site deploy <git-sha-or-release>
+SITE_DEPLOYMENT_IMAGE_DIGEST=sha256:<digest> ./site deploy
+./site deploy <40-char-git-sha> --image-digest sha256:<digest> --reason <text>
 ```
 
 GitHub Actions 和 `./site deploy` 向同一个独立 `control-api` 完成认证，执行相同 Policy，并调用同一个底层 Deployment Engine；不得维护 CI/Manual 两套实现。
@@ -50,7 +51,7 @@ https://www.tungchiahui.cn/api/ops/deployments
 
 不得向 `content-worker` 或 `control-api` 授予 Docker Socket/Unrestricted Host Permission。只有 `deploy-agent` 获得完成声明操作所需的最小 Docker/OpenResty/Host Capability。
 
-Phase 12 只交付该权限边界的最小可执行起点：Production Compose 中仅 `deploy-agent` 挂载 Docker Socket，且当前代码只发出 `GET /_ping` 并报告 `productionOperations: false`。正式 Compose Lifecycle、Migration、Smoke、OpenResty Cutover、Rollback 和 Recovery Engine 仍属于 Phase 14；不得把 Phase 12 Health Stub 当成 Deployment Success Path。
+Phase 14 已在该边界上交付唯一 Shared Engine：Production Compose 中仍只有 `deploy-agent` 挂载 Docker Socket；Adapter 只执行声明的 Image/Container Inspect、Inactive/Migration Lifecycle、OpenResty Validate/HUP 与既有 Recovery Request。`control-api` 只写 SQLite 并快速返回，不执行 Docker 或 Migration。
 
 ## High-level Flow
 

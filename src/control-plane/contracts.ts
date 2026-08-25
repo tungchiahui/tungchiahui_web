@@ -62,7 +62,7 @@ export const actorIdentitySchema = z
 export type ActorIdentity = Readonly<z.infer<typeof actorIdentitySchema>>
 
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/)
-const gitShaSchema = z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/)
+const gitShaSchema = z.string().regex(/^[a-f0-9]{40}$/)
 const environmentSchema = recoveryEnvironmentSchema
 const boundedReasonSchema = z.string().trim().min(1).max(1_000)
 const infrastructureTargetSchemas = {
@@ -122,7 +122,15 @@ const infrastructureTargetSchemas = {
         })
       }
     }),
-  rollback: z.object({ targetSha: gitShaSchema }).strict(),
+  rollback: z
+    .object({
+      targetDigest: z
+        .string()
+        .regex(/^sha256:[a-f0-9]{64}$/)
+        .optional(),
+      targetSha: gitShaSchema,
+    })
+    .strict(),
   'server-migration': z
     .object({ inventoryHost: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,252}$/) })
     .strict(),

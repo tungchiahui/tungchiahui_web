@@ -9,6 +9,8 @@ RUN pnpm install --frozen-lockfile
 
 FROM node-dependencies AS node-build
 COPY services ./services
+COPY drizzle/migration-policy.json ./drizzle/migration-policy.json
+COPY drizzle/meta/_journal.json ./drizzle/meta/_journal.json
 COPY src ./src
 COPY tsconfig.json ./
 RUN mkdir -p /workspace/dist \
@@ -53,6 +55,7 @@ RUN apt-get update \
 WORKDIR /app
 COPY --from=pgbackrest-build /tmp/pgbackrest-build/src/pgbackrest /usr/local/bin/pgbackrest
 COPY --from=node-build --chown=70:10050 /workspace/dist ./dist
+COPY --from=node-build --chown=70:10050 /workspace/drizzle ./deployment/drizzle
 
 USER 70:10050
 CMD ["node", "dist/deploy-agent.cjs"]

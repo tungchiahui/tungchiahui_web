@@ -117,7 +117,7 @@ describe('Phase 13 recovery boundary', () => {
       auditEventMaxId: 1,
       environment: 'test',
       integrity: 'ok',
-      schemaVersion: 4,
+      schemaVersion: 5,
     })
     expect(inspectControlStateSnapshot(snapshot)).toEqual(evidence)
     expect(restoreControlStateSnapshot(snapshot, restored, 'test')).toEqual(evidence)

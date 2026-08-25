@@ -12,6 +12,30 @@ describe('site command boundary', () => {
       parseSiteCommand(['dev', 'reset', '--environment', 'local', '--confirm', 'RESET-LOCAL-DATA']),
     ).toEqual({ kind: 'dev-reset' })
     expect(parseSiteCommand([])).toEqual({ kind: 'help' })
+    expect(parseSiteCommand(['status'])).toEqual({ kind: 'status' })
+    expect(parseSiteCommand(['deploy'])).toEqual({
+      kind: 'deployment-create',
+      reason: 'manual operator deployment',
+    })
+    expect(
+      parseSiteCommand([
+        'deploy',
+        'a'.repeat(40),
+        '--image-digest',
+        `sha256:${'b'.repeat(64)}`,
+        '--reason',
+        'phase 14 test',
+      ]),
+    ).toEqual({
+      gitSha: 'a'.repeat(40),
+      imageDigest: `sha256:${'b'.repeat(64)}`,
+      kind: 'deployment-create',
+      reason: 'phase 14 test',
+    })
+    expect(parseSiteCommand(['rollback'])).toEqual({
+      kind: 'rollback-create',
+      reason: 'manual operator rollback',
+    })
     expect(
       parseSiteCommand([
         'backup',
@@ -84,7 +108,7 @@ describe('site command boundary', () => {
   })
 
   it('rejects unknown or ambiguous commands', () => {
-    expect(() => parseSiteCommand(['deploy'])).toThrow(SiteUsageError)
+    expect(() => parseSiteCommand(['deploy', 'latest'])).toThrow()
     expect(() => parseSiteCommand(['check', 'extra'])).toThrow(SiteUsageError)
     expect(() => parseSiteCommand(['dev', 'reset'])).toThrow(SiteUsageError)
     expect(() =>

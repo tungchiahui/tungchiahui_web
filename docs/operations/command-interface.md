@@ -82,15 +82,17 @@ Force 重译还要求 `--force --confirm-retranslation RETRANSLATE`。Execute �
 ### Deployment
 
 ```bash
-./site deploy
-./site deploy <git-sha-or-release>
+SITE_DEPLOYMENT_IMAGE_DIGEST=sha256:<digest> ./site deploy
+./site deploy <40-char-git-sha> --image-digest sha256:<digest> [--reason <text>]
 ```
 
 ### Rollback
 
 ```bash
-./site rollback
+./site rollback [--reason <text>]
 ```
+
+Deploy 的 Release Identity 必须同时包含完整 Git SHA 与固定 Digest；不接受 Tag、Short SHA 或 `latest`。省略 SHA 时读取当前 Git HEAD，省略 Flag 时 Digest 只可由仓库外 `SITE_DEPLOYMENT_IMAGE_DIGEST` 提供。CLI、后续 CI 与 Control API 使用相同 Endpoint、Idempotency、SQLite Operation 和 Shared Engine。
 
 ### Backup
 

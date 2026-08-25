@@ -7,8 +7,14 @@ import {
   claimNextInfrastructureOperation,
   finishInfrastructureOperation,
   initializeControlState,
+  listInfrastructureOperations,
+  listRecoveryBackups,
+  requeueDeploymentOperationForReconciliation,
   startInfrastructureOperation,
 } from '../../src/control-plane/control-state'
+import { parseDeploymentConfiguration } from '../../src/deployment/configuration'
+import { DockerDeploymentPlatform } from '../../src/deployment/docker-platform'
+import { executeDeploymentOperation } from '../../src/deployment/engine'
 import { parseRecoveryConfiguration } from '../../src/recovery/configuration'
 import {
   executeControlStateBackup,
@@ -30,7 +36,12 @@ const configuration = z
   })
   .parse(process.env)
 const recovery = parseRecoveryConfiguration(process.env)
+const deployment = parseDeploymentConfiguration(process.env)
 initializeControlState(configuration.CONTROL_STATE_PATH, 'production')
+const deploymentPlatform = new DockerDeploymentPlatform(
+  deployment,
+  configuration.DOCKER_SOCKET_PATH,
+)
 
 function sendJson(response: ServerResponse, statusCode: number, payload: unknown) {
   response.statusCode = statusCode
@@ -135,19 +146,83 @@ async function executeClaimedRecovery() {
       status: 'completed',
     })
   } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'unknown recovery failure'
     finishInfrastructureOperation(configuration.CONTROL_STATE_PATH, claimed.id, lease, {
+      errorSummary: message,
       phase: 'recovery-failed',
       status: 'failed',
     })
     console.error(
       JSON.stringify({
         event: 'recovery_operation_failed',
-        message: error instanceof Error ? error.message : 'unknown recovery failure',
+        message,
         operationId: claimed.id,
       }),
     )
   }
   return true
+}
+
+async function executeClaimedDeployment() {
+  const claimed = claimNextInfrastructureOperation(
+    configuration.CONTROL_STATE_PATH,
+    'deploy-agent:deployment',
+    3_600,
+    new Date(),
+    ['deploy', 'rollback'],
+  )
+  if (!claimed) return false
+  const lease = {
+    fencingToken: claimed.fencingToken,
+    leaseOwner: 'deploy-agent:deployment',
+  }
+  const running = startInfrastructureOperation(configuration.CONTROL_STATE_PATH, claimed.id, lease)
+  try {
+    await executeDeploymentOperation(
+      running,
+      lease,
+      listRecoveryBackups(configuration.CONTROL_STATE_PATH, 100),
+      deploymentPlatform,
+      {
+        backupFreshnessSeconds: deployment.DEPLOYMENT_BACKUP_MAX_AGE_SECONDS,
+        controlStatePath: configuration.CONTROL_STATE_PATH,
+        journalPath: deployment.DEPLOYMENT_JOURNAL_PATH,
+        leaseSeconds: 3_600,
+        migrationPolicyPath: deployment.DEPLOYMENT_MIGRATION_POLICY_PATH,
+        stabilizationSeconds: deployment.DEPLOYMENT_STABILIZATION_SECONDS,
+      },
+    )
+    finishInfrastructureOperation(configuration.CONTROL_STATE_PATH, claimed.id, lease, {
+      phase: 'deployment-verified',
+      status: 'completed',
+    })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'unknown deployment failure'
+    finishInfrastructureOperation(configuration.CONTROL_STATE_PATH, claimed.id, lease, {
+      errorSummary: message,
+      phase: 'deployment-failed',
+      status: 'failed',
+    })
+    console.error(
+      JSON.stringify({
+        event: 'deployment_operation_failed',
+        message,
+        operationId: claimed.id,
+      }),
+    )
+  }
+  return true
+}
+
+function reconcileInterruptedDeployments() {
+  const interrupted = listInfrastructureOperations(configuration.CONTROL_STATE_PATH, {
+    operationTypes: ['deploy', 'rollback'],
+    statuses: ['needs-attention'],
+  })
+  for (const operation of interrupted) {
+    requeueDeploymentOperationForReconciliation(configuration.CONTROL_STATE_PATH, operation.id)
+  }
+  return interrupted.length
 }
 
 let polling = false
@@ -156,15 +231,23 @@ async function poll() {
   if (polling) return
   polling = true
   try {
-    while (await executeClaimedRecovery()) {
-      // Drain recovery work without claiming Phase 14 deployment operations.
+    reconcileInterruptedDeployments()
+    while (true) {
+      const recovered =
+        configuration.RECOVERY_POLLING_ENABLED === 'true' ? await executeClaimedRecovery() : false
+      const deployed =
+        deployment.DEPLOYMENT_POLLING_ENABLED === 'true' ? await executeClaimedDeployment() : false
+      if (!recovered && !deployed) break
     }
   } finally {
     polling = false
   }
 }
 
-if (configuration.RECOVERY_POLLING_ENABLED === 'true') {
+if (
+  configuration.RECOVERY_POLLING_ENABLED === 'true' ||
+  deployment.DEPLOYMENT_POLLING_ENABLED === 'true'
+) {
   pollTimer = setInterval(() => void poll(), 1_000)
   void poll()
 }
@@ -179,14 +262,22 @@ const server = createServer(async (request, response) => {
     sendJson(response, dockerReady ? 200 : 503, {
       allowedDockerRequests: [
         'GET /_ping',
+        'GET /containers/<declared>/json',
+        'GET /containers/<migration>/logs',
+        'GET /images/<digest>/json',
+        'POST /containers/<slot>/start|stop',
+        'DELETE /containers/<inactive-slot>',
+        'POST /containers/create?name=<inactive-slot>',
+        'POST /containers/<openresty>/exec',
+        'POST /containers/<openresty>/kill?signal=HUP',
         'POST /containers/<postgres>/stop',
         'POST /containers/<postgres>/start',
       ],
       contract: serviceIdentityContracts['deploy-agent'],
-      deploymentEngine: 'phase-14-not-implemented',
+      deploymentEngine: 'phase-14-shared-blue-green',
       dockerReady,
       mode: configuration.SITE_RUNTIME_MODE,
-      productionOperations: false,
+      productionOperations: true,
       recoveryEngine: 'phase-13',
       recoveryOperations: true,
       service: 'deploy-agent',
@@ -200,7 +291,7 @@ const server = createServer(async (request, response) => {
 server.listen(configuration.DEPLOY_AGENT_PORT, configuration.DEPLOY_AGENT_HOST, () => {
   console.log(
     JSON.stringify({
-      deploymentOperations: false,
+      deploymentOperations: true,
       event: 'deploy_agent_started',
       mode: configuration.SITE_RUNTIME_MODE,
       port: configuration.DEPLOY_AGENT_PORT,

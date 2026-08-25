@@ -20,7 +20,7 @@ import {
   infrastructureOperationTypeSchema,
 } from './contracts'
 
-const CONTROL_STATE_SCHEMA_VERSION = 4
+const CONTROL_STATE_SCHEMA_VERSION = 5
 
 const controlStateSummarySchema = z.object({
   environment: z.enum(['local', 'test', 'production']),
@@ -34,6 +34,7 @@ const controlStateSummarySchema = z.object({
 const infrastructureOperationRowSchema = z.object({
   actor_id: z.string(),
   created_at: z.string(),
+  error_summary: z.string().nullable(),
   fencing_token: z.number().int().nonnegative(),
   finished_at: z.string().nullable(),
   id: z.uuid(),
@@ -67,13 +68,14 @@ export type ControlStateSummary = Readonly<{
   incompleteOperations: number
   initializedAt: string
   journalMode: 'wal'
-  schemaVersion: 4
+  schemaVersion: 5
   synchronous: 2
 }>
 
 export type InfrastructureOperation = Readonly<{
   actorId: string
   createdAt: string
+  errorSummary: string | null
   fencingToken: number
   finishedAt: string | null
   id: string
@@ -141,7 +143,37 @@ export type ControlStateSnapshotEvidence = Readonly<{
   integrity: 'ok'
   lastSha: string | null
   previousSlot: 'blue' | 'green' | 'none'
-  schemaVersion: 4
+  schemaVersion: 5
+}>
+
+const deploymentRuntimeStateRowSchema = z.object({
+  active_slot: z.enum(['blue', 'green', 'none']),
+  current_digest: z.string().nullable(),
+  current_sha: z.string().nullable(),
+  cutover_at: z.string().nullable(),
+  last_digest: z.string().nullable(),
+  last_sha: z.string().nullable(),
+  pending_digest: z.string().nullable(),
+  pending_sha: z.string().nullable(),
+  pending_slot: z.enum(['blue', 'green', 'none']),
+  previous_slot: z.enum(['blue', 'green', 'none']),
+  stabilization_until: z.string().nullable(),
+  updated_at: z.string(),
+})
+
+export type DeploymentRuntimeState = Readonly<{
+  activeSlot: 'blue' | 'green' | 'none'
+  currentDigest: string | null
+  currentSha: string | null
+  cutoverAt: string | null
+  lastDigest: string | null
+  lastSha: string | null
+  pendingDigest: string | null
+  pendingSha: string | null
+  pendingSlot: 'blue' | 'green' | 'none'
+  previousSlot: 'blue' | 'green' | 'none'
+  stabilizationUntil: string | null
+  updatedAt: string
 }>
 
 export class ControlStateConflictError extends Error {
@@ -277,6 +309,20 @@ const migrations = [
         ON recovery_backup_records (completed_at DESC, backup_id);
     `,
     version: 4,
+  },
+  {
+    sql: `
+      ALTER TABLE control_runtime_state ADD COLUMN current_digest TEXT;
+      ALTER TABLE control_runtime_state ADD COLUMN last_digest TEXT;
+      ALTER TABLE control_runtime_state ADD COLUMN pending_slot TEXT NOT NULL DEFAULT 'none'
+        CHECK (pending_slot IN ('none', 'blue', 'green'));
+      ALTER TABLE control_runtime_state ADD COLUMN pending_sha TEXT;
+      ALTER TABLE control_runtime_state ADD COLUMN pending_digest TEXT;
+      ALTER TABLE control_runtime_state ADD COLUMN cutover_at TEXT;
+      ALTER TABLE control_runtime_state ADD COLUMN stabilization_until TEXT;
+      ALTER TABLE infrastructure_operations ADD COLUMN error_summary TEXT;
+    `,
+    version: 5,
   },
 ] as const
 
@@ -453,6 +499,7 @@ function mapOperation(row: unknown): InfrastructureOperation {
   return Object.freeze({
     actorId: parsed.actor_id,
     createdAt: parsed.created_at,
+    errorSummary: parsed.error_summary,
     fencingToken: parsed.fencing_token,
     finishedAt: parsed.finished_at,
     id: parsed.id,
@@ -467,6 +514,39 @@ function mapOperation(row: unknown): InfrastructureOperation {
     target: z.record(z.string(), z.unknown()).parse(JSON.parse(parsed.target_json) as unknown),
     updatedAt: parsed.updated_at,
   })
+}
+
+function mapDeploymentRuntimeState(row: unknown): DeploymentRuntimeState {
+  const parsed = deploymentRuntimeStateRowSchema.parse(row)
+  return Object.freeze({
+    activeSlot: parsed.active_slot,
+    currentDigest: parsed.current_digest,
+    currentSha: parsed.current_sha,
+    cutoverAt: parsed.cutover_at,
+    lastDigest: parsed.last_digest,
+    lastSha: parsed.last_sha,
+    pendingDigest: parsed.pending_digest,
+    pendingSha: parsed.pending_sha,
+    pendingSlot: parsed.pending_slot,
+    previousSlot: parsed.previous_slot,
+    stabilizationUntil: parsed.stabilization_until,
+    updatedAt: parsed.updated_at,
+  })
+}
+
+function readDeploymentRuntimeState(database: DatabaseSync) {
+  return mapDeploymentRuntimeState(
+    database.prepare('SELECT * FROM control_runtime_state WHERE singleton_id = 1').get(),
+  )
+}
+
+export function readDeploymentState(path: string) {
+  const database = openControlState(path)
+  try {
+    return readDeploymentRuntimeState(database)
+  } finally {
+    database.close()
+  }
 }
 
 export function consumeControlNonce(
@@ -521,6 +601,20 @@ export function createInfrastructureOperation(
         return Object.freeze({ created: false, operation: existing })
       }
 
+      if (request.operationType === 'deploy' || request.operationType === 'rollback') {
+        const competing = database
+          .prepare(
+            `SELECT id FROM infrastructure_operations
+             WHERE operation_type IN ('deploy', 'rollback')
+               AND status IN ('queued', 'claimed', 'running', 'needs-attention')
+             LIMIT 1`,
+          )
+          .get()
+        if (competing) {
+          throw new ControlStateConflictError('Another deployment operation is already active')
+        }
+      }
+
       const id = randomUUID()
       const timestamp = now.toISOString()
       database
@@ -573,6 +667,54 @@ export function getInfrastructureOperation(path: string, id: string) {
   }
 }
 
+export function listInfrastructureOperations(
+  path: string,
+  filter: Readonly<{
+    operationTypes?: readonly InfrastructureOperation['operationType'][]
+    statuses?: readonly InfrastructureOperation['status'][]
+  }> = {},
+) {
+  const operationTypes = z
+    .array(z.enum(['deploy', 'rollback', 'restore', 'recovery', 'server-migration']))
+    .parse(filter.operationTypes ?? [])
+  const statuses = z
+    .array(
+      z.enum([
+        'queued',
+        'claimed',
+        'running',
+        'needs-attention',
+        'completed',
+        'failed',
+        'cancelled',
+      ]),
+    )
+    .parse(filter.statuses ?? [])
+  const clauses: string[] = []
+  const values: string[] = []
+  if (operationTypes.length > 0) {
+    clauses.push(`operation_type IN (${operationTypes.map(() => '?').join(', ')})`)
+    values.push(...operationTypes)
+  }
+  if (statuses.length > 0) {
+    clauses.push(`status IN (${statuses.map(() => '?').join(', ')})`)
+    values.push(...statuses)
+  }
+  const database = openControlState(path)
+  try {
+    return database
+      .prepare(
+        `SELECT * FROM infrastructure_operations
+         ${clauses.length === 0 ? '' : `WHERE ${clauses.join(' AND ')}`}
+         ORDER BY created_at, id`,
+      )
+      .all(...values)
+      .map(mapOperation)
+  } finally {
+    database.close()
+  }
+}
+
 export function claimNextInfrastructureOperation(
   path: string,
   leaseOwner: string,
@@ -620,7 +762,9 @@ export function claimNextInfrastructureOperation(
       database
         .prepare(
           `UPDATE infrastructure_operations
-           SET status = 'claimed', phase = 'claimed', lease_owner = ?, lease_expires_at = ?,
+           SET status = 'claimed',
+               phase = CASE WHEN phase IN ('accepted', 'lease-expired') THEN 'claimed' ELSE phase END,
+               lease_owner = ?, lease_expires_at = ?,
                fencing_token = fencing_token + 1, updated_at = ?
            WHERE id = ? AND status = 'queued'`,
         )
@@ -685,7 +829,9 @@ export function startInfrastructureOperation(
       database
         .prepare(
           `UPDATE infrastructure_operations
-           SET status = 'running', phase = 'executing', updated_at = ?
+           SET status = 'running',
+               phase = CASE WHEN phase = 'claimed' THEN 'executing' ELSE phase END,
+               updated_at = ?
            WHERE id = ? AND status = 'claimed' AND lease_owner = ? AND fencing_token = ?`,
         )
         .run(timestamp, operation.id, lease.leaseOwner, lease.fencingToken)
@@ -749,15 +895,360 @@ export function heartbeatInfrastructureOperation(
   }
 }
 
+export function updateInfrastructureOperationPhase(
+  path: string,
+  id: string,
+  lease: LeaseIdentity,
+  phaseInput: string,
+  details: Readonly<Record<string, unknown>> = {},
+  now = new Date(),
+) {
+  const phase = z.string().trim().min(1).max(200).parse(phaseInput)
+  const database = openControlState(path)
+  try {
+    return transaction(database, () => {
+      const operation = mapOperation(
+        database
+          .prepare('SELECT * FROM infrastructure_operations WHERE id = ?')
+          .get(z.uuid().parse(id)),
+      )
+      requireActiveLease(operation, lease, now, ['running'])
+      const timestamp = now.toISOString()
+      database
+        .prepare(
+          `UPDATE infrastructure_operations
+           SET phase = ?, updated_at = ?
+           WHERE id = ? AND status = 'running' AND lease_owner = ? AND fencing_token = ?`,
+        )
+        .run(phase, timestamp, operation.id, lease.leaseOwner, lease.fencingToken)
+      appendAudit(database, {
+        actorId: lease.leaseOwner,
+        createdAt: timestamp,
+        details: { ...details, fencingToken: lease.fencingToken, phase },
+        eventType: 'infrastructure_operation_phase_changed',
+        operationId: operation.id,
+        outcome: 'accepted',
+      })
+      return mapOperation(
+        database.prepare('SELECT * FROM infrastructure_operations WHERE id = ?').get(operation.id),
+      )
+    })
+  } finally {
+    database.close()
+  }
+}
+
+export function requeueDeploymentOperationForReconciliation(
+  path: string,
+  id: string,
+  now = new Date(),
+) {
+  const database = openControlState(path)
+  try {
+    return transaction(database, () => {
+      const operation = mapOperation(
+        database
+          .prepare('SELECT * FROM infrastructure_operations WHERE id = ?')
+          .get(z.uuid().parse(id)),
+      )
+      if (
+        operation.status !== 'needs-attention' ||
+        (operation.operationType !== 'deploy' && operation.operationType !== 'rollback')
+      ) {
+        throw new ControlStateConflictError('Only interrupted deployment operations can reconcile')
+      }
+      const timestamp = now.toISOString()
+      database
+        .prepare(
+          `UPDATE infrastructure_operations
+           SET status = 'queued', updated_at = ?
+           WHERE id = ? AND status = 'needs-attention'`,
+        )
+        .run(timestamp, operation.id)
+      appendAudit(database, {
+        actorId: 'deploy-agent:deployment-reconciliation',
+        createdAt: timestamp,
+        details: { persistedPhase: operation.phase },
+        eventType: 'deployment_operation_requeued_for_reconciliation',
+        operationId: operation.id,
+        outcome: 'accepted',
+      })
+      return mapOperation(
+        database.prepare('SELECT * FROM infrastructure_operations WHERE id = ?').get(operation.id),
+      )
+    })
+  } finally {
+    database.close()
+  }
+}
+
+const deploymentSlotSchema = z.enum(['blue', 'green'])
+const deploymentShaSchema = z.string().regex(/^[a-f0-9]{40}$/)
+const deploymentDigestSchema = z.string().regex(/^sha256:[a-f0-9]{64}$/)
+
+export function initializeDeploymentRuntime(
+  path: string,
+  release: Readonly<{ digest: string; sha: string; slot: 'blue' | 'green' }>,
+  actorId = 'deploy-agent:deployment-reconciliation',
+  now = new Date(),
+) {
+  const validated = {
+    digest: deploymentDigestSchema.parse(release.digest),
+    sha: deploymentShaSchema.parse(release.sha),
+    slot: deploymentSlotSchema.parse(release.slot),
+  }
+  const database = openControlState(path)
+  try {
+    return transaction(database, () => {
+      const current = readDeploymentRuntimeState(database)
+      if (current.activeSlot !== 'none') {
+        if (
+          current.activeSlot !== validated.slot ||
+          current.currentSha !== validated.sha ||
+          current.currentDigest !== validated.digest
+        ) {
+          throw new ControlStateConflictError('Deployment runtime is already initialized')
+        }
+        return current
+      }
+      const timestamp = now.toISOString()
+      database
+        .prepare(
+          `UPDATE control_runtime_state
+           SET active_slot = ?, current_sha = ?, current_digest = ?, updated_at = ?
+           WHERE singleton_id = 1 AND active_slot = 'none'`,
+        )
+        .run(validated.slot, validated.sha, validated.digest, timestamp)
+      appendAudit(database, {
+        actorId,
+        createdAt: timestamp,
+        details: validated,
+        eventType: 'deployment_runtime_initialized',
+        operationId: null,
+        outcome: 'accepted',
+      })
+      return readDeploymentRuntimeState(database)
+    })
+  } finally {
+    database.close()
+  }
+}
+
+export function recordDeploymentCutoverIntent(
+  path: string,
+  operationId: string,
+  lease: LeaseIdentity,
+  release: Readonly<{ digest: string; sha: string; slot: 'blue' | 'green' }>,
+  now = new Date(),
+) {
+  const validated = {
+    digest: deploymentDigestSchema.parse(release.digest),
+    sha: deploymentShaSchema.parse(release.sha),
+    slot: deploymentSlotSchema.parse(release.slot),
+  }
+  const database = openControlState(path)
+  try {
+    return transaction(database, () => {
+      const operation = mapOperation(
+        database
+          .prepare('SELECT * FROM infrastructure_operations WHERE id = ?')
+          .get(z.uuid().parse(operationId)),
+      )
+      requireActiveLease(operation, lease, now, ['running'])
+      const runtime = readDeploymentRuntimeState(database)
+      if (runtime.activeSlot === 'none' || runtime.activeSlot === validated.slot) {
+        throw new ControlStateConflictError('Cutover target must be the inactive slot')
+      }
+      const timestamp = now.toISOString()
+      database
+        .prepare(
+          `UPDATE control_runtime_state
+           SET pending_slot = ?, pending_sha = ?, pending_digest = ?, updated_at = ?
+           WHERE singleton_id = 1`,
+        )
+        .run(validated.slot, validated.sha, validated.digest, timestamp)
+      appendAudit(database, {
+        actorId: lease.leaseOwner,
+        createdAt: timestamp,
+        details: validated,
+        eventType: 'deployment_cutover_intent_recorded',
+        operationId: operation.id,
+        outcome: 'accepted',
+      })
+      return readDeploymentRuntimeState(database)
+    })
+  } finally {
+    database.close()
+  }
+}
+
+export function commitDeploymentCutover(
+  path: string,
+  operationId: string,
+  lease: LeaseIdentity,
+  stabilizationSeconds: number,
+  now = new Date(),
+) {
+  const stabilization = z.number().int().nonnegative().max(86_400).parse(stabilizationSeconds)
+  const database = openControlState(path)
+  try {
+    return transaction(database, () => {
+      const operation = mapOperation(
+        database
+          .prepare('SELECT * FROM infrastructure_operations WHERE id = ?')
+          .get(z.uuid().parse(operationId)),
+      )
+      requireActiveLease(operation, lease, now, ['running'])
+      const runtime = readDeploymentRuntimeState(database)
+      if (
+        runtime.activeSlot === 'none' ||
+        runtime.pendingSlot === 'none' ||
+        runtime.pendingSha === null ||
+        runtime.pendingDigest === null
+      ) {
+        throw new ControlStateConflictError('No complete deployment cutover intent exists')
+      }
+      const timestamp = now.toISOString()
+      const stabilizationUntil = new Date(now.getTime() + stabilization * 1_000).toISOString()
+      database
+        .prepare(
+          `UPDATE control_runtime_state
+           SET previous_slot = active_slot,
+               last_sha = current_sha,
+               last_digest = current_digest,
+               active_slot = pending_slot,
+               current_sha = pending_sha,
+               current_digest = pending_digest,
+               pending_slot = 'none', pending_sha = NULL, pending_digest = NULL,
+               cutover_at = ?, stabilization_until = ?, updated_at = ?
+           WHERE singleton_id = 1`,
+        )
+        .run(timestamp, stabilizationUntil, timestamp)
+      appendAudit(database, {
+        actorId: lease.leaseOwner,
+        createdAt: timestamp,
+        details: { stabilizationUntil },
+        eventType: 'deployment_cutover_committed',
+        operationId: operation.id,
+        outcome: 'succeeded',
+      })
+      return readDeploymentRuntimeState(database)
+    })
+  } finally {
+    database.close()
+  }
+}
+
+export function clearDeploymentCutoverIntent(
+  path: string,
+  operationId: string,
+  lease: LeaseIdentity,
+  now = new Date(),
+) {
+  const database = openControlState(path)
+  try {
+    return transaction(database, () => {
+      const operation = mapOperation(
+        database
+          .prepare('SELECT * FROM infrastructure_operations WHERE id = ?')
+          .get(z.uuid().parse(operationId)),
+      )
+      requireActiveLease(operation, lease, now, ['running'])
+      const timestamp = now.toISOString()
+      database
+        .prepare(
+          `UPDATE control_runtime_state
+           SET pending_slot = 'none', pending_sha = NULL, pending_digest = NULL, updated_at = ?
+           WHERE singleton_id = 1`,
+        )
+        .run(timestamp)
+      appendAudit(database, {
+        actorId: lease.leaseOwner,
+        createdAt: timestamp,
+        details: {},
+        eventType: 'deployment_cutover_intent_cleared',
+        operationId: operation.id,
+        outcome: 'accepted',
+      })
+      return readDeploymentRuntimeState(database)
+    })
+  } finally {
+    database.close()
+  }
+}
+
+export function discardDeploymentRollbackTarget(
+  path: string,
+  operationId: string,
+  lease: LeaseIdentity,
+  release: Readonly<{ digest: string; sha: string; slot: 'blue' | 'green' }>,
+  now = new Date(),
+) {
+  const validated = {
+    digest: deploymentDigestSchema.parse(release.digest),
+    sha: deploymentShaSchema.parse(release.sha),
+    slot: deploymentSlotSchema.parse(release.slot),
+  }
+  const database = openControlState(path)
+  try {
+    return transaction(database, () => {
+      const operation = mapOperation(
+        database
+          .prepare('SELECT * FROM infrastructure_operations WHERE id = ?')
+          .get(z.uuid().parse(operationId)),
+      )
+      requireActiveLease(operation, lease, now, ['running'])
+      const runtime = readDeploymentRuntimeState(database)
+      if (
+        runtime.previousSlot !== validated.slot ||
+        runtime.lastSha !== validated.sha ||
+        runtime.lastDigest !== validated.digest
+      ) {
+        throw new ControlStateConflictError('Rollback target does not match the expected release')
+      }
+      const timestamp = now.toISOString()
+      database
+        .prepare(
+          `UPDATE control_runtime_state
+           SET previous_slot = 'none', last_sha = NULL, last_digest = NULL, updated_at = ?
+           WHERE singleton_id = 1`,
+        )
+        .run(timestamp)
+      appendAudit(database, {
+        actorId: lease.leaseOwner,
+        createdAt: timestamp,
+        details: validated,
+        eventType: 'deployment_rollback_target_discarded',
+        operationId: operation.id,
+        outcome: 'succeeded',
+      })
+      return readDeploymentRuntimeState(database)
+    })
+  } finally {
+    database.close()
+  }
+}
+
 export function finishInfrastructureOperation(
   path: string,
   id: string,
   lease: LeaseIdentity,
-  result: Readonly<{ phase: string; status: 'completed' | 'failed' }>,
+  result: Readonly<{
+    errorSummary?: string | null
+    phase: string
+    status: 'completed' | 'failed'
+  }>,
   now = new Date(),
 ) {
   const phase = z.string().trim().min(1).max(200).parse(result.phase)
   const status = z.enum(['completed', 'failed']).parse(result.status)
+  const errorSummary = z
+    .string()
+    .trim()
+    .min(1)
+    .max(2_000)
+    .nullable()
+    .parse(result.errorSummary ?? null)
   const database = openControlState(path)
   try {
     return transaction(database, () => {
@@ -771,13 +1262,14 @@ export function finishInfrastructureOperation(
       database
         .prepare(
           `UPDATE infrastructure_operations
-           SET status = ?, phase = ?, finished_at = ?, lease_owner = NULL,
+           SET status = ?, phase = ?, error_summary = ?, finished_at = ?, lease_owner = NULL,
                lease_expires_at = NULL, updated_at = ?
            WHERE id = ? AND lease_owner = ? AND fencing_token = ?`,
         )
         .run(
           status,
           phase,
+          errorSummary,
           timestamp,
           timestamp,
           operation.id,
@@ -818,7 +1310,12 @@ export function reconcileInfrastructureOperations(path: string, now = new Date()
         .map(mapOperation)
       for (const operation of expiredRows) {
         const nextStatus = operation.status === 'claimed' ? 'queued' : 'needs-attention'
-        const nextPhase = operation.status === 'claimed' ? 'lease-expired' : 'reconcile-required'
+        const nextPhase =
+          operation.status === 'claimed'
+            ? 'lease-expired'
+            : operation.operationType === 'deploy' || operation.operationType === 'rollback'
+              ? operation.phase
+              : 'reconcile-required'
         database
           .prepare(
             `UPDATE infrastructure_operations
@@ -829,7 +1326,11 @@ export function reconcileInfrastructureOperations(path: string, now = new Date()
         appendAudit(database, {
           actorId: 'control-api:restart-reconciliation',
           createdAt: timestamp,
-          details: { previousLeaseOwner: operation.leaseOwner, previousStatus: operation.status },
+          details: {
+            persistedPhase: nextPhase,
+            previousLeaseOwner: operation.leaseOwner,
+            previousStatus: operation.status,
+          },
           eventType: 'infrastructure_operation_lease_expired',
           operationId: operation.id,
           outcome: 'accepted',

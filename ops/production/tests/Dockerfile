@@ -5,8 +5,12 @@ RUN npm install --global pnpm@11.23.0 \
 
 WORKDIR /workspace
 COPY .npmrc package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY tsconfig.json ./tsconfig.json
 RUN pnpm install --frozen-lockfile
 COPY tools/infra ./tools/infra
+COPY tools/control ./tools/control
+COPY tools/dev/control-auth-fixture.ts ./tools/dev/control-auth-fixture.ts
+COPY src ./src
 RUN pnpm exec esbuild tools/infra/test-production-foundation.ts --bundle --format=cjs --platform=node --target=node24 --outfile=/runner.cjs
 RUN pnpm exec esbuild tools/infra/test-recovery.ts --bundle --format=cjs --platform=node --target=node24 --outfile=/recovery-runner.cjs
 

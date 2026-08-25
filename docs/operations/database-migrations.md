@@ -66,7 +66,7 @@ Deployment CLI 根据 Migration Metadata/Policy 决定这一点，而不是依�
 
 Migration Orchestration Phase、Lock 与 Audit State 保存在 PostgreSQL-independent Control-state SQLite 中，不能要求先向目标 Production PostgreSQL 创建 Operation Job。实际执行某个 Schema Migration 当然要求 Database 可达；如果不可达，应安全停在明确 Phase，并保留可恢复状态。PostgreSQL Restore/Recovery 使用同一 Control/Recovery Engine。
 
-Phase 3 Runner 已强制解析 Metadata：未经显式 `allowContract` 不执行 Contract Migration；标记 `requiresFreshRecoverableBackup` 的 Migration 在没有 Fresh-recoverable-backup Evidence 时拒绝。Phase 14 才把这些输入接入 Shared Deployment Engine 和 SQLite Operation State；Phase 3 不创建 Deployment Operation。
+Phase 3 Runner 已强制解析 Metadata：未经显式 `allowContract` 不执行 Contract Migration；标记 `requiresFreshRecoverableBackup` 的 Migration 在没有 Fresh-recoverable-backup Evidence 时拒绝。Phase 14 已把这些输入接入 Shared Deployment Engine 和 SQLite Operation State。Production one-shot Runner 使用独立 `site_migrator_login` 直连内部 `postgres:5432`，保证 Session Advisory Lock 不经过 Transaction-pooling PgBouncer；它不执行 Cluster Role/Extension Bootstrap，只在 Migration 后应用由 Object Owner 有权设置的 Runtime Grant。Shared Engine 固定 `allowContract=false`，Fresh Evidence 必须来自有效、主副本与 R2 均 Fresh 且位于配置窗口内的 Recovery Record。
 
 ## Role Boundary
 
