@@ -30,7 +30,9 @@
 专门的 Test Suite 对以下两者运行相同 Storage Behavior：
 
 1. Local S3Mock
-2. 指定的 AList Non-production Test Bucket
+2. 指定的 S3-compatible Non-production Test Bucket
+
+Suite 与配置、CLI、Report Contract 必须保持 Provider-neutral。当前生产部署选择 AList，所以 Phase 11 的真实 Provider Evidence 使用 Owner 指定的 AList 非生产 Bucket；这不允许把 Adapter 或配置命名绑定到 AList。
 
 至少测试：
 

@@ -12,6 +12,9 @@ describe('site command boundary', () => {
       parseSiteCommand(['dev', 'reset', '--environment', 'local', '--confirm', 'RESET-LOCAL-DATA']),
     ).toEqual({ kind: 'dev-reset' })
     expect(parseSiteCommand([])).toEqual({ kind: 'help' })
+    expect(
+      parseSiteCommand(['storage', 'contract', 's3', '--confirm', 'S3-NON-PRODUCTION']),
+    ).toEqual({ kind: 'storage-contract-s3' })
     expect(parseSiteCommand(['translate', 'pending', '--dry-run'])).toEqual({
       action: 'create',
       kind: 'translate',
@@ -49,6 +52,10 @@ describe('site command boundary', () => {
     ).toThrow(SiteUsageError)
     expect(() => parseSiteCommand(['translate', 'pending', '--execute'])).toThrow()
     expect(() => parseSiteCommand(['translate', 'all', '--dry-run', '--force'])).toThrow()
+    expect(() => parseSiteCommand(['storage', 'contract', 's3'])).toThrow(SiteUsageError)
+    expect(() =>
+      parseSiteCommand(['storage', 'contract', 's3', '--confirm', 'PRODUCTION']),
+    ).toThrow(SiteUsageError)
   })
 
   it('pins the Node.js runtime', () => {

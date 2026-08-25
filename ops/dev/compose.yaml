@@ -161,10 +161,12 @@ services:
     environment:
       DATABASE_URL: postgresql://tungchiahui:local-only-postgres@pgbouncer:6432/tungchiahui
       NEXT_TELEMETRY_DISABLED: 1
-      S3_ACCESS_KEY_ID: local-only-access-key
-      S3_BUCKET: ${SITE_S3_BUCKET:?SITE_S3_BUCKET is required}
-      S3_ENDPOINT: http://s3mock:9090
-      S3_SECRET_ACCESS_KEY: local-only-secret-key
+      ASSET_S3_ACCESS_KEY_ID: local-only-access-key
+      ASSET_S3_BUCKET: ${SITE_S3_BUCKET:?SITE_S3_BUCKET is required}
+      ASSET_S3_ENDPOINT: http://s3mock:9090
+      ASSET_S3_FORCE_PATH_STYLE: "true"
+      ASSET_S3_REGION: us-east-1
+      ASSET_S3_SECRET_ACCESS_KEY: local-only-secret-key
       SITE_BASE_URL: http://localhost:${SITE_WEB_PORT:-3000}
       SITE_DEPLOYMENT_SHA: "0000000000000000000000000000000000000000"
       SITE_REVALIDATION_SECRET: local-only-phase6-revalidation-secret

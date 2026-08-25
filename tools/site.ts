@@ -5,6 +5,7 @@ import {
   parseSiteCommand,
   SiteUsageError,
 } from './site-command'
+import { runExternalS3ContractFromEnvironment } from './storage/run-s3-contract'
 import {
   cancelTranslationJob,
   createTranslationJob,
@@ -29,7 +30,11 @@ Translation:
   translate article <source-path> --dry-run
   translate <scope> --execute --budget-usd <amount>
   translate status [job-id]
-  translate cancel <job-id>`
+  translate cancel <job-id>
+
+Storage:
+  storage contract s3 --confirm S3-NON-PRODUCTION
+            Run the generic contract against the configured non-production S3-compatible target`
 
 async function main() {
   assertToolchain(process.versions.node)
@@ -52,6 +57,9 @@ async function main() {
       return 0
     case 'test':
       return executePackageScript('site:test')
+    case 'storage-contract-s3':
+      await runExternalS3ContractFromEnvironment()
+      return 0
     case 'translate': {
       const result =
         command.action === 'create'

@@ -103,6 +103,8 @@ Local Translation Test 默认使用 Fake/No-cost Provider。
 
 普通本地开发不需要 Production Paid AI Credential。
 
+Phase 11 的 Disposable Test Stack 自动在 S3Mock 上运行完整 Provider-neutral Storage Contract；普通 `./site test` 不读取 `S3_CONTRACT_*` 或访问外部 S3。真实 Implementation Test 必须显式执行 `./site storage contract s3 --confirm S3-NON-PRODUCTION`，并仅指向 Owner 授权的非生产 Target。
+
 Translation Provider 固定为 Deterministic Fake Provider，Cost 永远为 `0`。Fake Deploy Agent 只有 Health Capability，不挂载 Docker Socket、OpenResty 或 Production Recovery Directory，也不能执行真实部署。`control-api`、`content-worker` 与 Fake Deploy Agent 均使用 Read-only Root Filesystem、`no-new-privileges`、Drop-all Capability 且无 Docker Socket。
 
 ## Stop 与测试隔离

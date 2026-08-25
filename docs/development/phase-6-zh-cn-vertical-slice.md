@@ -32,7 +32,7 @@ A Phase 6 targeted read-only Legacy check was required only to recover exact fil
 | Blog/Wiki list and Home | Next.js; content type | none | content-type tag plus section/Home paths |
 | Owner dataset | Next.js; dataset key | none | reserved dataset tag; Phase 4 writes remain control-plane owned |
 | ROS2 archive / Next assets | Next.js static serving; file/hash path | framework/static policy | immutable artifact replacement |
-| S3 object gateway | Next.js `/api/assets/**`; validated object key | explicit public response policy | object-key replacement; Phase 11 validates AList semantics |
+| S3 object gateway | Next.js `/api/assets/**`; validated object key | explicit public response policy | object-key replacement; Phase 11 validates generic S3 semantics and the selected AList implementation |
 
 The content worker signs a strict revalidation payload with HMAC and calls the internal Next.js endpoint. Content materialization commits before hooks; if hook delivery fails, the PostgreSQL job persists a `side_effects` progress record and replays the exact hook input without fetching or materializing content again. Translation and search hooks remain explicit zero-cost deferred boundaries for Phases 8 and 10.
 

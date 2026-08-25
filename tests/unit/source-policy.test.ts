@@ -45,6 +45,32 @@ describe('source policy', () => {
     expect(violations).toEqual([])
   })
 
+  it('keeps the S3 adapter server-only and canonical content out of object storage', () => {
+    const violations = analyzeSourceFiles(
+      repositoryRoot,
+      virtualFiles({
+        'src/components/client.tsx':
+          "'use client'\nimport {storage} from '@/storage/s3-adapter'\nvoid storage",
+        'src/content/ingestion.ts': "import {bridge} from '@/lib/storage-bridge'\nvoid bridge",
+        'src/lib/storage-bridge.ts': "export {storage} from '@/storage/s3-adapter'",
+        'src/storage/s3-adapter.ts': 'export const storage = true',
+      }),
+    )
+
+    expect(violations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          file: 'src/components/client.tsx',
+          rule: 'server-client-boundary',
+        }),
+        expect.objectContaining({
+          file: 'src/content/ingestion.ts',
+          rule: 'canonical-content-storage',
+        }),
+      ]),
+    )
+  })
+
   it('rejects JavaScript application files and explicit any', () => {
     const violations = analyzeSourceFiles(
       repositoryRoot,

@@ -107,6 +107,11 @@ docs/planning/implementation-plan.md
 - `development/phase-10-pgroonga-search.md` — Locale Projection、PGroonga Ranking、API/UI、Durable Reindex、Cache 与 Recovery Contract。
 - `development/phase-10-verification-report.md` — Relevance、Locale、Migration、Reindex、Cache、E2E 与完整质量 Gate 证据。
 
+## Phase 11 S3-compatible Asset Contract
+
+- `development/phase-11-s3-compatible-asset-contract.md` — Provider-neutral Adapter、Object/Cache/CDN Policy、Credential Split、Contract Suite 与安全 Cleanup。
+- `development/phase-11-verification-report.md` — S3Mock、真实 AList 非生产 Evidence、应用加载、清理与完整质量 Gate 证据。
+
 ## Current implementation handoff
 
 - `planning/current-state.md` — 已完成 Phase、实际能力、Stub/Fake、已知限制、Legacy 回查规则与下一 Phase Prerequisite。

@@ -8,9 +8,9 @@
 
 ```text
 DATABASE_URL
-S3_ENDPOINT
-S3_BUCKET
-CDN_BASE_URL
+ASSET_S3_ENDPOINT
+ASSET_S3_BUCKET
+ASSET_CDN_BASE_URL
 SITE_BASE_URL
 REVALIDATION_SECRET
 TRANSLATION_API_KEY
@@ -81,6 +81,20 @@ Production Secret Change 应当是有意且可审计的。
 - Deployment/Revalidation Secret
 - age Recipient/Key
 
+## S3-compatible Asset 与 Contract 配置
+
+Application Asset、External Contract Test 和 Backup 必须使用不同 Namespace 与 Identity：
+
+```text
+ASSET_S3_*
+S3_CONTRACT_*
+BACKUP_S3_*
+```
+
+`S3_CONTRACT_*` 是 Operator 验收专用的 Provider-neutral 配置，可指向任意明确授权的 S3-compatible 非生产 Target；其中没有 Provider 类型或 Label，也不允许按实现名称选择分支。External Contract 只通过显式 `./site storage contract s3 --confirm S3-NON-PRODUCTION` 读取这些值，普通 Local/Test 和 Production Application Runtime 不读取它们，也不得把这组变量部署给 Production Application、`content-worker`、`control-api` 或 `deploy-agent`。当前 Production 选用 AList，因此 Phase 11 Verification Report 需另外记录 AList 非生产实例的兼容证据，但该部署事实不进入配置边界。
+
+Application 使用只读 Adapter/最小权限 Asset Identity。Contract Identity 只允许操作指定 Test Bucket，并只清理随机唯一 Prefix 下自己创建的 Object。`BACKUP_S3_*` 留给 Phase 13，不得与前两者复用。
+
 ## 新服务器
 
 Provisioning 必须使用以下内容重新构建 Production Environment File：
@@ -99,7 +113,7 @@ Provisioning 必须使用以下内容重新构建 Production Environment File：
 
 ```text
 PUBLIC_SITE_URL=https://www.tungchiahui.cn
-CDN_BASE_URL=https://cdn.tungchiahui.cn
+ASSET_CDN_BASE_URL=https://cdn.tungchiahui.cn
 PRODUCTION_ORIGIN_HOST=ddns.tungchiahui.cn
 ```
 

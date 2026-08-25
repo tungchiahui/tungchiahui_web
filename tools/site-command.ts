@@ -13,6 +13,7 @@ export type SiteCommand =
   | Readonly<{ kind: 'dev-start' }>
   | Readonly<{ kind: 'dev-stop' }>
   | Readonly<{ kind: 'help' }>
+  | Readonly<{ kind: 'storage-contract-s3' }>
   | Readonly<{ kind: 'test' }>
   | Readonly<{
       action: 'create'
@@ -154,6 +155,23 @@ export function parseSiteCommand(arguments_: readonly string[]): SiteCommand {
       scope: scope.data,
     })
     return Object.freeze({ action: 'create', kind: 'translate', request })
+  }
+
+  if (
+    arguments_.length === 5 &&
+    arguments_[0] === 'storage' &&
+    arguments_[1] === 'contract' &&
+    arguments_[2] === 's3' &&
+    arguments_[3] === '--confirm' &&
+    arguments_[4] === 'S3-NON-PRODUCTION'
+  ) {
+    return Object.freeze({ kind: 'storage-contract-s3' })
+  }
+
+  if (arguments_[0] === 'storage') {
+    throw new SiteUsageError(
+      'External S3 contract requires: storage contract s3 --confirm S3-NON-PRODUCTION',
+    )
   }
 
   throw new SiteUsageError('Invalid or ambiguous command arguments')

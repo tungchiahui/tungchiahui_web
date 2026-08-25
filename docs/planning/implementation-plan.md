@@ -1,7 +1,7 @@
 # Website V2 分阶段实施计划
 
-> Status: In progress — Phase 0–10 complete
-> Current Phase: Awaiting Owner authorization for Phase 11
+> Status: In progress — Phase 0–11 complete
+> Current Phase: Awaiting Owner authorization for Phase 12
 > Execution Model: Hard-gated, one Phase at a time
 > Scope: 从新的 Next.js V2 Repository 基线推进到替换旧 Nuxt Production Site
 
@@ -20,7 +20,7 @@
 - [x] Phase 8 — Translation Memory 与 en-US Fallback
 - [x] Phase 9 — 显式付费 AI Translation
 - [x] Phase 10 — PGroonga Search 与 Cache Correctness
-- [ ] Phase 11 — AList S3 Asset Contract
+- [x] Phase 11 — S3-compatible Asset Contract（AList Evidence）
 - [ ] Phase 12 — Production Infrastructure、Ansible 与 Container Hardening
 - [ ] Phase 13 — Backup、PITR 与 PostgreSQL-independent Recovery
 - [ ] Phase 14 — Shared Deployment Engine 与 Full Blue-Green
@@ -977,11 +977,11 @@ Canonical、Converted 和 English/Fallback Content State 已明确，可以建�
 
 ---
 
-## Phase 11 — AList S3 Asset Contract
+## Phase 11 — S3-compatible Asset Contract（AList Evidence）
 
 ### 目标
 
-完成 S3-compatible Asset Boundary、Local S3Mock Integration 与指定 AList 非生产 Bucket Contract Test，证明 CDN/Metadata/Key Semantics 可用于生产资源。
+完成 Provider-neutral S3-compatible Asset Boundary、Local S3Mock Integration 与可配置非生产 Bucket Contract Test；并以当前 Production 选型 AList 的非生产 Target 证明 CDN/Metadata/Key Semantics 可用于生产资源。
 
 ### 为什么此时实施
 
@@ -1001,20 +1001,20 @@ Public Asset Read 已在 Phase 6 形成，生产 Infrastructure 前必须用真�
 
 ### Scope
 
-- Image、Attachment、Music、Mirrored Static Asset 的 S3 Adapter、CDN URL、Credential Split、Contract Suite。
+- Image、Attachment、Music、Mirrored Static Asset 的通用 S3 Adapter、CDN URL、Credential Split、Provider-neutral Contract Suite。
 - Backup Repository 的精确 pgBackRest Compatibility Decision 留给 Phase 13，但复用本阶段证据。
 - 引用：ADR 0003、0007；Testing Strategy；Security；Project Requirements。
 
 ### Task Checklist
 
-- [ ] 实现单一 S3-compatible Adapter，不引入第二套 Object-storage Abstraction。
-- [ ] 定义 Object Key、Content-Type、Cache-Control、Metadata、Public-read/Private-write Policy。
-- [ ] 在 S3Mock 上实现 PUT/GET/HEAD/DELETE/List/Prefix/Overwrite Contract Suite。
-- [ ] 覆盖 ETag Expectation、Unicode Key、Missing Key、Representative Object Size。
-- [ ] 使用独立 AList Non-production Test Credential/Bucket 运行同一 Contract Suite。
-- [ ] 验证 CDN URL、Immutable/Mutable Asset Cache Behavior 与应用加载。
-- [ ] 隔离 Application Asset、CI Contract Test、Backup Credential。
-- [ ] 明确 Canonical Article Markdown 永不进入 S3。
+- [x] 实现单一 S3-compatible Adapter，不引入第二套 Object-storage Abstraction。
+- [x] 定义 Object Key、Content-Type、Cache-Control、Metadata、Public-read/Private-write Policy。
+- [x] 在 S3Mock 上实现 PUT/GET/HEAD/DELETE/List/Prefix/Overwrite Contract Suite。
+- [x] 覆盖 ETag Expectation、Unicode Key、Missing Key、Representative Object Size。
+- [x] 使用通用 `S3_CONTRACT_*` 配置和独立 Non-production Test Credential/Bucket 运行同一 Contract Suite；当前 Exit Evidence Target 为 AList。
+- [x] 实现并在 Unit/E2E 验证 CDN URL、Immutable/Mutable Asset Cache Behavior 与应用加载；真实 CDN Contract Evidence 仍属于下方未完成 Verification。
+- [x] 隔离 Application Asset、CI Contract Test、Backup Credential。
+- [x] 明确 Canonical Article Markdown 永不进入 S3。
 
 ### 本 Phase 明确不做什么
 
@@ -1024,33 +1024,33 @@ Public Asset Read 已在 Phase 6 形成，生产 Infrastructure 前必须用真�
 
 ### Tests / Verification
 
-- [ ] 全部 Contract Case 在 S3Mock 通过。
-- [ ] 经 Owner 授权后，全部适用 Case 在指定 AList 非生产 Bucket 通过并清理测试 Object。
-- [ ] Credential Boundary Test 证明 Application Public-read 不等于 Public-write。
-- [ ] CDN/Cache Header 和 Unicode/Metadata Behavior 符合应用假设。
+- [x] 全部 Contract Case 在 S3Mock 通过。
+- [x] 经 Owner 授权后，全部适用 Case 在指定 S3-compatible 非生产 Bucket 通过并清理测试 Object；当前 Production 选型须由 AList 非生产 Target 补齐证据。
+- [x] Credential Boundary Test 证明 Application Public-read 不等于 Public-write。
+- [x] CDN/Cache Header 和 Unicode/Metadata Behavior 符合应用假设。
 
 ### Acceptance Criteria
 
-- [ ] 应用依赖的 S3 Behavior 在 Emulator 与真实 AList 均有证据。
-- [ ] Local Test 无 Production Credential，Production Resource 未受影响。
-- [ ] Static Asset 与 Canonical Article Content 的职责边界保持不变。
+- [x] 应用依赖的 S3 Behavior 在 Emulator 与当前 Production S3-compatible Implementation（AList）均有证据，代码契约不绑定 Provider。
+- [x] Local Test 无 Production Credential，Production Resource 未受影响。
+- [x] Static Asset 与 Canonical Article Content 的职责边界保持不变。
 
 ### Exit Gate
 
-- [ ] S3Mock 与 AList 非生产 Contract Report 通过或明确记录 Blocker。
-- [ ] 所有测试 Object/Credential 使用均已审计和安全清理。
-- [ ] 创建聚焦 Commit，建议：`test(storage): complete phase 11 alist contract`。
-- [ ] Commit 后停止并向 Owner 报告，不自动进入 Phase 12。
+- [x] S3Mock 与配置的 S3-compatible 非生产 Contract Report 通过；当前阶段 Report 明确记录 AList Target Evidence。
+- [x] 所有测试 Object/Credential 使用均已审计和安全清理。
+- [x] 创建聚焦 Commit：`test(storage): complete phase 11 s3 contract`。
+- [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 12。
 
 ### 本阶段完成后形成的 Artifact / Capability
 
-- 经真实 Contract 验证的 AList S3 Asset Layer、CDN/Cache Contract 和分离 Credential Model。
+- 经真实 Implementation Contract 验证的通用 S3-compatible Asset Layer、AList Evidence、CDN/Cache Contract 和分离 Credential Model。
 
 ### Agent Rules for This Phase
 
-- 外部 AList Test 必须获得明确非生产 Target；Target 不清楚就停止。
+- 外部 S3 Contract Test 必须获得明确非生产 Target；当前 AList Evidence Target 不清楚就停止。
 - 绝不对 Production Bucket 做 DELETE/Overwrite Contract Test。
-- 不因 AList 差异静默增加第二套 Storage System；架构变化先 ADR。
+- 不因某个 S3-compatible Provider 差异静默增加第二套 Storage Abstraction/System；架构变化先 ADR。
 - 完成 Exit Gate 后更新本计划、提交 Phase Commit、报告并停止。
 
 ---

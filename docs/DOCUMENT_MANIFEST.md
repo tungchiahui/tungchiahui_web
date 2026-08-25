@@ -56,6 +56,8 @@
 - `docs/development/phase-9-verification-report.md`
 - `docs/development/phase-10-pgroonga-search.md`
 - `docs/development/phase-10-verification-report.md`
+- `docs/development/phase-11-s3-compatible-asset-contract.md`
+- `docs/development/phase-11-verification-report.md`
 - `docs/development/testing-strategy.md`
 - `docs/migration/nuxt-to-next.md`
 - `docs/migration/legacy-discovery-baseline.md`

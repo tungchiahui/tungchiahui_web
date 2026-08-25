@@ -1,13 +1,12 @@
 import {
   CreateBucketCommand,
-  DeleteObjectCommand,
-  GetObjectCommand,
   HeadBucketCommand,
   ListBucketsCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3'
-
+import { assetCachePolicy } from '../../src/storage/policy'
+import { S3ObjectStorageAdapter } from '../../src/storage/s3-adapter'
 import type { LocalInfrastructureConfig } from './config'
 
 function createClient(configuration: LocalInfrastructureConfig) {
@@ -87,30 +86,33 @@ export async function ensureBucket(configuration: LocalInfrastructureConfig) {
 }
 
 export async function runS3Smoke(configuration: LocalInfrastructureConfig) {
-  const client = createClient(configuration)
+  const storage = new S3ObjectStorageAdapter({
+    accessKeyId: configuration.s3AccessKeyId,
+    bucket: configuration.s3Bucket,
+    endpoint: configuration.s3Endpoint,
+    forcePathStyle: true,
+    region: 'us-east-1',
+    secretAccessKey: configuration.s3SecretAccessKey,
+  })
   const key = 'phase-2/smoke.txt'
   const expected = `isolated-${configuration.mode}`
 
   try {
-    await client.send(
-      new PutObjectCommand({
-        Body: expected,
-        Bucket: configuration.s3Bucket,
-        ContentType: 'text/plain; charset=utf-8',
-        Key: key,
-      }),
-    )
-    const object = await client.send(
-      new GetObjectCommand({ Bucket: configuration.s3Bucket, Key: key }),
-    )
-    const actual = await object.Body?.transformToString()
+    await storage.putObject({
+      body: expected,
+      cacheControl: assetCachePolicy.mutable,
+      contentType: 'text/plain; charset=utf-8',
+      key,
+    })
+    const object = await storage.getObject(key)
+    const actual = await new Response(object.body).text()
 
     if (actual !== expected) {
       throw new Error('S3Mock smoke object content did not round-trip')
     }
 
-    await client.send(new DeleteObjectCommand({ Bucket: configuration.s3Bucket, Key: key }))
+    await storage.deleteObject(key)
   } finally {
-    client.destroy()
+    storage.destroy()
   }
 }

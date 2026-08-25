@@ -3,6 +3,7 @@ import { dirname, extname, join, relative, resolve, sep } from 'node:path'
 
 export type SourcePolicyRule =
   | 'application-javascript'
+  | 'canonical-content-storage'
   | 'nextjs-ops-route'
   | 'server-client-boundary'
   | 'ts-ignore'
@@ -79,7 +80,10 @@ function isClientModule(source: string) {
 
 function isServerOnlyModule(file: string, source: string) {
   return (
-    normalizePath(file).includes('/src/server/') || localSpecifiers(source).includes('server-only')
+    normalizePath(file).includes('/src/server/') ||
+    normalizePath(file).endsWith('/src/storage/configuration.ts') ||
+    normalizePath(file).endsWith('/src/storage/s3-adapter.ts') ||
+    localSpecifiers(source).includes('server-only')
   )
 }
 
@@ -290,6 +294,36 @@ export function analyzeSourceFiles(
     }
 
     visit(clientFile, [normalizePath(relative(repositoryRoot, clientFile))])
+  }
+
+  for (const [contentFile] of sourceFiles) {
+    const displayFile = normalizePath(relative(repositoryRoot, contentFile))
+    if (!displayFile.startsWith('src/content/')) continue
+    const visited = new Set<string>()
+
+    function visit(file: string, chain: readonly string[]) {
+      if (visited.has(file)) return
+      visited.add(file)
+      const source = sourceFiles.get(file)
+      if (source === undefined) return
+
+      for (const specifier of localSpecifiers(source)) {
+        const importedFile = resolveLocalImport(repositoryRoot, file, specifier, files)
+        if (!importedFile) continue
+        const nextChain = [...chain, normalizePath(relative(repositoryRoot, importedFile))]
+        if (normalizePath(importedFile).includes('/src/storage/')) {
+          violations.push({
+            file: displayFile,
+            message: `Canonical content path must not reach object storage: ${nextChain.join(' -> ')}`,
+            rule: 'canonical-content-storage',
+          })
+          continue
+        }
+        visit(importedFile, nextChain)
+      }
+    }
+
+    visit(contentFile, [displayFile])
   }
 
   return violations

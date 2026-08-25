@@ -3,8 +3,10 @@ import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 
 import { z } from 'zod'
+import { S3ObjectStorageAdapter } from '../../src/storage/s3-adapter'
 import { verifyPhase5Ingestion } from '../content/test-ingestion'
 import { verifyPhase10CacheInvalidation, verifyPhase10Search } from '../search/test-search'
+import { runStorageContract } from '../storage/contract'
 import { verifyPhase9Translation } from '../translation/test-execution'
 import { verifyPhase6Revalidation } from '../web/test-revalidation'
 import { assertDockerPrerequisites, ComposeProject } from './compose'
@@ -403,6 +405,22 @@ async function run() {
     await runInfrastructureHooks(repositoryRoot, compose)
     verifyPostgresAndPgBouncer(compose)
     await runS3Smoke(configuration)
+    const contractStorage = new S3ObjectStorageAdapter({
+      accessKeyId: configuration.s3AccessKeyId,
+      bucket: configuration.s3Bucket,
+      endpoint: configuration.s3Endpoint,
+      forcePathStyle: true,
+      region: 'us-east-1',
+      secretAccessKey: configuration.s3SecretAccessKey,
+    })
+    try {
+      const storageReport = await runStorageContract(contractStorage)
+      console.log(
+        `S3Mock storage contract: PASS (${storageReport.cases.length} cases; cleanup ${storageReport.cleanup})`,
+      )
+    } finally {
+      contractStorage.destroy()
+    }
     await fetchServiceHealth(new URL('/health', configuration.controlApiUrl), 'control-api')
     await fetchServiceHealth(
       new URL('/health', configuration.fakeDeployAgentUrl),

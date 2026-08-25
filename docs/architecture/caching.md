@@ -49,7 +49,7 @@ Phase 10 Search API/Page 的 HTTP Response 对 Edge/OpenResty 使用 `no-store`�
 
 使用稳定但可变 Key 的用户上传资源需要明确的 Cache Policy。
 
-Phase 6 Local `/api/assets/**` Gateway 只接受经过 Validation 的 Object Key，并通过 S3Mock 验证 Content-Type 与读取行为。它不是 Phase 11 AList Production Contract 的替代证据。
+Phase 6 Local `/api/assets/**` Gateway 只接受经过 Validation 的 Object Key，并通过 S3Mock 验证 Content-Type 与读取行为。它不是 Phase 11 真实 S3-compatible Implementation Contract 的替代证据；当前 Production 选型仍需 AList 非生产 Evidence。
 
 ## UI/应用资源
 

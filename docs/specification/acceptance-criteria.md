@@ -57,7 +57,7 @@ Website V2 在满足以下标准之前，不视为 Production-ready。
 ## S3
 
 - [ ] Local Storage Integration 对 S3Mock 通过。
-- [ ] Storage Contract Suite 对指定 AList Test Bucket 通过。
+- [ ] Provider-neutral Storage Contract Suite 对指定的 S3-compatible Test Bucket 通过；当前 Production 选型还必须包含 AList 非生产证据。
 - [ ] Local Test 不使用 Production Credential。
 
 ## Deployment

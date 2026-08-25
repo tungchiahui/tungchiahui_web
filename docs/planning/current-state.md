@@ -1,7 +1,7 @@
 # Website V2 Current Implementation State
 
-> Status: Phase 0–10 completed; Phase 11 not started
-> Current Phase: Awaiting Owner authorization for Phase 11
+> Status: Phase 0–11 completed
+> Current Phase: Awaiting Owner authorization for Phase 12
 > Handoff audit date: 2026-08-25
 
 本文件是新 Claude Code/Codex 会话的简洁交接入口。它索引当前实际状态和容易遗漏的实施事实，不替代 `AGENTS.md`、Accepted ADR、架构规范或 `implementation-plan.md`。
@@ -30,8 +30,9 @@
 | 8 — Translation Memory | `feat(i18n): complete phase 8 translation memory` | Phase 8 Translation Memory 与 Verification | PASS；segmentation/reuse/pending/stale/mixed fallback/zero-cost gates |
 | 9 — Budgeted Translation | `feat(translation): complete phase 9 budgeted execution` | Phase 9 Budgeted Translation 与 Verification | PASS；explicit/dry-run/budget/partial/retry/authz/directionality gates |
 | 10 — PostgreSQL + PGroonga Search | `feat(search): complete phase 10 pgroonga search` | Phase 10 Search 与 Verification | PASS；relevance/locale/migration/reindex/cache/client-corpus gates |
+| 11 — S3-compatible Asset Contract | `test(storage): complete phase 11 s3 contract` | Generic S3 Adapter、Policy、S3Mock/AList Contract 与 Verification | PASS；8-case AList `TEST` Bucket/CDN evidence and cleanup complete |
 
-`implementation-plan.md` 中 Phase 0–10 的 Checklist 与 Overall Progress 已完成，Phase 11 保持未开始。任何后续 Agent 不得根据本文件自行越过 Owner 授权 Gate。
+`implementation-plan.md` 中 Phase 0–11 的 Checklist 与 Overall Progress 已完成。Phase 12 尚未获得 Owner 授权，任何后续 Agent 不得根据本文件自行开始。
 
 ## 3. Legacy durable baseline
 
@@ -55,7 +56,7 @@
 - en-US `document_translations` 绑定当前 Canonical Source Hash，并物化 reviewed/translated English + 最新 zh-CN Pending Fallback。Public DAL 拒绝 Source Hash 不匹配的旧行，页面按实际内容暴露 `fallback`、`mixed`、`translated` State；zh-HK/zh-TW 继续显示 `converted`。
 - Phase 0/5 exact Blog/Pinyin/approved Alias routes 已由真实 App Router E2E 覆盖；没有默认 Redirect Map。
 - 完整 frozen ROS2 Archive 位于 `public/docs/ros2`；Biome/Source Policy 只对该精确第三方输出目录豁免，不放宽应用 `.js/.jsx` 禁令。
-- Local S3Mock Seed 写入 deterministic SVG；`/api/assets/**` 是 server-only validated read gateway。Production AList Contract 仍未验证。
+- Local S3Mock Seed 写入 deterministic SVG；`/api/assets/**` 现在复用 server-only Generic S3 Adapter。共享 7-case Contract 在 S3Mock 通过并完成清理；通用 External CLI、Credential Split、Cache/CDN/Object-key Policy 和 Canonical-content-to-S3 Source Policy 已实现。Production-compatible AList 非生产 Evidence 仍未取得。
 - Next Cache 无任意 TTL：Article Route Tag、Content-type List Tag 与 Home/List/Article Path 精确失效。HMAC Endpoint 位于 `/api/internal/revalidate`，不属于 Privileged Ops Control Plane。
 - Content materialization 后 Hook 失败会把精确 `side_effects` Payload（含 Translation Metric）存入 PostgreSQL Job Progress；Retry 不再次 Fetch/Materialize。Phase 8 Translation Diff/Materialization 已在 Ingestion Transaction 内完成；Phase 10 Search Hook 只按受影响 Document/Locale 刷新 Projection，并保持同一 Durable Retry Contract。
 - Phase 9 Translation Job 使用配对的 PostgreSQL `operational_jobs`/`translation_jobs`：Control API 提供 create/read/list/cancel，`content-worker` Claim/Lease/Retry 并逐 Current Semantic Block 执行；没有进入 Control-state SQLite。
@@ -66,7 +67,7 @@
 - `/search`、Locale-prefixed Search Page 与 `GET /api/search` 完全 Server-side；Public Result 只含 Title/Locale/Route/Content Type/Snippet/Matched Context/Score，API 与 Edge/OpenResty 使用 `no-store`，Browser Bundle 不包含 Content Corpus。
 - Content/Translation Update 精确刷新受影响 Projection 与 Locale Search Tag；Full Reindex 使用 PostgreSQL `search_reindex` Job、`content-worker` Claim/Lease/Retry 与 Per-locale Transaction Lock。Next Search Cache Key 为 normalized Query/Locale/Limit、无任意 TTL。
 - `/api/health` 是 liveness；`/api/ready` 检查 PostgreSQL；`/api/version` 输出 validated Git SHA/development stub；均 `no-store`。
-- `./site check` 覆盖 Biome、Source Policy、Drizzle、Typecheck、Renovate 与 webpack Production Build。`./site test` 覆盖 20 files / 85 Unit、Disposable Integration（含 Search Relevance/Locale/Reindex/Retry/Cache 与既有 Translation Gate）、10 个真实 Playwright E2E 和 6-Migration Dedicated Suite。
+- `./site check` 覆盖 Biome、Source Policy、Drizzle、Typecheck、Renovate 与 webpack Production Build。Phase 11 当前 `./site test` 覆盖 21 files / 90 Unit、Disposable Integration（含共享 S3Mock Contract、Search Relevance/Locale/Reindex/Retry/Cache 与既有 Translation Gate）、10 个真实 Playwright E2E 和 6-Migration Dedicated Suite。
 - Phase 4 Control API/SQLite Recovery 与 Phase 5 GitHub Ingestion/Worker 权限边界均保持不变；`/api/ops/*` 没有进入 Next.js。
 
 ## 5. 当前 Stub/Fake 与替换责任
@@ -79,7 +80,7 @@
 | Translation Diff | Phase 8 transactional zero-cost reconcile | completed in Phase 8 |
 | Translation Provider/Dry-run/Budget Execution | validated vendor-neutral adapter + complete Fake/no-cost execution；concrete paid vendor unselected | production provider binding requires explicit non-production contract authorization |
 | Search Refresh/Query | production-shaped PostgreSQL Projection、PGroonga Query、Durable Reindex 与精确 Cache Invalidation | completed in Phase 10 |
-| S3Mock/Public Asset Gateway | local S3 API evidence only | Phase 11 AList non-production contract |
+| Generic S3/Public Asset Gateway | production-shaped generic Adapter plus S3Mock and AList `TEST` Bucket/CDN evidence | completed in Phase 11 |
 | GitHub polling default | idle to prevent implicit network; explicit repository enables read-only polling | Phase 15 workflow binding |
 | Owner Dataset | validated PostgreSQL public read + Phase 4 authorized CAS write | Phase 16 final trust/privacy review |
 | Fake Deploy Agent | health/identity only; no production capability | Phase 14 |
@@ -98,22 +99,23 @@
 - Phase 8 Migration 不在 Migration-time 猜测/回填旧 English。现有 en-US Row 的 `source_hash` 为 NULL 时 Public DAL 忽略；应用 Phase 8 后必须显式 Content Sync 才会建立 Segment Mapping、Pending 和 Current Mixed Materialization。zh-CN 发布不等待该 Backfill，Public Request 也不写 DB。
 - Normalization Version 当前固定为 1。任何改变 Identity/Normalization 的实现必须显式提升版本、提供安全重放/迁移计划，并更新稳定身份与重复 Block Fixture。
 - Glossary 任何会改变输出的编辑必须同时提升 `version` 与正整数 `revision`，并更新代表性 Unit/Integration Evidence。
-- S3Mock cannot prove AList metadata, ETag, Unicode-key and overwrite compatibility; Phase 11 must run the designated non-production contract before Production Infrastructure.
+- S3Mock alone cannot prove AList metadata, ETag, Unicode-key and overwrite compatibility. Phase 11 added the required AList `TEST` Bucket/CDN evidence; behavior-affecting storage changes must rerun both targets.
+- Owner clarified that AList Bucket `TEST` is the dedicated production-compatible contract target, not the production asset Bucket. Its CDN mapping is `/TEST`, while S3 keys are Bucket-root relative; no Provider-specific root-prefix configuration exists.
+- AList S3 GET/HEAD exposes no usable ETag and normalizes Cache-Control. ETag is therefore optional and never a correctness dependency; the application gateway derives content-addressed immutable or stable-key mutable response policy from validated object keys. Direct CDN is for content-addressed assets and the verified baseline is correct SVG MIME, ETag, `max-age=86400` and anonymous-write denial.
+- Filesystem-backed AList synthesizes an empty `tungchiahui-contract/` namespace directory without ETag/Last-Modified. It is not an object and is not removed by S3 DELETE. UUID-flat prefixes prevent per-run directory accumulation; final exact-prefix cleanup was empty.
 - Static ROS2 files are frozen third-party generated output. Do not run formatters or source analyzers inside that exact directory; Phase 18 refreshes/diffs from the then-current Legacy HEAD.
 - No Production, GitHub write, AList, DNS, paid AI, deploy, backup/restore or old-repository mutation occurred through Phase 10。Phase 10 完全依赖仓库内既有 Fixture，没有重新扫描或定点读取旧仓库。
-- 真实 Provider Contract Test 未运行：Owner 没有提供明确的非生产 Provider Target/Credential/付费授权。此为 Phase 9 Exit Gate 要求的安全分支，不是自动测试缺口；未来启用具体 Provider 前必须补做。
+- 真实 Translation Provider Contract Test 未运行：Owner 没有提供明确的非生产 Provider Target/Credential/付费授权。此为 Phase 9 Exit Gate 要求的安全分支，不是 S3 缺口；未来启用具体付费翻译 Provider 前必须补做。
 
-## 7. Phase 11 开始前 Prerequisite
+## 7. Phase 12 开始前 Prerequisite
 
-- Owner must explicitly authorize Phase 11; this handoff is not authorization.
-- Start from a clean worktree with the focused Phase 10 commit visible; report unknown changes before editing.
-- Read Phase 11 plan plus S3/Asset、Security、Testing Strategy、Migration、ADR 0003/0013 and Phase 6/10 implementation/verification reports.
-- Phase 11 必须使用 Owner 明确指定的 AList 非生产 Bucket/Credential 执行 Contract Test；未获得授权时停止，不得用 Production Bucket 补证据。
-- S3Mock 只证明 Local S3 API 行为，不能代替 AList 对 Metadata、ETag、Unicode Key、Overwrite、Missing-key 和代表性 Object Size 的兼容性证据。
-- Canonical Markdown、Runtime Translation/Search State 不得迁入 S3；Phase 10 Search Projection/Job/Cache Contract 保持 PostgreSQL-backed。
-- Contract Test 必须使用唯一 Prefix、只清理自己创建的 Object，并记录 Cleanup/Recovery 结果；不得扩大 `content-worker`、`control-api` 或 Public Next.js 的权限。
+- Owner must explicitly authorize Phase 12; this handoff is not authorization.
+- Start from the focused Phase 11 commit and a clean tracked worktree; `.env.local` remains Owner-owned, Gitignored and must never be staged.
+- Read the Phase 12 plan plus Infrastructure、Security、Deployment、Migration、ADR 0011/0012/0013/0014/0015 and Phase 4/11 verification evidence.
+- Preserve the single generic S3 Adapter and separate Asset/Contract/Backup credentials. Phase 12 may inject production Asset read credentials but must not deploy `S3_CONTRACT_*`.
+- Treat AList ETag as optional and keep cache correctness in key/Edge policy; do not add Provider-specific branches or weaken Canonical Markdown/PostgreSQL boundaries.
 
-Phase 11 has no code dependency blocker, but its external AList contract gate requires explicit Owner authorization, a designated non-production target and scoped credential. This handoff does not authorize that access.
+Phase 12 has no Phase 11 dependency blocker. The provider-neutral S3 Contract and AList evidence are complete, but this handoff does not authorize Phase 12.
 
 ## 8. 回查旧 myblog 的规则
 
