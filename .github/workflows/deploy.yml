@@ -1,0 +1,139 @@
+name: Application Deployment
+
+on:
+  workflow_run:
+    workflows: [Quality Gate]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      git_sha:
+        description: Full main-branch Git SHA with a successful Quality Gate
+        required: true
+        type: string
+      reason:
+        description: Audited retry or specified-SHA deployment reason
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: application-production-deployment
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build-and-publish-immutable-image
+    if: >-
+      (github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository) ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: read
+      packages: write
+    outputs:
+      git_sha: ${{ steps.release.outputs.git_sha }}
+      image_digest: ${{ steps.publish.outputs.image_digest }}
+    env:
+      IMAGE_REPOSITORY: ghcr.io/tungchiahui/tungchiahui_web
+    steps:
+      - name: Resolve a Quality-Gate-approved main release
+        id: release
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_SHA: ${{ inputs.git_sha }}
+          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_run" ]]; then
+            release_sha="$WORKFLOW_RUN_SHA"
+          else
+            release_sha="$REQUESTED_SHA"
+            quality_runs="$(gh api --method GET \
+              "/repos/$GITHUB_REPOSITORY/actions/workflows/quality.yml/runs" \
+              -f branch=main -f event=push -f status=success -f head_sha="$release_sha" -f per_page=100)"
+            jq -e --arg sha "$release_sha" \
+              '.workflow_runs | any(.head_sha == $sha and .conclusion == "success" and .event == "push")' \
+              <<<"$quality_runs" >/dev/null
+            comparison="$(gh api --method GET "/repos/$GITHUB_REPOSITORY/compare/$release_sha...main")"
+            jq -e '.status == "ahead" or .status == "identical"' <<<"$comparison" >/dev/null
+          fi
+          [[ "$release_sha" =~ ^[a-f0-9]{40}$ ]]
+          echo "git_sha=$release_sha" >>"$GITHUB_OUTPUT"
+
+      - name: Check out the approved release
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.release.outputs.git_sha }}
+
+      - name: Authenticate to GitHub Container Registry
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+
+      - name: Build and publish the Git-SHA image
+        id: publish
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.git_sha }}
+        shell: bash
+        run: |
+          image_tag="$IMAGE_REPOSITORY:$RELEASE_SHA"
+          docker build \
+            --build-arg "SITE_DEPLOYMENT_SHA=$RELEASE_SHA" \
+            --file ops/production/images/web.Dockerfile \
+            --tag "$image_tag" \
+            .
+          docker push "$image_tag"
+          repository_digest="$(docker image inspect --format '{{index .RepoDigests 0}}' "$image_tag")"
+          [[ "$repository_digest" == "$IMAGE_REPOSITORY@sha256:"* ]]
+          image_digest="${repository_digest#*@}"
+          [[ "$image_digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+          echo "image_digest=$image_digest" >>"$GITHUB_OUTPUT"
+
+  deploy:
+    name: shared-control-plane-deployment
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      RELEASE_REASON: ${{ inputs.reason || format('main Quality Gate run {0}', github.event.workflow_run.id) }}
+      RELEASE_SHA: ${{ needs.build.outputs.git_sha }}
+      RELEASE_DIGEST: ${{ needs.build.outputs.image_digest }}
+      SITE_CONTROL_API_URL: https://www.tungchiahui.cn
+    steps:
+      - name: Check out the reviewed workflow control client
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@008330803749db0355799c700092d9a85fd074e9 # v6.0.9
+        with:
+          version: 11.23.0
+          run_install: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install locked deployment client
+        run: pnpm install --frozen-lockfile
+
+      - name: Trigger and wait for the shared deployment engine
+        run: >-
+          ./site deploy "$RELEASE_SHA" --image-digest "$RELEASE_DIGEST"
+          --reason "$RELEASE_REASON" --wait

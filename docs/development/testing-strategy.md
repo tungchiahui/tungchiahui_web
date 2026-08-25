@@ -91,6 +91,8 @@ Phase 13 另加入 `test:recovery`：构建固定 pgBackRest 版本的 PostgreSQ
 
 Phase 14 扩展 `test:infra`：在同一临时 Host Root 和 Hardened Compose 中先 Migration/Seed/Reindex，再通过签名 Control API 执行真实 Inactive Green Deploy、全部 Candidate/Public Smoke、OpenResty Cutover、Retained Blue Rollback、Missing Digest Failure 和 PostgreSQL-down Dependency Failure。Unit Gate 注入 Pre/Post Smoke、Invalid Config 与四个 Crash Phase；Migration Suite 继续证明 Previous Schema/Blue-Green Overlap。测试不启用 Public Production Traffic。
 
+Phase 15 再把临时 OCI Registry 纳入 `test:infra`：Candidate 先以完整 Git SHA Label 推送，再从 Host Local Store 移除，强制 `deploy-agent` 只按 approved Repository + Registry Manifest Digest Pull，并验证 `RepoDigest` 与 OCI Revision。Workflow Policy Gate 解析 Quality/Application/Content/Translation 四条 Workflow，校验 Trigger、Environment、Concurrency、Permission、Pinned Action、共享 CLI 和 Forbidden Credential/Command；OIDC Unit 覆盖错误 Issuer/Audience/Repository/Ref/Environment/Workflow Claim 及 reusable `job_workflow_ref`。全部验证只使用 Production-like Local Resource，不调用 GitHub 或 Public Production Control API。
+
 ## Migration Test
 
 CI 必须测试：

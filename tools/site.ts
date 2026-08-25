@@ -1,3 +1,4 @@
+import { createContentSync } from './content/control-client'
 import { createDeployment, createRollback, readDeploymentStatus } from './deployment/control-client'
 import { resetDevelopmentStack, startDevelopmentStack, stopDevelopmentStack } from './dev/runtime'
 import {
@@ -37,6 +38,9 @@ Deployment:
   deploy [git-sha] [--image-digest sha256:<digest>] [--reason <text>]
   rollback [--reason <text>]
 
+Automation:
+  content sync <40-char-source-commit>
+
 Recovery:
   backup --environment <local|test|production> --type <full|diff|incr> --reason <text>
   backup status
@@ -69,6 +73,10 @@ async function main() {
     }
     case 'check':
       return executePackageScript('site:check')
+    case 'content-sync': {
+      console.log(JSON.stringify(await createContentSync(command.sourceCommit), null, 2))
+      return 0
+    }
     case 'deployment-create': {
       console.log(JSON.stringify(await createDeployment(command), null, 2))
       return 0

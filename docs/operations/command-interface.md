@@ -83,7 +83,7 @@ Force 重译还要求 `--force --confirm-retranslation RETRANSLATE`。Execute �
 
 ```bash
 SITE_DEPLOYMENT_IMAGE_DIGEST=sha256:<digest> ./site deploy
-./site deploy <40-char-git-sha> --image-digest sha256:<digest> [--reason <text>]
+./site deploy <40-char-git-sha> --image-digest sha256:<digest> [--reason <text>] [--wait]
 ```
 
 ### Rollback
@@ -92,7 +92,15 @@ SITE_DEPLOYMENT_IMAGE_DIGEST=sha256:<digest> ./site deploy
 ./site rollback [--reason <text>]
 ```
 
-Deploy 的 Release Identity 必须同时包含完整 Git SHA 与固定 Digest；不接受 Tag、Short SHA 或 `latest`。省略 SHA 时读取当前 Git HEAD，省略 Flag 时 Digest 只可由仓库外 `SITE_DEPLOYMENT_IMAGE_DIGEST` 提供。CLI、后续 CI 与 Control API 使用相同 Endpoint、Idempotency、SQLite Operation 和 Shared Engine。
+Deploy 的 Release Identity 必须同时包含完整 Git SHA 与固定 Registry Manifest Digest；不接受 Tag、Short SHA 或 `latest`。省略 SHA 时读取当前 Git HEAD，省略 Flag 时 Digest 只可由仓库外 `SITE_DEPLOYMENT_IMAGE_DIGEST` 提供。`--wait` 只轮询同一 SQLite Operation 到 Terminal State，不在 CLI/Workflow 进程执行 Docker、Migration、Smoke 或 Cutover。CLI、CI 与 Control API 使用相同 Endpoint、Idempotency、SQLite Operation 和 Shared Engine。
+
+### Content automation
+
+```bash
+./site content sync <40-char-source-commit>
+```
+
+该命令只通过 Control API 创建 PostgreSQL-backed `content_sync` Application Job，不 Fetch/Materialize Content，也不触发 Translation、Application Image Build 或 Blue-Green。它是 reviewed reusable Content Workflow 的稳定客户端，不是第二套 Sync Engine。
 
 ### Backup
 
@@ -135,7 +143,7 @@ GitHub Actions 和 Human Operator 必须调用同一套底层 Production Control
 
 不得创建逻辑分叉的“CI Deployment Path”和“Manual Deployment Path”。
 
-Web Application Repository 的 `push/merge to main` 在 CI Quality Gates 全部通过后自动构建 Git-SHA-tagged Immutable Image，并调用该统一实现。`./site deploy` 只提供人工触发、重试或指定版本。Content Repository Push 只触发 Content Sync，不触发 Next.js Build/Blue-Green。
+Web Application Repository 的 `push/merge to main` 在 CI Quality Gates 全部通过后自动构建 Git-SHA-tagged Immutable Image，并调用该统一实现。`./site deploy` 只提供人工触发、重试或指定版本。Content Repository Push 只通过 reusable workflow 调用 `./site content sync`，不触发 Next.js Build/Blue-Green；Translation 仍只允许显式 typed `workflow_dispatch`。
 
 ## Break-glass
 

@@ -35,6 +35,8 @@ SITE_DEPLOYMENT_IMAGE_DIGEST=sha256:<digest> ./site deploy
 
 GitHub Actions 和 `./site deploy` 向同一个独立 `control-api` 完成认证，执行相同 Policy，并调用同一个底层 Deployment Engine；不得维护 CI/Manual 两套实现。
 
+Phase 15 的 Application Workflow 只接受成功的同仓库 `main` Quality run，或显式验证过成功 Quality run 且仍属于 `main` 历史的完整 SHA。Build Job 只持有 Repository Read 与 Package Write；Deploy Job 只持有 Repository Read 与 OIDC，进入受保护的 `production` Environment，并由单一 non-cancelling Concurrency Group 序列化。Workflow 不持有 Production DB、AI Provider、Host Login、Origin Pull Credential 或 Docker Socket。
+
 正常 Remote Operation 使用：
 
 ```text
@@ -81,7 +83,8 @@ post-cutover smoke
 
 操作 Inactive Slot 前：
 
-- Target Image 存在
+- Target Registry Manifest Digest 可从唯一批准 Repository 精确 Resolve/Pull
+- Pulled `RepoDigest` 等于请求 Digest，OCI Revision Label 等于请求的完整 Git SHA
 - Production Config Validation 通过
 - Encrypted Secret 可以 Resolve
 - 如果 Release/Phase 需要 Database，则其可达且 Required Migration State 已知
@@ -90,6 +93,8 @@ post-cutover smoke
 - Disk Space 足够
 
 Production PostgreSQL 不可用不得阻止 `control-api`、Deployment Operation State 或 `deploy-agent` 启动。依赖 Database Readiness/Migration 的普通 Application Release 可以安全停在 Preflight/Recovery Phase，但基础 Deploy/Rollback/Restore/Recovery Control 仍可执行和查询。
+
+只有 `deploy-agent` 从运行时加密 Secret 获得 approved Registry 的 Package-read Identity。GitHub Actions 的短期 Package-write Token 不下发到 Origin；Registry 认证失败、404、Digest 或 SHA Label 不匹配都必须在 Candidate Mutation 前失败。Rollback 验证已运行的 Retained Container，不重新 Pull 或 Build。
 
 ## Deployment Failure
 

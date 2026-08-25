@@ -1,7 +1,7 @@
 # Website V2 分阶段实施计划
 
-> Status: In progress — Phase 0–14 complete
-> Current Phase: Awaiting Owner authorization for Phase 15
+> Status: In progress — Phase 0–15 complete
+> Current Phase: Awaiting Owner authorization for Phase 16
 > Execution Model: Hard-gated, one Phase at a time
 > Scope: 从新的 Next.js V2 Repository 基线推进到替换旧 Nuxt Production Site
 
@@ -24,7 +24,7 @@
 - [x] Phase 12 — Production Infrastructure、Ansible 与 Container Hardening
 - [x] Phase 13 — Backup、PITR 与 PostgreSQL-independent Recovery
 - [x] Phase 14 — Shared Deployment Engine 与 Full Blue-Green
-- [ ] Phase 15 — GitHub Actions OIDC 与 `main` 自动部署
+- [x] Phase 15 — GitHub Actions OIDC 与 `main` 自动部署
 - [ ] Phase 16 — Observability、Security 与 Production Readiness
 - [ ] Phase 17 — Planned PostgreSQL / Server Migration Readiness
 - [ ] Phase 18 — Final Legacy Audit、Production Cutover 与 Rollback Window
@@ -1331,16 +1331,16 @@ Deployment Engine 已在 Production-like 环境证明安全，才能让 CI 只�
 
 ### Task Checklist
 
-- [ ] 固化 PR 与 `main` 的 format/lint、typecheck、unit、integration、migration、build、affected E2E Gate。
-- [ ] 仅在 `main` Gates 全部通过后 Build/Publish Git-SHA-tagged、Digest-pinned Immutable Image。
-- [ ] 使用 GitHub OIDC 调用 `https://www.tungchiahui.cn/api/ops/deployments`，严格验证全部 Claims。
-- [ ] 让 Workflow 与 `./site deploy` 调用同一 Control API、Policy 和 Deployment Engine。
-- [ ] 配置 GitHub Environment/Approval/Concurrency/Idempotency，避免重复或并发 Cutover。
-- [ ] 确保 Content Repository Push 只 Validate + Trigger Content Sync，不 Build Next.js 或 Blue-Green。
-- [ ] 确保 Translation `workflow_dispatch` 使用 Typed Input/OIDC，且不阻塞 Content Push。
-- [ ] 确保 Workflow 不持有 Production DB、AI Provider、Host Root 或 Docker Credential。
-- [ ] 验证 Renovate PR 走相同 CI Gate，Security Update 优先，Core Major 不默认 Auto-merge。
-- [ ] 提供 Manual Retry/指定 SHA Deployment，不建立独立实现。
+- [x] 固化 PR 与 `main` 的 format/lint、typecheck、unit、integration、migration、build、affected E2E Gate。
+- [x] 仅在 `main` Gates 全部通过后 Build/Publish Git-SHA-tagged、Digest-pinned Immutable Image。
+- [x] 使用 GitHub OIDC 调用 `https://www.tungchiahui.cn/api/ops/deployments`，严格验证全部 Claims。
+- [x] 让 Workflow 与 `./site deploy` 调用同一 Control API、Policy 和 Deployment Engine。
+- [x] 配置 GitHub Environment/Approval/Concurrency/Idempotency，避免重复或并发 Cutover。
+- [x] 确保 Content Repository Push 只 Validate + Trigger Content Sync，不 Build Next.js 或 Blue-Green。
+- [x] 确保 Translation `workflow_dispatch` 使用 Typed Input/OIDC，且不阻塞 Content Push。
+- [x] 确保 Workflow 不持有 Production DB、AI Provider、Host Root 或 Docker Credential。
+- [x] 验证 Renovate PR 走相同 CI Gate，Security Update 优先，Core Major 不默认 Auto-merge。
+- [x] 提供 Manual Retry/指定 SHA Deployment，不建立独立实现。
 
 ### 本 Phase 明确不做什么
 
@@ -1350,25 +1350,25 @@ Deployment Engine 已在 Production-like 环境证明安全，才能让 CI 只�
 
 ### Tests / Verification
 
-- [ ] PR Gate Failure 阻止 Merge/Deploy；`main` Gate Failure 阻止 Image/Deployment Trigger。
-- [ ] OIDC 错误 issuer/audience/repository/ref/workflow Claim 被拒绝。
-- [ ] Duplicate Workflow 通过 Idempotency/Concurrency 不产生双重 Cutover。
-- [ ] `main` Happy Path 调用 Shared Engine 完成 Production-like Blue-Green。
-- [ ] Content Push Test 证明无 Application Image Build/Blue-Green/AI Call。
-- [ ] Manual Translation Workflow 无 DB/AI/Host Credential。
+- [x] PR Gate Failure 阻止 Merge/Deploy；`main` Gate Failure 阻止 Image/Deployment Trigger。
+- [x] OIDC 错误 issuer/audience/repository/ref/workflow Claim 被拒绝。
+- [x] Duplicate Workflow 通过 Idempotency/Concurrency 不产生双重 Cutover。
+- [x] `main` Happy Path 调用 Shared Engine 完成 Production-like Blue-Green。
+- [x] Content Push Test 证明无 Application Image Build/Blue-Green/AI Call。
+- [x] Manual Translation Workflow 无 DB/AI/Host Credential。
 
 ### Acceptance Criteria
 
-- [ ] `main` 是 Web Application Repository 的正常自动发布路径。
-- [ ] Human/CI Deployment 完全共享 Engine、Policy、State 和 Audit。
-- [ ] Content、Translation 与 Application Trigger Boundary 清晰可测试。
+- [x] `main` 是 Web Application Repository 的正常自动发布路径。
+- [x] Human/CI Deployment 完全共享 Engine、Policy、State 和 Audit。
+- [x] Content、Translation 与 Application Trigger Boundary 清晰可测试。
 
 ### Exit Gate
 
-- [ ] CI/CD、OIDC、Trigger Separation、Supply-chain 和 Concurrency Gate 全部通过。
-- [ ] 自动 Pipeline 只在 Production-like/Staging 验证，未替换旧站。
-- [ ] 创建聚焦 Commit，建议：`feat(ci): complete phase 15 oidc deployment automation`。
-- [ ] Commit 后停止并向 Owner 报告，不自动进入 Phase 16。
+- [x] CI/CD、OIDC、Trigger Separation、Supply-chain 和 Concurrency Gate 全部通过。
+- [x] 自动 Pipeline 只在 Production-like/Staging 验证，未替换旧站。
+- [x] 创建聚焦 Commit，建议：`feat(ci): complete phase 15 oidc deployment automation`。
+- [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 16。
 
 ### 本阶段完成后形成的 Artifact / Capability
 

@@ -8,6 +8,10 @@ The Ansible role decrypts on the controller with `sops`, suppresses task output,
 separate per-service files under `/run/tungchiahui/secrets`. The directory is runtime-only and must
 be reconstructed after reboot. No `S3_CONTRACT_*` value is accepted or deployed.
 
+`deployment-registry.env` belongs only to `deploy-agent` and contains a package-read identity for
+the single approved immutable image repository. GitHub Actions publishes with its short-lived
+repository token; it never receives this origin pull credential, a Docker socket, or a Host login.
+
 Example initialization, after replacing every placeholder in a private temporary copy:
 
 ```text

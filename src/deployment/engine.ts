@@ -225,7 +225,9 @@ export async function executeDeploymentOperation(
     (targetAlreadyCurrent && phase >= phaseIndex('traffic-switched'))
   try {
     if (phase < phaseIndex('preflight-complete')) {
-      await platform.validateImage(target)
+      if (operation.operationType === 'deploy') {
+        await platform.validateImage(target)
+      }
       validateMigrationPolicy(options.migrationPolicyPath, options.journalPath, {
         allowContract: false,
         hasFreshRecoverableBackup: freshBackup,

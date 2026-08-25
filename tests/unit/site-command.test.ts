@@ -16,6 +16,7 @@ describe('site command boundary', () => {
     expect(parseSiteCommand(['deploy'])).toEqual({
       kind: 'deployment-create',
       reason: 'manual operator deployment',
+      wait: false,
     })
     expect(
       parseSiteCommand([
@@ -25,12 +26,18 @@ describe('site command boundary', () => {
         `sha256:${'b'.repeat(64)}`,
         '--reason',
         'phase 14 test',
+        '--wait',
       ]),
     ).toEqual({
       gitSha: 'a'.repeat(40),
       imageDigest: `sha256:${'b'.repeat(64)}`,
       kind: 'deployment-create',
       reason: 'phase 14 test',
+      wait: true,
+    })
+    expect(parseSiteCommand(['content', 'sync', 'c'.repeat(40)])).toEqual({
+      kind: 'content-sync',
+      sourceCommit: 'c'.repeat(40),
     })
     expect(parseSiteCommand(['rollback'])).toEqual({
       kind: 'rollback-create',

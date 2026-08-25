@@ -17,10 +17,17 @@ const input = z
     PHASE12_HOST_ROOT: z.string().startsWith('/'),
     PHASE12_HOST_UID: z.coerce.number().int().nonnegative(),
     PHASE12_ORIGIN_PORT: z.coerce.number().int().min(1024).max(65_535),
+    PHASE15_REGISTRY_PORT: z.coerce.number().int().min(1024).max(65_535),
   })
   .parse(process.env)
 
 const projectName = `tungchiahui-phase12-${process.pid}`
+const registryContainer = `${projectName}-registry`
+const registryImage =
+  'registry:3.0.0@sha256:6c5666b861f3505b116bb9aa9b25175e71210414bd010d92035ff64018f9457e'
+const registryRepository = `127.0.0.1:${String(input.PHASE15_REGISTRY_PORT)}/tungchiahui-web`
+const registryTag = `${registryRepository}:${input.PHASE12_GIT_SHA}`
+let registryDigest = ''
 const webImage = `tungchiahui-web:${input.PHASE12_GIT_SHA}`
 const serviceImage = `tungchiahui-services:${input.PHASE12_GIT_SHA}`
 const recoveryImage = `tungchiahui-recovery:${input.PHASE12_GIT_SHA}`
@@ -80,6 +87,7 @@ function composeEnvironment() {
     TUNGCHIAHUI_DATA_ROOT: dataRoot,
     TUNGCHIAHUI_DEPLOYMENT_BACKUP_MAX_AGE_SECONDS: '86400',
     TUNGCHIAHUI_DEPLOYMENT_STABILIZATION_SECONDS: '0',
+    TUNGCHIAHUI_DEPLOYMENT_IMAGE_REPOSITORY: registryRepository,
     TUNGCHIAHUI_DOCKER_SOCKET_GID: socket,
     TUNGCHIAHUI_GREEN_CONTAINER_NAME: `${projectName}-web-green-1`,
     TUNGCHIAHUI_GREEN_DEPLOYMENT_SHA: input.PHASE12_GIT_SHA,
@@ -155,16 +163,18 @@ function createEncryptedSecret() {
       publicKeyJwk: publicJwk,
     },
   ])
-  const githubPolicy = JSON.stringify({
-    audience: 'tungchiahui-control-api',
-    capabilities: ['translation:read'],
-    environment: 'production',
-    issuer: 'https://token.actions.githubusercontent.com',
-    jwksUrl: 'https://token.actions.githubusercontent.com/.well-known/jwks',
-    ref: 'refs/heads/main',
-    repository: 'tungchiahui/tungchiahui_web',
-    workflowRef: 'tungchiahui/tungchiahui_web/.github/workflows/translation.yml@refs/heads/main',
-  })
+  const githubPolicy = JSON.stringify([
+    {
+      audience: 'tungchiahui-control-api',
+      capabilities: ['translation:read'],
+      environment: 'production',
+      issuer: 'https://token.actions.githubusercontent.com',
+      jwksUrl: 'https://token.actions.githubusercontent.com/.well-known/jwks',
+      ref: 'refs/heads/main',
+      repository: 'tungchiahui/tungchiahui_web',
+      workflowRef: 'tungchiahui/tungchiahui_web/.github/workflows/translation.yml@refs/heads/main',
+    },
+  ])
   const testPassword = 'phase12-disposable-password'
   const testSecret = 'phase12-disposable-revalidation-secret-value'
   const appPassword = 'phase12-disposable-app-password-0001'
@@ -199,6 +209,7 @@ function createEncryptedSecret() {
       `CONTROL_OPERATOR_KEYS_JSON=${operatorKeys}`,
       `CONTROL_GITHUB_OIDC_POLICY_JSON=${githubPolicy}`,
     ].join('\n'),
+    deployment_registry_env: '\n',
     database_role_bootstrap_env: [
       `DATABASE_ADMIN_URL=postgresql://tungchiahui:${testPassword}@postgres:5432/tungchiahui`,
       'SITE_APP_LOGIN_NAME=site_app_login',
@@ -301,6 +312,33 @@ function buildImages() {
     webImage,
     '.',
   ])
+  execute('docker', ['tag', webImage, registryTag])
+  execute('docker', ['push', registryTag])
+  const repositoryDigest = execute('docker', [
+    'image',
+    'inspect',
+    '--format',
+    '{{index .RepoDigests 0}}',
+    registryTag,
+  ]).stdout.trim()
+  registryDigest =
+    z
+      .string()
+      .regex(/^127\.0\.0\.1:[0-9]+\/tungchiahui-web@sha256:[a-f0-9]{64}$/)
+      .parse(repositoryDigest)
+      .split('@')[1] ?? ''
+}
+
+function startRegistry() {
+  execute('docker', [
+    'run',
+    '--detach',
+    '--name',
+    registryContainer,
+    '--publish',
+    `127.0.0.1:${String(input.PHASE15_REGISTRY_PORT)}:5000`,
+    registryImage,
+  ])
 }
 
 function runProvision(identityPath: string) {
@@ -333,6 +371,7 @@ function runProvision(identityPath: string) {
       tungchiahui_deployment_sha: input.PHASE12_GIT_SHA,
       tungchiahui_deployment_backup_max_age_seconds: '86400',
       tungchiahui_deployment_stabilization_seconds: '0',
+      tungchiahui_deployment_image_repository: registryRepository,
       tungchiahui_install_packages: false,
       tungchiahui_manage_stack: true,
       tungchiahui_origin_port: String(input.PHASE12_ORIGIN_PORT),
@@ -664,14 +703,13 @@ async function verifyBlueGreenDeployment() {
   process.env.SITE_OPERATOR_KEY_ID = 'phase12-test-operator'
   process.env.SITE_OPERATOR_PRIVATE_KEY_PATH = join(workRoot, 'operator-private.json')
 
-  const digest = execute('docker', [
-    'image',
-    'inspect',
-    '--format',
-    '{{.Id}}',
-    webImage,
-  ]).stdout.trim()
-  const candidateSha = 'c'.repeat(40)
+  const digest = z
+    .string()
+    .regex(/^sha256:[a-f0-9]{64}$/)
+    .parse(registryDigest)
+  execute('docker', ['image', 'rm', registryTag], { allowFailure: true })
+  execute('docker', ['image', 'rm', `${registryRepository}@${digest}`], { allowFailure: true })
+  const candidateSha = input.PHASE12_GIT_SHA
   const created = operationResponseSchema.parse(
     await controlRequest('/api/ops/deployments', {
       body: { gitSha: candidateSha, imageDigest: digest, reason: 'Phase 14 production-like gate' },
@@ -730,12 +768,24 @@ async function verifyBlueGreenDeployment() {
     'Failed inactive deployment changed the active public release',
   )
   const retainedGreen = z
-    .array(z.object({ Image: z.string(), State: z.object({ Running: z.boolean() }) }))
+    .array(
+      z.object({
+        Config: z.object({ Env: z.array(z.string()).nullable() }),
+        State: z.object({ Running: z.boolean() }),
+      }),
+    )
     .parse(
       JSON.parse(execute('docker', ['inspect', `${projectName}-web-green-1`]).stdout) as unknown,
     )[0]
+  const retainedGreenEnvironment = new Map(
+    retainedGreen?.Config.Env?.map((entry) => {
+      const separatorIndex = entry.indexOf('=')
+      return [entry.slice(0, separatorIndex), entry.slice(separatorIndex + 1)] as const
+    }) ?? [],
+  )
   expect(
-    retainedGreen?.Image === digest && retainedGreen.State.Running,
+    retainedGreenEnvironment.get('SITE_DEPLOYMENT_IMAGE_DIGEST') === digest &&
+      retainedGreen?.State.Running === true,
     'Preflight failure removed or changed the retained rollback target',
   )
 
@@ -744,7 +794,7 @@ async function verifyBlueGreenDeployment() {
     const databaseUnavailable = operationResponseSchema.parse(
       await controlRequest('/api/ops/deployments', {
         body: {
-          gitSha: 'f'.repeat(40),
+          gitSha: input.PHASE12_GIT_SHA,
           imageDigest: digest,
           reason: 'Phase 14 PostgreSQL dependency failure gate',
         },
@@ -774,8 +824,9 @@ async function verifyBlueGreenDeployment() {
 
 async function main() {
   const encrypted = createEncryptedSecret()
-  buildImages()
   try {
+    startRegistry()
+    buildImages()
     runProvision(encrypted.identityPath)
     inspectHardening()
     verifyDatabaseRoleBindings()
@@ -792,6 +843,7 @@ async function main() {
         ipv4AndIpv6Origin: 'pass',
         nextDownControlRoute: 'pass',
         noRebuildRollback: 'pass',
+        registryDigestPull: 'pass',
         openRestyValidationAndReload: 'pass',
         postgresDownDeploymentDependency: 'pass',
         postgresDownControlRoute: 'pass',
@@ -807,6 +859,7 @@ async function main() {
     throw error
   } finally {
     compose(['--profile', 'deployment', 'down', '--volumes', '--remove-orphans'], true)
+    execute('docker', ['rm', '--force', registryContainer], { allowFailure: true })
     execute(
       'chown',
       [

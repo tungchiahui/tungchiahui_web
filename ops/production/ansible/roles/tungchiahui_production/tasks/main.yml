@@ -8,6 +8,7 @@
       - tungchiahui_deployment_sha != '0000000000000000000000000000000000000000'
       - tungchiahui_deployment_backup_max_age_seconds | int > 0
       - tungchiahui_deployment_stabilization_seconds | int >= 0
+      - tungchiahui_deployment_image_repository is match('^[a-z0-9.-]+(?::[0-9]{2,5})?/[a-z0-9._/-]+$')
       - tungchiahui_control_rate_limit_per_minute | int > 0
       - tungchiahui_control_rate_limit_per_minute | int <= 10000
       - tungchiahui_web_image is match('^.+:[a-f0-9]{40}$')
@@ -89,6 +90,7 @@
       - (tungchiahui_decrypted_secret.stdout | from_json).database_migrate_env is string
       - (tungchiahui_decrypted_secret.stdout | from_json).postgres_env is string
       - (tungchiahui_decrypted_secret.stdout | from_json).backup_env is string
+      - (tungchiahui_decrypted_secret.stdout | from_json).deployment_registry_env is string
       - (tungchiahui_decrypted_secret.stdout | from_json).backup_age_identity is string
       - (tungchiahui_decrypted_secret.stdout | from_json).pgbouncer_userlist is string
       - (tungchiahui_decrypted_secret.stdout | from_json).origin_certificate is string
@@ -111,6 +113,7 @@
     - { source: database_migrate_env, destination: database-migrate.env, mode: "0640" }
     - { source: postgres_env, destination: postgres.env, mode: "0640" }
     - { source: backup_env, destination: backup.env, mode: "0640" }
+    - { source: deployment_registry_env, destination: deployment-registry.env, mode: "0640" }
     - { source: backup_age_identity, destination: backup-age-identity.txt, mode: "0640" }
     - { source: pgbouncer_userlist, destination: pgbouncer-userlist.txt, mode: "0640" }
     - { source: origin_certificate, destination: origin.crt, mode: "0644" }
@@ -180,6 +183,7 @@
       TUNGCHIAHUI_DOCKER_SOCKET_GID: "{{ tungchiahui_docker_socket.stat.gid }}"
       TUNGCHIAHUI_DEPLOYMENT_BACKUP_MAX_AGE_SECONDS: "{{ tungchiahui_deployment_backup_max_age_seconds }}"
       TUNGCHIAHUI_DEPLOYMENT_STABILIZATION_SECONDS: "{{ tungchiahui_deployment_stabilization_seconds }}"
+      TUNGCHIAHUI_DEPLOYMENT_IMAGE_REPOSITORY: "{{ tungchiahui_deployment_image_repository }}"
       TUNGCHIAHUI_GREEN_CONTAINER_NAME: "{{ tungchiahui_compose_project_name }}-web-green-1"
       TUNGCHIAHUI_GREEN_DEPLOYMENT_SHA: "{{ tungchiahui_deployment_sha }}"
       TUNGCHIAHUI_MIGRATION_CONTAINER_NAME: "{{ tungchiahui_compose_project_name }}-database-migrate-1"

@@ -33,6 +33,7 @@ const hostRoot = mkdtempSync(join(tmpdir(), 'tungchiahui-phase12-'))
 chmodSync(hostRoot, 0o755)
 const gitSha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
 const originPort = await freePort()
+const registryPort = await freePort()
 const testImage = `tungchiahui-infra-test:${gitSha}`
 
 try {
@@ -52,6 +53,8 @@ try {
     `PHASE12_HOST_GID=${String(process.getgid?.() ?? 1000)}`,
     '--env',
     `PHASE12_ORIGIN_PORT=${String(originPort)}`,
+    '--env',
+    `PHASE15_REGISTRY_PORT=${String(registryPort)}`,
     '--mount',
     'type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock',
     '--mount',
@@ -63,5 +66,22 @@ try {
     testImage,
   ])
 } finally {
-  rmSync(hostRoot, { force: true, maxRetries: 3, recursive: true })
+  try {
+    rmSync(hostRoot, { force: true, maxRetries: 3, recursive: true })
+  } catch {
+    const hostIdentity = `${String(process.getuid?.() ?? 1000)}:${String(process.getgid?.() ?? 1000)}`
+    run('docker', [
+      'run',
+      '--rm',
+      '--entrypoint',
+      'chown',
+      '--mount',
+      `type=bind,source=${hostRoot},target=${hostRoot}`,
+      testImage,
+      '--recursive',
+      hostIdentity,
+      hostRoot,
+    ])
+    rmSync(hostRoot, { force: true, maxRetries: 3, recursive: true })
+  }
 }

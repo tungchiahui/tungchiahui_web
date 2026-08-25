@@ -21,7 +21,9 @@ export type SiteCommand =
       imageDigest?: string
       kind: 'deployment-create'
       reason: string
+      wait: boolean
     }>
+  | Readonly<{ kind: 'content-sync'; sourceCommit: string }>
   | Readonly<{ kind: 'dev-reset' }>
   | Readonly<{ kind: 'dev-start' }>
   | Readonly<{ kind: 'dev-stop' }>
@@ -66,6 +68,7 @@ export function parseSiteCommand(arguments_: readonly string[]): SiteCommand {
     let gitSha: string | undefined
     let imageDigest: string | undefined
     let reason = 'manual operator deployment'
+    let wait = false
     let index = 1
     if (arguments_[index] !== undefined && !arguments_[index]?.startsWith('--')) {
       gitSha = z
@@ -94,6 +97,11 @@ export function parseSiteCommand(arguments_: readonly string[]): SiteCommand {
         index += 2
         continue
       }
+      if (argument === '--wait') {
+        wait = true
+        index += 1
+        continue
+      }
       throw new SiteUsageError(`Unknown deploy argument: ${String(argument)}`)
     }
     return Object.freeze({
@@ -101,6 +109,17 @@ export function parseSiteCommand(arguments_: readonly string[]): SiteCommand {
       ...(imageDigest === undefined ? {} : { imageDigest }),
       kind: 'deployment-create',
       reason,
+      wait,
+    })
+  }
+
+  if (arguments_[0] === 'content' && arguments_[1] === 'sync' && arguments_.length === 3) {
+    return Object.freeze({
+      kind: 'content-sync',
+      sourceCommit: z
+        .string()
+        .regex(/^[a-f0-9]{40}$/)
+        .parse(arguments_[2]),
     })
   }
 

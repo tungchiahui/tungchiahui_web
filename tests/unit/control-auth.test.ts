@@ -8,6 +8,7 @@ import {
   AuthorizationError,
   authenticateControlRequest,
   canonicalOperatorRequest,
+  parseGitHubOidcPolicies,
   parseGitHubOidcPolicy,
   parseOperatorKeys,
   requireCapability,
@@ -29,16 +30,18 @@ function operatorFixture() {
   if (!key) throw new Error('Operator fixture key was not created')
   const seen = new Set<string>()
   const configuration = {
-    github: parseGitHubOidcPolicy({
-      audience: 'control-api',
-      capabilities: ['application-job:create'],
-      environment: 'production',
-      issuer: 'https://token.actions.githubusercontent.com',
-      jwksUrl: 'https://token.actions.githubusercontent.com/.well-known/jwks',
-      ref: 'refs/heads/main',
-      repository: 'owner/repository',
-      workflowRef: 'owner/repository/.github/workflows/deploy.yml@refs/heads/main',
-    }),
+    githubPolicies: [
+      parseGitHubOidcPolicy({
+        audience: 'control-api',
+        capabilities: ['application-job:create'],
+        environment: 'production',
+        issuer: 'https://token.actions.githubusercontent.com',
+        jwksUrl: 'https://token.actions.githubusercontent.com/.well-known/jwks',
+        ref: 'refs/heads/main',
+        repository: 'owner/repository',
+        workflowRef: 'owner/repository/.github/workflows/deploy.yml@refs/heads/main',
+      }),
+    ],
     operatorKeys: [key],
     replayWindowSeconds: 300,
   }
@@ -147,19 +150,23 @@ describe('control-plane authentication and authorization', () => {
     })
     const { privateKey, publicKey } = await generateKeyPair('RS256')
 
-    async function token(overrides: Readonly<Record<string, string>> = {}) {
+    async function token(
+      overrides: Readonly<Record<string, string>> = {},
+      audience = policy.audience,
+    ) {
       const claims = {
         environment: 'production',
         job_workflow_ref: 'owner/repository/.github/workflows/deploy.yml@refs/heads/main',
         ref: 'refs/heads/main',
         repository: 'owner/repository',
         sub: 'repo:owner/repository:environment:production',
+        workflow_ref: 'owner/repository/.github/workflows/deploy.yml@refs/heads/main',
         ...overrides,
       }
       return new SignJWT(claims)
         .setProtectedHeader({ alg: 'RS256' })
         .setIssuer(overrides.iss ?? policy.issuer)
-        .setAudience(policy.audience)
+        .setAudience(audience)
         .setIssuedAt()
         .setExpirationTime('5m')
         .sign(privateKey)
@@ -175,7 +182,7 @@ describe('control-plane authentication and authorization', () => {
       { repository: 'other/repository' },
       { ref: 'refs/heads/untrusted' },
       { environment: 'preview' },
-      { job_workflow_ref: 'owner/repository/.github/workflows/other.yml@refs/heads/main' },
+      { workflow_ref: 'owner/repository/.github/workflows/other.yml@refs/heads/main' },
     ]) {
       await expect(
         validateGitHubOidcToken(await token(invalidClaims), policy, publicKey),
@@ -185,6 +192,67 @@ describe('control-plane authentication and authorization', () => {
       validateGitHubOidcToken(
         await token({ iss: 'https://issuer.example.invalid' }),
         policy,
+        publicKey,
+      ),
+    ).rejects.toBeInstanceOf(AuthenticationError)
+    await expect(
+      validateGitHubOidcToken(await token({}, 'wrong-control-api'), policy, publicKey),
+    ).rejects.toBeInstanceOf(AuthenticationError)
+  })
+
+  it('binds reusable content automation independently from deploy and translation workflows', async () => {
+    const policies = parseGitHubOidcPolicies([
+      {
+        audience: 'control-api',
+        capabilities: ['infrastructure-operation:create'],
+        environment: 'production',
+        issuer: 'https://token.actions.githubusercontent.com',
+        jwksUrl: 'https://token.actions.githubusercontent.com/.well-known/jwks',
+        ref: 'refs/heads/main',
+        repository: 'owner/application',
+        workflowRef: 'owner/application/.github/workflows/deploy.yml@refs/heads/main',
+      },
+      {
+        audience: 'control-api',
+        capabilities: ['application-job:create'],
+        environment: 'production',
+        issuer: 'https://token.actions.githubusercontent.com',
+        jobWorkflowRef: 'owner/application/.github/workflows/content-sync.yml@refs/heads/main',
+        jwksUrl: 'https://token.actions.githubusercontent.com/.well-known/jwks',
+        ref: 'refs/heads/main',
+        repository: 'owner/content',
+      },
+    ])
+    expect(policies).toHaveLength(2)
+    const contentPolicy = policies[1]
+    if (!contentPolicy) throw new Error('Missing content workflow policy fixture')
+    const { privateKey, publicKey } = await generateKeyPair('RS256')
+    const contentToken = (jobWorkflowRef: string) =>
+      new SignJWT({
+        environment: 'production',
+        job_workflow_ref: jobWorkflowRef,
+        ref: 'refs/heads/main',
+        repository: 'owner/content',
+        sub: 'repo:owner/content:environment:production',
+        workflow_ref: 'owner/content/.github/workflows/publish.yml@refs/heads/main',
+      })
+        .setProtectedHeader({ alg: 'RS256' })
+        .setIssuer(contentPolicy.issuer)
+        .setAudience(contentPolicy.audience)
+        .setIssuedAt()
+        .setExpirationTime('5m')
+        .sign(privateKey)
+    await expect(
+      validateGitHubOidcToken(
+        await contentToken(contentPolicy.jobWorkflowRef ?? ''),
+        contentPolicy,
+        publicKey,
+      ),
+    ).resolves.toMatchObject({ capabilities: ['application-job:create'] })
+    await expect(
+      validateGitHubOidcToken(
+        await contentToken('owner/application/.github/workflows/other.yml@refs/heads/main'),
+        contentPolicy,
         publicKey,
       ),
     ).rejects.toBeInstanceOf(AuthenticationError)

@@ -51,6 +51,9 @@ jobs:
       - name: TypeScript source and boundary policy
         run: pnpm run check:source
 
+      - name: GitHub workflow trigger and credential policy
+        run: pnpm run check:workflows
+
       - name: Drizzle migration consistency
         run: pnpm run check:drizzle
 
@@ -59,6 +62,9 @@ jobs:
 
       - name: Unit tests
         run: pnpm run test:unit
+
+      - name: Production foundation, recovery and blue-green tests
+        run: pnpm run test:infra && pnpm run test:recovery
 
       - name: Disposable infrastructure integration and critical E2E tests
         run: pnpm run test:integration

@@ -18,6 +18,8 @@ RUN pnpm build
 
 FROM node:24.19.0-bookworm-slim@sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03 AS runtime
 ARG SITE_DEPLOYMENT_SHA
+LABEL org.opencontainers.image.revision=${SITE_DEPLOYMENT_SHA} \
+  org.opencontainers.image.source="https://github.com/tungchiahui/tungchiahui_web"
 ENV HOSTNAME=0.0.0.0 \
   NODE_ENV=production \
   NEXT_TELEMETRY_DISABLED=1 \

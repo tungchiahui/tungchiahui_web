@@ -202,6 +202,7 @@ describe('Phase 14 shared deployment engine', () => {
       previousSlot: 'green',
     })
     expect(platform.calls).toContain('verify-retained:blue')
+    expect(platform.calls).not.toContain('validate-image:blue')
     expect(platform.calls.filter((call) => call === 'prepare:blue')).toHaveLength(0)
   })
 

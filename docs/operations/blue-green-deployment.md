@@ -63,6 +63,10 @@ Active Slot、Previous Rollback Target、Current/Last Deployment SHA/Digest 与 
 
 动态 Upstream 文件位于独立、setgid 的 Deployment Config Directory。`deploy-agent` 先以临时文件提出配置、运行 `openresty -t`，恢复旧文件；只有验证成功后才原子 Rename 并发送 HUP。OpenResty 只读挂载整个 Directory，使 Rename 后的新 Inode 可见。
 
+## Candidate image supply chain
+
+Candidate Identity 是完整 Git SHA + Registry Manifest Digest。`deploy-agent` 只从配置的唯一 Approved Repository 解析 `<repository>@<digest>`；缺失时通过 Docker Engine 受控 Pull，并验证精确 `RepoDigest` 与 OCI `org.opencontainers.image.revision`。Registry Pull Credential 只存在于该 Agent 的运行时 Secret，不进入 Workflow 或 Image。Docker Local Config ID 与 Registry Manifest Digest 是不同标识，Container 必须单独保存后者供 State/Retained Target 验证。
+
 ## Smoke Test
 
 Cutover 前：

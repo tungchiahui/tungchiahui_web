@@ -62,6 +62,7 @@ const dockerContainerSchema = z.object({
 })
 
 const dockerImageSchema = z.object({
+  Config: z.object({ Labels: z.record(z.string(), z.string()).nullable() }).passthrough(),
   Id: z.string().regex(/^sha256:[a-f0-9]{64}$/),
   RepoDigests: z.array(z.string()).nullable().optional(),
 })
@@ -70,19 +71,35 @@ function replaceEnvironment(environment: readonly string[] | null, release: Depl
   const retained = (environment ?? []).filter(
     (entry) => !entry.startsWith('SITE_DEPLOYMENT_SHA=') && !entry.startsWith('SITE_SLOT='),
   )
-  return [...retained, `SITE_DEPLOYMENT_SHA=${release.sha}`, `SITE_SLOT=${release.slot}`]
+  const withoutDigest = retained.filter(
+    (entry) => !entry.startsWith('SITE_DEPLOYMENT_IMAGE_DIGEST='),
+  )
+  return [
+    ...withoutDigest,
+    `SITE_DEPLOYMENT_IMAGE_DIGEST=${release.digest}`,
+    `SITE_DEPLOYMENT_SHA=${release.sha}`,
+    `SITE_SLOT=${release.slot}`,
+  ]
 }
 
-function requestJson(socketPath: string, method: DockerMethod, path: string, body?: unknown) {
+function requestJson(
+  socketPath: string,
+  method: DockerMethod,
+  path: string,
+  body?: unknown,
+  additionalHeaders: Readonly<Record<string, string>> = {},
+) {
   return new Promise<Readonly<{ body: unknown; status: number }>>(
     (resolveRequest, rejectRequest) => {
       const encoded = body === undefined ? null : Buffer.from(JSON.stringify(body))
       const request = httpRequest(
         {
-          headers:
-            encoded === null
-              ? undefined
-              : { 'content-length': String(encoded.length), 'content-type': 'application/json' },
+          headers: {
+            ...additionalHeaders,
+            ...(encoded === null
+              ? {}
+              : { 'content-length': String(encoded.length), 'content-type': 'application/json' }),
+          },
           method,
           path,
           socketPath,
@@ -119,8 +136,9 @@ async function requireDocker(
   path: string,
   accepted: readonly number[],
   body?: unknown,
+  headers?: Readonly<Record<string, string>>,
 ) {
-  const response = await requestJson(socketPath, method, path, body)
+  const response = await requestJson(socketPath, method, path, body, headers)
   if (!accepted.includes(response.status)) {
     throw new Error(`Docker rejected ${method} ${path} with HTTP ${String(response.status)}`)
   }
@@ -177,6 +195,25 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
     )
   }
 
+  private imageReference(release: DeploymentRelease) {
+    const repository = this.configuration.DEPLOYMENT_IMAGE_REPOSITORY
+    return repository === undefined ? release.digest : `${repository}@${release.digest}`
+  }
+
+  private registryAuthenticationHeader() {
+    const repository = this.configuration.DEPLOYMENT_IMAGE_REPOSITORY
+    const username = this.configuration.DEPLOYMENT_REGISTRY_USERNAME
+    const token = this.configuration.DEPLOYMENT_REGISTRY_TOKEN
+    if (repository === undefined) return undefined
+    if (username === undefined || token === undefined) {
+      return Buffer.from('{}', 'utf8').toString('base64url')
+    }
+    return Buffer.from(
+      JSON.stringify({ password: token, serveraddress: repository.split('/')[0], username }),
+      'utf8',
+    ).toString('base64url')
+  }
+
   private async inspectContainer(name: string) {
     return dockerContainerSchema.parse(
       await requireDocker(
@@ -220,7 +257,7 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
       }),
     )
     return deploymentReleaseSchema.parse({
-      digest: container.Image,
+      digest: environment.SITE_DEPLOYMENT_IMAGE_DIGEST ?? container.Image,
       sha: environment.SITE_DEPLOYMENT_SHA,
       slot,
     })
@@ -303,7 +340,7 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
           SecurityOpt: template.HostConfig.SecurityOpt ?? undefined,
           Tmpfs: template.HostConfig.Tmpfs ?? undefined,
         },
-        Image: release.digest,
+        Image: this.imageReference(release),
         Labels: labels,
         NetworkingConfig: { EndpointsConfig: endpointConfig },
         StopSignal: template.Config.StopSignal,
@@ -476,20 +513,56 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
   }
 
   async validateImage(release: DeploymentRelease) {
-    const image = dockerImageSchema.parse(
+    const reference = this.imageReference(release)
+    let inspection = await requestJson(
+      this.socketPath,
+      'GET',
+      `/images/${encodeURIComponent(reference)}/json`,
+    )
+    if (inspection.status === 404 && this.configuration.DEPLOYMENT_IMAGE_REPOSITORY !== undefined) {
+      const authentication = this.registryAuthenticationHeader()
       await requireDocker(
         this.socketPath,
-        'GET',
-        `/images/${encodeURIComponent(release.digest)}/json`,
+        'POST',
+        `/images/create?fromImage=${encodeURIComponent(reference)}`,
         [200],
-      ),
-    )
-    if (image.Id !== release.digest) throw new Error('Docker image digest does not match request')
+        undefined,
+        authentication === undefined ? undefined : { 'x-registry-auth': authentication },
+      )
+      inspection = await requestJson(
+        this.socketPath,
+        'GET',
+        `/images/${encodeURIComponent(reference)}/json`,
+      )
+    }
+    if (inspection.status !== 200) {
+      throw new Error(
+        `Immutable deployment image is unavailable (HTTP ${String(inspection.status)})`,
+      )
+    }
+    const image = dockerImageSchema.parse(inspection.body)
+    if (this.configuration.DEPLOYMENT_IMAGE_REPOSITORY === undefined) {
+      if (image.Id !== release.digest) throw new Error('Docker image digest does not match request')
+      return
+    }
+    if (!(image.RepoDigests ?? []).includes(reference)) {
+      throw new Error('Pulled image does not expose the requested registry digest')
+    }
+    if (image.Config.Labels?.['org.opencontainers.image.revision'] !== release.sha) {
+      throw new Error('Pulled image revision label does not match the requested Git SHA')
+    }
   }
 
   async verifyRetainedRelease(release: DeploymentRelease) {
     const container = await this.inspectContainer(this.containerName(release.slot))
-    if (!container.State.Running || container.Image !== release.digest) {
+    const environment = Object.fromEntries(
+      (container.Config.Env ?? []).map((entry) => {
+        const separator = entry.indexOf('=')
+        return [entry.slice(0, separator), entry.slice(separator + 1)]
+      }),
+    )
+    const observedDigest = environment.SITE_DEPLOYMENT_IMAGE_DIGEST ?? container.Image
+    if (!container.State.Running || observedDigest !== release.digest) {
       throw new Error('Retained rollback container is not running the expected immutable image')
     }
   }

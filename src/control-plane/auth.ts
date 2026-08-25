@@ -65,9 +65,35 @@ const githubOidcPolicySchema = z
     jwksUrl: z.url(),
     ref: z.string().min(1),
     repository: z.string().regex(/^[^/\s]+\/[^/\s]+$/),
-    workflowRef: z.string().min(1),
+    workflowRef: z.string().min(1).optional(),
+    jobWorkflowRef: z.string().min(1).optional(),
   })
   .strict()
+  .refine((policy) => policy.workflowRef !== undefined || policy.jobWorkflowRef !== undefined, {
+    message: 'GitHub OIDC policy requires workflowRef or jobWorkflowRef',
+  })
+
+const githubOidcPoliciesSchema = z
+  .array(githubOidcPolicySchema)
+  .min(1)
+  .superRefine((policies, context) => {
+    const identities = new Set<string>()
+    for (const [index, policy] of policies.entries()) {
+      const identity = [
+        policy.issuer,
+        policy.audience,
+        policy.repository,
+        policy.ref,
+        policy.environment,
+        policy.workflowRef ?? '',
+        policy.jobWorkflowRef ?? '',
+      ].join('|')
+      if (identities.has(identity)) {
+        context.addIssue({ code: 'custom', message: 'Duplicate GitHub OIDC policy', path: [index] })
+      }
+      identities.add(identity)
+    }
+  })
 
 const githubClaimsSchema = z
   .object({
@@ -76,11 +102,12 @@ const githubClaimsSchema = z
     exp: z.number().int(),
     iat: z.number().int(),
     iss: z.url(),
-    job_workflow_ref: z.string().min(1),
+    job_workflow_ref: z.string().min(1).optional(),
     nbf: z.number().int().optional(),
     ref: z.string().min(1),
     repository: z.string().min(1),
     sub: z.string().min(1),
+    workflow_ref: z.string().min(1),
   })
   .passthrough()
 
@@ -107,7 +134,7 @@ export type AuthenticationInput = Readonly<{
 }>
 
 export type AuthenticationConfiguration = Readonly<{
-  github: GitHubOidcPolicy
+  githubPolicies: readonly GitHubOidcPolicy[]
   githubVerificationKey?: JWTVerifyGetKey | KeyInput
   operatorKeys: readonly OperatorKey[]
   replayWindowSeconds: number
@@ -289,14 +316,15 @@ export async function validateGitHubOidcToken(
     claims.data.repository !== policy.repository ||
     claims.data.ref !== policy.ref ||
     claims.data.environment !== policy.environment ||
-    claims.data.job_workflow_ref !== policy.workflowRef
+    (policy.workflowRef !== undefined && claims.data.workflow_ref !== policy.workflowRef) ||
+    (policy.jobWorkflowRef !== undefined && claims.data.job_workflow_ref !== policy.jobWorkflowRef)
   ) {
     throw new AuthenticationError('github_oidc_policy_denied', 'GitHub OIDC claims are not allowed')
   }
 
   return actorIdentitySchema.parse({
     capabilities: policy.capabilities,
-    id: `github:${claims.data.repository}:${claims.data.job_workflow_ref}`,
+    id: `github:${claims.data.repository}:${policy.jobWorkflowRef ?? policy.workflowRef}`,
     kind: 'github-actions',
   })
 }
@@ -311,11 +339,18 @@ async function authenticateGitHub(
     throw new AuthenticationError('malformed_bearer_token', 'Bearer token is invalid')
   }
   const token = authorization.data.slice('Bearer '.length)
-  const actor = await validateGitHubOidcToken(
-    token,
-    configuration.github,
-    configuration.githubVerificationKey,
-  )
+  let actor: ActorIdentity | undefined
+  for (const policy of configuration.githubPolicies) {
+    try {
+      actor = await validateGitHubOidcToken(token, policy, configuration.githubVerificationKey)
+      break
+    } catch (error: unknown) {
+      if (!(error instanceof AuthenticationError)) throw error
+    }
+  }
+  if (!actor) {
+    throw new AuthenticationError('github_oidc_policy_denied', 'GitHub OIDC claims are not allowed')
+  }
   consumeReplayNonce(
     replayStore,
     actor.id,
@@ -334,7 +369,7 @@ export async function authenticateControlRequest(
 ): Promise<ActorIdentity> {
   const configuration = Object.freeze({
     ...configurationInput,
-    github: githubOidcPolicySchema.parse(configurationInput.github),
+    githubPolicies: githubOidcPoliciesSchema.parse(configurationInput.githubPolicies),
     operatorKeys: configurationInput.operatorKeys.map((key) => operatorKeySchema.parse(key)),
     replayWindowSeconds: z
       .number()
@@ -366,4 +401,8 @@ export function parseOperatorKeys(input: unknown) {
 
 export function parseGitHubOidcPolicy(input: unknown) {
   return githubOidcPolicySchema.parse(input)
+}
+
+export function parseGitHubOidcPolicies(input: unknown) {
+  return githubOidcPoliciesSchema.parse(input)
 }

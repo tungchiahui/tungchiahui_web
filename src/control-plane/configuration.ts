@@ -1,6 +1,10 @@
 import { z } from 'zod'
 
-import { type AuthenticationConfiguration, parseGitHubOidcPolicy, parseOperatorKeys } from './auth'
+import {
+  type AuthenticationConfiguration,
+  parseGitHubOidcPolicies,
+  parseOperatorKeys,
+} from './auth'
 import { capabilityValues } from './contracts'
 
 const configurationSchema = z.object({
@@ -42,24 +46,26 @@ export function parseControlApiConfiguration(input: unknown) {
     }
   }
 
-  const githubPolicy =
+  const githubPolicies =
     parsed.CONTROL_GITHUB_OIDC_POLICY_JSON === undefined
-      ? {
-          audience: 'tungchiahui-control-api',
-          capabilities: [
-            'translation:dry-run',
-            'translation:execute',
-            'translation:read',
-            'translation:cancel',
-          ],
-          environment: 'production',
-          issuer: 'https://token.actions.githubusercontent.com',
-          jwksUrl: 'https://token.actions.githubusercontent.com/.well-known/jwks',
-          ref: 'refs/heads/main',
-          repository: 'tungchiahui/tungchiahui_web',
-          workflowRef:
-            'tungchiahui/tungchiahui_web/.github/workflows/translation.yml@refs/heads/main',
-        }
+      ? [
+          {
+            audience: 'tungchiahui-control-api',
+            capabilities: [
+              'translation:dry-run',
+              'translation:execute',
+              'translation:read',
+              'translation:cancel',
+            ],
+            environment: 'production',
+            issuer: 'https://token.actions.githubusercontent.com',
+            jwksUrl: 'https://token.actions.githubusercontent.com/.well-known/jwks',
+            ref: 'refs/heads/main',
+            repository: 'tungchiahui/tungchiahui_web',
+            workflowRef:
+              'tungchiahui/tungchiahui_web/.github/workflows/translation.yml@refs/heads/main',
+          },
+        ]
       : parseJson(parsed.CONTROL_GITHUB_OIDC_POLICY_JSON, 'CONTROL_GITHUB_OIDC_POLICY_JSON')
   const operatorKeys =
     parsed.CONTROL_OPERATOR_KEYS_JSON === undefined
@@ -73,7 +79,7 @@ export function parseControlApiConfiguration(input: unknown) {
         ]
       : parseJson(parsed.CONTROL_OPERATOR_KEYS_JSON, 'CONTROL_OPERATOR_KEYS_JSON')
   const authentication: AuthenticationConfiguration = Object.freeze({
-    github: parseGitHubOidcPolicy(githubPolicy),
+    githubPolicies: parseGitHubOidcPolicies(githubPolicies),
     operatorKeys: parseOperatorKeys(operatorKeys),
     replayWindowSeconds: parsed.CONTROL_REPLAY_WINDOW_SECONDS,
   })

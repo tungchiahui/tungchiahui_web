@@ -196,6 +196,7 @@ services:
         condition: service_healthy
     env_file:
       - ${TUNGCHIAHUI_SECRET_DIRECTORY:?secret directory is required}/backup.env
+      - ${TUNGCHIAHUI_SECRET_DIRECTORY:?secret directory is required}/deployment-registry.env
     environment:
       BACKUP_AGE_IDENTITY_PATH: /run/secrets/backup-age-identity.txt
       BACKUP_LOCAL_REPOSITORY_PATH: /var/lib/pgbackrest
@@ -212,6 +213,7 @@ services:
       DEPLOYMENT_BLUE_URL: http://web-blue:3000
       DEPLOYMENT_GREEN_CONTAINER_NAME: ${TUNGCHIAHUI_GREEN_CONTAINER_NAME:?green container name is required}
       DEPLOYMENT_GREEN_URL: http://web-green:3000
+      DEPLOYMENT_IMAGE_REPOSITORY: ${TUNGCHIAHUI_DEPLOYMENT_IMAGE_REPOSITORY:?approved image repository is required}
       DEPLOYMENT_JOURNAL_PATH: /app/deployment/drizzle/meta/_journal.json
       DEPLOYMENT_MIGRATION_CONTAINER_NAME: ${TUNGCHIAHUI_MIGRATION_CONTAINER_NAME:?migration container name is required}
       DEPLOYMENT_MIGRATION_POLICY_PATH: /app/deployment/drizzle/migration-policy.json

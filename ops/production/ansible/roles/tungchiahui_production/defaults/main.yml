@@ -7,6 +7,7 @@ tungchiahui_data_root: /var/lib/tungchiahui
 tungchiahui_deployment_sha: ""
 tungchiahui_deployment_backup_max_age_seconds: ""
 tungchiahui_deployment_stabilization_seconds: ""
+tungchiahui_deployment_image_repository: ghcr.io/tungchiahui/tungchiahui_web
 tungchiahui_install_packages: true
 tungchiahui_manage_stack: true
 tungchiahui_origin_port: "8443"
