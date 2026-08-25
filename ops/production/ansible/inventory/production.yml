@@ -1,0 +1,7 @@
+all:
+  children:
+    production_origins:
+      hosts:
+        production_origin:
+          ansible_host: tungchiahui-production-origin
+          ansible_user: deploy-bootstrap

@@ -238,7 +238,7 @@ weight_loss
 | PostgreSQL `app` | Document、Translation、Segment、Translation Job、Application Job、Ingestion、Approved Alias、Owner-managed Dataset | Deploy、Rollback、Restore、Recovery、Server Migration Operation |
 | PostgreSQL `drizzle` | Versioned Migration Journal | Application Job 或业务数据 |
 | PostgreSQL `public` | PGroonga Extension Bootstrap | 业务 Table |
-| host-local SQLite | Phase 4 Version 2 Control-state、Nonce、Infrastructure Operation/Lease/Fencing 与 Append-only Audit | Content、Translation、Search、Ingestion、Application Job |
+| host-local SQLite | Phase 12 Version 3 Control-state（兼容升级 Phase 4 Version 2）、Nonce、Infrastructure Operation/Lease/Fencing 与 Append-only Audit | Content、Translation、Search、Ingestion、Application Job |
 
 `src/domain/persistence.ts` 是 Locale、Content/Job/Translation Status、Dataset Key 和 External Write Schema 的唯一 Shared Domain 定义。Drizzle Schema 从这些 Closed Union 建立 PostgreSQL Enum，Repository/API 不得再次手写平行 Union。
 

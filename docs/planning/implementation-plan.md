@@ -1,7 +1,7 @@
 # Website V2 分阶段实施计划
 
-> Status: In progress — Phase 0–11 complete
-> Current Phase: Awaiting Owner authorization for Phase 12
+> Status: In progress — Phase 0–12 complete
+> Current Phase: Awaiting Owner authorization for Phase 13
 > Execution Model: Hard-gated, one Phase at a time
 > Scope: 从新的 Next.js V2 Repository 基线推进到替换旧 Nuxt Production Site
 
@@ -21,7 +21,7 @@
 - [x] Phase 9 — 显式付费 AI Translation
 - [x] Phase 10 — PGroonga Search 与 Cache Correctness
 - [x] Phase 11 — S3-compatible Asset Contract（AList Evidence）
-- [ ] Phase 12 — Production Infrastructure、Ansible 与 Container Hardening
+- [x] Phase 12 — Production Infrastructure、Ansible 与 Container Hardening
 - [ ] Phase 13 — Backup、PITR 与 PostgreSQL-independent Recovery
 - [ ] Phase 14 — Shared Deployment Engine 与 Full Blue-Green
 - [ ] Phase 15 — GitHub Actions OIDC 与 `main` 自动部署
@@ -1084,17 +1084,17 @@ Public Asset Read 已在 Phase 6 形成，生产 Infrastructure 前必须用真�
 
 ### Task Checklist
 
-- [ ] 建立 Version-controlled Ansible Inventory/Role/Playbook，以 Hostname/SSH Alias 寻址。
-- [ ] Provision Docker、OpenResty、PostgreSQL/PgBouncer、Next Blue/Green、`control-api`、Workers/Agent 和 State Directory。
-- [ ] 为每个 Service 创建 Multi-stage、Pinned、Minimal、Non-root Production Image。
-- [ ] 对实际可行 Service 启用 Read-only Root Filesystem，只开放明确 Volume/tmpfs。
-- [ ] Drop 不需要的 Linux Capability、Device、Namespace 和 Network Access。
-- [ ] 仅为 `deploy-agent` 配置受控最小 Docker/Host Capability；其他 Service 无 Docker Socket。
-- [ ] 建立 `/var/lib/tungchiahui/control-state` 等明确 Durable Directory、Owner、Mode、Backup Hook。
-- [ ] 使用 SOPS + age 管理 Production Secret，Runtime 注入且不 Bake 进 Image/Log。
-- [ ] 配置 OpenResty：普通 Route -> Active Next Slot，`/api/ops/*` -> 独立 `control-api`，AList/CDN Path 按规范处理。
-- [ ] 配置 `ddns.tungchiahui.cn:8443` Origin，不保存家庭公网数字 IP。
-- [ ] 验证 A+AAAA 与 AAAA-only Origin Scenario，内部只使用 Docker Service DNS。
+- [x] 建立 Version-controlled Ansible Inventory/Role/Playbook，以 Hostname/SSH Alias 寻址。
+- [x] Provision Docker、OpenResty、PostgreSQL/PgBouncer、Next Blue/Green、`control-api`、Workers/Agent 和 State Directory。
+- [x] 为每个 Service 创建 Multi-stage、Pinned、Minimal、Non-root Production Image。
+- [x] 对实际可行 Service 启用 Read-only Root Filesystem，只开放明确 Volume/tmpfs。
+- [x] Drop 不需要的 Linux Capability、Device、Namespace 和 Network Access。
+- [x] 仅为 `deploy-agent` 配置受控最小 Docker/Host Capability；其他 Service 无 Docker Socket。
+- [x] 建立 `/var/lib/tungchiahui/control-state` 等明确 Durable Directory、Owner、Mode、Backup Hook。
+- [x] 使用 SOPS + age 管理 Production Secret，Runtime 注入且不 Bake 进 Image/Log。
+- [x] 配置 OpenResty：普通 Route -> Active Next Slot，`/api/ops/*` -> 独立 `control-api`，AList/CDN Path 按规范处理。
+- [x] 配置 `ddns.tungchiahui.cn:8443` Origin，不保存家庭公网数字 IP。
+- [x] 验证 A+AAAA 与 AAAA-only Origin Scenario，内部只使用 Docker Service DNS。
 
 ### 本 Phase 明确不做什么
 
@@ -1104,25 +1104,25 @@ Public Asset Read 已在 Phase 6 形成，生产 Infrastructure 前必须用真�
 
 ### Tests / Verification
 
-- [ ] 从 Clean Production-like Host 执行 Ansible Provision 并通过 Idempotency Run。
-- [ ] Image Inspection 证明 Non-root、无 Secret Layer、无 `latest` Identity。
-- [ ] Read-only Filesystem/Volume/Capability/Socket Permission Test 通过。
-- [ ] OpenResty Config Validation、Reload 和 Path-routing Integration Test 通过。
-- [ ] Next Slots 全挂时 `control-api` Route 仍可达。
-- [ ] IPv6-only Origin Compatibility Test 不要求修改 App/CI/CLI Config。
+- [x] 从 Clean Production-like Host 执行 Ansible Provision 并通过 Idempotency Run。
+- [x] Image Inspection 证明 Non-root、无 Secret Layer、无 `latest` Identity。
+- [x] Read-only Filesystem/Volume/Capability/Socket Permission Test 通过。
+- [x] OpenResty Config Validation、Reload 和 Path-routing Integration Test 通过。
+- [x] Next Slots 全挂时 `control-api` Route 仍可达。
+- [x] IPv6-only Origin Compatibility Test 不要求修改 App/CI/CLI Config。
 
 ### Acceptance Criteria
 
-- [ ] 新 Host 可由 Version-controlled Infrastructure + Encrypted Secret 重建。
-- [ ] Container Hardening 与 Worker Privilege Separation 可由 Test 证明。
-- [ ] Production Identity 全部使用 Domain/Service Name，而非数字公网 IP。
+- [x] 新 Host 可由 Version-controlled Infrastructure + Encrypted Secret 重建。
+- [x] Container Hardening 与 Worker Privilege Separation 可由 Test 证明。
+- [x] Production Identity 全部使用 Domain/Service Name，而非数字公网 IP。
 
 ### Exit Gate
 
-- [ ] Ansible、Container Hardening、OpenResty Routing、Secret 和 IPv6 Gate 全部通过。
-- [ ] Production-like Environment 尚未承载 Public Traffic。
-- [ ] 创建聚焦 Commit，建议：`feat(infra): complete phase 12 production foundation`。
-- [ ] Commit 后停止并向 Owner 报告，不自动进入 Phase 13。
+- [x] Ansible、Container Hardening、OpenResty Routing、Secret 和 IPv6 Gate 全部通过。
+- [x] Production-like Environment 尚未承载 Public Traffic。
+- [x] 创建聚焦 Commit，建议：`feat(infra): complete phase 12 production foundation`。
+- [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 13。
 
 ### 本阶段完成后形成的 Artifact / Capability
 

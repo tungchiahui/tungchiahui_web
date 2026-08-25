@@ -58,6 +58,8 @@
 - `docs/development/phase-10-verification-report.md`
 - `docs/development/phase-11-s3-compatible-asset-contract.md`
 - `docs/development/phase-11-verification-report.md`
+- `docs/development/phase-12-production-foundation.md`
+- `docs/development/phase-12-verification-report.md`
 - `docs/development/testing-strategy.md`
 - `docs/migration/nuxt-to-next.md`
 - `docs/migration/legacy-discovery-baseline.md`

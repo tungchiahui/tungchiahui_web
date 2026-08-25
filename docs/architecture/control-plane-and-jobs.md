@@ -130,7 +130,9 @@ SQLite 只用于 Control-plane Recovery State，绝不是业务 Production Datab
 
 ### Phase 4 executable baseline
 
-Phase 4 的 Local/Test 实现把上述边界具体化为：独立 Node/TypeScript `control-api`、PostgreSQL `site_control_api` NOLOGIN Role，以及 Version 2 SQLite Schema。SQLite 使用 `BEGIN IMMEDIATE` Transaction、WAL、`synchronous=FULL`、`wal_autocheckpoint=1000`、Versioned Migration、Nonce Uniqueness、Append-only Audit Trigger 和 Lease Fencing Token。
+Phase 4 的 Local/Test 实现把上述边界具体化为：独立 Node/TypeScript `control-api`、PostgreSQL `site_control_api` NOLOGIN Role，以及 Version 2 SQLite Schema。Phase 12 以向后兼容 Version 3 Migration 增加 `production` Environment：原 Version 2 Metadata 先保留为 `local_control_metadata_v2`，再复制进扩展 Constraint 的新 Metadata Table。SQLite 继续使用 `BEGIN IMMEDIATE` Transaction、WAL、`synchronous=FULL`、`wal_autocheckpoint=1000`、Versioned Migration、Nonce Uniqueness、Append-only Audit Trigger 和 Lease Fencing Token。
+
+Phase 12 Production Compose 将该 Store 挂载到权限受限的 `/var/lib/tungchiahui/control-state`，并交付独立 `control-api` 与 `deploy-agent` 容器。此阶段 deploy-agent 只允许 Docker `GET /_ping`、对外报告 Production Mutation Disabled；它不是 Phase 14 Deployment Engine，也没有提前实现 Cutover/Rollback。Docker Socket 只进入 deploy-agent，`control-api` 与 `content-worker` 没有该 Mount 或 deploy-control Network。
 
 Operation State Machine 是 `queued -> claimed -> running -> completed|failed`；Claimed Lease 到期可重新排队并增加 Fencing Token，Running Lease 到期则进入 `needs-attention/reconcile-required`，避免 Restart 后盲目重放高权限副作用。Heartbeat 只能由匹配 Owner/Fencing Token 的未过期 Lease 续期，旧 Token 不能 Start、Heartbeat 或 Finish。
 

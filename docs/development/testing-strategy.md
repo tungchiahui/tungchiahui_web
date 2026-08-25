@@ -85,6 +85,8 @@ Test Command 必须：
 
 Phase 2 已实现 Disposable Infrastructure Entry Point；Phase 3 已加入真实 Migration/Role/PgBouncer Suite 和真实 Migration/Seed Hook。Phase 6 已用真实 Playwright Suite 替换 Placeholder，覆盖 zh-CN Home/Blog/Wiki、Legacy Route、Markdown、S3Mock Asset、Special Page、Health/Ready/Version、404、Metadata 与 Client Secret Negative Scan。该 Suite 对共享的 Disposable Runtime/Cache 串行执行，并在任一失败时输出 Web Log 后清理全部资源。
 
+Phase 12 在 Unit 与 Disposable Application Integration 之间加入独立 Production-foundation Gate。它使用提交锁定的 Ansible/SOPS/age/Compose Toolchain，在临时 Host Root 上生成真实 age 密文、构建 Git-SHA 标识的 Production Image、执行两次 Provision，并验证第二次 `changed=0`。同一 Gate 检查 Image History、Container User/Readonly/Capability/Socket、四个数据库登录身份、OpenResty Validation/Reload、IPv4+IPv6 和 Next Slots 全停后的独立 Control Route；只绑定临时本机端口，不承载 Public Traffic。
+
 ## Migration Test
 
 CI 必须测试：

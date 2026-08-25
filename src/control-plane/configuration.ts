@@ -9,8 +9,10 @@ const configurationSchema = z.object({
   CONTROL_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).max(10_000).default(120),
   CONTROL_REPLAY_WINDOW_SECONDS: z.coerce.number().int().min(30).max(900).default(300),
   CONTROL_STATE_PATH: z.string().startsWith('/control-state/'),
+  CONTROL_GITHUB_OIDC_POLICY_JSON: z.string().min(2).optional(),
+  CONTROL_OPERATOR_KEYS_JSON: z.string().min(2).optional(),
   DATABASE_URL: z.string().url().optional(),
-  SITE_RUNTIME_MODE: z.enum(['local', 'test']),
+  SITE_RUNTIME_MODE: z.enum(['local', 'test', 'production']),
 })
 
 const localOperatorPublicJwk = Object.freeze({
@@ -21,30 +23,58 @@ const localOperatorPublicJwk = Object.freeze({
 
 export function parseControlApiConfiguration(input: unknown) {
   const parsed = configurationSchema.parse(input)
+  const production = parsed.SITE_RUNTIME_MODE === 'production'
+  if (
+    production &&
+    (parsed.CONTROL_GITHUB_OIDC_POLICY_JSON === undefined ||
+      parsed.CONTROL_OPERATOR_KEYS_JSON === undefined)
+  ) {
+    throw new Error(
+      'Production control-api requires CONTROL_GITHUB_OIDC_POLICY_JSON and CONTROL_OPERATOR_KEYS_JSON',
+    )
+  }
+
+  const parseJson = (value: string, name: string): unknown => {
+    try {
+      return JSON.parse(value) as unknown
+    } catch {
+      throw new Error(`${name} must contain valid JSON`)
+    }
+  }
+
+  const githubPolicy =
+    parsed.CONTROL_GITHUB_OIDC_POLICY_JSON === undefined
+      ? {
+          audience: 'tungchiahui-control-api',
+          capabilities: [
+            'translation:dry-run',
+            'translation:execute',
+            'translation:read',
+            'translation:cancel',
+          ],
+          environment: 'production',
+          issuer: 'https://token.actions.githubusercontent.com',
+          jwksUrl: 'https://token.actions.githubusercontent.com/.well-known/jwks',
+          ref: 'refs/heads/main',
+          repository: 'tungchiahui/tungchiahui_web',
+          workflowRef:
+            'tungchiahui/tungchiahui_web/.github/workflows/translation.yml@refs/heads/main',
+        }
+      : parseJson(parsed.CONTROL_GITHUB_OIDC_POLICY_JSON, 'CONTROL_GITHUB_OIDC_POLICY_JSON')
+  const operatorKeys =
+    parsed.CONTROL_OPERATOR_KEYS_JSON === undefined
+      ? [
+          {
+            actorId: `local-operator:${parsed.SITE_RUNTIME_MODE}`,
+            capabilities: capabilityValues,
+            keyId: 'local-phase4-operator',
+            publicKeyJwk: localOperatorPublicJwk,
+          },
+        ]
+      : parseJson(parsed.CONTROL_OPERATOR_KEYS_JSON, 'CONTROL_OPERATOR_KEYS_JSON')
   const authentication: AuthenticationConfiguration = Object.freeze({
-    github: parseGitHubOidcPolicy({
-      audience: 'tungchiahui-control-api',
-      capabilities: [
-        'translation:dry-run',
-        'translation:execute',
-        'translation:read',
-        'translation:cancel',
-      ],
-      environment: 'production',
-      issuer: 'https://token.actions.githubusercontent.com',
-      jwksUrl: 'https://token.actions.githubusercontent.com/.well-known/jwks',
-      ref: 'refs/heads/main',
-      repository: 'tungchiahui/tungchiahui_web',
-      workflowRef: 'tungchiahui/tungchiahui_web/.github/workflows/translation.yml@refs/heads/main',
-    }),
-    operatorKeys: parseOperatorKeys([
-      {
-        actorId: `local-operator:${parsed.SITE_RUNTIME_MODE}`,
-        capabilities: capabilityValues,
-        keyId: 'local-phase4-operator',
-        publicKeyJwk: localOperatorPublicJwk,
-      },
-    ]),
+    github: parseGitHubOidcPolicy(githubPolicy),
+    operatorKeys: parseOperatorKeys(operatorKeys),
     replayWindowSeconds: parsed.CONTROL_REPLAY_WINDOW_SECONDS,
   })
 

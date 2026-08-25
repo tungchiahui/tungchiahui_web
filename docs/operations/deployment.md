@@ -50,6 +50,8 @@ https://www.tungchiahui.cn/api/ops/deployments
 
 不得向 `content-worker` 或 `control-api` 授予 Docker Socket/Unrestricted Host Permission。只有 `deploy-agent` 获得完成声明操作所需的最小 Docker/OpenResty/Host Capability。
 
+Phase 12 只交付该权限边界的最小可执行起点：Production Compose 中仅 `deploy-agent` 挂载 Docker Socket，且当前代码只发出 `GET /_ping` 并报告 `productionOperations: false`。正式 Compose Lifecycle、Migration、Smoke、OpenResty Cutover、Rollback 和 Recovery Engine 仍属于 Phase 14；不得把 Phase 12 Health Stub 当成 Deployment Success Path。
+
 ## High-level Flow
 
 ```text

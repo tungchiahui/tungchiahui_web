@@ -1,0 +1,266 @@
+---
+- name: Validate stable host and immutable release inputs
+  ansible.builtin.assert:
+    that:
+      - ansible_host is match('^[A-Za-z][A-Za-z0-9._-]*$')
+      - ansible_host is not match('^[0-9.]+$')
+      - tungchiahui_deployment_sha is match('^[a-f0-9]{40}$')
+      - tungchiahui_deployment_sha != '0000000000000000000000000000000000000000'
+      - tungchiahui_web_image is match('^.+:[a-f0-9]{40}$')
+      - tungchiahui_service_image is match('^.+:[a-f0-9]{40}$')
+      - "':latest' not in tungchiahui_web_image"
+      - "':latest' not in tungchiahui_service_image"
+      - tungchiahui_secret_file | length > 0
+    fail_msg: Production provisioning requires a hostname/SSH alias, exact Git SHA images and an encrypted SOPS file.
+
+- name: Install pinned host prerequisites
+  ansible.builtin.apt:
+    name:
+      - docker.io
+      - docker-compose-v2
+    state: present
+    update_cache: true
+  when: tungchiahui_install_packages | bool
+
+- name: Ensure Docker is enabled
+  ansible.builtin.service:
+    name: docker
+    enabled: true
+    state: started
+  when: tungchiahui_install_packages | bool
+
+- name: Create runtime group
+  ansible.builtin.group:
+    name: tungchiahui-runtime
+    gid: "{{ tungchiahui_runtime_group_gid }}"
+    system: true
+    state: present
+
+- name: Create durable and configuration directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ tungchiahui_config_root }}", owner: root, group: tungchiahui-runtime, mode: "0750" }
+    - { path: "{{ tungchiahui_config_root }}/backup-hooks.d", owner: root, group: tungchiahui-runtime, mode: "0750" }
+    - { path: "{{ tungchiahui_data_root }}", owner: root, group: tungchiahui-runtime, mode: "0750" }
+    - { path: "{{ tungchiahui_data_root }}/control-state", owner: "10002", group: tungchiahui-runtime, mode: "0770" }
+    - { path: "{{ tungchiahui_data_root }}/postgres", owner: "70", group: "70", mode: "0700" }
+    - { path: "{{ tungchiahui_secret_root }}", owner: root, group: tungchiahui-runtime, mode: "0750" }
+
+- name: Check controller SOPS executable
+  ansible.builtin.command:
+    argv: [sops, --version]
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  no_log: true
+
+- name: Decrypt structured runtime secrets on the controller
+  ansible.builtin.command:
+    argv: [sops, --decrypt, --output-type, json, "{{ tungchiahui_secret_file }}"]
+  delegate_to: localhost
+  become: false
+  register: tungchiahui_decrypted_secret
+  changed_when: false
+  no_log: true
+
+- name: Validate decrypted secret keys
+  ansible.builtin.assert:
+    that:
+      - (tungchiahui_decrypted_secret.stdout | from_json).web_env is string
+      - (tungchiahui_decrypted_secret.stdout | from_json).control_api_env is string
+      - (tungchiahui_decrypted_secret.stdout | from_json).content_worker_env is string
+      - (tungchiahui_decrypted_secret.stdout | from_json).database_role_bootstrap_env is string
+      - (tungchiahui_decrypted_secret.stdout | from_json).postgres_env is string
+      - (tungchiahui_decrypted_secret.stdout | from_json).pgbouncer_userlist is string
+      - (tungchiahui_decrypted_secret.stdout | from_json).origin_certificate is string
+      - (tungchiahui_decrypted_secret.stdout | from_json).origin_private_key is string
+    fail_msg: The encrypted production secret file does not match the Phase 12 schema.
+  no_log: true
+
+- name: Install per-service runtime secrets without logging values
+  ansible.builtin.copy:
+    content: "{{ (tungchiahui_decrypted_secret.stdout | from_json)[item.source] }}"
+    dest: "{{ tungchiahui_secret_root }}/{{ item.destination }}"
+    owner: root
+    group: tungchiahui-runtime
+    mode: "{{ item.mode }}"
+  loop:
+    - { source: web_env, destination: web.env, mode: "0640" }
+    - { source: control_api_env, destination: control-api.env, mode: "0640" }
+    - { source: content_worker_env, destination: content-worker.env, mode: "0640" }
+    - { source: database_role_bootstrap_env, destination: database-role-bootstrap.env, mode: "0640" }
+    - { source: postgres_env, destination: postgres.env, mode: "0640" }
+    - { source: pgbouncer_userlist, destination: pgbouncer-userlist.txt, mode: "0640" }
+    - { source: origin_certificate, destination: origin.crt, mode: "0644" }
+    - { source: origin_private_key, destination: origin.key, mode: "0640" }
+  no_log: true
+  register: tungchiahui_runtime_secrets
+
+- name: Install version-controlled production topology
+  ansible.builtin.copy:
+    src: "{{ tungchiahui_repository_root }}/ops/production/{{ item.source }}"
+    dest: "{{ tungchiahui_config_root }}/{{ item.destination }}"
+    owner: root
+    group: tungchiahui-runtime
+    mode: "0640"
+  loop:
+    - { source: compose.yaml, destination: compose.yaml }
+    - { source: openresty.conf, destination: openresty.conf }
+    - { source: active-slot.conf, destination: active-slot.conf }
+    - { source: pgbouncer.ini, destination: pgbouncer.ini }
+  notify: Reload validated OpenResty configuration
+
+- name: Install declared backup-source hook
+  ansible.builtin.copy:
+    dest: "{{ tungchiahui_config_root }}/backup-hooks.d/control-state.yml"
+    owner: root
+    group: tungchiahui-runtime
+    mode: "0640"
+    content: |
+      version: 1
+      owner_phase: 13
+      source: {{ tungchiahui_data_root }}/control-state/control.db
+      consistency: sqlite-wal-checkpoint-required
+      restore_validation: schema-integrity-audit-continuity
+
+- name: Read Docker socket ownership
+  ansible.builtin.stat:
+    path: /var/run/docker.sock
+  register: tungchiahui_docker_socket
+
+- name: Require a local Docker socket
+  ansible.builtin.assert:
+    that:
+      - tungchiahui_docker_socket.stat.exists
+      - tungchiahui_docker_socket.stat.issock
+    fail_msg: A local Docker Engine socket is required; remote Docker contexts are not accepted.
+
+- name: Define immutable Compose environment
+  ansible.builtin.set_fact:
+    tungchiahui_compose_environment:
+      TUNGCHIAHUI_CONFIG_ROOT: "{{ tungchiahui_config_root }}"
+      TUNGCHIAHUI_CONTENT_POLLING_ENABLED: "{{ tungchiahui_content_polling_enabled }}"
+      TUNGCHIAHUI_DATA_ROOT: "{{ tungchiahui_data_root }}"
+      TUNGCHIAHUI_DEPLOYMENT_SHA: "{{ tungchiahui_deployment_sha }}"
+      TUNGCHIAHUI_DOCKER_SOCKET_GID: "{{ tungchiahui_docker_socket.stat.gid }}"
+      TUNGCHIAHUI_ORIGIN_PORT: "{{ tungchiahui_origin_port }}"
+      TUNGCHIAHUI_SECRET_DIRECTORY: "{{ tungchiahui_secret_root }}"
+      TUNGCHIAHUI_SERVICE_IMAGE: "{{ tungchiahui_service_image }}"
+      TUNGCHIAHUI_SEARCH_POLLING_ENABLED: "{{ tungchiahui_search_polling_enabled }}"
+      TUNGCHIAHUI_WEB_IMAGE: "{{ tungchiahui_web_image }}"
+
+- name: Validate rendered Compose topology
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-name
+      - "{{ tungchiahui_compose_project_name }}"
+      - --file
+      - "{{ tungchiahui_config_root }}/compose.yaml"
+      - config
+      - --quiet
+  environment: "{{ tungchiahui_compose_environment }}"
+  changed_when: false
+
+- name: Start and wait for the PostgreSQL foundation
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-name
+      - "{{ tungchiahui_compose_project_name }}"
+      - --file
+      - "{{ tungchiahui_config_root }}/compose.yaml"
+      - up
+      - --detach
+      - --wait
+      - postgres
+  environment: "{{ tungchiahui_compose_environment }}"
+  register: tungchiahui_postgres_up
+  changed_when: >-
+    'Created' in tungchiahui_postgres_up.stderr or
+    'Started' in tungchiahui_postgres_up.stderr or
+    'Recreated' in tungchiahui_postgres_up.stderr
+  when: tungchiahui_manage_stack | bool
+
+- name: Check database role bootstrap marker
+  ansible.builtin.stat:
+    path: "{{ tungchiahui_config_root }}/database-role-bootstrap.complete"
+  register: tungchiahui_database_role_marker
+
+- name: Reconcile least-privilege database login identities
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-name
+      - "{{ tungchiahui_compose_project_name }}"
+      - --file
+      - "{{ tungchiahui_config_root }}/compose.yaml"
+      - --profile
+      - provision
+      - run
+      - --rm
+      - database-role-bootstrap
+  environment: "{{ tungchiahui_compose_environment }}"
+  changed_when: true
+  no_log: true
+  when:
+    - tungchiahui_manage_stack | bool
+    - tungchiahui_runtime_secrets.changed or not tungchiahui_database_role_marker.stat.exists
+
+- name: Record successful database role bootstrap
+  ansible.builtin.copy:
+    dest: "{{ tungchiahui_config_root }}/database-role-bootstrap.complete"
+    owner: root
+    group: tungchiahui-runtime
+    mode: "0640"
+    content: |
+      schema: 1
+  when:
+    - tungchiahui_manage_stack | bool
+    - tungchiahui_runtime_secrets.changed or not tungchiahui_database_role_marker.stat.exists
+
+- name: Reconcile hardened production-like services
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-name
+      - "{{ tungchiahui_compose_project_name }}"
+      - --file
+      - "{{ tungchiahui_config_root }}/compose.yaml"
+      - up
+      - --detach
+      - --remove-orphans
+  environment: "{{ tungchiahui_compose_environment }}"
+  register: tungchiahui_compose_up
+  changed_when: >-
+    'Created' in tungchiahui_compose_up.stderr or
+    'Started' in tungchiahui_compose_up.stderr or
+    'Recreated' in tungchiahui_compose_up.stderr
+  when: tungchiahui_manage_stack | bool
+
+- name: Validate OpenResty configuration in the running topology
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-name
+      - "{{ tungchiahui_compose_project_name }}"
+      - --file
+      - "{{ tungchiahui_config_root }}/compose.yaml"
+      - exec
+      - --no-TTY
+      - openresty
+      - openresty
+      - -t
+  environment: "{{ tungchiahui_compose_environment }}"
+  changed_when: false
+  when: tungchiahui_manage_stack | bool

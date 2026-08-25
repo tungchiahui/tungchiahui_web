@@ -36,7 +36,8 @@ TRANSLATION_API_KEY
 
 ```text
 .env.example
-ops/env/production.env
+ops/production/compose.yaml
+ops/production/ansible/inventory/production.yml
 ```
 
 这些文件只包含 Variable Name 和安全的默认非 Secret 值。
@@ -52,10 +53,10 @@ Gitignored。
 ### Production Secret
 
 ```text
-ops/secrets/production.env.sops
+ops/production/secrets/production.sops.yaml
 ```
 
-使用 SOPS + age 加密。
+使用 SOPS + age 加密；提交前必须以 `production.sops.yaml.example` 的结构创建真实密文，禁止提交对应明文。Ansible 在 Controller 解密并以 `no_log` 安装分 Service Runtime File，真实密钥值不经过 Build Argument。
 
 Secret 在 Runtime/Deployment 时注入，不得通过 Docker Build Argument、Layer、Image Environment 或复制文件的方式 Bake 进 Production Image。需要文件形式 Secret 时，使用权限受限的明确 Runtime Mount/tmpfs，并确保不会进入 Image Layer 或一般 Log。
 
@@ -66,6 +67,8 @@ Secret 在 Runtime/Deployment 时注入，不得通过 Docker Build Argument、L
 Invalid Configuration 必须在 Startup 时 Fail Fast，并给出安全 Error，指出缺失/非法变量，但不打印 Secret Value。
 
 Phase 2 Local/Test Infrastructure 使用固定、公开、仅本机有效的 Dummy DB/S3 Credential；它们不是 Secret，也不能由 Production Credential 覆盖。Local/Test Parser 只允许 Loopback/Docker Service DNS、`tungchiahui-local-*`/`tungchiahui-test-*` Bucket 和专用 Control-state Directory，并固定使用 Fake Translation Provider。
+
+Phase 12 Production Parser 必须显式获得 Operator Key 与 GitHub OIDC Policy；Production `content-worker` 禁止 Fake Translation Provider。数据库通过 SOPS Payload 为 `site_app_login`、`site_control_api_login`、`site_content_worker_login` 和 `site_migrator_login` 提供不同 Credential，并由一次性 Bootstrap 绑定到对应 NOLOGIN Least-privilege Group Role。不得让普通 Runtime Service 使用 PostgreSQL Bootstrap/Superuser Identity。
 
 ## Secret Lifecycle
 

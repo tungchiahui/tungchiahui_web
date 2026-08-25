@@ -1,0 +1,216 @@
+name: tungchiahui-production
+
+x-hardened-service: &hardened-service
+  restart: unless-stopped
+  read_only: true
+  cap_drop: [ALL]
+  security_opt:
+    - no-new-privileges:true
+
+x-node-tmpfs: &node-tmpfs
+  - /tmp:size=32m,mode=1777,noexec,nosuid,nodev
+
+services:
+  postgres:
+    image: groonga/pgroonga:4.0.8-alpine-18@sha256:b5c92fa3d86ad76ce75ddd8095f60542cf025348a58b8a38cd0b4a580fe4ce68
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    user: "70:70"
+    env_file:
+      - ${TUNGCHIAHUI_SECRET_DIRECTORY:?secret directory is required}/postgres.env
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    networks: [database]
+    tmpfs:
+      - /tmp:size=32m,mode=1777,noexec,nosuid,nodev
+      - /run/postgresql:size=8m,mode=3775,uid=70,gid=70,nosuid,nodev
+    volumes:
+      - type: bind
+        source: ${TUNGCHIAHUI_DATA_ROOT:?data root is required}/postgres
+        target: /var/lib/postgresql
+
+  pgbouncer:
+    <<: *hardened-service
+    image: percona/percona-pgbouncer:1.25.2-5@sha256:ee8f9b3e8b80b379b47ae41419a0d16de7a20c2be0cae5dbf55fe403d3d9f33d
+    user: "1001:10050"
+    entrypoint: [/usr/bin/pgbouncer]
+    command: [/etc/pgbouncer/pgbouncer.ini]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD-SHELL, "timeout 2 bash -c '</dev/tcp/127.0.0.1/6432'"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    networks: [application, database]
+    tmpfs: *node-tmpfs
+    volumes:
+      - ${TUNGCHIAHUI_CONFIG_ROOT:?config root is required}/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ${TUNGCHIAHUI_SECRET_DIRECTORY:?secret directory is required}/pgbouncer-userlist.txt:/etc/pgbouncer/userlist.txt:ro
+
+  database-role-bootstrap:
+    <<: *hardened-service
+    image: ${TUNGCHIAHUI_SERVICE_IMAGE:?immutable service image is required}
+    restart: "no"
+    profiles: [provision]
+    user: "10006:10050"
+    command: [node, dist/database-role-bootstrap.cjs]
+    env_file:
+      - ${TUNGCHIAHUI_SECRET_DIRECTORY:?secret directory is required}/database-role-bootstrap.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [database]
+    tmpfs: *node-tmpfs
+
+  control-api:
+    <<: *hardened-service
+    image: ${TUNGCHIAHUI_SERVICE_IMAGE:?immutable service image is required}
+    user: "10002:10050"
+    command: [node, dist/control-api.cjs]
+    env_file:
+      - ${TUNGCHIAHUI_SECRET_DIRECTORY:?secret directory is required}/control-api.env
+    environment:
+      CONTROL_API_HOST: 0.0.0.0
+      CONTROL_API_PORT: "8080"
+      CONTROL_RATE_LIMIT_PER_MINUTE: "120"
+      CONTROL_REPLAY_WINDOW_SECONDS: "300"
+      CONTROL_STATE_PATH: /control-state/control.db
+      SITE_RUNTIME_MODE: production
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8080/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    networks: [edge, application]
+    tmpfs: *node-tmpfs
+    volumes:
+      - type: bind
+        source: ${TUNGCHIAHUI_DATA_ROOT:?data root is required}/control-state
+        target: /control-state
+
+  content-worker:
+    <<: *hardened-service
+    image: ${TUNGCHIAHUI_SERVICE_IMAGE:?immutable service image is required}
+    user: "10003:10050"
+    command: [node, dist/content-worker.cjs]
+    env_file:
+      - ${TUNGCHIAHUI_SECRET_DIRECTORY:?secret directory is required}/content-worker.env
+    environment:
+      CONTENT_WORKER_HOST: 0.0.0.0
+      CONTENT_WORKER_POLLING_ENABLED: ${TUNGCHIAHUI_CONTENT_POLLING_ENABLED:-false}
+      CONTENT_WORKER_PORT: "8083"
+      SEARCH_WORKER_POLLING_ENABLED: ${TUNGCHIAHUI_SEARCH_POLLING_ENABLED:-false}
+      SITE_REVALIDATION_ENDPOINT: http://web-blue:3000/api/internal/revalidate
+      SITE_RUNTIME_MODE: production
+      TRANSLATION_PROVIDER: disabled
+      TRANSLATION_WORKER_POLLING_ENABLED: "false"
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8083/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    networks: [application]
+    tmpfs: *node-tmpfs
+
+  web-blue:
+    <<: *hardened-service
+    image: ${TUNGCHIAHUI_WEB_IMAGE:?immutable web image is required}
+    user: "10001:10001"
+    env_file:
+      - ${TUNGCHIAHUI_SECRET_DIRECTORY:?secret directory is required}/web.env
+    environment:
+      SITE_DEPLOYMENT_SHA: ${TUNGCHIAHUI_DEPLOYMENT_SHA:?Git SHA is required}
+      SITE_RUNTIME_MODE: production
+      SITE_SLOT: blue
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 45
+    networks: [edge, application]
+    tmpfs: *node-tmpfs
+
+  web-green:
+    <<: *hardened-service
+    image: ${TUNGCHIAHUI_WEB_IMAGE:?immutable web image is required}
+    user: "10001:10001"
+    env_file:
+      - ${TUNGCHIAHUI_SECRET_DIRECTORY:?secret directory is required}/web.env
+    environment:
+      SITE_DEPLOYMENT_SHA: ${TUNGCHIAHUI_DEPLOYMENT_SHA:?Git SHA is required}
+      SITE_RUNTIME_MODE: production
+      SITE_SLOT: green
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 45
+    networks: [edge, application]
+    tmpfs: *node-tmpfs
+
+  deploy-agent:
+    <<: *hardened-service
+    image: ${TUNGCHIAHUI_SERVICE_IMAGE:?immutable service image is required}
+    user: "10004:10050"
+    group_add:
+      - ${TUNGCHIAHUI_DOCKER_SOCKET_GID:?Docker socket GID is required}
+    command: [node, dist/deploy-agent.cjs]
+    environment:
+      DEPLOY_AGENT_HOST: 0.0.0.0
+      DEPLOY_AGENT_PORT: "8081"
+      DOCKER_SOCKET_PATH: /run/deploy-capability/docker.sock
+      SITE_RUNTIME_MODE: production
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8081/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    networks: [deploy-control]
+    tmpfs: *node-tmpfs
+    volumes:
+      - type: bind
+        source: ${TUNGCHIAHUI_DATA_ROOT:?data root is required}/control-state
+        target: /control-state
+      - /var/run/docker.sock:/run/deploy-capability/docker.sock:ro
+
+  openresty:
+    <<: *hardened-service
+    image: openresty/openresty:1.31.1.1-2-bookworm-fat@sha256:45fbb5026af2127655b247c90735aa65dab60518e7ccfc6ebbac71a7403be430
+    user: "10005:10050"
+    depends_on:
+      control-api:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, curl, --insecure, --fail, --silent, https://127.0.0.1:8443/openresty-health]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    networks: [edge]
+    ports:
+      - "${TUNGCHIAHUI_ORIGIN_PORT:-8443}:8443"
+    tmpfs:
+      - /tmp:size=32m,mode=1777,noexec,nosuid,nodev
+      - /var/run:size=8m,mode=755,nosuid,nodev
+    volumes:
+      - ${TUNGCHIAHUI_CONFIG_ROOT:?config root is required}/openresty.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro
+      - ${TUNGCHIAHUI_CONFIG_ROOT:?config root is required}/active-slot.conf:/etc/tungchiahui/active-slot.conf:ro
+      - ${TUNGCHIAHUI_SECRET_DIRECTORY:?secret directory is required}/origin.crt:/run/secrets/origin.crt:ro
+      - ${TUNGCHIAHUI_SECRET_DIRECTORY:?secret directory is required}/origin.key:/run/secrets/origin.key:ro
+
+networks:
+  application:
+    internal: true
+  database:
+    internal: true
+  deploy-control:
+    internal: true
+  edge:
+    enable_ipv6: true

@@ -1,0 +1,7 @@
+---
+- name: Provision TungChiaHui production foundation
+  hosts: production_origins
+  become: true
+  gather_facts: true
+  roles:
+    - role: tungchiahui_production

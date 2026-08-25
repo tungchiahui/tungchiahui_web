@@ -12,10 +12,10 @@ import {
   infrastructureOperationTypeSchema,
 } from './contracts'
 
-const CONTROL_STATE_SCHEMA_VERSION = 2
+const CONTROL_STATE_SCHEMA_VERSION = 3
 
 const controlStateSummarySchema = z.object({
-  environment: z.enum(['local', 'test']),
+  environment: z.enum(['local', 'test', 'production']),
   incomplete_operations: z.number().int().nonnegative(),
   initialized_at: z.string(),
   journal_mode: z.literal('wal'),
@@ -51,7 +51,7 @@ const auditEventRowSchema = z.object({
   outcome: z.enum(['accepted', 'denied', 'failed', 'succeeded']),
 })
 
-export type ControlStateEnvironment = 'local' | 'test'
+export type ControlStateEnvironment = 'local' | 'production' | 'test'
 
 export type ControlStateSummary = Readonly<{
   checkpointPolicy: 'wal_autocheckpoint=1000'
@@ -59,7 +59,7 @@ export type ControlStateSummary = Readonly<{
   incompleteOperations: number
   initializedAt: string
   journalMode: 'wal'
-  schemaVersion: 2
+  schemaVersion: 3
   synchronous: 2
 }>
 
@@ -186,6 +186,22 @@ const migrations = [
     `,
     version: 2,
   },
+  {
+    sql: `
+      ALTER TABLE local_control_metadata RENAME TO local_control_metadata_v2;
+
+      CREATE TABLE local_control_metadata (
+        singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+        environment TEXT NOT NULL CHECK (environment IN ('local', 'test', 'production')),
+        initialized_at TEXT NOT NULL
+      ) STRICT;
+
+      INSERT INTO local_control_metadata (singleton_id, environment, initialized_at)
+      SELECT singleton_id, environment, initialized_at
+      FROM local_control_metadata_v2;
+    `,
+    version: 3,
+  },
 ] as const
 
 function openControlState(path: string) {
@@ -242,6 +258,14 @@ function applyMigrations(database: DatabaseSync, environment: ControlStateEnviro
   const appliedAt = new Date().toISOString()
   transaction(database, () => {
     database.exec(migrations[0].sql)
+    const alreadyInitialized =
+      z
+        .object({ count: z.number().int().nonnegative() })
+        .parse(
+          database
+            .prepare('SELECT count(*) AS count FROM local_control_metadata WHERE singleton_id = 1')
+            .get(),
+        ).count > 0
     database
       .prepare(
         'INSERT OR IGNORE INTO control_schema_migrations (version, applied_at) VALUES (1, ?)',
@@ -253,7 +277,7 @@ function applyMigrations(database: DatabaseSync, environment: ControlStateEnviro
           (singleton_id, environment, initialized_at)
          VALUES (1, ?, ?)`,
       )
-      .run(environment, appliedAt)
+      .run(environment === 'production' ? 'test' : environment, appliedAt)
 
     const applied = new Set(
       database
@@ -269,13 +293,20 @@ function applyMigrations(database: DatabaseSync, environment: ControlStateEnviro
       database
         .prepare('INSERT INTO control_schema_migrations (version, applied_at) VALUES (?, ?)')
         .run(migration.version, appliedAt)
-      database
-        .prepare(
-          `INSERT INTO control_runtime_state
-            (singleton_id, active_slot, previous_slot, updated_at)
-           VALUES (1, 'none', 'none', ?)`,
-        )
-        .run(appliedAt)
+      if (migration.version === 2) {
+        database
+          .prepare(
+            `INSERT INTO control_runtime_state
+              (singleton_id, active_slot, previous_slot, updated_at)
+             VALUES (1, 'none', 'none', ?)`,
+          )
+          .run(appliedAt)
+      }
+      if (migration.version === 3 && environment === 'production' && !alreadyInitialized) {
+        database
+          .prepare('UPDATE local_control_metadata SET environment = ? WHERE singleton_id = 1')
+          .run(environment)
+      }
     }
   })
 }
@@ -289,7 +320,7 @@ export function initializeControlState(
     applyMigrations(database, environment)
     const summary = readSummary(database)
     if (summary.environment !== environment) {
-      throw new Error('Control-state environment does not match the requested local/test mode')
+      throw new Error('Control-state environment does not match the requested runtime mode')
     }
     return summary
   } finally {

@@ -1,0 +1,12 @@
+version: 1
+ansible_core:
+  version: 2.21.3
+docker_compose:
+  version: 5.4.0
+  linux_amd64_sha256: 837fd1d35bf6a494f41b5b5988269a7be79de337cf1a1a6ff0e45ab51bb4e9be
+sops:
+  version: 3.13.3
+  linux_amd64_sha256: e5bec3346a873ae91d871550f3e698c1aad962aff462a080e40f25fde17fef6b
+age:
+  version: 1.3.1
+  linux_amd64_sha256: bdc69c09cbdd6cf8b1f333d372a1f58247b3a33146406333e30c0f26e8f51377

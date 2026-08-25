@@ -35,18 +35,32 @@ const configuration = z
     GITHUB_CONTENT_REPOSITORY: z.string().min(3).optional(),
     SITE_REVALIDATION_ENDPOINT: z.url().optional(),
     SITE_REVALIDATION_SECRET: z.string().min(32).optional(),
-    SITE_RUNTIME_MODE: z.enum(['local', 'test']),
+    SITE_RUNTIME_MODE: z.enum(['local', 'test', 'production']),
     SEARCH_WORKER_POLLING_ENABLED: z
       .enum(['true', 'false'])
       .default('false')
       .transform((value) => value === 'true'),
-    TRANSLATION_PROVIDER: z.literal('fake').default('fake'),
+    TRANSLATION_PROVIDER: z.enum(['disabled', 'fake']).default('fake'),
     TRANSLATION_WORKER_POLLING_ENABLED: z
       .enum(['true', 'false'])
       .default('false')
       .transform((value) => value === 'true'),
   })
   .superRefine((value, context) => {
+    if (value.SITE_RUNTIME_MODE === 'production' && value.TRANSLATION_PROVIDER === 'fake') {
+      context.addIssue({
+        code: 'custom',
+        message: 'The fake translation provider cannot run in production',
+        path: ['TRANSLATION_PROVIDER'],
+      })
+    }
+    if (value.TRANSLATION_WORKER_POLLING_ENABLED && value.TRANSLATION_PROVIDER === 'disabled') {
+      context.addIssue({
+        code: 'custom',
+        message: 'Translation polling requires an enabled validated provider',
+        path: ['TRANSLATION_PROVIDER'],
+      })
+    }
     if (value.CONTENT_WORKER_POLLING_ENABLED && value.GITHUB_CONTENT_REPOSITORY === undefined) {
       context.addIssue({
         code: 'custom',

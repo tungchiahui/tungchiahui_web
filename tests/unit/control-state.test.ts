@@ -73,11 +73,11 @@ describe('control-state SQLite engine', () => {
       incompleteOperations: 0,
       initializedAt: '2026-08-23T00:00:00.000Z',
       journalMode: 'wal',
-      schemaVersion: 2,
+      schemaVersion: 3,
       synchronous: 2,
     })
     checkpointControlState(path)
-    expect(readControlState(path).schemaVersion).toBe(2)
+    expect(readControlState(path).schemaVersion).toBe(3)
   })
 
   it('refuses to reuse state from another environment', () => {
@@ -86,6 +86,35 @@ describe('control-state SQLite engine', () => {
     expect(() => initializeControlState(path, 'test')).toThrow(
       'Control-state environment does not match',
     )
+  })
+
+  it('initializes the dedicated production recovery-state environment', () => {
+    const path = statePath()
+    const summary = initializeControlState(path, 'production')
+
+    expect(summary.environment).toBe('production')
+    expect(summary.schemaVersion).toBe(3)
+  })
+
+  it('does not relabel an existing pre-Version-3 state database as production', () => {
+    const path = statePath()
+    const legacy = new DatabaseSync(path)
+    legacy.exec(`
+      CREATE TABLE control_schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL) STRICT;
+      CREATE TABLE local_control_metadata (
+        singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+        environment TEXT NOT NULL CHECK (environment IN ('local', 'test')),
+        initialized_at TEXT NOT NULL
+      ) STRICT;
+      INSERT INTO control_schema_migrations VALUES (1, '2026-08-23T00:00:00.000Z');
+      INSERT INTO local_control_metadata VALUES (1, 'test', '2026-08-23T00:00:00.000Z');
+    `)
+    legacy.close()
+
+    expect(() => initializeControlState(path, 'production')).toThrow(
+      'Control-state environment does not match',
+    )
+    expect(readControlState(path).environment).toBe('test')
   })
 
   it('enforces replay nonces and infrastructure idempotency semantics', () => {

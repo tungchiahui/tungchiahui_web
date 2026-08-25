@@ -132,3 +132,5 @@ Cache-Control: no-store
 运维 POST Request 永远不得缓存。
 
 EdgeOne 与 OpenResty 必须保留原始 Host、Method、Path 和控制面认证所需的安全 Header，并对 `/api/ops/*` 使用独立的 WAF/Rate-limit/Method Policy。Next.js Slot 是否健康不得决定 `control-api` Route 是否可达。
+
+Phase 12 的可执行基线使用 `listen [::]:8443 ssl ipv6only=off` 同时服务 A/AAAA，到内部 `web-blue`/`control-api` 只使用 Docker Service DNS。Production Inventory 使用 `tungchiahui-production-origin` SSH Alias；仓库不保存家庭公网数字 IP。Production-like Integration 已验证 IPv4、IPv6 以及两个 Next Slot 全停后 `/api/ops/*` 仍到达独立控制面；没有修改 DNS、EdgeOne 或承载 Public Traffic。

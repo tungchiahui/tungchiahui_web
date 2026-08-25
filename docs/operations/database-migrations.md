@@ -78,7 +78,7 @@ Phase 3 Runner 已强制解析 Metadata：未经显式 `allowContract` 不执行
 | `site_backup` | `pg_read_all_data`、`pg_monitor` | Application Write、Schema Migration、Replication |
 | `site_replication` | PostgreSQL Replication Attribute | Application Table Grant、Schema Migration、Backup Role Inheritance |
 
-这些是 NOLOGIN Group Role；Phase 12 才通过 Encrypted Secret 和 Container Identity 配置 Production Login/Member。Local Seed 在 PgBouncer Transaction 内使用 `SET LOCAL ROLE site_content_worker`，Application Compatibility Test 使用 `SET LOCAL ROLE site_app`，不会把 Superuser Session State 泄漏到下一个 Transaction。
+这些是 NOLOGIN Group Role。Phase 12 已通过 SOPS + age Secret 和 Hardened One-shot Bootstrap 配置不同的 `site_app_login`、`site_control_api_login`、`site_content_worker_login`、`site_migrator_login`，每个 Login 只继承对应 Group Role；普通 Runtime 不使用 Bootstrap/Superuser Identity。Local Seed 在 PgBouncer Transaction 内使用 `SET LOCAL ROLE site_content_worker`，Application Compatibility Test 使用 `SET LOCAL ROLE site_app`，不会把 Superuser Session State 泄漏到下一个 Transaction。
 
 ## CI
 
