@@ -135,6 +135,46 @@ test('keeps all Phase 0 ROS2 HTML routes publicly readable', async ({ request })
   }
 })
 
+test('searches PostgreSQL + PGroonga by locale without shipping the corpus to the browser', async ({
+  page,
+  request,
+}) => {
+  await page.goto('/search?q=ROS2_Control')
+  await expect(page.getByRole('heading', { name: '站内搜索' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'C++ 开发环境搭建与测试' })).toHaveAttribute(
+    'href',
+    '/zh-cn/wiki/2023-10-05-cplusplus-jiao-xue/0200-c-kai-fa-huan-jing-da-jian-yu-ce-shi',
+  )
+  await expect(page.locator('[data-search-results]')).toContainText('正文匹配')
+
+  await page.goto('/en-us/search?q=New%20blog%20enabled')
+  await expect(page.getByRole('heading', { name: 'Site search' })).toBeVisible()
+  await expect(page.locator('a[href="/en-us/blog/newblogenable!"]')).toBeVisible()
+
+  const api = await request.get('/api/search?q=Docker%20教程&locale=zh-cn')
+  expect(api.status()).toBe(200)
+  expect(api.headers()['cache-control']).toBe('no-store')
+  const response = await api.json()
+  expect(response.results[0]).toMatchObject({
+    locale: 'zh-cn',
+    route: '/zh-cn/wiki/2024-10-03-docker-jiao-cheng',
+    title: 'Docker 教程',
+  })
+  expect(JSON.stringify(response)).not.toContain('rawMarkdown')
+
+  const scripts = await page
+    .locator('script[src]')
+    .evaluateAll((elements) =>
+      elements
+        .map((element) => element.getAttribute('src'))
+        .filter((value): value is string => Boolean(value)),
+    )
+  const clientBundles = await Promise.all(
+    scripts.map((source) => page.request.get(source).then((bundle) => bundle.text())),
+  )
+  expect(clientBundles.join('\n')).not.toContain('Revalidated without rebuilding.')
+})
+
 test('keeps special pages, local Start interaction and public datasets available', async ({
   page,
 }) => {

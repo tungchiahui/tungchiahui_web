@@ -40,6 +40,14 @@
       "requiresFreshRecoverableBackup": false,
       "reason": "Adds a backward-compatible execution mode, force/cancellation control, request counts and segment progress metrics to the existing translation-job table; all columns have safe defaults for Phase 8 application overlap.",
       "recovery": "Retain the additive enum and columns for blue-green compatibility. Disable explicit translation execution, preserve completed segment rows, and deploy a reviewed forward fix before resuming jobs."
+    },
+    {
+      "tag": "0005_phase10_pgroonga_search",
+      "changeKind": "expand",
+      "risk": "low",
+      "requiresFreshRecoverableBackup": false,
+      "reason": "Adds an independently rebuildable locale-aware search projection and PGroonga index without changing canonical documents, translations, routes, or existing application-job rows.",
+      "recovery": "Retain the additive projection table for blue-green overlap. Disable search polling or public search on error, deploy a reviewed forward fix, and replay a PostgreSQL-backed search_reindex job from current runtime content."
     }
   ]
 }

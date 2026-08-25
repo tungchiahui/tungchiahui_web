@@ -246,14 +246,11 @@ Phase 8 Migration `0003_phase8_translation_memory` 是 additive Expand：新增 
 
 ## 搜索
 
-PGroonga 索引：
+Phase 10 Migration `0005_phase10_pgroonga_search` 以 additive Expand 新增 `app.search_documents`。`(document_id, locale)` 是 Primary Key，并 Foreign Key 到 Canonical Document；Row 保存 Content Type、Canonical Route、Title、Heading、Body、Relevant Metadata、Source/Projection Hash 和时间字段。
 
-- Title
-- Source Content
-- Translated Content
-- Relevant Metadata
+PGroonga Multi-column Index 覆盖 Title、Heading、Body 与 Metadata，Locale/Content Type 另有 B-tree Index。每个 Locale Projection 从当前 PostgreSQL Runtime Content 确定性生成：en-US 只接受与当前 Source Hash 绑定的 Materialization，否则索引当前 zh-CN Fallback；zh-HK/zh-TW 使用 Materialized Conversion。Projection 不是 Authoring Source，可按 Locale 重建，不承载 Canonical Markdown。
 
-Search Schema 必须支持 Locale Filtering。
+Search/Reindex 使用 PostgreSQL `operational_jobs`，不进入 host-local SQLite。Migration 不重写 Document/Translation，不删除旧 Column，可在 Application Rollback 时保留。
 
 ## ID 与作者编写的 Frontmatter
 

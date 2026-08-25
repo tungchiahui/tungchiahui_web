@@ -20,7 +20,13 @@ import {
   translationScopeValues,
   translationSegmentStatusValues,
 } from '../domain/persistence'
-import { applicationSchema, documents, operationalJobs, ownerManagedDatasets } from './schema-core'
+import {
+  applicationSchema,
+  contentTypeEnum,
+  documents,
+  operationalJobs,
+  ownerManagedDatasets,
+} from './schema-core'
 
 export * from './schema-core'
 
@@ -79,6 +85,44 @@ export const documentTranslations = applicationSchema.table(
     ),
     check('document_translations_fallback_nonnegative', sql`${table.fallbackSegmentCount} >= 0`),
     check('document_translations_hits_nonnegative', sql`${table.translationMemoryHits} >= 0`),
+  ],
+)
+
+export const searchDocuments = applicationSchema.table(
+  'search_documents',
+  {
+    documentId: uuid('document_id')
+      .notNull()
+      .references(() => documents.id, { onDelete: 'cascade' }),
+    locale: localeEnum().notNull(),
+    contentType: contentTypeEnum('content_type').notNull(),
+    routePath: text('route_path').notNull(),
+    title: text().notNull(),
+    headings: text().notNull(),
+    body: text().notNull(),
+    metadata: text().notNull(),
+    sourceHash: text('source_hash').notNull(),
+    projectionHash: text('projection_hash').notNull(),
+    sourceUpdatedAt: timestamp('source_updated_at', { withTimezone: true }),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.documentId, table.locale] }),
+    index('search_documents_locale_type_idx').on(table.locale, table.contentType),
+    index('search_documents_full_text_idx').using(
+      'pgroonga',
+      table.title,
+      table.headings,
+      table.body,
+      table.metadata,
+    ),
+    check('search_documents_route_path_absolute', sql`${table.routePath} LIKE '/%'`),
+    check('search_documents_title_not_empty', sql`length(${table.title}) > 0`),
+    check('search_documents_source_hash_sha256', sql`${table.sourceHash} ~ '^[a-f0-9]{64}$'`),
+    check(
+      'search_documents_projection_hash_sha256',
+      sql`${table.projectionHash} ~ '^[a-f0-9]{64}$'`,
+    ),
   ],
 )
 
@@ -280,6 +324,7 @@ export const persistenceSchema = {
   ingestionRuns,
   operationalJobs,
   ownerManagedDatasets,
+  searchDocuments,
   translationJobs,
   translationSegments,
 }

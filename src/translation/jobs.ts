@@ -3,7 +3,11 @@ import { createHash } from 'node:crypto'
 import { and, asc, eq, inArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
 
-import type { ContentHookInput, ContentIngestionHooks } from '../content/hooks'
+import {
+  type ContentHookInput,
+  type ContentIngestionHooks,
+  contentHookInputSchema,
+} from '../content/hooks'
 import { createDatabaseClient } from '../database/client'
 import {
   documents,
@@ -420,6 +424,7 @@ export class TranslationJobRepository {
               type: 'modified',
             },
           ],
+          searchLocales: ['en-us'],
           sourceCommit: document.sourceCommit,
           translation: {
             fallbackSegments: materialized.metrics.fallbackSegmentCount,
@@ -507,23 +512,26 @@ export class TranslationJobRepository {
         )
         .where(inArray(documents.id, documentIds))
     })
-    return rows.map(({ document, translation }) => ({
-      changes: [
-        {
-          documentId: document.id,
-          routePath: document.routePath,
-          sourceHash: document.sourceHash,
-          type: 'modified' as const,
+    return rows.map(({ document, translation }) =>
+      contentHookInputSchema.parse({
+        changes: [
+          {
+            documentId: document.id,
+            routePath: document.routePath,
+            sourceHash: document.sourceHash,
+            type: 'modified',
+          },
+        ],
+        searchLocales: ['en-us'],
+        sourceCommit: document.sourceCommit,
+        translation: {
+          fallbackSegments: translation.fallbackSegmentCount,
+          memoryHits: translation.translationMemoryHits,
+          pendingSegments: translation.pendingSegmentCount,
+          translatedSegments: translation.translatedSegmentCount,
         },
-      ],
-      sourceCommit: document.sourceCommit,
-      translation: {
-        fallbackSegments: translation.fallbackSegmentCount,
-        memoryHits: translation.translationMemoryHits,
-        pendingSegments: translation.pendingSegmentCount,
-        translatedSegments: translation.translatedSegmentCount,
-      },
-    }))
+      }),
+    )
   }
 
   async finish(
@@ -599,14 +607,14 @@ export class TranslationJobRepository {
 }
 
 export class TranslationWorker {
-  readonly #hooks: Pick<ContentIngestionHooks, 'revalidatePublicContent'>
+  readonly #hooks: Pick<ContentIngestionHooks, 'refreshSearch' | 'revalidatePublicContent'>
   readonly #jobs: TranslationJobRepository
   readonly #provider: TranslationProvider
   readonly #workerId: string
 
   constructor(
     options: Readonly<{
-      hooks: Pick<ContentIngestionHooks, 'revalidatePublicContent'>
+      hooks: Pick<ContentIngestionHooks, 'refreshSearch' | 'revalidatePublicContent'>
       jobs: TranslationJobRepository
       provider: TranslationProvider
       workerId: string
@@ -616,6 +624,11 @@ export class TranslationWorker {
     this.#jobs = options.jobs
     this.#provider = options.provider
     this.#workerId = options.workerId
+  }
+
+  async #deliverHooks(input: ContentHookInput) {
+    await this.#hooks.refreshSearch(input)
+    await this.#hooks.revalidatePublicContent(input)
   }
 
   async runOnce() {
@@ -636,7 +649,7 @@ export class TranslationWorker {
 
       if (progress.revalidationDocumentIds.length > 0) {
         const inputs = await this.#jobs.readRevalidationInputs(progress.revalidationDocumentIds)
-        for (const input of inputs) await this.#hooks.revalidatePublicContent(input)
+        for (const input of inputs) await this.#deliverHooks(input)
         progress = await this.#jobs.clearRevalidation(job, progress)
       }
 
@@ -670,7 +683,7 @@ export class TranslationWorker {
         }
         const recorded = await this.#jobs.recordTranslation(job, progress, candidate, response)
         progress = recorded.progress
-        for (const input of recorded.hookInputs) await this.#hooks.revalidatePublicContent(input)
+        for (const input of recorded.hookInputs) await this.#deliverHooks(input)
         progress = await this.#jobs.clearRevalidation(job, progress)
         console.log(
           JSON.stringify({

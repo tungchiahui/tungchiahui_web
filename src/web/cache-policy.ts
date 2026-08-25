@@ -1,12 +1,21 @@
 import { z } from 'zod'
 
 import type { ContentChange } from '../content/hooks'
+import type { Locale } from '../domain/persistence'
 import { locales } from '../i18n/locales'
 import { localeSwitchPath } from './routes'
 
 export const publicContentCachePolicy = Object.freeze({
   invalidation: 'exact-path-and-shared-index-tags',
   key: 'content type, canonical route path, source hash',
+  owner: 'Next.js web application',
+  ttl: null,
+})
+
+export const publicSearchCachePolicy = Object.freeze({
+  edgeAndOpenResty: 'no-store',
+  invalidation: 'exact-locale-tag-after-transactional-search-projection-refresh',
+  key: 'normalized query, locale, result limit',
   owner: 'Next.js web application',
   ttl: null,
 })
@@ -19,6 +28,10 @@ export function routeCacheTag(routePath: string) {
 
 export function contentTypeCacheTag(contentType: 'blog' | 'wiki') {
   return `content:list:${contentType}`
+}
+
+export function searchLocaleCacheTag(locale: Locale) {
+  return `search:locale:${locale}`
 }
 
 export function affectedPublicPaths(changes: readonly ContentChange[]) {

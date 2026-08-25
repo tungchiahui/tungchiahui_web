@@ -145,6 +145,9 @@ export async function verifyPhase9Translation(
     )
     let injectRevalidationFailure = true
     const retryHooks = {
+      async refreshSearch(input: Parameters<typeof hooks.refreshSearch>[0]) {
+        await hooks.refreshSearch(input)
+      },
       async revalidatePublicContent(input: Parameters<typeof hooks.revalidatePublicContent>[0]) {
         if (injectRevalidationFailure) {
           injectRevalidationFailure = false

@@ -71,7 +71,7 @@ Cutover 前：
 - Homepage
 - Representative Article
 - Locale Route
-- Search
+- Search：`/zh-cn/search?q=ROS2_Control` 页面与 `/api/search?q=ROS2_Control&locale=zh-cn`，验证 200、Locale Route、非空 Result 和 `Cache-Control: no-store`
 - Static Asset Fetch
 
 Cutover 后，通过真实 Production Entry 重复关键 Public-path Check。

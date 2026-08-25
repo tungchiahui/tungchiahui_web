@@ -3,32 +3,9 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 import { z } from 'zod'
 
 import { affectedPublicPaths } from '../web/cache-policy'
-import type { ContentHookInput, ContentIngestionHooks } from './hooks'
+import { type ContentHookInput, type ContentIngestionHooks, contentHookInputSchema } from './hooks'
 
-export const revalidationRequestSchema = z
-  .object({
-    changes: z.array(
-      z
-        .object({
-          documentId: z.uuid(),
-          previousRoutePath: z.string().startsWith('/').optional(),
-          routePath: z.string().startsWith('/'),
-          sourceHash: z.string().regex(/^[a-f0-9]{64}$/),
-          type: z.enum(['added', 'deleted', 'modified', 'moved']),
-        })
-        .strict(),
-    ),
-    sourceCommit: z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/),
-    translation: z
-      .object({
-        fallbackSegments: z.number().int().nonnegative(),
-        memoryHits: z.number().int().nonnegative(),
-        pendingSegments: z.number().int().nonnegative(),
-        translatedSegments: z.number().int().nonnegative(),
-      })
-      .strict(),
-  })
-  .strict()
+export const revalidationRequestSchema = contentHookInputSchema
 
 export function signRevalidationPayload(body: string, secret: string) {
   return createHmac('sha256', z.string().min(32).parse(secret)).update(body).digest('hex')
@@ -59,7 +36,7 @@ export class HttpPublicContentRevalidationHook implements ContentIngestionHooks 
   async refreshSearch() {}
 
   async revalidatePublicContent(input: ContentHookInput) {
-    if (input.changes.length === 0) return
+    if (input.changes.length === 0 && input.searchLocales === undefined) return
     const payload = revalidationRequestSchema.parse(input)
     const body = JSON.stringify(payload)
     const response = await fetch(this.#endpoint, {
@@ -103,22 +80,11 @@ export class PublicContentHooks implements ContentIngestionHooks {
   }
 
   async refreshSearch(input: ContentHookInput) {
-    this.#logDeferred('search_refresh_deferred', 10, input)
+    void input
   }
 
   async revalidatePublicContent(input: ContentHookInput) {
     await this.#revalidation.revalidatePublicContent(input)
-  }
-
-  #logDeferred(event: string, replacementPhase: number, input: ContentHookInput) {
-    console.log(
-      JSON.stringify({
-        changedDocuments: input.changes.length,
-        event,
-        replacementPhase,
-        sourceCommit: input.sourceCommit,
-      }),
-    )
   }
 }
 

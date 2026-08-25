@@ -4,6 +4,7 @@ import { basename, join, resolve } from 'node:path'
 
 import { z } from 'zod'
 import { verifyPhase5Ingestion } from '../content/test-ingestion'
+import { verifyPhase10CacheInvalidation, verifyPhase10Search } from '../search/test-search'
 import { verifyPhase9Translation } from '../translation/test-execution'
 import { verifyPhase6Revalidation } from '../web/test-revalidation'
 import { assertDockerPrerequisites, ComposeProject } from './compose'
@@ -353,7 +354,7 @@ function runPlaywright(siteBaseUrl: URL) {
 async function run() {
   assertDockerPrerequisites()
   const repositoryRoot = process.cwd()
-  const temporaryRoot = mkdtempSync(join(tmpdir(), 'tungchiahui-phase9-'))
+  const temporaryRoot = mkdtempSync(join(tmpdir(), 'tungchiahui-phase10-'))
   const suffix = basename(temporaryRoot)
     .replaceAll(/[^a-z0-9]/g, '')
     .slice(-12)
@@ -426,7 +427,9 @@ async function run() {
     requireHardenedLocalService(compose, 'fake-deploy-agent')
     const firstContentJobId = await verifyApplicationJobBoundary(configuration.controlApiUrl)
     await verifyPhase5Ingestion(configuration.databaseUrl.toString(), firstContentJobId)
+    await verifyPhase10Search(configuration.databaseUrl.toString(), configuration.siteBaseUrl)
     await verifyPhase6Revalidation(configuration.databaseUrl.toString(), configuration.siteBaseUrl)
+    await verifyPhase10CacheInvalidation(configuration.siteBaseUrl)
     const firstTranslationJobId = await verifyTranslationJobBoundary(configuration.controlApiUrl)
     runPlaywright(configuration.siteBaseUrl)
     await verifyPhase9Translation(configuration.databaseUrl.toString(), firstTranslationJobId)

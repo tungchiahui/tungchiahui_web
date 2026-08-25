@@ -154,7 +154,7 @@ Phase 5 将上述 Pipeline 实现为以下边界：
 - Snapshot Apply 在单个 PostgreSQL Transaction 中完成。Source Path 优先保持 Identity；相同 Public Route 或唯一 Source Hash 可证明的 Rename/Move 复用 Document ID；歧义 Hash 不静默合并。
 - 删除使用可审计 Soft-delete；同 Path/Route 的恢复复用原 Identity。相同 Commit/Content 重放不更新 Document、Translation 或 Hook Side Effect。
 - `content-worker` 使用 `FOR UPDATE SKIP LOCKED` Claim、Lease Expiry Recovery、Attempt Limit、`retry_wait`、Progress 和有界 Error Summary。Application Job 与 `ingestion_runs` 仍只位于 PostgreSQL。
-- Translation Diff、zh-CN Revalidation 与 Search Refresh 是明确 Typed Hook。Phase 6 已替换 Public Revalidation，Phase 8 已在同一 Ingestion Transaction 内替换 Translation Diff/Materialization；Search Refresh 继续由 Phase 10 替换。没有 AI Provider、Image Build、Deploy 或 GitHub Write Path。
+- Translation Diff、Public Revalidation 与 Search Refresh 是明确 Typed Hook。Phase 6 已替换 Public Revalidation，Phase 8 已在同一 Ingestion Transaction 内替换 Translation Diff/Materialization，Phase 10 已替换 Search Refresh：只重建受影响 Document/Locale 的 PGroonga Projection，并在成功后精确失效 Locale Search Tag。没有隐式 AI Provider、Image Build、Deploy 或 GitHub Write Path。
 
 ## Phase 8 Translation Memory baseline
 

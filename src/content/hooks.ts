@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { localeSchema } from '../domain/persistence'
+
 export const contentChangeSchema = z
   .object({
     documentId: z.uuid(),
@@ -13,6 +15,12 @@ export const contentChangeSchema = z
 export const contentHookInputSchema = z
   .object({
     changes: z.array(contentChangeSchema),
+    searchLocales: z
+      .array(localeSchema)
+      .min(1)
+      .max(4)
+      .refine((locales) => new Set(locales).size === locales.length, 'Locales must be unique')
+      .optional(),
     sourceCommit: z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/),
     translation: z
       .object({

@@ -1,4 +1,4 @@
-import { ExternalLink } from 'lucide-react'
+import { ExternalLink, Search as SearchIcon } from 'lucide-react'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -11,6 +11,8 @@ import { SiteShell } from '@/components/site-shell'
 import { techFootprintPayloadSchema, weightLossPayloadSchema } from '@/control-plane/contracts'
 import { localizeContentText } from '@/i18n/content'
 import type { AppLocale } from '@/i18n/locales'
+import { readCachedSearch } from '@/search/cache'
+import { searchQuerySchema } from '@/search/contracts'
 import {
   listCachedDocuments,
   readCachedDocument,
@@ -150,6 +152,86 @@ async function ContentList({
           <CardLink context={context} document={document} key={document.id} />
         ))}
       </ul>
+    </section>
+  )
+}
+
+async function SearchPage({
+  context,
+  queryInput,
+}: Readonly<{ context: PublicRouteContext; queryInput: string | undefined }>) {
+  const t = await getTranslations({ locale: context.locale, namespace: 'Web' })
+  const parsedQuery = searchQuerySchema.safeParse(queryInput)
+  const query = parsedQuery.success ? parsedQuery.data : undefined
+  const results = query
+    ? await readCachedSearch({ limit: 20, locale: context.locale, query })
+    : undefined
+  const matchedContextLabels = {
+    body: t('searchMatchBody'),
+    heading: t('searchMatchHeading'),
+    metadata: t('searchMatchMetadata'),
+    title: t('searchMatchTitle'),
+  } as const
+
+  return (
+    <section>
+      <h1 className="font-bold text-4xl">{t('searchTitle')}</h1>
+      <p className="mt-3 max-w-3xl text-muted-foreground">{t('searchDescription')}</p>
+      <search>
+        <form
+          action={withLocalePrefix('/search', context)}
+          className="mt-8 flex max-w-3xl gap-3"
+          method="get"
+        >
+          <input
+            aria-label={t('searchPlaceholder')}
+            className="min-w-0 flex-1 rounded-xl border bg-background px-4 py-3"
+            defaultValue={query}
+            maxLength={200}
+            name="q"
+            placeholder={t('searchPlaceholder')}
+            required
+            type="search"
+          />
+          <button
+            className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 font-medium text-primary-foreground"
+            type="submit"
+          >
+            <SearchIcon aria-hidden="true" size={17} />
+            {t('searchSubmit')}
+          </button>
+        </form>
+      </search>
+      {results === undefined ? (
+        <p className="mt-8 text-muted-foreground">{t('searchPrompt')}</p>
+      ) : results.length === 0 ? (
+        <p className="mt-8 rounded-xl border p-5 text-muted-foreground">{t('searchEmpty')}</p>
+      ) : (
+        <div className="mt-9" data-search-results>
+          <p className="mb-4 text-muted-foreground text-sm">
+            {t('searchResultCount', { count: results.length })}
+          </p>
+          <ol className="grid gap-4">
+            {results.map((result) => (
+              <li
+                className="rounded-2xl border bg-card p-5"
+                key={`${result.locale}:${result.route}`}
+              >
+                <div className="flex flex-wrap gap-3 text-muted-foreground text-xs uppercase">
+                  <span>{t(result.contentType)}</span>
+                  <span>{matchedContextLabels[result.matchedContext]}</span>
+                </div>
+                <h2 className="mt-2 font-semibold text-xl">
+                  <Link className="hover:text-primary" href={result.route}>
+                    {result.title}
+                  </Link>
+                </h2>
+                <p className="mt-3 text-muted-foreground">{result.snippet}</p>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
     </section>
   )
 }
@@ -499,12 +581,17 @@ async function SpecialPage({
   }
 }
 
-export async function renderPublicPage(segments: readonly string[], context: PublicRouteContext) {
+export async function renderPublicPage(
+  segments: readonly string[],
+  context: PublicRouteContext,
+  searchQuery?: string,
+) {
   const path = publicPath(segments)
   let page: ReactNode
   if (path === '/') page = <HomePage context={context} />
   else if (path === '/blog') page = <ContentList contentType="blog" context={context} />
   else if (path === '/wiki') page = <ContentList contentType="wiki" context={context} />
+  else if (path === '/search') page = <SearchPage context={context} queryInput={searchQuery} />
   else if (path.startsWith('/blog/') || path.startsWith('/wiki/'))
     page = <ArticlePage context={context} path={path} />
   else {
@@ -538,6 +625,7 @@ export async function publicPageMetadata(
   }
   if (path === '/blog') return { description: t('blogDescription'), title: t('blogTitle') }
   if (path === '/wiki') return { description: t('wikiDescription'), title: t('wikiTitle') }
+  if (path === '/search') return { description: t('searchDescription'), title: t('searchTitle') }
   const special = specialPageSlugSchema.safeParse(segments.length === 1 ? segments[0] : undefined)
   if (special.success) {
     switch (special.data) {

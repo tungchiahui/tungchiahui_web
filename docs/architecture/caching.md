@@ -35,10 +35,13 @@ Content Ingestion 应尽量只使受影响的 Cache Key/Route 失效。
 | Blog/Wiki List | Next.js Web | Content Type；`content:list:<type>` | 无任意 TTL | 受影响 Content Type Tag 与 List Path |
 | Homepage | Next.js Web | `/`、`/zh-cn` Route Cache | 无任意 TTL | 每次非空 Content Change 精确 Revalidate 两条 Home Path |
 | Owner Dataset | Next.js Web | Dataset Key；`owner-dataset:<key>` | 无任意 TTL | 由对应 Owner Write Path 失效；Phase 6 只建立 Public Read |
+| Search Result | Next.js Web | Normalized Query + Locale + Limit；`search:locale:<locale>` | 无任意 TTL | Projection Transaction 成功后失效受影响 Locale Tag；Full Reindex 失效其请求 Locale |
 
 Content Worker 对严格 Zod Payload 执行 HMAC-SHA256 签名后调用 `/api/internal/revalidate`。Secret 只存在 Server/Worker Environment，不进入 Client Bundle。Endpoint 使 Article/List Tag 和 Home/List/Article 的 zh-CN prefixed/unprefixed Path 失效，并输出不含 Secret 的结构化事件。
 
 Materialization Transaction 与 Side-effect Delivery 之间发生故障时，既有 PostgreSQL `operational_jobs.progress` 保存精确 `side_effects` 输入。Worker Retry 只重放幂等 Hook，不重新 Fetch 或重写已提交正文。这样 Content Publish 不依赖 Next.js Rebuild，同时不会因同 Commit 再摄取成为 No-op 而漏失效。
+
+Phase 10 Search API/Page 的 HTTP Response 对 Edge/OpenResty 使用 `no-store`。Next.js 内部 Search Result Cache 使用 Query/Locale/Limit 精确 Key 和 Locale Tag；Content/Translation 精确 Projection Refresh 或显式 Reindex 成功后才失效对应 Locale。Cache Correctness 不依赖任意 TTL，且不增加 Process-local Cache。
 
 ## 静态资源
 

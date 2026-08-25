@@ -1,7 +1,7 @@
 # Website V2 分阶段实施计划
 
-> Status: In progress — Phase 0–9 complete
-> Current Phase: Awaiting Owner authorization for Phase 10
+> Status: In progress — Phase 0–10 complete
+> Current Phase: Awaiting Owner authorization for Phase 11
 > Execution Model: Hard-gated, one Phase at a time
 > Scope: 从新的 Next.js V2 Repository 基线推进到替换旧 Nuxt Production Site
 
@@ -19,7 +19,7 @@
 - [x] Phase 7 — UI i18n 与 zh-HK/zh-TW
 - [x] Phase 8 — Translation Memory 与 en-US Fallback
 - [x] Phase 9 — 显式付费 AI Translation
-- [ ] Phase 10 — PGroonga Search 与 Cache Correctness
+- [x] Phase 10 — PGroonga Search 与 Cache Correctness
 - [ ] Phase 11 — AList S3 Asset Contract
 - [ ] Phase 12 — Production Infrastructure、Ansible 与 Container Hardening
 - [ ] Phase 13 — Backup、PITR 与 PostgreSQL-independent Recovery
@@ -927,14 +927,14 @@ Canonical、Converted 和 English/Fallback Content State 已明确，可以建�
 
 ### Task Checklist
 
-- [ ] 建立 Title、Heading、Body、Translated/Converted Content 和 Metadata 的 PGroonga Index Migration。
-- [ ] 实现 Locale Scope/Ranking，防止偶然 Cross-locale Result。
-- [ ] 实现 Server-side Search Repository/API 与 UI Result Contract。
-- [ ] 返回 title、route、locale、content_type、snippet、matched context。
-- [ ] 建立 Exact Title、Heading、Body、中文短语、English Term、Mixed Identifier Ranking Fixture。
-- [ ] 实现 PostgreSQL-backed Search/Reindex Durable Job 和 `content-worker` Handler。
-- [ ] Content/Translation Update 后只刷新受影响 Index/Cache。
-- [ ] 为 Edge/OpenResty/Next Cache 定义 Owner、Key、Invalidation、TTL 和 Metric。
+- [x] 建立 Title、Heading、Body、Translated/Converted Content 和 Metadata 的 PGroonga Index Migration。
+- [x] 实现 Locale Scope/Ranking，防止偶然 Cross-locale Result。
+- [x] 实现 Server-side Search Repository/API 与 UI Result Contract。
+- [x] 返回 title、route、locale、content_type、snippet、matched context。
+- [x] 建立 Exact Title、Heading、Body、中文短语、English Term、Mixed Identifier Ranking Fixture。
+- [x] 实现 PostgreSQL-backed Search/Reindex Durable Job 和 `content-worker` Handler。
+- [x] Content/Translation Update 后只刷新受影响 Index/Cache。
+- [x] 为 Edge/OpenResty/Next Cache 定义 Owner、Key、Invalidation、TTL 和 Metric。
 
 ### 本 Phase 明确不做什么
 
@@ -944,25 +944,25 @@ Canonical、Converted 和 English/Fallback Content State 已明确，可以建�
 
 ### Tests / Verification
 
-- [ ] 中文和英文 Query 返回正确 Locale/Route 的相关 Document。
-- [ ] Ranking Fixture 有确定期望，不依赖人工肉眼判断。
-- [ ] PGroonga Migration/Index Rebuild 在 Disposable Database 通过。
-- [ ] Search API 不泄露 Raw Secret/Internal-only Data。
-- [ ] Reindex Retry/Concurrency/Failure 和 Cache Invalidation Test 通过。
-- [ ] Browser Bundle 不包含完整 Content Corpus。
+- [x] 中文和英文 Query 返回正确 Locale/Route 的相关 Document。
+- [x] Ranking Fixture 有确定期望，不依赖人工肉眼判断。
+- [x] PGroonga Migration/Index Rebuild 在 Disposable Database 通过。
+- [x] Search API 不泄露 Raw Secret/Internal-only Data。
+- [x] Reindex Retry/Concurrency/Failure 和 Cache Invalidation Test 通过。
+- [x] Browser Bundle 不包含完整 Content Corpus。
 
 ### Acceptance Criteria
 
-- [ ] Search 完全 Server-side 且由 PostgreSQL + PGroonga 支撑。
-- [ ] Locale、Ranking、Snippet、Route 与 Reindex Behavior 有自动化测试。
-- [ ] Cache Correctness 不依赖任意 TTL。
+- [x] Search 完全 Server-side 且由 PostgreSQL + PGroonga 支撑。
+- [x] Locale、Ranking、Snippet、Route 与 Reindex Behavior 有自动化测试。
+- [x] Cache Correctness 不依赖任意 TTL。
 
 ### Exit Gate
 
-- [ ] Search Relevance、Locale、Migration、Reindex、Cache Gate 全部通过。
-- [ ] Representative Search 加入 Production Smoke Candidate List。
-- [ ] 创建聚焦 Commit，建议：`feat(search): complete phase 10 pgroonga search`。
-- [ ] Commit 后停止并向 Owner 报告，不自动进入 Phase 11。
+- [x] Search Relevance、Locale、Migration、Reindex、Cache Gate 全部通过。
+- [x] Representative Search 加入 Production Smoke Candidate List。
+- [x] 创建聚焦 Commit，建议：`feat(search): complete phase 10 pgroonga search`。
+- [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 11。
 
 ### 本阶段完成后形成的 Artifact / Capability
 

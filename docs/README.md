@@ -97,6 +97,16 @@ docs/planning/implementation-plan.md
 - `development/phase-8-translation-memory.md` — Semantic Block、Hash/Context Identity、Document Mapping、Mixed Fallback、Targeted Patch 与零成本边界。
 - `development/phase-8-verification-report.md` — Segmentation、Reuse/Pending/Stale、AST、安全 Backfill、E2E 与 Migration Gate 证据。
 
+## Phase 9 Budgeted Translation
+
+- `development/phase-9-budgeted-translation.md` — 显式 Translation Job、Provider Validation、Budget、Partial、Retry 与 Audit Contract。
+- `development/phase-9-verification-report.md` — Scope、Budget、Authz、Directionality、Fake Provider 与完整质量 Gate 证据。
+
+## Phase 10 PostgreSQL + PGroonga Search
+
+- `development/phase-10-pgroonga-search.md` — Locale Projection、PGroonga Ranking、API/UI、Durable Reindex、Cache 与 Recovery Contract。
+- `development/phase-10-verification-report.md` — Relevance、Locale、Migration、Reindex、Cache、E2E 与完整质量 Gate 证据。
+
 ## Current implementation handoff
 
 - `planning/current-state.md` — 已完成 Phase、实际能力、Stub/Fake、已知限制、Legacy 回查规则与下一 Phase Prerequisite。

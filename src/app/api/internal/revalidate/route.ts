@@ -6,7 +6,9 @@ import {
   revalidationRequestSchema,
   verifyRevalidationSignature,
 } from '@/content/revalidation'
-import { contentTypeCacheTag, routeCacheTag } from '@/web/cache-policy'
+import { locales } from '@/i18n/locales'
+import { contentTypeCacheTag, routeCacheTag, searchLocaleCacheTag } from '@/web/cache-policy'
+import { localeSwitchPath } from '@/web/routes'
 
 export const dynamic = 'force-dynamic'
 
@@ -58,12 +60,19 @@ export async function POST(request: Request) {
   for (const contentType of contentTypes) {
     revalidateTag(contentTypeCacheTag(contentType), { expire: 0 })
   }
+  const searchLocales = parsed.data.searchLocales ?? locales
+  for (const locale of searchLocales) {
+    revalidateTag(searchLocaleCacheTag(locale), { expire: 0 })
+    revalidatePath(localeSwitchPath('/search', locale))
+  }
+  if (searchLocales.includes('zh-cn')) revalidatePath('/search')
   for (const path of paths) revalidatePath(path)
 
   console.log(
     JSON.stringify({
       event: 'zh_cn_routes_revalidated',
       routeCount: paths.length,
+      searchLocales,
       sourceCommit: parsed.data.sourceCommit,
     }),
   )

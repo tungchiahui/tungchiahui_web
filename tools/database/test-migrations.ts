@@ -240,6 +240,38 @@ async function assertDatabaseConstraints(connectionString: string) {
   }
 }
 
+async function assertSearchMigration(connectionString: string) {
+  const client = new Client({ connectionString })
+  await client.connect()
+  try {
+    const result = await client.query<{
+      extension_available: boolean
+      index_valid: boolean
+      search_table: string | null
+    }>(
+      `SELECT
+         EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pgroonga') AS extension_available,
+         COALESCE((
+           SELECT index.indisvalid
+             FROM pg_index AS index
+             JOIN pg_class AS relation ON relation.oid = index.indexrelid
+            WHERE relation.relname = 'search_documents_full_text_idx'
+         ), false) AS index_valid,
+         to_regclass('app.search_documents')::text AS search_table`,
+    )
+    if (
+      !result.rows[0]?.extension_available ||
+      !result.rows[0].index_valid ||
+      result.rows[0].search_table !== 'app.search_documents'
+    ) {
+      throw new Error('Phase 10 PGroonga search table/index migration is incomplete')
+    }
+    await client.query('REINDEX INDEX app.search_documents_full_text_idx')
+  } finally {
+    await client.end()
+  }
+}
+
 async function assertPgBouncerDrizzleCompatibility(connectionString: string) {
   await seedDevelopmentDatabase(connectionString)
   const client = createDatabaseClient({
@@ -289,7 +321,7 @@ async function run() {
     const cleanUrl = databaseUrl(postgresPort)
 
     const clean = await runPostgresMigrations(cleanUrl, { repositoryRoot })
-    if (clean.migrationCount !== 5) {
+    if (clean.migrationCount !== 6) {
       throw new Error('Empty database did not reach the latest migration')
     }
     const repeated = await runPostgresMigrations(cleanUrl, { repositoryRoot })
@@ -298,6 +330,7 @@ async function run() {
     }
     await assertPgBouncerDrizzleCompatibility(databaseUrl(pgbouncerPort))
     await assertDatabaseConstraints(cleanUrl)
+    await assertSearchMigration(cleanUrl)
     await assertRoleBoundary(cleanUrl)
 
     const admin = new Client({ connectionString: cleanUrl })
@@ -339,6 +372,7 @@ async function run() {
     try {
       const result = await upgradedClient.query<{
         preserved: boolean
+        search_table: string | null
         translation_execution: boolean
         translation_table: string | null
       }>(
@@ -349,13 +383,15 @@ async function run() {
              WHERE table_schema = 'app' AND table_name = 'translation_jobs'
                AND column_name = 'execution_mode'
           ) AS translation_execution,
-          to_regclass('app.document_translation_segments')::text AS translation_table`,
+          to_regclass('app.document_translation_segments')::text AS translation_table,
+          to_regclass('app.search_documents')::text AS search_table`,
         [previous.fixture.representativeDocument.id],
       )
       if (
         !result.rows[0]?.preserved ||
         !result.rows[0].translation_execution ||
-        result.rows[0].translation_table === null
+        result.rows[0].translation_table === null ||
+        result.rows[0].search_table === null
       ) {
         throw new Error('Previous production-like schema did not upgrade while preserving data')
       }
@@ -363,7 +399,7 @@ async function run() {
       await upgradedClient.end()
     }
 
-    console.log('PostgreSQL migration suite: PASS (through Phase 9)')
+    console.log('PostgreSQL migration suite: PASS (through Phase 10)')
   } finally {
     if (stackStarted) {
       compose.down(true)

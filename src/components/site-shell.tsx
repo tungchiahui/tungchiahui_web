@@ -17,6 +17,7 @@ export async function SiteShell({
     { path: '/', label: t('home') },
     { path: '/blog', label: t('blog') },
     { path: '/wiki', label: t('wiki') },
+    { path: '/search', label: t('search') },
     { path: '/about', label: t('about') },
     { path: '/more', label: t('more') },
   ]

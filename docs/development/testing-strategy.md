@@ -125,6 +125,8 @@ Phase 8 增加 Semantic-block/Translation Memory Gate：位置变化不改变身
 
 Phase 9 在同一 Disposable Stack 增加 Control API Translation Create/Idempotency/Read/List、四种 Scope、Force Confirmation、Dry-run 零调用、逐请求 Budget Stop/Partial、Cancellation、Provider Failure Retry、Revalidation Failure Resume、Published reviewed Translation Preservation，以及 Token/Cost/Provider/Model Audit。Phase 9 数据变更在 Public E2E 之后运行，避免测试互相污染。Automated Suite 只使用 Fake Provider；真实 Provider Contract Test 必须先获得明确的非生产 Target 与付费授权。
 
+Phase 10 在同一 Disposable Stack 先通过 PostgreSQL Durable Job 重建四 Locale Search Projection，再验证 PGroonga Query Plan/`REINDEX`、Concurrent Claim、Retry、Locale Isolation、Exact Title/Heading/Body/中文/English/Mixed Identifier Ranking、Snippet/Public Contract/Secret Negative、真实 Content Update 后精确 Search Cache Invalidation。Playwright 验证 Localized Search Page/API/Route 和 Client Bundle 不含完整 Corpus。
+
 ## Deployment Pipeline Test
 
 验证 Web Application Repository 的 `main` Workflow 必须在全部 CI Quality Gates 通过后才 Build Git-SHA-tagged Immutable Image，并调用与 `./site deploy` 相同的 Control Plane/Deployment Engine。验证 Content Repository Push 只触发 Content Sync，不触发 Next.js Build 或 Blue-Green Deployment。

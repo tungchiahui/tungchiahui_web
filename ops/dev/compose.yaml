@@ -53,7 +53,7 @@ services:
       - s3-data:/s3mock-data
 
   control-api:
-    image: tungchiahui-web-local:phase9
+    image: tungchiahui-web-local:phase10
     build:
       context: ../..
       dockerfile: ops/dev/Dockerfile
@@ -89,7 +89,7 @@ services:
         target: /control-state
 
   fake-deploy-agent:
-    image: tungchiahui-web-local:phase9
+    image: tungchiahui-web-local:phase10
     pull_policy: never
     command: ["pnpm", "exec", "tsx", "services/fake-deploy-agent/main.ts"]
     environment:
@@ -115,7 +115,7 @@ services:
       - /tmp:size=16m,mode=1777
 
   content-worker:
-    image: tungchiahui-web-local:phase9
+    image: tungchiahui-web-local:phase10
     pull_policy: never
     command: ["pnpm", "exec", "tsx", "services/content-worker/main.ts"]
     environment:
@@ -126,6 +126,7 @@ services:
       SITE_RUNTIME_MODE: ${SITE_RUNTIME_MODE:?SITE_RUNTIME_MODE is required}
       SITE_REVALIDATION_ENDPOINT: http://web:3000/api/internal/revalidate
       SITE_REVALIDATION_SECRET: local-only-phase6-revalidation-secret
+      SEARCH_WORKER_POLLING_ENABLED: "false"
       TRANSLATION_PROVIDER: fake
       TRANSLATION_WORKER_POLLING_ENABLED: "false"
     healthcheck:
@@ -147,7 +148,7 @@ services:
       - /tmp:size=16m,mode=1777
 
   web:
-    image: tungchiahui-web-local:phase9
+    image: tungchiahui-web-local:phase10
     pull_policy: never
     command: ["pnpm", "dev", "--hostname", "0.0.0.0"]
     depends_on:

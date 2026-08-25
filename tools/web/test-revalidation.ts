@@ -1,11 +1,16 @@
 import type { ContentSnapshot, ReadonlyContentSource } from '../../src/content/contracts'
-import type { ContentHookInput, ContentIngestionHooks } from '../../src/content/hooks'
+import {
+  CompositeContentHooks,
+  type ContentHookInput,
+  type ContentIngestionHooks,
+} from '../../src/content/hooks'
 import { ContentIngestionRepository } from '../../src/content/ingestion'
 import { ContentJobRepository } from '../../src/content/jobs'
 import { PublicContentHooks } from '../../src/content/revalidation'
 import { ContentWorker } from '../../src/content/worker'
 import { ApplicationJobRepository } from '../../src/control-plane/application-jobs'
 import type { ActorIdentity } from '../../src/control-plane/contracts'
+import { SearchRefreshContentHook } from '../../src/search/hooks'
 import { phase5FinalSnapshot } from '../content/test-ingestion'
 
 const sourceCommit = 'f'.repeat(40)
@@ -81,14 +86,18 @@ export async function verifyPhase6Revalidation(connectionString: string, siteBas
   const jobs = new ContentJobRepository(connectionString)
   const creator = new ApplicationJobRepository(connectionString)
   const source = new SingleSnapshotSource()
+  const search = new SearchRefreshContentHook(connectionString)
   const ingestion = new ContentIngestionRepository(
     connectionString,
-    new FailOnceRevalidationHooks(
-      new PublicContentHooks(
-        new URL('/api/internal/revalidate', siteBaseUrl).toString(),
-        revalidationSecret,
+    new CompositeContentHooks([
+      search,
+      new FailOnceRevalidationHooks(
+        new PublicContentHooks(
+          new URL('/api/internal/revalidate', siteBaseUrl).toString(),
+          revalidationSecret,
+        ),
       ),
-    ),
+    ]),
   )
   try {
     const created = await creator.createJob(
@@ -128,6 +137,6 @@ export async function verifyPhase6Revalidation(connectionString: string, siteBas
       )
     }
   } finally {
-    await Promise.all([creator.close(), ingestion.close(), jobs.close()])
+    await Promise.all([creator.close(), ingestion.close(), jobs.close(), search.close()])
   }
 }
