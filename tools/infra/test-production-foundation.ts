@@ -32,6 +32,8 @@ const webImage = `tungchiahui-web:${input.PHASE12_GIT_SHA}`
 const serviceImage = `tungchiahui-services:${input.PHASE12_GIT_SHA}`
 const recoveryImage = `tungchiahui-recovery:${input.PHASE12_GIT_SHA}`
 const postgresImage = `tungchiahui-postgres:${input.PHASE12_GIT_SHA}`
+const trivyImage =
+  'aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969'
 const configRoot = join(input.PHASE12_HOST_ROOT, 'etc')
 const dataRoot = join(input.PHASE12_HOST_ROOT, 'var')
 const secretRoot = join(input.PHASE12_HOST_ROOT, 'run', 'secrets')
@@ -62,6 +64,7 @@ function execute(
     encoding: 'utf8',
     env: { ...process.env, ...options.environment },
     input: options.input,
+    maxBuffer: 64 * 1_024 * 1_024,
   })
   if (result.error) throw result.error
   if (result.status !== 0 && options.allowFailure !== true) {
@@ -94,6 +97,21 @@ function composeEnvironment() {
     TUNGCHIAHUI_MIGRATION_CONTAINER_NAME: `${projectName}-database-migrate-1`,
     TUNGCHIAHUI_OPENRESTY_CONTAINER_NAME: `${projectName}-openresty-1`,
     TUNGCHIAHUI_ORIGIN_PORT: String(input.PHASE12_ORIGIN_PORT),
+    TUNGCHIAHUI_OBSERVABILITY_BACKUP_MAX_AGE_SECONDS: '86400',
+    TUNGCHIAHUI_OBSERVABILITY_DISK_CRITICAL_PERCENT: '99',
+    TUNGCHIAHUI_OBSERVABILITY_INTERVAL_SECONDS: '10',
+    TUNGCHIAHUI_OBSERVABILITY_JOB_MAX_AGE_SECONDS: '3600',
+    TUNGCHIAHUI_OBSERVABILITY_LATENCY_WARNING_MS: '10000',
+    TUNGCHIAHUI_OBSERVABILITY_ORIGIN_HOSTNAME: 'localhost',
+    TUNGCHIAHUI_OBSERVABILITY_ORIGIN_IPV6_REQUIRED: 'false',
+    TUNGCHIAHUI_OBSERVABILITY_ORIGIN_SERVER_NAME: 'ddns.tungchiahui.cn',
+    TUNGCHIAHUI_OBSERVABILITY_ORIGIN_URL: 'https://openresty:8443/api/ready',
+    TUNGCHIAHUI_OBSERVABILITY_PUBLIC_ASSET_PATH: '/api/assets/monitoring/health.svg',
+    TUNGCHIAHUI_OBSERVABILITY_PUBLIC_SERVER_NAME: 'www.tungchiahui.cn',
+    TUNGCHIAHUI_OBSERVABILITY_PUBLIC_URL: 'https://openresty:8443/',
+    TUNGCHIAHUI_OBSERVABILITY_RESTORE_DRILL_MAX_AGE_SECONDS: '86400',
+    TUNGCHIAHUI_OBSERVABILITY_RESTORE_DRILL_TIMESTAMP: new Date().toISOString(),
+    TUNGCHIAHUI_OBSERVABILITY_TLS_CA_PATH: '/run/observability/origin-ca.crt',
     TUNGCHIAHUI_POSTGRES_CONTAINER_NAME: `${projectName}-postgres-1`,
     TUNGCHIAHUI_POSTGRES_IMAGE: postgresImage,
     TUNGCHIAHUI_RECOVERY_IMAGE: recoveryImage,
@@ -226,6 +244,7 @@ function createEncryptedSecret() {
     ].join('\n'),
     origin_certificate: readFileSync(certificatePath, 'utf8'),
     origin_private_key: readFileSync(privateKeyPath, 'utf8'),
+    observability_env: '\n',
     pgbouncer_userlist: [
       `"site_app_login" "${appPassword}"`,
       `"site_content_worker_login" "${workerPassword}"`,
@@ -274,7 +293,22 @@ function createEncryptedSecret() {
   ]) {
     expect(!encrypted.includes(password), 'SOPS output leaked a plaintext secret')
   }
-  return { identityPath, workerPassword }
+  return {
+    identityPath,
+    secretSentinels: [
+      testPassword,
+      testSecret,
+      appPassword,
+      controlPassword,
+      migratorPassword,
+      workerPassword,
+      'phase12-disposable-access',
+      'phase12-disposable-secret',
+      'phase13-primary-only-secret',
+      'phase13-r2-only-secret',
+    ],
+    workerPassword,
+  }
 }
 
 function buildImages() {
@@ -329,6 +363,62 @@ function buildImages() {
       .split('@')[1] ?? ''
 }
 
+function verifyImageSecurity() {
+  const cacheRoot = join(workRoot, 'trivy-cache')
+  mkdirSync(cacheRoot, { mode: 0o755, recursive: true })
+  execute('docker', ['pull', trivyImage])
+  const images = [
+    webImage,
+    serviceImage,
+    recoveryImage,
+    postgresImage,
+    'openresty/openresty:1.31.1.1-2-alpine-fat@sha256:427d94fea0c24b099e7891e8d1b7976f6d008e2d427e56bab725c8b8b293795b',
+    'percona/percona-pgbouncer:1.25.2-5@sha256:ee8f9b3e8b80b379b47ae41419a0d16de7a20c2be0cae5dbf55fe403d3d9f33d',
+  ]
+  for (const image of images) {
+    execute('docker', [
+      'run',
+      '--rm',
+      '--volume',
+      '/var/run/docker.sock:/var/run/docker.sock',
+      '--volume',
+      `${cacheRoot}:/root/.cache`,
+      trivyImage,
+      'image',
+      '--scanners',
+      'vuln,secret',
+      '--severity',
+      'CRITICAL',
+      '--exit-code',
+      '1',
+      '--quiet',
+      image,
+    ])
+    const sbom = execute('docker', [
+      'run',
+      '--rm',
+      '--volume',
+      '/var/run/docker.sock:/var/run/docker.sock',
+      '--volume',
+      `${cacheRoot}:/root/.cache`,
+      trivyImage,
+      'image',
+      '--format',
+      'cyclonedx',
+      '--scanners',
+      'vuln',
+      '--skip-db-update',
+      '--quiet',
+      image,
+    ]).stdout
+    const components = z
+      .object({ components: z.array(z.unknown()).min(1) })
+      .passthrough()
+      .parse(JSON.parse(sbom) as unknown).components
+    expect(components.length > 0, `${image} produced an empty SBOM`)
+  }
+}
+
 function startRegistry() {
   execute('docker', [
     'run',
@@ -375,6 +465,21 @@ function runProvision(identityPath: string) {
       tungchiahui_install_packages: false,
       tungchiahui_manage_stack: true,
       tungchiahui_origin_port: String(input.PHASE12_ORIGIN_PORT),
+      tungchiahui_observability_backup_max_age_seconds: '86400',
+      tungchiahui_observability_disk_critical_percent: '99',
+      tungchiahui_observability_interval_seconds: '10',
+      tungchiahui_observability_job_max_age_seconds: '3600',
+      tungchiahui_observability_latency_warning_ms: '10000',
+      tungchiahui_observability_origin_hostname: 'localhost',
+      tungchiahui_observability_origin_ipv6_required: 'false',
+      tungchiahui_observability_origin_server_name: 'ddns.tungchiahui.cn',
+      tungchiahui_observability_origin_url: 'https://openresty:8443/api/ready',
+      tungchiahui_observability_public_asset_path: '/api/assets/monitoring/health.svg',
+      tungchiahui_observability_public_server_name: 'www.tungchiahui.cn',
+      tungchiahui_observability_public_url: 'https://openresty:8443/',
+      tungchiahui_observability_restore_drill_max_age_seconds: '86400',
+      tungchiahui_observability_restore_drill_timestamp: new Date().toISOString(),
+      tungchiahui_observability_tls_ca_path: '/run/observability/origin-ca.crt',
       tungchiahui_postgres_image: postgresImage,
       tungchiahui_recovery_image: recoveryImage,
       tungchiahui_repository_root: '/workspace',
@@ -440,6 +545,7 @@ function inspectHardening() {
     'web-blue',
     'web-green',
     'openresty',
+    'observability-agent',
   ]
   for (const service of services) {
     const container = compose(['ps', '--quiet', service]).stdout.trim()
@@ -594,7 +700,253 @@ function curl(arguments_: readonly string[], expectedStatus: number) {
   )
 }
 
-function verifyRoutingAndIpFamilies() {
+async function waitForPublicReadiness() {
+  const deadline = Date.now() + 60_000
+  const url = `https://127.0.0.1:${String(input.PHASE12_ORIGIN_PORT)}/api/ready`
+  while (Date.now() < deadline) {
+    const result = execute(
+      'curl',
+      [
+        '--insecure',
+        '--noproxy',
+        '*',
+        '--silent',
+        '--output',
+        '/dev/null',
+        '--write-out',
+        '%{http_code}',
+        url,
+      ],
+      { allowFailure: true },
+    )
+    if (result.stdout === '200') return
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 500))
+  }
+  throw new Error('Public readiness did not recover after the injected PostgreSQL outage')
+}
+
+async function restorePostgresDependentServices() {
+  compose(['start', 'postgres'])
+  compose(['up', '--detach', '--wait', 'postgres'])
+  compose(['restart', 'pgbouncer', 'web-blue'])
+  compose(['up', '--detach', '--wait', 'pgbouncer', 'web-blue'])
+  await waitForPublicReadiness()
+}
+
+function percentile(values: readonly number[], fraction: number) {
+  const sorted = [...values].toSorted((left, right) => left - right)
+  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * fraction) - 1))
+  return sorted[index] ?? 0
+}
+
+function parallelRequests(path: string, count: number) {
+  const url = `https://127.0.0.1:${String(input.PHASE12_ORIGIN_PORT)}${path}`
+  const result = execute('curl', [
+    '--insecure',
+    '--noproxy',
+    '*',
+    '--silent',
+    '--show-error',
+    '--parallel',
+    '--parallel-max',
+    String(count),
+    '--write-out',
+    '%{http_code} %{time_total}\n',
+    ...Array.from({ length: count }, () => ['--output', '/dev/null', url]).flat(),
+  ])
+  return result.stdout
+    .trim()
+    .split('\n')
+    .map((line) => {
+      const [status, seconds] = line.split(' ')
+      return {
+        durationMilliseconds: Number(seconds) * 1_000,
+        status: Number(status),
+      }
+    })
+}
+
+let readinessMeasurements: Readonly<Record<string, number>> = Object.freeze({})
+
+async function verifySecurityAndLoad() {
+  const port = String(input.PHASE12_ORIGIN_PORT)
+  const headers = execute('curl', [
+    '--insecure',
+    '--noproxy',
+    '*',
+    '--silent',
+    '--dump-header',
+    '-',
+    '--output',
+    '/dev/null',
+    `https://127.0.0.1:${port}/`,
+  ]).stdout.toLowerCase()
+  for (const header of [
+    'content-security-policy:',
+    'permissions-policy:',
+    'referrer-policy:',
+    'strict-transport-security:',
+    'x-content-type-options:',
+    'x-frame-options:',
+    'x-request-id:',
+  ]) {
+    expect(headers.includes(header), `Public response lacks ${header}`)
+  }
+  expect(
+    execute(
+      'curl',
+      [
+        '--insecure',
+        '--noproxy',
+        '*',
+        '--silent',
+        '--tls-max',
+        '1.1',
+        `https://127.0.0.1:${port}/`,
+      ],
+      { allowFailure: true },
+    ).status !== 0,
+    'Origin accepted obsolete TLS 1.1',
+  )
+  curl(['--request', 'TRACE', `https://127.0.0.1:${port}/`], 405)
+  curl([`https://127.0.0.1:${port}/api/internal/revalidate`], 404)
+  curl([`https://127.0.0.1:${port}/api/search?q=`], 400)
+
+  const baseline = parallelRequests('/', 80)
+  expect(
+    baseline.every((sample) => sample.status === 200),
+    `Representative public load returned errors: ${JSON.stringify(baseline)}`,
+  )
+  const abusive = parallelRequests('/', 220)
+  expect(
+    abusive.some((sample) => sample.status === 429),
+    'Public origin rate limit did not engage',
+  )
+  await new Promise((resolveDelay) => setTimeout(resolveDelay, 2_500))
+  curl([`https://127.0.0.1:${port}/`], 200)
+
+  const controlAbuse = parallelRequests('/api/ops/status', 100)
+  expect(
+    controlAbuse.some((sample) => sample.status === 429),
+    'Control origin rate limit did not engage',
+  )
+  expect(
+    controlAbuse.some((sample) => sample.status === 401),
+    'Control auth boundary disappeared',
+  )
+  await new Promise((resolveDelay) => setTimeout(resolveDelay, 2_500))
+  curl([`https://127.0.0.1:${port}/api/ops/status`], 401)
+
+  const observability = compose(['ps', '--quiet', 'observability-agent']).stdout.trim()
+  const poolResult = execute('docker', [
+    'exec',
+    observability,
+    'node',
+    '-e',
+    "const started=Date.now();Promise.all(Array.from({length:80},()=>fetch('http://web-blue:3000/api/ready').then(r=>r.status))).then(statuses=>console.log(JSON.stringify({durationMs:Date.now()-started,failures:statuses.filter(s=>s!==200).length})))",
+  ]).stdout.trim()
+  const pool = z
+    .object({ durationMs: z.number().nonnegative(), failures: z.literal(0) })
+    .parse(JSON.parse(poolResult) as unknown)
+  const observabilitySnapshot = z
+    .object({
+      activeAlerts: z.array(z.string()),
+      controlStateIntegrity: z.literal('ok'),
+      probes: z.object({
+        asset: z.object({ ok: z.boolean() }),
+        control: z.object({ ok: z.boolean() }),
+        deployAgent: z.object({ ok: z.boolean() }),
+        worker: z.object({ ok: z.boolean() }),
+      }),
+    })
+    .passthrough()
+    .parse(
+      JSON.parse(
+        execute('docker', [
+          'exec',
+          observability,
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:8084/metrics').then(async r=>console.log(await r.text()))",
+        ]).stdout,
+      ) as unknown,
+    )
+  expect(observabilitySnapshot.probes.control.ok, 'Control observability probe failed')
+  expect(observabilitySnapshot.probes.deployAgent.ok, 'Deploy-agent observability probe failed')
+  expect(observabilitySnapshot.probes.worker.ok, 'Worker observability probe failed')
+  expect(!observabilitySnapshot.probes.asset.ok, 'Injected S3 failure was not diagnosed')
+  expect(
+    observabilitySnapshot.activeAlerts.includes('AssetStorageUnavailable'),
+    'Injected S3 failure did not produce the storage alert',
+  )
+  const postgres = compose(['ps', '--quiet', 'postgres']).stdout.trim()
+  const slowQueryStartedAt = performance.now()
+  execute('docker', [
+    'exec',
+    postgres,
+    'psql',
+    '--username',
+    'tungchiahui',
+    '--dbname',
+    'tungchiahui',
+    '--command',
+    'SELECT pg_sleep(0.2)',
+  ])
+  const slowQueryDurationMs = performance.now() - slowQueryStartedAt
+  expect(slowQueryDurationMs >= 180, 'Injected slow query did not exercise the latency path')
+  curl([`https://127.0.0.1:${port}/api/ready`], 200)
+  readinessMeasurements = Object.freeze({
+    poolSaturation80DurationMs: pool.durationMs,
+    publicLoadCount: baseline.length,
+    publicLoadP50Ms: Number(
+      percentile(
+        baseline.map((sample) => sample.durationMilliseconds),
+        0.5,
+      ).toFixed(2),
+    ),
+    publicLoadP95Ms: Number(
+      percentile(
+        baseline.map((sample) => sample.durationMilliseconds),
+        0.95,
+      ).toFixed(2),
+    ),
+    publicRateLimitRejected: abusive.filter((sample) => sample.status === 429).length,
+    slowQueryDurationMs: Number(slowQueryDurationMs.toFixed(2)),
+  })
+}
+
+function verifyNoSecretLeakage(secretSentinels: readonly string[]) {
+  const runtimeLogs = compose(['logs', '--no-color']).stdout
+  const publicResponse = execute('curl', [
+    '--insecure',
+    '--noproxy',
+    '*',
+    '--silent',
+    '--include',
+    `https://127.0.0.1:${String(input.PHASE12_ORIGIN_PORT)}/`,
+  ]).stdout
+  const controlResponse = execute('curl', [
+    '--insecure',
+    '--noproxy',
+    '*',
+    '--silent',
+    '--include',
+    `https://127.0.0.1:${String(input.PHASE12_ORIGIN_PORT)}/api/ops/status`,
+  ]).stdout
+  for (const sentinel of secretSentinels) {
+    expect(!runtimeLogs.includes(sentinel), 'Runtime logs contain a disposable secret sentinel')
+    expect(
+      !publicResponse.includes(sentinel),
+      'Public response contains a disposable secret sentinel',
+    )
+    expect(
+      !controlResponse.includes(sentinel),
+      'Control response contains a disposable secret sentinel',
+    )
+  }
+}
+
+async function verifyRoutingAndIpFamilies() {
   const port = String(input.PHASE12_ORIGIN_PORT)
   curl(['--ipv4', `https://127.0.0.1:${port}/api/health`], 200)
   curl(['--ipv6', `https://[::1]:${port}/api/health`], 200)
@@ -604,7 +956,51 @@ function verifyRoutingAndIpFamilies() {
   compose(['start', 'web-blue', 'web-green'])
   compose(['stop', 'postgres'])
   curl([`https://127.0.0.1:${port}/api/ops/status`], 401)
-  compose(['start', 'postgres'])
+  const control = compose(['ps', '--quiet', 'control-api']).stdout.trim()
+  const postgresDownHealth = z
+    .object({
+      applicationJobs: z.null(),
+      infrastructure: z.object({ integrity: z.literal('ok') }),
+      status: z.literal('ok'),
+    })
+    .passthrough()
+    .parse(
+      JSON.parse(
+        execute('docker', [
+          'exec',
+          control,
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:8080/health').then(async r=>console.log(await r.text()))",
+        ]).stdout,
+      ) as unknown,
+    )
+  expect(postgresDownHealth.applicationJobs === null, 'PostgreSQL failure was not distinguished')
+  await restorePostgresDependentServices()
+  const postgresRestoredHealth = z
+    .object({
+      applicationJobs: z.object({
+        backlog_count: z.number().int().nonnegative(),
+        budget_stop_count: z.number().int().nonnegative(),
+      }),
+      status: z.literal('ok'),
+    })
+    .passthrough()
+    .parse(
+      JSON.parse(
+        execute('docker', [
+          'exec',
+          control,
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:8080/health').then(async r=>console.log(await r.text()))",
+        ]).stdout,
+      ) as unknown,
+    )
+  expect(
+    postgresRestoredHealth.applicationJobs !== null,
+    'Application-job observability did not recover with PostgreSQL',
+  )
   const config = readFileSync(join(configRoot, 'openresty.conf'), 'utf8')
   expect(config.includes('listen [::]:8443 ssl ipv6only=off;'), 'OpenResty is not dual-stack')
   expect(
@@ -818,7 +1214,7 @@ async function verifyBlueGreenDeployment() {
       'PostgreSQL dependency failure changed the active public release',
     )
   } finally {
-    compose(['start', 'postgres'])
+    await restorePostgresDependentServices()
   }
 }
 
@@ -827,12 +1223,15 @@ async function main() {
   try {
     startRegistry()
     buildImages()
+    verifyImageSecurity()
     runProvision(encrypted.identityPath)
     inspectHardening()
     verifyDatabaseRoleBindings()
     await initializeDeploymentFixture(encrypted.workerPassword)
     await verifyBlueGreenDeployment()
-    verifyRoutingAndIpFamilies()
+    await verifyRoutingAndIpFamilies()
+    await verifySecurityAndLoad()
+    verifyNoSecretLeakage(encrypted.secretSentinels)
     console.log(
       JSON.stringify({
         ansibleIdempotency: 'pass',
@@ -849,6 +1248,10 @@ async function main() {
         postgresDownControlRoute: 'pass',
         productionTraffic: false,
         secretInjection: 'sops-age-runtime-only',
+        secretLogAndResponseLeakage: 'pass',
+        sbomAndCriticalVulnerabilityScan: 'pass',
+        securityHeadersAndAbuseControls: 'pass',
+        ...readinessMeasurements,
         status: 'pass',
       }),
     )

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-
+import { safeErrorAttributes } from '@/observability/telemetry'
 import { readCachedSearch } from '@/search/cache'
 import { searchRequestSchema, searchResponseSchema } from '@/search/contracts'
 
@@ -43,7 +43,7 @@ export async function GET(request: Request) {
       JSON.stringify({
         event: 'search_request_failed',
         locale: searchRequest.locale,
-        message: error instanceof Error ? error.message.slice(0, 500) : 'unknown error',
+        ...safeErrorAttributes(error),
       }),
     )
     return Response.json(

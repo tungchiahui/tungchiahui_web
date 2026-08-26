@@ -70,6 +70,30 @@ Rollback 只切到 Version 5 Control State 中保留的 Previous SHA/Digest，�
 
 该 Restore Path 通过独立 `control-api`、Control-state SQLite 与 `deploy-agent` 工作，不要求待恢复的 Production PostgreSQL 先健康。完成 Restore/Integrity/Readiness Check 后，再恢复 PostgreSQL-backed Content/Translation/Search Job。
 
+## Availability or 5xx
+
+1. 比较 Public Probe 与 Direct-origin Probe：两者失败优先检查 Origin；只有 Public 失败优先检查 Edge/DNS。
+2. 查询 `/api/version` 和 `./site status`，核对 Active Slot、SHA/Digest 与 OpenResty Upstream。
+3. Public 失败但 `/api/ops/status` 可用时，不要误判整个 Control Plane 消失；保留 SQLite/Audit Evidence。
+4. 只有新 Slot 与变更时间相关且 Database 仍向后兼容时，按 Rollback 执行；不得 Rebuild Previous Image。
+5. 恢复后等待 `WebAvailabilityFailed resolved`，并从 Public 与 Origin 各做一次 Health-safe 和 Representative Content Read。
+
+## Latency or Pool Saturation
+
+比较 Public/Origin Duration、Next Readiness、PgBouncer TCP、PostgreSQL Connection/Lock/Slow Query 和 Host CPU/I/O。先停止不必要的 Background Work，再处理 Pool/Query Cause；不要仅扩大 Pool 把连接压力转移给 PostgreSQL。恢复后验证代表性请求、Pool Queue 和 `WebLatencyHigh`/`PgbouncerUnavailable resolved`。
+
+## Worker Backlog or Budget Stop
+
+区分 PostgreSQL-backed Content/Translation/Search/Revalidation Job 与 SQLite Infrastructure Operation。检查 Oldest Age、Expired Lease、Attempt/Failure、Translation Partial/Budget Stop 和精确 Progress。Budget Stop 是安全状态，不得通过提高预算自动清除；需要新的显式授权。修复 Cause 后只重试幂等 Job，并确认 Backlog/Age 回落与 `ApplicationJobStuck resolved`。
+
+## Control State or Audit Continuity
+
+检查 SQLite Integrity、Schema Version、WAL、Audit Count/Max ID、Operation Lease/Phase 和 Active/Previous Deployment Identity。不要依赖 Production PostgreSQL。Integrity 或 Audit Continuity 不成立时停止新的高权限 Operation，保留 Control-state Snapshot，按 Backup Verification/Break-glass 流程恢复；确认 `InfrastructureOperationStuck resolved` 后再开放创建操作。
+
+## Backup WAL R2 or Restore Drill
+
+逐项验证最新 Backup Age/Validity、WAL Archive、Primary Replica、R2 Replica 和 Restore Drill Timestamp。任一失败都不能把 Backup 标记为可恢复。按 `backup-and-recovery.md` 在 Disposable Target 重做 Integrity/Read-back；Production Restore 仍需单独授权。全部证据恢复 Fresh 后确认 `RecoveryEvidenceStale resolved`。
+
 ## S3 Incident
 
 Static Asset 与 Article Content 在运维上彼此独立。
@@ -83,6 +107,8 @@ Static Asset 与 Article Content 在运维上彼此独立。
 
 不要在没有更新并验证所有依赖 Service 的情况下 Rotation Production Credential。
 
+代表性 Probe 必须读取 `/api/assets/monitoring/health.svg`。若只有该 Object 缺失，先核对 Activation/Key；若全部 Asset 失败，比较 Application Gateway、AList、Bucket Policy 与 CDN。恢复后验证匿名 Read、MIME/Cache Policy 以及 `AssetStorageUnavailable resolved`；不得写 Canonical Markdown 到 S3。
+
 ## Disk Pressure
 
 删除任何内容前：
@@ -93,6 +119,8 @@ Static Asset 与 Article Content 在运维上彼此独立。
 4. Protect Active Backup Repository
 5. 有意识地移除安全的 Cache/Build/Container Garbage
 6. 需要时扩展 Storage
+
+同时检查 Bytes 与 Inode。不要通过填满 Host Disk 做 Production Alert Test；使用 Policy Injection。清理后确认 PostgreSQL/WAL/Backup Integrity、Container Health 和 `HostDiskPressure resolved`。
 
 ## Server Replacement
 
@@ -113,6 +141,8 @@ Static Asset 与 Article Content 在运维上彼此独立。
 - Review Log
 - Verify Backup Integrity
 - Document Root Cause and Preventative Action
+
+Credential Scope 与轮换顺序见 `credential-rotation.md`。保留被影响时间窗的安全 Log/Audit，但不要把 Secret、Authorization/Cookie 或 Connection String 复制到 Ticket。对 Client Bundle、Image、Runtime Log 和 Response 重跑 Leakage Gate，并确认撤销证据。
 
 ## Translation
 
@@ -153,6 +183,10 @@ ddns.tungchiahui.cn
 日常运维中不要把它们替换成记忆中的公网数字 IP。
 
 如果 Origin Connectivity 失败，在修改 Application Configuration 前先诊断 DNS/DDNS/IPv6/EdgeOne Reachability。
+
+## Origin Connectivity
+
+分别检查 `www.tungchiahui.cn` Public Path 与 `ddns.tungchiahui.cn` Direct-origin Path；不要用其中一个替代另一个。验证 DNS A/AAAA、TLS Server Name/Certificate、IPv4/IPv6 Reachability 和 OpenResty Upstream。Origin IPv6 被要求时，AAAA 缺失或 IPv6 Direct Probe 失败必须保留为独立 Signal。恢复后确认 `OriginIpv6Unavailable resolved`，不得把家庭公网数字 IP 写进 Durable Configuration。
 
 OpenResty 必须把 `/api/ops/*` 直接路由到独立 `control-api`，而不是 Next.js Blue/Green Slot。因此 Next.js 全挂时先验证 Control API 与 Control-state SQLite，再决定 Deploy/Rollback。
 

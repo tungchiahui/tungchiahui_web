@@ -10,6 +10,8 @@ import { ContentJobRepository } from '../../src/content/jobs'
 import { PublicContentHooks } from '../../src/content/revalidation'
 import { ContentWorker } from '../../src/content/worker'
 import { serviceIdentityContracts } from '../../src/control-plane/contracts'
+import { apiSecurityHeaders } from '../../src/observability/security'
+import { safeErrorAttributes } from '../../src/observability/telemetry'
 import { SearchRefreshContentHook } from '../../src/search/hooks'
 import { SearchJobRepository, SearchWorker } from '../../src/search/jobs'
 import { SearchIndexRepository } from '../../src/search/repository'
@@ -89,6 +91,7 @@ function sendJson(response: ServerResponse, statusCode: number, payload: unknown
   response.statusCode = statusCode
   response.setHeader('cache-control', 'no-store')
   response.setHeader('content-type', 'application/json; charset=utf-8')
+  for (const [name, value] of Object.entries(apiSecurityHeaders)) response.setHeader(name, value)
   response.end(JSON.stringify(payload))
 }
 
@@ -139,7 +142,7 @@ async function poll(worker: ContentWorker) {
       console.error(
         JSON.stringify({
           event: 'content_worker_poll_failed',
-          message: error instanceof Error ? error.message : 'unknown error',
+          ...safeErrorAttributes(error),
         }),
       )
     }
@@ -166,7 +169,7 @@ async function pollTranslations(worker: TranslationWorker) {
       console.error(
         JSON.stringify({
           event: 'translation_worker_poll_failed',
-          message: error instanceof Error ? error.message : 'unknown error',
+          ...safeErrorAttributes(error),
         }),
       )
     }
@@ -187,7 +190,7 @@ async function pollSearch(worker: SearchWorker) {
       console.error(
         JSON.stringify({
           event: 'search_worker_poll_failed',
-          message: error instanceof Error ? error.message : 'unknown error',
+          ...safeErrorAttributes(error),
         }),
       )
     }
@@ -304,7 +307,7 @@ function shutdown() {
     ])
     if (error) {
       console.error(
-        JSON.stringify({ event: 'content_worker_shutdown_failed', message: error.message }),
+        JSON.stringify({ event: 'content_worker_shutdown_failed', ...safeErrorAttributes(error) }),
       )
       process.exitCode = 1
       return

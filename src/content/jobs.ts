@@ -2,6 +2,7 @@ import { z } from 'zod'
 
 import { createDatabaseClient } from '../database/client'
 import { applicationJobRequestSchema } from '../domain/persistence'
+import { redactTelemetryText } from '../observability/telemetry'
 
 const claimedJobSchema = z.object({
   attempt_count: z.number().int().positive(),
@@ -157,7 +158,7 @@ export class ContentJobRepository {
     }>,
   ) {
     const errorSummary =
-      error instanceof Error ? error.message.slice(0, 2_000) : 'Unknown content-worker failure'
+      error instanceof Error ? redactTelemetryText(error.message) : 'Unknown content-worker failure'
     const retry = options.retryable && job.attemptCount < job.maxAttempts
     const result = await this.#transaction((client) =>
       client.query(

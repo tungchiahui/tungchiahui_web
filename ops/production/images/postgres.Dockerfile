@@ -16,7 +16,8 @@ RUN apk add --no-cache \
 
 FROM groonga/pgroonga:4.0.8-alpine-18@sha256:b5c92fa3d86ad76ce75ddd8095f60542cf025348a58b8a38cd0b4a580fe4ce68
 
-RUN apk add --no-cache libbz2 libcrypto3 libpq libssh2 libxml2 lz4-libs zlib zstd-libs
+RUN apk add --no-cache libbz2 libcrypto3 libpq libssh2 libxml2 lz4-libs zlib zstd-libs \
+  && rm -f /usr/local/bin/gosu
 COPY --from=build /tmp/pgbackrest-build/src/pgbackrest /usr/local/bin/pgbackrest
 
 USER 70:70

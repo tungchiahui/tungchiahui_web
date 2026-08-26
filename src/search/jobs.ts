@@ -1,8 +1,8 @@
 import { z } from 'zod'
-
 import type { ContentIngestionHooks } from '../content/hooks'
 import { createDatabaseClient } from '../database/client'
 import { applicationJobRequestSchema, type Locale, localeSchema } from '../domain/persistence'
+import { redactTelemetryText } from '../observability/telemetry'
 
 const claimedSearchJobSchema = z.object({
   attempt_count: z.number().int().positive(),
@@ -148,7 +148,7 @@ export class SearchJobRepository {
 
   async fail(job: ClaimedSearchJob, error: unknown) {
     const message =
-      error instanceof Error ? error.message.slice(0, 2_000) : 'Unknown search failure'
+      error instanceof Error ? redactTelemetryText(error.message) : 'Unknown search failure'
     const retry = job.attemptCount < job.maxAttempts
     const result = await this.#transaction((client) =>
       client.query(

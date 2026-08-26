@@ -1,5 +1,5 @@
 import { ZodError, z } from 'zod'
-
+import { safeErrorAttributes } from '../observability/telemetry'
 import type { ReadonlyContentSource } from './contracts'
 import { contentHookInputSchema } from './hooks'
 import {
@@ -122,7 +122,7 @@ export class ContentWorker {
             JSON.stringify({
               event: 'content_ingestion_failure_audit_failed',
               jobId: job.id,
-              message: auditError instanceof Error ? auditError.message : 'unknown error',
+              ...safeErrorAttributes(auditError),
             }),
           )
         }

@@ -11,6 +11,21 @@ tungchiahui_deployment_image_repository: ghcr.io/tungchiahui/tungchiahui_web
 tungchiahui_install_packages: true
 tungchiahui_manage_stack: true
 tungchiahui_origin_port: "8443"
+tungchiahui_observability_backup_max_age_seconds: ""
+tungchiahui_observability_disk_critical_percent: "90"
+tungchiahui_observability_interval_seconds: "30"
+tungchiahui_observability_job_max_age_seconds: "900"
+tungchiahui_observability_latency_warning_ms: "2000"
+tungchiahui_observability_origin_hostname: ddns.tungchiahui.cn
+tungchiahui_observability_origin_ipv6_required: "true"
+tungchiahui_observability_origin_server_name: ddns.tungchiahui.cn
+tungchiahui_observability_origin_url: https://ddns.tungchiahui.cn:8443/api/ready
+tungchiahui_observability_public_asset_path: /api/assets/monitoring/health.svg
+tungchiahui_observability_public_server_name: www.tungchiahui.cn
+tungchiahui_observability_public_url: https://www.tungchiahui.cn/
+tungchiahui_observability_restore_drill_max_age_seconds: ""
+tungchiahui_observability_restore_drill_timestamp: ""
+tungchiahui_observability_tls_ca_path: ""
 tungchiahui_postgres_image: ""
 tungchiahui_recovery_image: ""
 tungchiahui_repository_root: "{{ playbook_dir }}/../../../.."

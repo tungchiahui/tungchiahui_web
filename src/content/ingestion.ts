@@ -1,12 +1,12 @@
 import { createHash } from 'node:crypto'
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
-
 import { createDatabaseClient } from '../database/client'
 import { contentAliases, documents, documentTranslations, ingestionRuns } from '../database/schema'
 import { sourceCommitSchema } from '../domain/persistence'
 import { contentGlossary } from '../i18n/content-glossary'
 import { localizeContentMarkdown } from '../i18n/content-markdown'
+import { redactTelemetryText } from '../observability/telemetry'
 import { reconcileEnglishTranslation, retireEnglishTranslations } from '../translation/memory'
 import type { PreparedContentDocument } from './contracts'
 import {
@@ -187,7 +187,7 @@ export class ContentIngestionRepository {
     const operationalJobId = jobIdSchema.parse(jobIdInput)
     const sourceCommit = sourceCommitSchema.parse(sourceCommitInput)
     const errorSummary =
-      error instanceof Error ? error.message.slice(0, 2_000) : 'Unknown ingestion failure'
+      error instanceof Error ? redactTelemetryText(error.message) : 'Unknown ingestion failure'
     await this.#client.database.transaction(async (transaction) => {
       await transaction.execute(sql`SET LOCAL ROLE site_content_worker`)
       await transaction

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { initializeControlState } from '../../src/control-plane/control-state'
+import { safeErrorAttributes } from '../../src/observability/telemetry'
 import { parseRecoveryConfiguration } from '../../src/recovery/configuration'
 import {
   executeDatabaseBackup,
@@ -52,6 +53,6 @@ async function main() {
 }
 
 main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : 'unknown recovery drill failure')
+  console.error(JSON.stringify({ event: 'recovery_drill_failed', ...safeErrorAttributes(error) }))
   process.exitCode = 1
 })

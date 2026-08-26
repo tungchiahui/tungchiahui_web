@@ -2,6 +2,13 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 
 import { z } from 'zod'
 
+import { apiSecurityHeaders } from '../observability/security'
+import {
+  emitTelemetry,
+  requestIdFromHeaders,
+  safeErrorAttributes,
+} from '../observability/telemetry'
+
 import {
   ApplicationJobIdempotencyConflictError,
   ApplicationJobRepository,
@@ -32,6 +39,7 @@ import {
   createInfrastructureOperation,
   getInfrastructureOperation,
   listRecoveryBackups,
+  readControlObservabilitySnapshot,
   readControlState,
   readDeploymentState,
 } from './control-state'
@@ -96,9 +104,8 @@ function parseJsonBody(body: Uint8Array, contentType: string | null) {
 
 function sendJson(response: ServerResponse, payload: JsonResponse) {
   response.statusCode = payload.status
-  response.setHeader('cache-control', 'no-store')
   response.setHeader('content-type', 'application/json; charset=utf-8')
-  response.setHeader('x-content-type-options', 'nosniff')
+  for (const [name, value] of Object.entries(apiSecurityHeaders)) response.setHeader(name, value)
   for (const [name, value] of Object.entries(payload.headers ?? {})) {
     response.setHeader(name, value)
   }
@@ -268,6 +275,23 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
   const server = createServer(async (request, response) => {
     const url = new URL(request.url ?? '/', 'http://control-api')
     const canonicalPath = `${url.pathname}${url.search}`
+    const requestId = requestIdFromHeaders(requestHeaders(request))
+    const startedAt = performance.now()
+    response.setHeader('x-request-id', requestId)
+    response.once('finish', () =>
+      emitTelemetry({
+        attributes: {
+          duration_ms: Number((performance.now() - startedAt).toFixed(2)),
+          method: request.method ?? 'UNKNOWN',
+          route: url.pathname.slice(0, 500),
+          status: response.statusCode,
+        },
+        component: 'control-api',
+        event: 'http_request_completed',
+        level: response.statusCode >= 500 ? 'error' : 'info',
+        requestId,
+      }),
+    )
 
     if (url.pathname === '/health') {
       if (request.method !== 'GET') {
@@ -278,15 +302,38 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
         })
         return
       }
-      sendJson(response, {
-        body: {
-          controlState: readControlState(configuration.statePath),
-          mode: configuration.mode,
-          service: 'control-api',
-          status: 'ok',
-        },
-        status: 200,
-      })
+      const applicationJobTelemetry = applicationJobs
+        ? await applicationJobs.observabilitySnapshot().catch(() => null)
+        : null
+      try {
+        sendJson(response, {
+          body: {
+            applicationJobs: applicationJobTelemetry,
+            controlState: readControlState(configuration.statePath),
+            infrastructure: readControlObservabilitySnapshot(configuration.statePath),
+            mode: configuration.mode,
+            service: 'control-api',
+            status: 'ok',
+          },
+          status: 200,
+        })
+      } catch (error: unknown) {
+        emitTelemetry({
+          attributes: safeErrorAttributes(error),
+          component: 'control-api',
+          event: 'control_state_health_failed',
+          level: 'error',
+          requestId,
+        })
+        sendJson(response, {
+          body: {
+            applicationJobs: applicationJobTelemetry,
+            service: 'control-api',
+            status: 'degraded',
+          },
+          status: 503,
+        })
+      }
       return
     }
 
@@ -716,6 +763,15 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
         },
       )
       sendJson(response, mapped)
+      if (!authenticationFailure && !authorizationFailure) {
+        emitTelemetry({
+          attributes: safeErrorAttributes(error),
+          component: 'control-api',
+          event: 'request_failed',
+          level: 'error',
+          requestId,
+        })
+      }
     }
   })
 

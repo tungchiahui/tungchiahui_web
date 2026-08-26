@@ -4,6 +4,7 @@ import {
   reconcileInfrastructureOperations,
 } from '../../src/control-plane/control-state'
 import { createControlApiServer } from '../../src/control-plane/http-server'
+import { safeErrorAttributes } from '../../src/observability/telemetry'
 
 process.umask(0o007)
 
@@ -37,7 +38,7 @@ async function shutdown() {
     console.error(
       JSON.stringify({
         event: 'control_api_shutdown_failed',
-        message: error instanceof Error ? error.message : 'unknown shutdown error',
+        ...safeErrorAttributes(error),
       }),
     )
     process.exitCode = 1

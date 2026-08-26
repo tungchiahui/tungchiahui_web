@@ -74,6 +74,39 @@ export class ApplicationJobRepository {
     }
   }
 
+  async observabilitySnapshot(now = new Date()) {
+    try {
+      const result = await this.#client.pool.query(
+        `SELECT
+           count(*) FILTER (WHERE operational.status IN ('queued', 'retry_wait'))::int AS backlog_count,
+           count(*) FILTER (WHERE operational.status = 'running')::int AS running_count,
+           count(*) FILTER (WHERE operational.status = 'failed' AND operational.finished_at >= $1::timestamptz - interval '24 hours')::int AS failed_24h_count,
+           count(*) FILTER (WHERE operational.status = 'running' AND operational.claim_expires_at <= $1::timestamptz)::int AS expired_lease_count,
+           COALESCE(EXTRACT(EPOCH FROM ($1::timestamptz - min(operational.created_at) FILTER (WHERE operational.status IN ('queued', 'retry_wait', 'running')))), 0)::double precision AS oldest_incomplete_age_seconds,
+           count(*) FILTER (WHERE translation.status = 'partial')::int AS budget_stop_count
+         FROM app.operational_jobs AS operational
+         LEFT JOIN app.translation_jobs AS translation ON translation.id = operational.id`,
+        [now.toISOString()],
+      )
+      return Object.freeze(
+        z
+          .object({
+            backlog_count: z.number().int().nonnegative(),
+            budget_stop_count: z.number().int().nonnegative(),
+            expired_lease_count: z.number().int().nonnegative(),
+            failed_24h_count: z.number().int().nonnegative(),
+            oldest_incomplete_age_seconds: z.number().nonnegative(),
+            running_count: z.number().int().nonnegative(),
+          })
+          .parse(result.rows[0]),
+      )
+    } catch {
+      throw new ApplicationJobStoreUnavailableError(
+        'PostgreSQL application job observability is unavailable',
+      )
+    }
+  }
+
   async createJob(requestInput: unknown, actor: ActorIdentity, idempotencyKeyInput: unknown) {
     const request = applicationJobRequestSchema.parse(requestInput)
     const idempotencyKey = idempotencyKeySchema.parse(idempotencyKeyInput)

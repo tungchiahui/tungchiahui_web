@@ -2,7 +2,6 @@ import { createHash } from 'node:crypto'
 
 import { and, asc, eq, inArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
-
 import {
   type ContentHookInput,
   type ContentIngestionHooks,
@@ -17,6 +16,7 @@ import {
   translationJobs,
   translationSegments,
 } from '../database/schema'
+import { redactTelemetryText } from '../observability/telemetry'
 import { type TranslationJobProgress, translationJobProgressSchema } from './contracts'
 import { reconcileEnglishTranslation } from './memory'
 import type {
@@ -579,7 +579,7 @@ export class TranslationJobRepository {
     retryable: boolean,
   ) {
     const message =
-      error instanceof Error ? error.message.slice(0, 2_000) : 'Unknown translation failure'
+      error instanceof Error ? redactTelemetryText(error.message) : 'Unknown translation failure'
     const retry = retryable && job.attemptCount < job.maxAttempts
     const terminalStatus = progress.completedSegmentIds.length > 0 ? 'partial' : 'failed'
     await this.#poolTransaction(async (client) => {

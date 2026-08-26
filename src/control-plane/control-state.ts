@@ -464,6 +464,94 @@ export function readControlState(path: string): ControlStateSummary {
   }
 }
 
+export function readControlObservabilitySnapshot(path: string, now = new Date()) {
+  const database = openControlState(path)
+  try {
+    const integrity = z
+      .object({ integrity_check: z.literal('ok') })
+      .parse(database.prepare('SELECT integrity_check FROM pragma_integrity_check').get())
+    const operations = z
+      .object({
+        expired_lease_count: z.number().int().nonnegative(),
+        failed_24h_count: z.number().int().nonnegative(),
+        incomplete_count: z.number().int().nonnegative(),
+        needs_attention_count: z.number().int().nonnegative(),
+        oldest_incomplete_age_seconds: z.number().nonnegative(),
+      })
+      .parse(
+        database
+          .prepare(
+            `SELECT
+               count(*) FILTER (WHERE status IN ('queued', 'claimed', 'running', 'needs-attention')) AS incomplete_count,
+               count(*) FILTER (WHERE status = 'needs-attention') AS needs_attention_count,
+               count(*) FILTER (WHERE status = 'failed' AND finished_at >= datetime(?, '-24 hours')) AS failed_24h_count,
+               count(*) FILTER (WHERE status IN ('claimed', 'running') AND lease_expires_at <= ?) AS expired_lease_count,
+               COALESCE(max(0, (julianday(?) - julianday(min(created_at) FILTER (WHERE status IN ('queued', 'claimed', 'running', 'needs-attention')))) * 86400), 0) AS oldest_incomplete_age_seconds
+             FROM infrastructure_operations`,
+          )
+          .get(now.toISOString(), now.toISOString(), now.toISOString()),
+      )
+    const audit = z
+      .object({ count: z.number().int().nonnegative(), max_id: z.number().int().nonnegative() })
+      .parse(
+        database
+          .prepare(
+            'SELECT count(*) AS count, COALESCE(max(event_id), 0) AS max_id FROM control_audit_events',
+          )
+          .get(),
+      )
+    const latestBackup = database
+      .prepare(
+        `SELECT completed_at, primary_replica_status, r2_replica_status, valid, wal_archive_max
+         FROM recovery_backup_records ORDER BY completed_at DESC, backup_id DESC LIMIT 1`,
+      )
+      .get()
+    const backup = latestBackup
+      ? z
+          .object({
+            completed_at: z.iso.datetime({ offset: true }),
+            primary_replica_status: z.enum(['pending', 'fresh', 'failed']),
+            r2_replica_status: z.enum(['pending', 'fresh', 'failed']),
+            valid: z.union([z.literal(0), z.literal(1)]),
+            wal_archive_max: z.string().nullable(),
+          })
+          .parse(latestBackup)
+      : null
+    const schema = z
+      .object({ version: z.number().int().positive() })
+      .parse(
+        database.prepare('SELECT max(version) AS version FROM control_schema_migrations').get(),
+      )
+    return Object.freeze({
+      audit: Object.freeze({ count: audit.count, maxId: audit.max_id }),
+      backup:
+        backup === null
+          ? null
+          : Object.freeze({
+              ageSeconds: Math.max(
+                0,
+                (now.getTime() - new Date(backup.completed_at).getTime()) / 1_000,
+              ),
+              primaryReplicaStatus: backup.primary_replica_status,
+              r2ReplicaStatus: backup.r2_replica_status,
+              valid: backup.valid === 1,
+              walArchivePresent: backup.wal_archive_max !== null,
+            }),
+      integrity: integrity.integrity_check,
+      operations: Object.freeze({
+        expiredLeaseCount: operations.expired_lease_count,
+        failed24hCount: operations.failed_24h_count,
+        incompleteCount: operations.incomplete_count,
+        needsAttentionCount: operations.needs_attention_count,
+        oldestIncompleteAgeSeconds: operations.oldest_incomplete_age_seconds,
+      }),
+      schemaVersion: schema.version,
+    })
+  } finally {
+    database.close()
+  }
+}
+
 function readSummary(database: DatabaseSync): ControlStateSummary {
   const metadata = database
     .prepare(

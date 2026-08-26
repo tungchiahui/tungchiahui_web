@@ -24,6 +24,7 @@ const composeSchema = z.object({
       networks: z.array(z.string()).optional(),
       read_only: z.boolean().optional(),
       security_opt: z.array(z.string()).optional(),
+      tmpfs: z.array(z.string()).optional(),
       user: z.string().optional(),
       volumes: z.array(z.unknown()).optional(),
     }),
@@ -65,6 +66,7 @@ describe('Phase 12 production foundation policy', () => {
       'web-green',
       'deploy-agent',
       'openresty',
+      'observability-agent',
     ]
     for (const name of hardenedServices) {
       const service = compose.services[name]
@@ -92,6 +94,16 @@ describe('Phase 12 production foundation policy', () => {
     })
     expect(compose.services['control-api']?.networks).not.toContain('deploy-control')
     expect(compose.services['content-worker']?.networks).not.toContain('deploy-control')
+    expect(compose.services['observability-agent']?.networks).toEqual([
+      'application',
+      'deployment-probe',
+      'edge',
+    ])
+    for (const name of ['web-blue', 'web-green']) {
+      expect(compose.services[name]?.tmpfs).toContain(
+        '/app/.next/cache:size=64m,mode=0755,uid=10001,gid=10001,nosuid,nodev',
+      )
+    }
   })
 
   it('routes by service DNS and keeps the origin domain-addressed and dual-stack', () => {
@@ -101,6 +113,12 @@ describe('Phase 12 production foundation policy', () => {
     expect(openRestySource).toContain('set $control_upstream control-api:8080;')
     expect(openRestySource).toContain('include /etc/tungchiahui/deployment/active-slot.conf;')
     expect(openRestySource).toContain('add_header Cache-Control "no-store" always;')
+    expect(openRestySource).toContain('log_format structured escape=json')
+    expect(openRestySource).toContain('limit_req zone=public_origin')
+    expect(openRestySource).toContain('limit_req zone=control_origin')
+    expect(openRestySource).toContain('Strict-Transport-Security')
+    expect(openRestySource).toContain('Content-Security-Policy')
+    expect(openRestySource).toContain('location ^~ /api/internal/')
     expect(inventorySource).toContain('ansible_host: tungchiahui-production-origin')
     expect(inventorySource).not.toMatch(/ansible_host:\s*(?:\d{1,3}\.){3}\d{1,3}/)
     expect(composeSource).not.toContain('S3_CONTRACT_')

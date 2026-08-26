@@ -344,7 +344,7 @@ async function verifyOpenRestyAndFailureBoundaries(
 }
 
 function runPlaywright(siteBaseUrl: URL) {
-  runCommand('pnpm', ['exec', 'playwright', 'test'], {
+  runCommand(process.execPath, [resolve('node_modules/@playwright/test/cli.js'), 'test'], {
     environment: {
       ...process.env,
       PLAYWRIGHT_BASE_URL: siteBaseUrl.toString(),

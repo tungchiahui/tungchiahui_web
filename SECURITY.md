@@ -14,6 +14,8 @@
 
 不得把仅服务器使用的环境变量暴露到 Client Bundle。
 
+每类 Runtime、Migration、Backup、S3、AI、Deploy、Operator 与 Alert Credential 的唯一 Consumer、最小权限与轮换流程定义在 `docs/operations/credential-rotation.md`。不得用一个 Credential 跨越这些边界。
+
 ## 数据库
 
 应用使用专门的最小权限 PostgreSQL Role 连接数据库。
@@ -68,6 +70,8 @@ Migration 和运维权限与应用 Runtime 权限分离。
 - 完整 Authorization Header
 - 敏感 Cookie
 
+Telemetry Field Name 必须 Fail-closed 拒绝上述类别；Error Text 仍需 Redaction。OpenResty Access Log 不记录 Query String、Client IP、Authorization、Cookie 或 Request Body。Request Correlation 使用随机 `x-request-id`。
+
 ## 依赖
 
 核心 Runtime 和公开服务依赖的安全更新应优先处理。
@@ -87,6 +91,8 @@ Production Docker Image 必须使用 Multi-stage Build，并将 Runtime Stage �
 运维响应流程记录在 `docs/operations/runbook.md`。
 
 发生 Incident 时，第一优先级是保留证据并恢复安全服务，而不是直接在生产环境进行高风险现场修改。
+
+Phase 16 Security Gate 扫描 Source/Config、Client Bundle、Image Layer、Runtime Log 与 Response，并对 Production Dependency/SBOM/Image 执行 Critical Vulnerability 和 Secret Scan。Critical Finding 不得以风险接受的默认理由被跳过；任何例外必须由 Owner 明确批准并记录范围、期限与补救计划。
 
 ## Control-plane API
 

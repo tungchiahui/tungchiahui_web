@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { runPostgresMigrations } from '../../src/database/migrate'
+import { safeErrorAttributes } from '../../src/observability/telemetry'
 
 const configuration = z
   .object({
@@ -28,7 +29,7 @@ runPostgresMigrations(configuration.DATABASE_URL, {
     console.error(
       JSON.stringify({
         event: 'database_migrations_failed',
-        message: error instanceof Error ? error.message : 'unknown migration failure',
+        ...safeErrorAttributes(error),
       }),
     )
     process.exitCode = 1

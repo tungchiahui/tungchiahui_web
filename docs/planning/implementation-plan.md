@@ -1,7 +1,7 @@
 # Website V2 分阶段实施计划
 
-> Status: In progress — Phase 0–15 complete
-> Current Phase: Awaiting Owner authorization for Phase 16
+> Status: In progress — Phase 0–16 complete
+> Current Phase: Awaiting Owner authorization for Phase 17
 > Execution Model: Hard-gated, one Phase at a time
 > Scope: 从新的 Next.js V2 Repository 基线推进到替换旧 Nuxt Production Site
 
@@ -25,7 +25,7 @@
 - [x] Phase 13 — Backup、PITR 与 PostgreSQL-independent Recovery
 - [x] Phase 14 — Shared Deployment Engine 与 Full Blue-Green
 - [x] Phase 15 — GitHub Actions OIDC 与 `main` 自动部署
-- [ ] Phase 16 — Observability、Security 与 Production Readiness
+- [x] Phase 16 — Observability、Security 与 Production Readiness
 - [ ] Phase 17 — Planned PostgreSQL / Server Migration Readiness
 - [ ] Phase 18 — Final Legacy Audit、Production Cutover 与 Rollback Window
 
@@ -1412,17 +1412,17 @@ Deployment Engine 已在 Production-like 环境证明安全，才能让 CI 只�
 
 ### Task Checklist
 
-- [ ] 为 Public/OpenResty/Next.js/Control API/Worker/Agent/PostgreSQL/PgBouncer/S3/Host/Backup 建立安全 Structured Telemetry。
-- [ ] 监控 Application Job 与 SQLite Infrastructure Operation，包含 Age、Lease、Stuck、Failure、Budget 和 Audit Continuity。
-- [ ] 建立可操作 Alert：Availability、5xx、Latency、Disk、DB、Backup/WAL/R2、Restore Drill、Control State。
-- [ ] 分离 Public Path 与 Origin Path Monitoring，支持 IPv6 Direct-origin Check。
-- [ ] 配置并测试 HTTPS、HSTS Policy、CSP、X-Content-Type-Options、Referrer/Permissions Policy。
-- [ ] 对 Public/Control Endpoint 完成 Runtime Validation、Rate Limit、Method Restriction、Replay/Idempotency 和 Abuse Test。
-- [ ] 验证 Runtime/Migration/Backup/S3/AI/Deploy Credential 最小权限和 Rotation Procedure。
-- [ ] 扫描 Client Bundle、Image Layer、Log/Response，确认无 Secret/Connection String/Sensitive Header。
-- [ ] 执行 Representative Load、Pool Saturation、Slow Query、Cache、Worker Backlog 和 Disk-pressure Test。
-- [ ] 更新 Incident、Rollback、Restore、Translation、Origin Connectivity 和 Security Runbook。
-- [ ] 对照 Acceptance Criteria 生成 Production Readiness Gap Report。
+- [x] 为 Public/OpenResty/Next.js/Control API/Worker/Agent/PostgreSQL/PgBouncer/S3/Host/Backup 建立安全 Structured Telemetry。
+- [x] 监控 Application Job 与 SQLite Infrastructure Operation，包含 Age、Lease、Stuck、Failure、Budget 和 Audit Continuity。
+- [x] 建立可操作 Alert：Availability、5xx、Latency、Disk、DB、Backup/WAL/R2、Restore Drill、Control State。
+- [x] 分离 Public Path 与 Origin Path Monitoring，支持 IPv6 Direct-origin Check。
+- [x] 配置并测试 HTTPS、HSTS Policy、CSP、X-Content-Type-Options、Referrer/Permissions Policy。
+- [x] 对 Public/Control Endpoint 完成 Runtime Validation、Rate Limit、Method Restriction、Replay/Idempotency 和 Abuse Test。
+- [x] 验证 Runtime/Migration/Backup/S3/AI/Deploy Credential 最小权限和 Rotation Procedure。
+- [x] 扫描 Client Bundle、Image Layer、Log/Response，确认无 Secret/Connection String/Sensitive Header。
+- [x] 执行 Representative Load、Pool Saturation、Slow Query、Cache、Worker Backlog 和 Disk-pressure Test。
+- [x] 更新 Incident、Rollback、Restore、Translation、Origin Connectivity 和 Security Runbook。
+- [x] 对照 Acceptance Criteria 生成 Production Readiness Gap Report。
 
 ### 本 Phase 明确不做什么
 
@@ -1432,25 +1432,25 @@ Deployment Engine 已在 Production-like 环境证明安全，才能让 CI 只�
 
 ### Tests / Verification
 
-- [ ] Alert Injection 能产生可操作 Signal，并验证恢复后 Clear Behavior。
-- [ ] Security Header/CSP/Rate Limit/Authz/Replay/Secret Leakage Test 通过。
-- [ ] Database/Next.js/Control API/Worker/Storage Failure Scenario 可区分诊断。
-- [ ] PostgreSQL Down 时 Recovery Observability 仍可用。
-- [ ] Load/Pool/Cache/Backlog 测试结果已记录，无未解释 Critical Bottleneck。
-- [ ] Dependency/SBOM/Image/Config Security Scan 无未接受 Critical Finding。
+- [x] Alert Injection 能产生可操作 Signal，并验证恢复后 Clear Behavior。
+- [x] Security Header/CSP/Rate Limit/Authz/Replay/Secret Leakage Test 通过。
+- [x] Database/Next.js/Control API/Worker/Storage Failure Scenario 可区分诊断。
+- [x] PostgreSQL Down 时 Recovery Observability 仍可用。
+- [x] Load/Pool/Cache/Backlog 测试结果已记录，无未解释 Critical Bottleneck。
+- [x] Dependency/SBOM/Image/Config Security Scan 无未接受 Critical Finding。
 
 ### Acceptance Criteria
 
-- [ ] 每个生产组件都有 Owner、Health、Metric、Log、Alert 和 Runbook Entry。
-- [ ] Security Boundary 与 Least Privilege 有自动化/审计证据。
-- [ ] Production Readiness Gap 已关闭或由 Owner 明确接受并记录。
+- [x] 每个生产组件都有 Owner、Health、Metric、Log、Alert 和 Runbook Entry。
+- [x] Security Boundary 与 Least Privilege 有自动化/审计证据。
+- [x] Production Readiness Gap 已关闭或由 Owner 明确接受并记录。
 
 ### Exit Gate
 
-- [ ] Observability、Security、Load、Secret 和 Runbook Gate 全部通过。
-- [ ] Acceptance Criteria Gap Report 没有未授权 Critical Blocker。
-- [ ] 创建聚焦 Commit，建议：`feat(ops): complete phase 16 production readiness`。
-- [ ] Commit 后停止并向 Owner 报告，不自动进入 Phase 17。
+- [x] Observability、Security、Load、Secret 和 Runbook Gate 全部通过。
+- [x] Acceptance Criteria Gap Report 没有未授权 Critical Blocker。
+- [x] 创建聚焦 Commit，建议：`feat(ops): complete phase 16 production readiness`。
+- [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 17。
 
 ### 本阶段完成后形成的 Artifact / Capability
 

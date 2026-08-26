@@ -1,7 +1,6 @@
 import { createServer, request as httpRequest, type ServerResponse } from 'node:http'
 
 import { z } from 'zod'
-
 import { serviceIdentityContracts } from '../../src/control-plane/contracts'
 import {
   claimNextInfrastructureOperation,
@@ -15,6 +14,8 @@ import {
 import { parseDeploymentConfiguration } from '../../src/deployment/configuration'
 import { DockerDeploymentPlatform } from '../../src/deployment/docker-platform'
 import { executeDeploymentOperation } from '../../src/deployment/engine'
+import { apiSecurityHeaders } from '../../src/observability/security'
+import { safeErrorAttributes } from '../../src/observability/telemetry'
 import { parseRecoveryConfiguration } from '../../src/recovery/configuration'
 import {
   executeControlStateBackup,
@@ -47,6 +48,7 @@ function sendJson(response: ServerResponse, statusCode: number, payload: unknown
   response.statusCode = statusCode
   response.setHeader('cache-control', 'no-store')
   response.setHeader('content-type', 'application/json; charset=utf-8')
+  for (const [name, value] of Object.entries(apiSecurityHeaders)) response.setHeader(name, value)
   response.end(JSON.stringify(payload))
 }
 
@@ -146,7 +148,7 @@ async function executeClaimedRecovery() {
       status: 'completed',
     })
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'unknown recovery failure'
+    const message = safeErrorAttributes(error).message
     finishInfrastructureOperation(configuration.CONTROL_STATE_PATH, claimed.id, lease, {
       errorSummary: message,
       phase: 'recovery-failed',
@@ -197,7 +199,7 @@ async function executeClaimedDeployment() {
       status: 'completed',
     })
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'unknown deployment failure'
+    const message = safeErrorAttributes(error).message
     finishInfrastructureOperation(configuration.CONTROL_STATE_PATH, claimed.id, lease, {
       errorSummary: message,
       phase: 'deployment-failed',
@@ -305,7 +307,7 @@ function shutdown() {
   server.close((error) => {
     if (error) {
       console.error(
-        JSON.stringify({ event: 'deploy_agent_shutdown_failed', message: error.message }),
+        JSON.stringify({ event: 'deploy_agent_shutdown_failed', ...safeErrorAttributes(error) }),
       )
       process.exitCode = 1
       return

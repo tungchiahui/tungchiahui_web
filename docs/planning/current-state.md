@@ -1,7 +1,7 @@
 # Website V2 Current Implementation State
 
-> Status: Phase 0–15 completed
-> Current Phase: Awaiting Owner authorization for Phase 16
+> Status: Phase 0–16 completed
+> Current Phase: Awaiting Owner authorization for Phase 17
 > Handoff audit date: 2026-08-26
 
 本文件是新 Claude Code/Codex 会话的简洁交接入口。它索引当前实际状态和容易遗漏的实施事实，不替代 `AGENTS.md`、Accepted ADR、架构规范或 `implementation-plan.md`。
@@ -35,8 +35,9 @@
 | 13 — Tested Recovery | `feat(recovery): complete phase 13 tested recovery` | pgBackRest、WAL/PITR、双副本、Control-state、PG-independent/Break-glass Recovery 与 Verification | PASS；disposable restore/PITR、R2、PG-down、SQLite continuity gates |
 | 14 — Shared Blue-Green Deployment | `feat(deploy): complete phase 14 blue-green engine` | Shared Engine、SQLite V5、Migration/Smoke、Atomic OpenResty、Rollback 与 Verification | PASS；Production-like blue-green/failure/crash/PG-down/no-rebuild rollback gates |
 | 15 — GitHub OIDC Deployment Automation | `feat(ci): complete phase 15 oidc deployment automation` | Quality/Deploy/Content/Translation Workflows、OIDC Policy、Registry Digest Pull 与 Verification | PASS；workflow boundary、claims、supply-chain、concurrency、Production-like shared-engine gates |
+| 16 — Observability、Security、Production Readiness | `feat(ops): complete phase 16 production readiness` | Structured Telemetry、Read-only Observability Agent、Security/Rotation/Runbook、Gap 与 Verification Report | PASS；alert lifecycle、failure diagnosis、load、secret/SBOM/Critical scan、full regression gates |
 
-`implementation-plan.md` 中 Phase 0–15 的 Checklist 与 Overall Progress 已完成。Phase 16 尚未获得 Owner 授权，任何后续 Agent 不得根据本文件自行开始。
+`implementation-plan.md` 中 Phase 0–16 的 Checklist 与 Overall Progress 已完成。Phase 17 尚未获得 Owner 授权，任何后续 Agent 不得根据本文件自行开始。
 
 ## 3. Legacy durable baseline
 
@@ -86,6 +87,10 @@
 - Control API OIDC 配置现为严格 Policy Array：Deployment、Manual Translation 与 canonical Content + reviewed reusable `job_workflow_ref` 各有独立 Claims/Capability。Workflow 没有 Production DB、AI、Host Login/Root、Origin Registry Pull 或 Docker Socket Credential；所有第三方 Action 固定完整 Commit Digest。
 - `deploy-agent` 可从唯一 Approved Registry 按 Manifest Digest 受控 Pull，并验证精确 `RepoDigest` 与 OCI Git Revision；Candidate 单独记录 Manifest Digest，不再与 Docker Local Config ID 混淆。Rollback 只验证已运行 Retained Container，不 Pull/Build。
 - `content-sync.yml` 只能被 reusable `workflow_call` 调用，验证完整 Canonical Source Commit 后通过 `./site content sync` 创建 PostgreSQL Job；不 Build/Deploy/Translate。`translation.yml` 保持 typed manual-only OIDC Job Trigger。
+- Phase 16 统一 TypeScript JSON Telemetry Envelope、Request ID、错误/敏感字段 Redaction 与 OpenResty 安全 JSON Access Log；日志不包含 Query、Client IP、Authorization、Cookie、Connection String、Private Key 或 Token。Next/OpenResty 同时施加 HSTS、CSP、MIME、Referrer、Permissions、Frame 与 COOP Policy，TLS 只允许 1.2/1.3，Public/Control 使用独立 Rate Zone。
+- 独立 `observability-agent` 以只读、无业务 Credential、无 Docker Socket 身份监控 Public/Direct-origin、IPv6、Next、Control、Worker、Deploy Agent、PgBouncer、S3 Representative Object、Host Disk/Inode，以及 PostgreSQL Job 与 SQLite Operation/Backup/WAL/R2/Restore Evidence。PostgreSQL Down 时 SQLite Integrity/Audit/Recovery Evidence 仍可观测；Alert 具有 Firing/Noise-suppression/Resolved Lifecycle。
+- Production Runtime 使用固定 Alpine Node/OpenResty Digest，移除 Runtime npm/corepack/yarn/gosu；Recovery Image 以固定 Go 1.25.7 Builder 重建 age 1.3.1。固定 Trivy 0.74.0 对六个 Runtime Image 生成 CycloneDX SBOM 并执行 Critical/Secret Fail-closed Scan；Production npm Audit 与 Repository/Bundle/Image Scan 同属 Gate。
+- Production Web Root 保持 Read-only，只有 `/tmp` 与 `/app/.next/cache` 为明确 tmpfs。PostgreSQL 故障演练恢复时必须先等待 PostgreSQL Healthy，再重启 PgBouncer 与 Web Slot，防止失败的 Backend/DNS Pool State 污染 Readiness。
 - `./site check` 覆盖 Biome、Source Policy、Workflow Policy、Drizzle、Typecheck、Renovate 与 webpack Production Build。`./site test` 依次包含 Unit、带真实 Registry Pull/Blue-Green/Rollback 的 Production-foundation、Disposable Recovery Drill、Application Integration/10 个 Playwright E2E 和 6-Migration Dedicated Suite。
 - Phase 4 Control API/SQLite Recovery 与 Phase 5 GitHub Ingestion/Worker 权限边界均保持不变；`/api/ops/*` 没有进入 Next.js。
 
@@ -101,7 +106,8 @@
 | Search Refresh/Query | production-shaped PostgreSQL Projection、PGroonga Query、Durable Reindex 与精确 Cache Invalidation | completed in Phase 10 |
 | Generic S3/Public Asset Gateway | production-shaped generic Adapter plus S3Mock and AList `TEST` Bucket/CDN evidence | completed in Phase 11 |
 | GitHub polling default | idle content-worker polling; Phase 15 canonical reusable workflow explicitly creates exact-commit sync jobs | completed in Phase 15 |
-| Owner Dataset | validated PostgreSQL public read + Phase 4 authorized CAS write | Phase 16 final trust/privacy review |
+| Owner Dataset | validated PostgreSQL public read + Phase 4 authorized CAS write；Phase 16 Trust/Privacy Review 为 CONTROLLED | completed in Phase 16 |
+| Observability Alert Sink/Production Asset Probe | production-shaped read-only agent、HTTPS-only optional sink 与固定 Representative Object Contract；真实 Webhook/Object 未启用 | Phase 18 authorized activation |
 | Shared Deploy/Recovery Agent | Phase 14 Engine + Phase 13 Recovery + Phase 15 OIDC/Registry automation binding；真实 GitHub/Production Trigger 与 Public Cutover 未启用 | Phase 18 authorized activation/cutover |
 | Fake Translation Provider | isolated deterministic default for Local/Test; production must inject a validated paid adapter | retained permanent test boundary |
 
@@ -128,22 +134,23 @@
 - Phase 13 也没有执行 Production、真实 AList/R2、DNS/EdgeOne、付费 AI、Deploy/Cutover 或旧仓库操作。Recovery Gate 只使用临时 PostgreSQL 18、两个独立 S3Mock、随机 Host Root/Key/Credential，并要求 Disposable Target Marker。
 - Phase 14 没有执行 Production、Public Cutover、GitHub Write、AList/R2、付费 AI 或旧仓库操作。Deployment Gate 只使用临时 Host Root、高端口、自签名证书、Disposable PostgreSQL 和本地 Docker Image；缺失 Digest 与 PostgreSQL-down Failure Injection 均只作用于 Inactive Slot。
 - Phase 15 没有执行 Production、Public Cutover、GitHub Write/Workflow、GHCR Push、GitHub Settings Mutation、AList/R2、付费 AI 或旧仓库操作。Supply-chain Gate 只使用临时 Registry/Host Root/Port/Database/Certificate，并明确输出 `productionTraffic=false`。
-- Phase 15 已实现 approved Repository + Manifest Digest Pull/Resolution，但真实 GitHub `production` Environment Protection、`main` Required Check、Package Permission 和 canonical Content Caller 必须在 Phase 18 Activation 前由 Owner 在 GitHub Hosted Settings 中核验；YAML 不可替代这些外部控制。不得在 Phase 16 借 Production-readiness 测试提前启用真实 Trigger/Cutover。
+- Phase 15 已实现 approved Repository + Manifest Digest Pull/Resolution，但真实 GitHub `production` Environment Protection、`main` Required Check、Package Permission 和 canonical Content Caller 必须在 Phase 18 Activation 前由 Owner 在 GitHub Hosted Settings 中核验；YAML 不可替代这些外部控制。Phase 16 没有借 Production-readiness 测试提前启用真实 Trigger/Cutover。
+- Phase 16 没有执行 Production、Public Cutover、GitHub Write/Settings、AList/R2、真实 Alert Webhook/Object、DNS/EdgeOne、付费 AI、真实 Backup/Restore 或旧仓库读取/修改。Infrastructure/Recovery/Load/Security Evidence 全部来自临时本机目录、容器、Registry、S3Mock、证书、Key 与 Disposable Credential，输出明确 `productionTraffic=false`。
+- Phase 16 最终单次 Disposable Load 为 Public 80 并发全成功、P50 `322.99 ms`、P95 `508.76 ms`、Pool 80 请求 `186 ms`、Slow Query `247.11 ms`；这些数字不是 SLA 或 Capacity Promise。Production SLA、RPO/RTO 仍为 **Unknown**，必须由后续明确授权的代表性多次测量定义。
 - pgBackRest Repository Generation 是完整 Snapshot 而非增量对象同步；这优先保证可独立验证/恢复，后续优化不得削弱逐对象 Hash 或双副本有效性条件。
 - Disposable Drill 已输出实际 Backup Bytes/Seconds 与 Restore-to-ready Seconds，但小数据集/S3Mock 不代表 Production。Production RPO/RTO 仍未定义，需明确授权的代表性多次演练后才能提出。
 - 真实 Translation Provider Contract Test 未运行：Owner 没有提供明确的非生产 Provider Target/Credential/付费授权。此为 Phase 9 Exit Gate 要求的安全分支，不是 S3 缺口；未来启用具体付费翻译 Provider 前必须补做。
 
-## 7. Phase 16 开始前 Prerequisite
+## 7. Phase 17 开始前 Prerequisite
 
-- Owner must explicitly authorize Phase 16; this handoff is not authorization.
-- Start from the focused Phase 15 commit and a clean tracked worktree; `.env.local` remains Owner-owned, Gitignored and must never be staged.
-- Read the Phase 16 plan plus Observability、Security、Non-functional Requirements、Runbook、Acceptance Criteria、ADR 0008/0010/0011/0013/0014/0015 and Phase 12/13/14/15 design/verification evidence.
-- Review Public/OpenResty/Next/Control API/Worker/Agent/PostgreSQL/PgBouncer/S3/Backup/Host end to end; telemetry must redact Token、Private Key、Connection String、Authorization/Cookie and sensitive headers.
-- Record measured Load/Failure/Alert/Security evidence only. Do not invent SLA/RPO/RTO, suppress Critical findings, or treat fake/local numbers as Production claims.
-- Preserve Phase 15 trigger/credential separation and Phase 13/14 PostgreSQL-independent control/recovery path. Phase 16 may harden and observe them but must not create a parallel control path or enable Phase 18 public cutover.
-- Production-readiness checks must remain non-destructive and use disposable/non-production targets unless Owner separately authorizes an exact external contract target. No paid AI or Production operation is implicit.
+- Owner must explicitly authorize Phase 17; this handoff is not authorization.
+- Start from the focused Phase 16 commit and a clean tracked worktree；`.env.local` remains Owner-owned、Gitignored and must never be staged.
+- Read the Phase 17 plan plus Planned Migration、Network Identity、Deployment/Recovery、Non-functional Requirements、Runbook、Acceptance Criteria、ADR 0008/0009/0010/0011/0013/0014/0015 and Phase 12–16 design/verification evidence.
+- Preserve Phase 13–16 backup/recovery validity、PostgreSQL-independent SQLite control path、shared blue-green engine、OIDC/registry separation and observability security boundaries；不得另建迁移脚本或第二套 Control Plane。
+- Phase 17 只建立 Planned PostgreSQL/Server Migration Readiness 与 Disposable Rehearsal，不执行真实 Production Migration、DNS/Public Cutover 或 Phase 18 Final Legacy Audit。任何外部/Production 操作仍需精确的 Owner 授权。
+- Cross-major PostgreSQL method 必须按 Phase 17 当期官方支持与 ADR 0009 选择；若边界变化，先创建或 Supersede ADR。不得把 Phase 16 Disposable Load/Restore 数字伪装为 Production SLA/RPO/RTO。
 
-Phase 16 has no Phase 15 dependency blocker: all primary runtime and operation paths, OIDC workflow boundaries, immutable registry supply chain, shared deployment/recovery state and regression gates are ready for cross-system hardening. This handoff does not authorize Phase 16.
+Phase 17 依赖已就绪：Phase 16 已完成全系统 Telemetry、Alert、Security、Load、Secret/SBOM/Critical Scan、Runbook 和 Gap Closure，且没有未授权 Critical Blocker。本交接不授权 Phase 17。
 
 ## 8. 回查旧 myblog 的规则
 
