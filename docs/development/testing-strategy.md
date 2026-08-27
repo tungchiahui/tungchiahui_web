@@ -93,6 +93,8 @@ Phase 14 扩展 `test:infra`：在同一临时 Host Root 和 Hardened Compose �
 
 Phase 15 再把临时 OCI Registry 纳入 `test:infra`：Candidate 先以完整 Git SHA Label 推送，再从 Host Local Store 移除，强制 `deploy-agent` 只按 approved Repository + Registry Manifest Digest Pull，并验证 `RepoDigest` 与 OCI Revision。Workflow Policy Gate 解析 Quality/Application/Content/Translation 四条 Workflow，校验 Trigger、Environment、Concurrency、Permission、Pinned Action、共享 CLI 和 Forbidden Credential/Command；OIDC Unit 覆盖错误 Issuer/Audience/Repository/Ref/Environment/Workflow Claim 及 reusable `job_workflow_ref`。全部验证只使用 Production-like Local Resource，不调用 GitHub 或 Public Production Control API。
 
+Phase 17 在同一 `test:infra` 中 Provision 第二个隔离 Host Root，第二次 Ansible 必须 `changed=0`，并验证 Target Hardening。Gate 使用 PostgreSQL 18 Physical Base Backup/Streaming Slot，把 Base、Streaming、Final-WAL 三条唯一 Row 复制到 Target；在 Final LSN Catch-up 后停止 Source、Promote Target、验证 Application Ready/Target Write/Old-source Non-writing。Control-state 执行一致 Snapshot/Restore 与最终 Reconcile，核对 Active/Previous Identity、Operation Lease/Phase 和 Audit Digest；最终 Origin Probe 强制 AAAA-only。Unit Test 另注入 Promotion 前 Failure，证明安全 Abort 且不会 Promote。所有 Target、Certificate、Credential、Port 与 Registry 都是 Disposable，输出明确 `productionTraffic=false`。
+
 ## Migration Test
 
 CI 必须测试：

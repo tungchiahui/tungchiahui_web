@@ -33,6 +33,7 @@ const hostRoot = mkdtempSync(join(tmpdir(), 'tungchiahui-phase12-'))
 chmodSync(hostRoot, 0o755)
 const gitSha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
 const originPort = await freePort()
+const targetOriginPort = await freePort()
 const registryPort = await freePort()
 const testImage = `tungchiahui-infra-test:${gitSha}`
 
@@ -53,6 +54,8 @@ try {
     `PHASE12_HOST_GID=${String(process.getgid?.() ?? 1000)}`,
     '--env',
     `PHASE12_ORIGIN_PORT=${String(originPort)}`,
+    '--env',
+    `PHASE17_TARGET_ORIGIN_PORT=${String(targetOriginPort)}`,
     '--env',
     `PHASE15_REGISTRY_PORT=${String(registryPort)}`,
     '--mount',

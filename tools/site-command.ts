@@ -28,6 +28,12 @@ export type SiteCommand =
   | Readonly<{ kind: 'dev-start' }>
   | Readonly<{ kind: 'dev-stop' }>
   | Readonly<{ kind: 'help' }>
+  | Readonly<{
+      action: 'planned-migration' | 'provision-only'
+      inventoryHost: string
+      kind: 'server-migration-create'
+      reason: string
+    }>
   | Readonly<{ kind: 'rollback-create'; reason: string }>
   | Readonly<{ kind: 'status' }>
   | Readonly<{ kind: 'storage-contract-s3' }>
@@ -110,6 +116,39 @@ export function parseSiteCommand(arguments_: readonly string[]): SiteCommand {
       kind: 'deployment-create',
       reason,
       wait,
+    })
+  }
+
+  if (arguments_[0] === 'migrate-server' || arguments_[0] === 'provision') {
+    const inventoryHost = z
+      .string()
+      .regex(/^[a-zA-Z][a-zA-Z0-9._-]{0,252}$/)
+      .safeParse(arguments_[1])
+    if (!inventoryHost.success) {
+      throw new SiteUsageError(`${arguments_[0]} requires a stable inventory hostname or SSH alias`)
+    }
+    let reason =
+      arguments_[0] === 'provision'
+        ? 'manual operator target provisioning'
+        : 'manual operator planned server migration'
+    let index = 2
+    while (index < arguments_.length) {
+      if (arguments_[index] !== '--reason') {
+        throw new SiteUsageError(`Unknown ${arguments_[0]} argument: ${String(arguments_[index])}`)
+      }
+      reason = z
+        .string()
+        .trim()
+        .min(1)
+        .max(1_000)
+        .parse(arguments_[index + 1])
+      index += 2
+    }
+    return Object.freeze({
+      action: arguments_[0] === 'provision' ? 'provision-only' : 'planned-migration',
+      inventoryHost: inventoryHost.data,
+      kind: 'server-migration-create',
+      reason,
     })
   }
 

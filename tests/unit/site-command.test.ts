@@ -43,6 +43,25 @@ describe('site command boundary', () => {
       kind: 'rollback-create',
       reason: 'manual operator rollback',
     })
+    expect(parseSiteCommand(['provision', 'phase17-target'])).toEqual({
+      action: 'provision-only',
+      inventoryHost: 'phase17-target',
+      kind: 'server-migration-create',
+      reason: 'manual operator target provisioning',
+    })
+    expect(
+      parseSiteCommand([
+        'migrate-server',
+        'phase17-target',
+        '--reason',
+        'disposable migration rehearsal',
+      ]),
+    ).toEqual({
+      action: 'planned-migration',
+      inventoryHost: 'phase17-target',
+      kind: 'server-migration-create',
+      reason: 'disposable migration rehearsal',
+    })
     expect(
       parseSiteCommand([
         'backup',
@@ -124,6 +143,7 @@ describe('site command boundary', () => {
     expect(() => parseSiteCommand(['translate', 'pending', '--execute'])).toThrow()
     expect(() => parseSiteCommand(['translate', 'all', '--dry-run', '--force'])).toThrow()
     expect(() => parseSiteCommand(['storage', 'contract', 's3'])).toThrow(SiteUsageError)
+    expect(() => parseSiteCommand(['migrate-server', '127.0.0.1'])).toThrow(SiteUsageError)
     expect(() => parseSiteCommand(['backup', '--environment', 'production'])).toThrow(
       SiteUsageError,
     )

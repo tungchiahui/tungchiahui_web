@@ -124,13 +124,21 @@ Static Asset 与 Article Content 在运维上彼此独立。
 
 ## Server Replacement
 
-使用：
+先以稳定 Inventory/SSH Identity 幂等 Provision；不要把 Bootstrap 数字地址写入 Operation 或 Durable Config：
 
 ```bash
-./site migrate-server <new-host>
+./site provision <new-host-alias> --reason "<change reference>"
 ```
 
-遵循 `server-migration.md`。
+确认 Backup/WAL/R2/Restore Evidence、Target Hardening、Storage、IPv6 与 Candidate Smoke 后，使用：
+
+```bash
+./site migrate-server <new-host-alias> --reason "<change reference>"
+```
+
+Promotion 前 Replication、Lag、Final WAL、Readiness、Backup、Storage、Smoke 或 Control-state Continuity 任一失败都必须 Abort。Promotion 后 Old PostgreSQL 保持停止且 Non-writing；不得自动重新启动形成 Split Brain。核对 Target 三阶段数据 Probe、Target Write、AAAA-only Origin/Public-like Smoke 和最终 SQLite Audit 后才开放 Rollback Window。
+
+完整 Procedure、Cross-major 方法与显式回退边界见 `server-migration.md`。Phase 17 只证明 Disposable Readiness；真实 Production Primary、Target Inventory/Secret 和 DDNS Cutover 仍需单独 Owner 授权。
 
 ## Security Incident
 

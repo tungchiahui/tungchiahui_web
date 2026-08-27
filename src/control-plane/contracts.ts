@@ -132,7 +132,10 @@ const infrastructureTargetSchemas = {
     })
     .strict(),
   'server-migration': z
-    .object({ inventoryHost: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,252}$/) })
+    .object({
+      action: z.enum(['planned-migration', 'provision-only']).default('planned-migration'),
+      inventoryHost: z.string().regex(/^[a-zA-Z][a-zA-Z0-9._-]{0,252}$/),
+    })
     .strict(),
 } as const
 

@@ -703,6 +703,33 @@ export function createInfrastructureOperation(
         }
       }
 
+      if (request.operationType === 'server-migration') {
+        const competing = database
+          .prepare(
+            `SELECT id FROM infrastructure_operations
+             WHERE status IN ('queued', 'claimed', 'running', 'needs-attention')
+             LIMIT 1`,
+          )
+          .get()
+        if (competing) {
+          throw new ControlStateConflictError(
+            'Server migration requires an exclusive infrastructure-operation window',
+          )
+        }
+      } else {
+        const migration = database
+          .prepare(
+            `SELECT id FROM infrastructure_operations
+             WHERE operation_type = 'server-migration'
+               AND status IN ('queued', 'claimed', 'running', 'needs-attention')
+             LIMIT 1`,
+          )
+          .get()
+        if (migration) {
+          throw new ControlStateConflictError('A server migration is already active')
+        }
+      }
+
       const id = randomUUID()
       const timestamp = now.toISOString()
       database

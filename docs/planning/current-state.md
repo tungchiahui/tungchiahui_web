@@ -1,8 +1,8 @@
 # Website V2 Current Implementation State
 
-> Status: Phase 0–16 completed
-> Current Phase: Awaiting Owner authorization for Phase 17
-> Handoff audit date: 2026-08-26
+> Status: Phase 0–17 completed
+> Current Phase: Awaiting Owner authorization for Phase 18
+> Handoff audit date: 2026-08-27
 
 本文件是新 Claude Code/Codex 会话的简洁交接入口。它索引当前实际状态和容易遗漏的实施事实，不替代 `AGENTS.md`、Accepted ADR、架构规范或 `implementation-plan.md`。
 
@@ -36,8 +36,9 @@
 | 14 — Shared Blue-Green Deployment | `feat(deploy): complete phase 14 blue-green engine` | Shared Engine、SQLite V5、Migration/Smoke、Atomic OpenResty、Rollback 与 Verification | PASS；Production-like blue-green/failure/crash/PG-down/no-rebuild rollback gates |
 | 15 — GitHub OIDC Deployment Automation | `feat(ci): complete phase 15 oidc deployment automation` | Quality/Deploy/Content/Translation Workflows、OIDC Policy、Registry Digest Pull 与 Verification | PASS；workflow boundary、claims、supply-chain、concurrency、Production-like shared-engine gates |
 | 16 — Observability、Security、Production Readiness | `feat(ops): complete phase 16 production readiness` | Structured Telemetry、Read-only Observability Agent、Security/Rotation/Runbook、Gap 与 Verification Report | PASS；alert lifecycle、failure diagnosis、load、secret/SBOM/Critical scan、full regression gates |
+| 17 — Planned PostgreSQL / Server Migration Readiness | `feat(ops): complete phase 17 migration readiness` | Shared Migration Engine、Same-major Physical Streaming、Control-state Transfer、AAAA-only Cutover、Runbook 与 Verification | PASS；idempotent target provision、final WAL、controlled promotion、no-data-loss、safe abort/non-writing rollback gates |
 
-`implementation-plan.md` 中 Phase 0–16 的 Checklist 与 Overall Progress 已完成。Phase 17 尚未获得 Owner 授权，任何后续 Agent 不得根据本文件自行开始。
+`implementation-plan.md` 中 Phase 0–17 的 Checklist 与 Overall Progress 已完成。Phase 18 尚未获得 Owner 授权，任何后续 Agent 不得根据本文件自行开始。
 
 ## 3. Legacy durable baseline
 
@@ -91,7 +92,10 @@
 - 独立 `observability-agent` 以只读、无业务 Credential、无 Docker Socket 身份监控 Public/Direct-origin、IPv6、Next、Control、Worker、Deploy Agent、PgBouncer、S3 Representative Object、Host Disk/Inode，以及 PostgreSQL Job 与 SQLite Operation/Backup/WAL/R2/Restore Evidence。PostgreSQL Down 时 SQLite Integrity/Audit/Recovery Evidence 仍可观测；Alert 具有 Firing/Noise-suppression/Resolved Lifecycle。
 - Production Runtime 使用固定 Alpine Node/OpenResty Digest，移除 Runtime npm/corepack/yarn/gosu；Recovery Image 以固定 Go 1.25.7 Builder 重建 age 1.3.1。固定 Trivy 0.74.0 对六个 Runtime Image 生成 CycloneDX SBOM 并执行 Critical/Secret Fail-closed Scan；Production npm Audit 与 Repository/Bundle/Image Scan 同属 Gate。
 - Production Web Root 保持 Read-only，只有 `/tmp` 与 `/app/.next/cache` 为明确 tmpfs。PostgreSQL 故障演练恢复时必须先等待 PostgreSQL Healthy，再重启 PgBouncer 与 Web Slot，防止失败的 Backend/DNS Pool State 污染 Readiness。
-- `./site check` 覆盖 Biome、Source Policy、Workflow Policy、Drizzle、Typecheck、Renovate 与 webpack Production Build。`./site test` 依次包含 Unit、带真实 Registry Pull/Blue-Green/Rollback 的 Production-foundation、Disposable Recovery Drill、Application Integration/10 个 Playwright E2E 和 6-Migration Dedicated Suite。
+- `./site provision` 与 `./site migrate-server` 通过独立 Control API 创建排他的 `server-migration` SQLite Operation；Stable Target 在 CLI/API/Engine 三层拒绝数字 IP。唯一 Typed Engine 记录 Provision、PostgreSQL 18 Physical Streaming、Abort Gate、Candidate Smoke、Final WAL、Control-state Transfer、Promotion、Application/Origin Cutover、Post-switch Verify 与 Non-writing Rollback Evidence。
+- Phase 17 Production-foundation Gate 用同一 Ansible/SOPS/age/Hardened Compose 从零重建第二个 Disposable Target，第二次 Provision `changed=0`；真实 Base Backup/WAL Streaming、Final LSN、Controlled Promotion、三阶段数据 Probe、Target Write、Old-source Stop、SQLite Snapshot/Reconcile 和 AAAA-only Public-like Smoke 全部通过。
+- Shared Database Client 监听 PostgreSQL Idle-client Error 并只记录脱敏 Structured Telemetry，避免 PgBouncer/PostgreSQL Down 时未监听 Event 退出 `control-api`；Active Query 仍显式失败。Integration 已证明 `/api/ops/*` SQLite Route 保持可用、PostgreSQL-backed Job 返回不可用。
+- `./site check` 覆盖 Biome、Source Policy、Workflow Policy、Drizzle、Typecheck、Renovate 与 webpack Production Build。`./site test` 依次包含 Unit、带真实 Registry Pull/Blue-Green/Rollback/Server Migration 的 Production-foundation、Disposable Recovery Drill、Application Integration/10 个 Playwright E2E 和 6-Migration Dedicated Suite。
 - Phase 4 Control API/SQLite Recovery 与 Phase 5 GitHub Ingestion/Worker 权限边界均保持不变；`/api/ops/*` 没有进入 Next.js。
 
 ## 5. 当前 Stub/Fake 与替换责任
@@ -109,6 +113,7 @@
 | Owner Dataset | validated PostgreSQL public read + Phase 4 authorized CAS write；Phase 16 Trust/Privacy Review 为 CONTROLLED | completed in Phase 16 |
 | Observability Alert Sink/Production Asset Probe | production-shaped read-only agent、HTTPS-only optional sink 与固定 Representative Object Contract；真实 Webhook/Object 未启用 | Phase 18 authorized activation |
 | Shared Deploy/Recovery Agent | Phase 14 Engine + Phase 13 Recovery + Phase 15 OIDC/Registry automation binding；真实 GitHub/Production Trigger 与 Public Cutover 未启用 | Phase 18 authorized activation/cutover |
+| Server Migration Platform Binding | Phase 17 typed/audited Engine + complete disposable Adapter；真实 Target Inventory/SSH Secret/DDNS Provider/Primary 未绑定 | Phase 18 Owner-authorized activation only if migration is actually required |
 | Fake Translation Provider | isolated deterministic default for Local/Test; production must inject a validated paid adapter | retained permanent test boundary |
 
 ## 6. 已知限制与踩坑
@@ -137,20 +142,24 @@
 - Phase 15 已实现 approved Repository + Manifest Digest Pull/Resolution，但真实 GitHub `production` Environment Protection、`main` Required Check、Package Permission 和 canonical Content Caller 必须在 Phase 18 Activation 前由 Owner 在 GitHub Hosted Settings 中核验；YAML 不可替代这些外部控制。Phase 16 没有借 Production-readiness 测试提前启用真实 Trigger/Cutover。
 - Phase 16 没有执行 Production、Public Cutover、GitHub Write/Settings、AList/R2、真实 Alert Webhook/Object、DNS/EdgeOne、付费 AI、真实 Backup/Restore 或旧仓库读取/修改。Infrastructure/Recovery/Load/Security Evidence 全部来自临时本机目录、容器、Registry、S3Mock、证书、Key 与 Disposable Credential，输出明确 `productionTraffic=false`。
 - Phase 16 最终单次 Disposable Load 为 Public 80 并发全成功、P50 `322.99 ms`、P95 `508.76 ms`、Pool 80 请求 `186 ms`、Slow Query `247.11 ms`；这些数字不是 SLA 或 Capacity Promise。Production SLA、RPO/RTO 仍为 **Unknown**，必须由后续明确授权的代表性多次测量定义。
+- Phase 17 没有执行 Production、真实 Primary/DNS/DDNS/Public Cutover、GitHub Write、AList/R2、付费 AI 或旧仓库读取/修改。完整迁移仅操作临时 Host Root/Port/Certificate/Registry/Credential/age Key 与 Disposable PostgreSQL Volume，最终输出 `productionTraffic=false`。
+- Phase 17 最终一次 Disposable Migration 从 Source PostgreSQL Stop 到 Target Application Ready 为 `1036.81 ms`，三阶段 Probe 无丢失且 Old Source Non-writing。该数字不是 Production SLA/RPO/RTO；真实数据量、网络、DNS/DDNS、Storage 和 Operator Coordination 未测，Production SLA/RPO/RTO 仍为 **Unknown**。
+- Cross-major 官方证据按 2026-08-27 PostgreSQL 18 文档复核：Physical Streaming 不跨 Major；Logical Replication 默认候选但需单独处理 Schema/DDL、Sequence 和其他限制；`pg_upgrade` 只用于明确 Maintenance Model。ADR 0009 仍适用，没有新增 ADR。
 - pgBackRest Repository Generation 是完整 Snapshot 而非增量对象同步；这优先保证可独立验证/恢复，后续优化不得削弱逐对象 Hash 或双副本有效性条件。
 - Disposable Drill 已输出实际 Backup Bytes/Seconds 与 Restore-to-ready Seconds，但小数据集/S3Mock 不代表 Production。Production RPO/RTO 仍未定义，需明确授权的代表性多次演练后才能提出。
 - 真实 Translation Provider Contract Test 未运行：Owner 没有提供明确的非生产 Provider Target/Credential/付费授权。此为 Phase 9 Exit Gate 要求的安全分支，不是 S3 缺口；未来启用具体付费翻译 Provider 前必须补做。
 
-## 7. Phase 17 开始前 Prerequisite
+## 7. Phase 18 开始前 Prerequisite
 
-- Owner must explicitly authorize Phase 17; this handoff is not authorization.
-- Start from the focused Phase 16 commit and a clean tracked worktree；`.env.local` remains Owner-owned、Gitignored and must never be staged.
-- Read the Phase 17 plan plus Planned Migration、Network Identity、Deployment/Recovery、Non-functional Requirements、Runbook、Acceptance Criteria、ADR 0008/0009/0010/0011/0013/0014/0015 and Phase 12–16 design/verification evidence.
-- Preserve Phase 13–16 backup/recovery validity、PostgreSQL-independent SQLite control path、shared blue-green engine、OIDC/registry separation and observability security boundaries；不得另建迁移脚本或第二套 Control Plane。
-- Phase 17 只建立 Planned PostgreSQL/Server Migration Readiness 与 Disposable Rehearsal，不执行真实 Production Migration、DNS/Public Cutover 或 Phase 18 Final Legacy Audit。任何外部/Production 操作仍需精确的 Owner 授权。
-- Cross-major PostgreSQL method 必须按 Phase 17 当期官方支持与 ADR 0009 选择；若边界变化，先创建或 Supersede ADR。不得把 Phase 16 Disposable Load/Restore 数字伪装为 Production SLA/RPO/RTO。
+- Owner must explicitly authorize Phase 18; this handoff is not authorization. Production、DNS/DDNS/Origin、GitHub Settings、真实 Storage/Backup/Restore、Legacy Inventory Refresh 和旧站 Rollback Window 均需按 Phase 18 精确授权。
+- Start from the focused Phase 17 commit and a clean tracked worktree；`.env.local` remains Owner-owned、Gitignored and must never be staged.
+- Read the Phase 18 plan、Migration Guide、Acceptance Criteria、Deployment/Recovery/Server Migration/Runbook、ADR 0001/0004/0006/0011 and Phase 0–17 durable evidence.
+- Phase 18 才按计划从当时最新 Legacy HEAD 做 Final Delta/Inventory Refresh；旧 Nuxt Repository 始终只读，不把重新扫描当作 V2 Architecture Source。
+- 在任何真实 Cutover 前重新验证 GitHub `production` Environment/Required Check/Package Permission、Canonical Content Caller、Production Asset Probe/Alert Sink、Fresh Backup/WAL/R2/Restore、Control-state Backup、Target Inventory 与 Public/Origin IPv4/IPv6。
+- 若 Phase 18 不需要实际 Server Replacement，不绑定或触发 Migration Platform；若需要，必须先获得真实 Target/Primary/DDNS 的单独授权并复核 `server-migration.md` Abort/Rollback Gate。
+- 不得把 Phase 16 Load、Phase 13 Restore 或 Phase 17 Disposable Migration Timing 伪装为 Production SLA/RPO/RTO。
 
-Phase 17 依赖已就绪：Phase 16 已完成全系统 Telemetry、Alert、Security、Load、Secret/SBOM/Critical Scan、Runbook 和 Gap Closure，且没有未授权 Critical Blocker。本交接不授权 Phase 17。
+Phase 18 依赖已就绪：Phase 17 已完成可复现 Target Provision、Same-major Physical Streaming、Control-state Transfer、Safe Abort/Non-writing Rollback、AAAA-only Gate 和 Cross-major Runbook，且没有未授权 Critical Blocker。本交接不授权 Phase 18。
 
 ## 8. 回查旧 myblog 的规则
 

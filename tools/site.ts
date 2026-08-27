@@ -7,6 +7,7 @@ import {
   createRestore,
   readBackupStatus,
 } from './recovery/control-client'
+import { createServerMigration } from './server-migration/control-client'
 import {
   assertToolchain,
   executePackageScript,
@@ -37,6 +38,10 @@ Deployment:
   status
   deploy [git-sha] [--image-digest sha256:<digest>] [--reason <text>]
   rollback [--reason <text>]
+
+Server lifecycle:
+  provision <inventory-hostname-or-alias> [--reason <text>]
+  migrate-server <inventory-hostname-or-alias> [--reason <text>]
 
 Automation:
   content sync <40-char-source-commit>
@@ -95,6 +100,10 @@ async function main() {
       return 0
     case 'rollback-create': {
       console.log(JSON.stringify(await createRollback(command.reason), null, 2))
+      return 0
+    }
+    case 'server-migration-create': {
+      console.log(JSON.stringify(await createServerMigration(command), null, 2))
       return 0
     }
     case 'status': {

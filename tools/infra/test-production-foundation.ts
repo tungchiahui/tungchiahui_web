@@ -5,9 +5,26 @@ import { join, resolve } from 'node:path'
 
 import { stringify } from 'yaml'
 import { z } from 'zod'
-
+import type { ActorIdentity } from '../../src/control-plane/contracts'
+import {
+  claimNextInfrastructureOperation,
+  createConsistentControlStateSnapshot,
+  createInfrastructureOperation,
+  finishInfrastructureOperation,
+  getInfrastructureOperation,
+  initializeControlState,
+  inspectControlStateSnapshot,
+  listControlAuditEvents,
+  readDeploymentState,
+  restoreControlStateSnapshot,
+  startInfrastructureOperation,
+} from '../../src/control-plane/control-state'
 import { seedDevelopmentDatabase } from '../../src/database/seed'
 import { SearchIndexRepository } from '../../src/search/repository'
+import {
+  executeServerMigrationOperation,
+  type ServerMigrationPlatform,
+} from '../../src/server-migration/engine'
 import { controlRequest } from '../control/client'
 
 const input = z
@@ -18,6 +35,7 @@ const input = z
     PHASE12_HOST_UID: z.coerce.number().int().nonnegative(),
     PHASE12_ORIGIN_PORT: z.coerce.number().int().min(1024).max(65_535),
     PHASE15_REGISTRY_PORT: z.coerce.number().int().min(1024).max(65_535),
+    PHASE17_TARGET_ORIGIN_PORT: z.coerce.number().int().min(1024).max(65_535),
   })
   .parse(process.env)
 
@@ -45,8 +63,19 @@ const certificatePath = join(workRoot, 'origin.crt')
 const privateKeyPath = join(workRoot, 'origin.key')
 const inventoryPath = join(workRoot, 'inventory.yml')
 const variablesPath = join(workRoot, 'variables.json')
+const targetProjectName = `tungchiahui-phase17-target-${process.pid}`
+const targetRoot = join(input.PHASE12_HOST_ROOT, 'phase17-target')
+const targetConfigRoot = join(targetRoot, 'etc')
+const targetDataRoot = join(targetRoot, 'var')
+const targetSecretRoot = join(targetRoot, 'run', 'secrets')
+const targetWorkRoot = join(targetRoot, 'work')
+const targetInventoryPath = join(targetWorkRoot, 'inventory.yml')
+const targetVariablesPath = join(targetWorkRoot, 'variables.json')
 
 for (const directory of [configRoot, dataRoot, secretRoot, workRoot]) {
+  mkdirSync(directory, { mode: 0o755, recursive: true })
+}
+for (const directory of [targetConfigRoot, targetDataRoot, targetSecretRoot, targetWorkRoot]) {
   mkdirSync(directory, { mode: 0o755, recursive: true })
 }
 chmodSync(input.PHASE12_HOST_ROOT, 0o755)
@@ -135,6 +164,38 @@ function compose(arguments_: readonly string[], allowFailure = false) {
       ...arguments_,
     ],
     { allowFailure, environment: composeEnvironment() },
+  )
+}
+
+function targetComposeEnvironment() {
+  const socket = execute('stat', ['--format=%g', '/var/run/docker.sock']).stdout.trim()
+  return {
+    ...composeEnvironment(),
+    TUNGCHIAHUI_BLUE_CONTAINER_NAME: `${targetProjectName}-web-blue-1`,
+    TUNGCHIAHUI_CONFIG_ROOT: targetConfigRoot,
+    TUNGCHIAHUI_DATA_ROOT: targetDataRoot,
+    TUNGCHIAHUI_DOCKER_SOCKET_GID: socket,
+    TUNGCHIAHUI_GREEN_CONTAINER_NAME: `${targetProjectName}-web-green-1`,
+    TUNGCHIAHUI_MIGRATION_CONTAINER_NAME: `${targetProjectName}-database-migrate-1`,
+    TUNGCHIAHUI_OPENRESTY_CONTAINER_NAME: `${targetProjectName}-openresty-1`,
+    TUNGCHIAHUI_ORIGIN_PORT: String(input.PHASE17_TARGET_ORIGIN_PORT),
+    TUNGCHIAHUI_POSTGRES_CONTAINER_NAME: `${targetProjectName}-postgres-1`,
+    TUNGCHIAHUI_SECRET_DIRECTORY: targetSecretRoot,
+  }
+}
+
+function targetCompose(arguments_: readonly string[], allowFailure = false) {
+  return execute(
+    'docker',
+    [
+      'compose',
+      '--project-name',
+      targetProjectName,
+      '--file',
+      join(targetConfigRoot, 'compose.yaml'),
+      ...arguments_,
+    ],
+    { allowFailure, environment: targetComposeEnvironment() },
   )
 }
 
@@ -507,6 +568,85 @@ function runProvision(identityPath: string) {
   expect(
     /changed=0\b/.test(second.stdout),
     `Second provision was not idempotent:\n${second.stdout}`,
+  )
+}
+
+function runMigrationTargetProvision(identityPath: string) {
+  writeFileSync(
+    targetInventoryPath,
+    stringify({
+      all: {
+        children: {
+          production_origins: {
+            hosts: {
+              phase17_nonproduction_target: {
+                ansible_connection: 'local',
+                ansible_host: 'phase17-nonproduction-target',
+                ansible_python_interpreter: '/usr/local/bin/python',
+              },
+            },
+          },
+        },
+      },
+    }),
+  )
+  writeFileSync(
+    targetVariablesPath,
+    JSON.stringify({
+      tungchiahui_compose_project_name: targetProjectName,
+      tungchiahui_config_root: targetConfigRoot,
+      tungchiahui_content_polling_enabled: 'false',
+      tungchiahui_control_rate_limit_per_minute: '1000',
+      tungchiahui_data_root: targetDataRoot,
+      tungchiahui_deployment_sha: input.PHASE12_GIT_SHA,
+      tungchiahui_deployment_backup_max_age_seconds: '86400',
+      tungchiahui_deployment_stabilization_seconds: '0',
+      tungchiahui_deployment_image_repository: registryRepository,
+      tungchiahui_install_packages: false,
+      tungchiahui_manage_stack: true,
+      tungchiahui_origin_port: String(input.PHASE17_TARGET_ORIGIN_PORT),
+      tungchiahui_observability_backup_max_age_seconds: '86400',
+      tungchiahui_observability_disk_critical_percent: '99',
+      tungchiahui_observability_interval_seconds: '10',
+      tungchiahui_observability_job_max_age_seconds: '3600',
+      tungchiahui_observability_latency_warning_ms: '10000',
+      tungchiahui_observability_origin_hostname: 'localhost',
+      tungchiahui_observability_origin_ipv6_required: 'false',
+      tungchiahui_observability_origin_server_name: 'ddns.tungchiahui.cn',
+      tungchiahui_observability_origin_url: 'https://openresty:8443/api/ready',
+      tungchiahui_observability_public_asset_path: '/api/assets/monitoring/health.svg',
+      tungchiahui_observability_public_server_name: 'www.tungchiahui.cn',
+      tungchiahui_observability_public_url: 'https://openresty:8443/',
+      tungchiahui_observability_restore_drill_max_age_seconds: '86400',
+      tungchiahui_observability_restore_drill_timestamp: new Date().toISOString(),
+      tungchiahui_observability_tls_ca_path: '/run/observability/origin-ca.crt',
+      tungchiahui_postgres_image: postgresImage,
+      tungchiahui_recovery_image: recoveryImage,
+      tungchiahui_repository_root: '/workspace',
+      tungchiahui_search_polling_enabled: 'false',
+      tungchiahui_secret_file: encryptedSecretPath,
+      tungchiahui_secret_root: targetSecretRoot,
+      tungchiahui_service_image: serviceImage,
+      tungchiahui_web_image: webImage,
+    }),
+  )
+  const command = [
+    '-i',
+    targetInventoryPath,
+    'ops/production/ansible/playbooks/provision.yml',
+    '--extra-vars',
+    `@${targetVariablesPath}`,
+  ]
+  const environment = {
+    ANSIBLE_CONFIG: resolve('ops/production/ansible/ansible.cfg'),
+    SOPS_AGE_KEY_FILE: identityPath,
+  }
+  const first = execute('ansible-playbook', command, { environment })
+  expect(/changed=[1-9][0-9]*/.test(first.stdout), 'Migration target provision reported no changes')
+  const second = execute('ansible-playbook', command, { environment })
+  expect(
+    /changed=0\b/.test(second.stdout),
+    `Migration target provision was not idempotent:\n${second.stdout}`,
   )
 }
 
@@ -1218,6 +1358,460 @@ async function verifyBlueGreenDeployment() {
   }
 }
 
+function psql(container: string, sql: string) {
+  return execute('docker', [
+    'exec',
+    container,
+    'psql',
+    '--username',
+    'tungchiahui',
+    '--dbname',
+    'tungchiahui',
+    '--tuples-only',
+    '--no-align',
+    '--command',
+    sql,
+  ]).stdout.trim()
+}
+
+async function waitFor(description: string, check: () => boolean, timeoutMilliseconds = 90_000) {
+  const deadline = Date.now() + timeoutMilliseconds
+  while (Date.now() < deadline) {
+    if (check()) return
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 500))
+  }
+  throw new Error(`Timed out waiting for ${description}`)
+}
+
+function inspectMigrationTargetHardening() {
+  for (const service of [
+    'control-api',
+    'content-worker',
+    'observability-agent',
+    'openresty',
+    'pgbouncer',
+    'postgres',
+    'web-blue',
+    'web-green',
+  ]) {
+    const container = targetCompose(['ps', '--quiet', service]).stdout.trim()
+    const inspection = z
+      .array(
+        z.object({
+          Config: z.object({ User: z.string() }),
+          HostConfig: z.object({
+            CapDrop: z.array(z.string()).nullable(),
+            Privileged: z.boolean(),
+            ReadonlyRootfs: z.boolean(),
+          }),
+        }),
+      )
+      .parse(JSON.parse(execute('docker', ['inspect', container]).stdout) as unknown)[0]
+    expect(inspection !== undefined, `Unable to inspect migration target ${service}`)
+    expect(
+      inspection.Config.User !== '' && !inspection.Config.User.startsWith('0:'),
+      `${service} is root`,
+    )
+    expect(inspection.HostConfig.ReadonlyRootfs, `${service} target root is writable`)
+    expect(!inspection.HostConfig.Privileged, `${service} target is privileged`)
+    expect(
+      inspection.HostConfig.CapDrop?.includes('ALL') === true,
+      `${service} target does not drop all capabilities`,
+    )
+  }
+}
+
+async function verifyServerMigrationRehearsal(identityPath: string) {
+  const sourcePostgres = `${projectName}-postgres-1`
+  const targetPostgres = `${targetProjectName}-postgres-1`
+  const sourceNetwork = `${projectName}_database`
+  const replicationRole = `phase17_replication_${process.pid}`
+  const replicationSlot = `phase17_slot_${process.pid}`
+  const replicationPassword = `phase17-disposable-replication-${process.pid}`
+  const targetMarker = join(targetRoot, '.tungchiahui-disposable-server-migration-target')
+  const sourceControlPath = join(dataRoot, 'control-state', 'control.db')
+  const targetControlPath = join(targetDataRoot, 'control-state', 'control.db')
+  const snapshotPath = join(workRoot, 'phase17-control-state.snapshot')
+  let sourceStoppedAt = 0
+  let measuredDowntimeMilliseconds = 0
+
+  const actor: ActorIdentity = {
+    capabilities: ['infrastructure-operation:create', 'infrastructure-operation:read'],
+    id: 'operator:phase17-disposable-rehearsal',
+    kind: 'operator',
+  }
+  initializeControlState(sourceControlPath, 'production')
+  const created = createInfrastructureOperation(
+    sourceControlPath,
+    {
+      operationType: 'server-migration',
+      reason: 'Phase 17 disposable same-major server migration rehearsal',
+      target: {
+        action: 'planned-migration',
+        inventoryHost: 'phase17-nonproduction-target',
+      },
+    },
+    actor,
+    `phase17-disposable-rehearsal-${process.pid}`,
+  ).operation
+  const claimed = claimNextInfrastructureOperation(
+    sourceControlPath,
+    'deploy-agent:server-migration',
+    3_600,
+    new Date(),
+    ['server-migration'],
+  )
+  expect(claimed?.id === created.id, 'Server migration operation was not claimed')
+  if (!claimed) throw new Error('Server migration operation was not claimed')
+  const lease = {
+    fencingToken: claimed.fencingToken,
+    leaseOwner: 'deploy-agent:server-migration',
+  }
+  const running = startInfrastructureOperation(sourceControlPath, claimed.id, lease)
+
+  const platform: ServerMigrationPlatform = {
+    abortBeforePromotion: async () => {
+      targetCompose(['--profile', 'deployment', 'down', '--volumes', '--remove-orphans'], true)
+      if (sourceStoppedAt > 0) compose(['start', 'postgres'], true)
+    },
+    cutoverOrigin: async (inventoryHost) => {
+      expect(inventoryHost === 'phase17-nonproduction-target', 'Origin cutover target drifted')
+      return { originHostname: 'ddns.tungchiahui.cn' }
+    },
+    deployCandidateAndSmoke: async () => {
+      targetCompose(['up', '--detach', '--wait'])
+      const targetPort = String(input.PHASE17_TARGET_ORIGIN_PORT)
+      for (const path of [
+        '/api/health',
+        '/api/ready',
+        '/',
+        '/blog/phase-3-seed',
+        '/zh-cn/search?q=ROS2_Control',
+        '/docs/ros2/core/index.html',
+      ]) {
+        curl([`https://127.0.0.1:${targetPort}${path}`], 200)
+      }
+      const version = z
+        .object({ gitSha: z.string().regex(/^[a-f0-9]{40}$/) })
+        .passthrough()
+        .parse(
+          JSON.parse(
+            execute('curl', [
+              '--insecure',
+              '--noproxy',
+              '*',
+              '--silent',
+              `https://127.0.0.1:${targetPort}/api/version`,
+            ]).stdout,
+          ) as unknown,
+        )
+      return { candidateSha: version.gitSha, smokePassed: true }
+    },
+    openNonWritingRollbackWindow: async () => {
+      const sourceState = z
+        .array(z.object({ State: z.object({ Running: z.boolean() }) }))
+        .parse(JSON.parse(execute('docker', ['inspect', sourcePostgres]).stdout) as unknown)[0]
+      expect(sourceState?.State.Running === false, 'Old PostgreSQL source is still writing')
+      psql(
+        targetPostgres,
+        "INSERT INTO app.phase17_migration_probe(note) VALUES ('promoted-write')",
+      )
+      expect(
+        psql(
+          targetPostgres,
+          "SELECT count(*) FROM app.phase17_migration_probe WHERE note = 'promoted-write'",
+        ) === '1',
+        'Promoted target does not accept writes',
+      )
+      return { sourceWriting: false }
+    },
+    preparePhysicalReplication: async () => {
+      execute('docker', [
+        'exec',
+        sourcePostgres,
+        '/bin/sh',
+        '-c',
+        `printf '%s\\n' 'host replication ${replicationRole} all scram-sha-256' >> /var/lib/postgresql/18/docker/pg_hba.conf`,
+      ])
+      psql(sourcePostgres, 'SELECT pg_reload_conf()')
+      psql(sourcePostgres, `DROP ROLE IF EXISTS ${replicationRole}`)
+      psql(
+        sourcePostgres,
+        `CREATE ROLE ${replicationRole} LOGIN REPLICATION PASSWORD '${replicationPassword}'`,
+      )
+      psql(
+        sourcePostgres,
+        `CREATE TABLE IF NOT EXISTS app.phase17_migration_probe (
+          id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+          note text NOT NULL UNIQUE
+        ); TRUNCATE app.phase17_migration_probe RESTART IDENTITY;
+        INSERT INTO app.phase17_migration_probe(note) VALUES ('base-backup-row');`,
+      )
+      writeFileSync(targetMarker, 'phase17-disposable-target\n')
+      expect(
+        readFileSync(targetMarker, 'utf8').trim() === 'phase17-disposable-target',
+        'Migration target marker is missing',
+      )
+      targetCompose(['--profile', 'deployment', 'down', '--remove-orphans'])
+      execute('docker', [
+        'run',
+        '--rm',
+        '--user',
+        '0:0',
+        '--entrypoint',
+        '/bin/sh',
+        '--mount',
+        `type=bind,source=${join(targetDataRoot, 'postgres')},target=/phase17-target`,
+        postgresImage,
+        '-c',
+        'find /phase17-target -mindepth 1 -delete',
+      ])
+      execute('docker', [
+        'run',
+        '--rm',
+        '--network',
+        sourceNetwork,
+        '--env',
+        `PGPASSWORD=${replicationPassword}`,
+        '--mount',
+        `type=bind,source=${join(targetDataRoot, 'postgres')},target=/var/lib/postgresql`,
+        postgresImage,
+        'pg_basebackup',
+        '--host',
+        sourcePostgres,
+        '--username',
+        replicationRole,
+        '--pgdata',
+        '/var/lib/postgresql/18/docker',
+        '--format=plain',
+        '--wal-method=stream',
+        '--write-recovery-conf',
+        '--create-slot',
+        `--slot=${replicationSlot}`,
+        '--checkpoint=fast',
+      ])
+      targetCompose(['create', 'postgres'])
+      execute('docker', ['network', 'connect', sourceNetwork, targetPostgres])
+      execute('docker', ['start', targetPostgres])
+      await waitFor('target PostgreSQL streaming recovery', () => {
+        const result = execute(
+          'docker',
+          [
+            'exec',
+            targetPostgres,
+            'psql',
+            '--username',
+            'tungchiahui',
+            '--dbname',
+            'tungchiahui',
+            '--tuples-only',
+            '--no-align',
+            '--command',
+            'SELECT pg_is_in_recovery()',
+          ],
+          { allowFailure: true },
+        )
+        return result.status === 0 && result.stdout.trim() === 't'
+      })
+      psql(sourcePostgres, "INSERT INTO app.phase17_migration_probe(note) VALUES ('streamed-row')")
+      psql(sourcePostgres, 'SELECT pg_switch_wal()')
+      await waitFor(
+        'streamed migration row',
+        () =>
+          psql(
+            targetPostgres,
+            "SELECT count(*) FROM app.phase17_migration_probe WHERE note = 'streamed-row'",
+          ) === '1',
+      )
+      return { postgresMajor: 18, replicationMode: 'physical-streaming' }
+    },
+    promoteTarget: async () => {
+      execute('docker', [
+        'exec',
+        targetPostgres,
+        'pg_ctl',
+        'promote',
+        '--pgdata=/var/lib/postgresql/18/docker',
+        '--wait',
+      ])
+      expect(psql(targetPostgres, 'SELECT pg_is_in_recovery()') === 'f', 'Target was not promoted')
+      const timeline = z.coerce
+        .number()
+        .int()
+        .positive()
+        .parse(psql(targetPostgres, 'SELECT timeline_id FROM pg_control_checkpoint()'))
+      return { promoted: true, timeline }
+    },
+    provisionTarget: async (inventoryHost) => {
+      expect(
+        inventoryHost === 'phase17-nonproduction-target',
+        'Numeric bootstrap address persisted',
+      )
+      runMigrationTargetProvision(identityPath)
+      inspectMigrationTargetHardening()
+      return { idempotent: true, stableIdentity: inventoryHost }
+    },
+    quiesceWritesAndAwaitFinalWal: async () => {
+      psql(sourcePostgres, "INSERT INTO app.phase17_migration_probe(note) VALUES ('final-wal-row')")
+      psql(sourcePostgres, 'SELECT pg_switch_wal()')
+      const finalWalLsn = psql(sourcePostgres, 'SELECT pg_current_wal_lsn()')
+      await waitFor('final WAL replay', () => {
+        const caughtUp = psql(
+          targetPostgres,
+          `SELECT pg_last_wal_replay_lsn() >= '${finalWalLsn}'::pg_lsn`,
+        )
+        return caughtUp === 't'
+      })
+      sourceStoppedAt = performance.now()
+      compose(['stop', 'postgres'])
+      return { finalWalLsn, lagBytes: 0, sourceWriting: false }
+    },
+    reconnectApplication: async () => {
+      curl([`https://127.0.0.1:${String(input.PHASE17_TARGET_ORIGIN_PORT)}/api/ready`], 200)
+      measuredDowntimeMilliseconds = performance.now() - sourceStoppedAt
+      targetCompose(['start', 'control-api', 'deploy-agent'])
+      return { ready: true }
+    },
+    transferControlState: async () => {
+      targetCompose(['stop', 'deploy-agent', 'control-api'])
+      const sourceEvidence = createConsistentControlStateSnapshot(sourceControlPath, snapshotPath)
+      const restored = restoreControlStateSnapshot(snapshotPath, targetControlPath, 'production')
+      execute('chown', ['10002:10050', targetControlPath])
+      execute('chmod', ['0660', targetControlPath])
+      expect(
+        restored.auditDigest === sourceEvidence.auditDigest,
+        'Control-state audit digest drifted',
+      )
+      expect(
+        JSON.stringify(readDeploymentState(targetControlPath)) ===
+          JSON.stringify(readDeploymentState(sourceControlPath)),
+        'Active/previous release state drifted during transfer',
+      )
+      const transferred = getInfrastructureOperation(targetControlPath, running.id)
+      expect(
+        transferred?.phase === 'final-wal-confirmed' && transferred.leaseOwner === lease.leaseOwner,
+        'Migration operation phase or lease did not survive transfer',
+      )
+      return {
+        auditDigest: restored.auditDigest,
+        operationPhase: transferred.phase,
+        schemaVersion: restored.schemaVersion,
+      }
+    },
+    verifyPostSwitch: async () => {
+      const port = String(input.PHASE17_TARGET_ORIGIN_PORT)
+      const stableUrl = `https://ddns.tungchiahui.cn:${port}`
+      for (const path of ['/api/health', '/api/ready', '/', '/blog/phase-3-seed']) {
+        const result = execute('curl', [
+          '--cacert',
+          certificatePath,
+          '--ipv6',
+          '--noproxy',
+          '*',
+          '--resolve',
+          `ddns.tungchiahui.cn:${port}:[::1]`,
+          '--silent',
+          '--show-error',
+          '--output',
+          '/dev/null',
+          '--write-out',
+          '%{http_code}',
+          `${stableUrl}${path}`,
+        ])
+        expect(result.stdout === '200', `AAAA-only post-switch probe failed for ${path}`)
+      }
+      expect(
+        psql(targetPostgres, 'SELECT count(*) FROM app.phase17_migration_probe') === '3',
+        'Promoted target lost a migration probe row',
+      )
+      return {
+        downtimeMilliseconds: Number(measuredDowntimeMilliseconds.toFixed(2)),
+        ipv6Only: true,
+        noDataLoss: true,
+        publicLikeSmokePassed: true,
+      }
+    },
+    verifyReadinessAndAbortCriteria: async () => {
+      execute('docker', [
+        'exec',
+        sourcePostgres,
+        'pgbackrest',
+        '--config=/etc/pgbackrest/pgbackrest.conf',
+        '--stanza=tungchiahui',
+        'check',
+      ])
+      const lagBytes = z.coerce
+        .number()
+        .nonnegative()
+        .parse(
+          psql(
+            sourcePostgres,
+            `SELECT COALESCE(pg_wal_lsn_diff(pg_current_wal_lsn(), replay_lsn), 0)
+             FROM pg_stat_replication WHERE application_name = 'walreceiver'`,
+          ) || '0',
+        )
+      expect(psql(targetPostgres, 'SELECT pg_is_in_recovery()') === 't', 'Target is not a standby')
+      return {
+        backupFresh: true,
+        lagBytes,
+        replicationHealthy: true,
+        storageReady: true,
+        targetReady: true,
+      }
+    },
+  }
+
+  try {
+    await executeServerMigrationOperation(running, lease, platform, {
+      controlStatePath: sourceControlPath,
+    })
+    const finished = finishInfrastructureOperation(sourceControlPath, running.id, lease, {
+      phase: 'migration-verified',
+      status: 'completed',
+    })
+    expect(finished.status === 'completed', 'Server migration operation did not complete')
+
+    targetCompose(['stop', 'deploy-agent', 'control-api'])
+    createConsistentControlStateSnapshot(sourceControlPath, snapshotPath)
+    restoreControlStateSnapshot(snapshotPath, targetControlPath, 'production')
+    execute('chown', ['10002:10050', targetControlPath])
+    execute('chmod', ['0660', targetControlPath])
+    targetCompose(['start', 'control-api', 'deploy-agent'])
+    expect(
+      getInfrastructureOperation(targetControlPath, running.id)?.status === 'completed',
+      'Completed migration operation did not survive final control-state reconciliation',
+    )
+    expect(
+      inspectControlStateSnapshot(targetControlPath).integrity === 'ok',
+      'Target state is corrupt',
+    )
+    const auditEvents = listControlAuditEvents(targetControlPath, running.id)
+    expect(
+      auditEvents.some((event) => event.eventType === 'infrastructure_operation_finished'),
+      'Migration completion audit did not survive transfer',
+    )
+    return Object.freeze({
+      auditContinuity: 'pass',
+      controlStateTransfer: 'pass',
+      measuredDowntimeMilliseconds: Number(measuredDowntimeMilliseconds.toFixed(2)),
+      noDataLoss: 'pass',
+      physicalStreamingReplication: 'pass',
+      promotion: 'pass',
+      rollbackWindow: 'old-host-non-writing',
+      targetProvisionIdempotency: 'pass',
+      targetStableIdentity: 'phase17-nonproduction-target',
+      targetIpv6OnlyPublicLikeProbe: 'pass',
+    })
+  } catch (error: unknown) {
+    finishInfrastructureOperation(sourceControlPath, running.id, lease, {
+      errorSummary: error instanceof Error ? error.message : 'unknown migration rehearsal failure',
+      phase: 'migration-failed',
+      status: 'failed',
+    })
+    throw error
+  }
+}
+
 async function main() {
   const encrypted = createEncryptedSecret()
   try {
@@ -1231,6 +1825,7 @@ async function main() {
     await verifyBlueGreenDeployment()
     await verifyRoutingAndIpFamilies()
     await verifySecurityAndLoad()
+    const migrationReadiness = await verifyServerMigrationRehearsal(encrypted.identityPath)
     verifyNoSecretLeakage(encrypted.secretSentinels)
     console.log(
       JSON.stringify({
@@ -1244,6 +1839,7 @@ async function main() {
         noRebuildRollback: 'pass',
         registryDigestPull: 'pass',
         openRestyValidationAndReload: 'pass',
+        ...migrationReadiness,
         postgresDownDeploymentDependency: 'pass',
         postgresDownControlRoute: 'pass',
         productionTraffic: false,
@@ -1261,6 +1857,7 @@ async function main() {
     console.error(diagnostics.stderr)
     throw error
   } finally {
+    targetCompose(['--profile', 'deployment', 'down', '--volumes', '--remove-orphans'], true)
     compose(['--profile', 'deployment', 'down', '--volumes', '--remove-orphans'], true)
     execute('docker', ['rm', '--force', registryContainer], { allowFailure: true })
     execute(

@@ -463,7 +463,11 @@ async function run() {
     )
     console.log(`Disposable infrastructure and public E2E: PASS (${projectName})`)
   } catch (error: unknown) {
-    if (stackStarted) compose.logs('web')
+    if (stackStarted) {
+      compose.logs('web')
+      compose.logs('control-api')
+      compose.logs('openresty')
+    }
     throw error
   } finally {
     if (stackStarted) {

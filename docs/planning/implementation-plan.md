@@ -1,7 +1,7 @@
 # Website V2 分阶段实施计划
 
-> Status: In progress — Phase 0–16 complete
-> Current Phase: Awaiting Owner authorization for Phase 17
+> Status: In progress — Phase 0–17 complete
+> Current Phase: Awaiting Owner authorization for Phase 18
 > Execution Model: Hard-gated, one Phase at a time
 > Scope: 从新的 Next.js V2 Repository 基线推进到替换旧 Nuxt Production Site
 
@@ -26,7 +26,7 @@
 - [x] Phase 14 — Shared Deployment Engine 与 Full Blue-Green
 - [x] Phase 15 — GitHub Actions OIDC 与 `main` 自动部署
 - [x] Phase 16 — Observability、Security 与 Production Readiness
-- [ ] Phase 17 — Planned PostgreSQL / Server Migration Readiness
+- [x] Phase 17 — Planned PostgreSQL / Server Migration Readiness
 - [ ] Phase 18 — Final Legacy Audit、Production Cutover 与 Rollback Window
 
 ## 使用方法与硬性执行协议
@@ -83,7 +83,7 @@ Phase 10 在 Phase 8 后可与 Phase 9 技术并行；Phase 11 在 Phase 6 后�
 - Operator Authentication：优先采用规范中的非对称 Request Signing；若采用成熟等效机制且改变架构契约，先提交 ADR 给 Owner。
 - pgBackRest Repository Path：必须通过 AList Compatibility Test 决定 Direct S3 或 Local Repository + Verified Sync，不按整洁偏好选择。
 - RPO/RTO：只能在获得真实 Backup/WAL Measurement 后确定。
-- Cross-major PostgreSQL Migration：在执行 Phase 17 时按当期官方支持选择 Logical Replication 或明确的成熟方法；若改变 ADR 0009 的边界，新增 ADR。
+- Cross-major PostgreSQL Migration：Phase 17 已按 PostgreSQL 18 官方支持确认 Logical Replication 为 Near-zero 默认候选、`pg_upgrade` 为明确 Maintenance Model；Physical Streaming 不跨 Major。ADR 0009 边界未改变；实际升级前仍须按当时 Target Release 复核。
 
 任何后续发现的冲突按“最新 Accepted ADR > Architecture > Specification > Operations/Development Guide”处理，但 Agent 必须先报告并等待 Owner，不得直接改写历史 ADR。
 
@@ -1494,16 +1494,16 @@ Deployment Engine 已在 Production-like 环境证明安全，才能让 CI 只�
 
 ### Task Checklist
 
-- [ ] 使用 Ansible 在新的非生产 Host 从 Code/Encrypted Secret 完成 Provision。
-- [ ] 建立稳定 Inventory/SSH Identity；Bootstrap Numeric Address 不进入 Durable Config。
-- [ ] 实现/验证 Same-major PostgreSQL Physical Streaming Replication、Lag、Final WAL 和 Controlled Promotion。
-- [ ] 实现 `./site migrate-server <inventory-hostname-or-alias>` Orchestration 与 Audit。
-- [ ] 在 Target 部署 Application Candidate，执行 Local-to-target Health/Ready/Smoke。
-- [ ] 迁移或明确重建 Control-state SQLite，验证 Active/Previous SHA、Lease、Operation Phase 和 Audit Continuity。
-- [ ] 实现 DDNS/Origin Hostname Cutover 与 Public Post-switch Test，不硬编码数字 IP。
-- [ ] 演练 AAAA-only Target，确认 App/CI/CLI 无需修改。
-- [ ] 记录 Replication/Readiness/Backup/Storage/Smoke Abort Criteria 和 Old-host Non-writing Rollback Window。
-- [ ] 为 Cross-major 场景记录当期支持的 Logical Replication/Upgrade Decision；若超出 ADR 0009，先新增 ADR。
+- [x] 使用 Ansible 在新的非生产 Host 从 Code/Encrypted Secret 完成 Provision。
+- [x] 建立稳定 Inventory/SSH Identity；Bootstrap Numeric Address 不进入 Durable Config。
+- [x] 实现/验证 Same-major PostgreSQL Physical Streaming Replication、Lag、Final WAL 和 Controlled Promotion。
+- [x] 实现 `./site migrate-server <inventory-hostname-or-alias>` Orchestration 与 Audit。
+- [x] 在 Target 部署 Application Candidate，执行 Local-to-target Health/Ready/Smoke。
+- [x] 迁移或明确重建 Control-state SQLite，验证 Active/Previous SHA、Lease、Operation Phase 和 Audit Continuity。
+- [x] 实现 DDNS/Origin Hostname Cutover 与 Public Post-switch Test，不硬编码数字 IP。
+- [x] 演练 AAAA-only Target，确认 App/CI/CLI 无需修改。
+- [x] 记录 Replication/Readiness/Backup/Storage/Smoke Abort Criteria 和 Old-host Non-writing Rollback Window。
+- [x] 为 Cross-major 场景记录当期支持的 Logical Replication/Upgrade Decision；若超出 ADR 0009，先新增 ADR。
 
 ### 本 Phase 明确不做什么
 
@@ -1513,25 +1513,25 @@ Deployment Engine 已在 Production-like 环境证明安全，才能让 CI 只�
 
 ### Tests / Verification
 
-- [ ] Provision Idempotency 与 Target Hardening Test 通过。
-- [ ] Physical Replication Catch-up、Write Quiesce、Promotion、App Reconnect 和 Public-like Cutover 通过。
-- [ ] Abort Criteria 在 Promotion 前能安全停止；Rollback Target 保持 Non-writing/可控。
-- [ ] Control-state Transfer/Reconcile 与 Recovery Operation Continuity 通过。
-- [ ] IPv6-only Origin Test 通过且没有应用/Workflow 配置变化。
-- [ ] Cross-major Runbook 引用当期官方支持证据，不假设 Physical Replication。
+- [x] Provision Idempotency 与 Target Hardening Test 通过。
+- [x] Physical Replication Catch-up、Write Quiesce、Promotion、App Reconnect 和 Public-like Cutover 通过。
+- [x] Abort Criteria 在 Promotion 前能安全停止；Rollback Target 保持 Non-writing/可控。
+- [x] Control-state Transfer/Reconcile 与 Recovery Operation Continuity 通过。
+- [x] IPv6-only Origin Test 通过且没有应用/Workflow 配置变化。
+- [x] Cross-major Runbook 引用当期官方支持证据，不假设 Physical Replication。
 
 ### Acceptance Criteria
 
-- [ ] 新服务器能从 Version-controlled Infrastructure 重建并接管 Service。
-- [ ] Same-major Planned Migration 达到经测量的 Near-zero Downtime 且 No Data Loss。
-- [ ] Migration 不要求长期 Standby HA 或永久 Public IPv4。
+- [x] 新服务器能从 Version-controlled Infrastructure 重建并接管 Service。
+- [x] Same-major Planned Migration 达到经测量的 Near-zero Downtime 且 No Data Loss。
+- [x] Migration 不要求长期 Standby HA 或永久 Public IPv4。
 
 ### Exit Gate
 
-- [ ] 非生产 Server Migration Rehearsal、Abort/Rollback、Control-state 和 IPv6 Gate 全部通过。
-- [ ] Migration Evidence/Timing/Risk 已向 Owner 报告。
-- [ ] 创建聚焦 Commit，建议：`feat(ops): complete phase 17 migration readiness`。
-- [ ] Commit 后停止并向 Owner 报告，不自动进入 Phase 18。
+- [x] 非生产 Server Migration Rehearsal、Abort/Rollback、Control-state 和 IPv6 Gate 全部通过。
+- [x] Migration Evidence/Timing/Risk 已向 Owner 报告。
+- [x] 创建聚焦 Commit：`feat(ops): complete phase 17 migration readiness`。
+- [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 18。
 
 ### 本阶段完成后形成的 Artifact / Capability
 
