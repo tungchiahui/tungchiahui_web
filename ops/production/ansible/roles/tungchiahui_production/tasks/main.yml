@@ -4,11 +4,14 @@
     that:
       - ansible_host is match('^[A-Za-z][A-Za-z0-9._-]*$')
       - ansible_host is not match('^[0-9.]+$')
+      - tungchiahui_deployment_article_path is match('^/.+')
+      - tungchiahui_deployment_asset_path is match('^/.+')
       - tungchiahui_deployment_sha is match('^[a-f0-9]{40}$')
       - tungchiahui_deployment_sha != '0000000000000000000000000000000000000000'
       - tungchiahui_deployment_backup_max_age_seconds | int > 0
       - tungchiahui_deployment_stabilization_seconds | int >= 0
       - tungchiahui_deployment_image_repository is match('^[a-z0-9.-]+(?::[0-9]{2,5})?/[a-z0-9._/-]+$')
+      - tungchiahui_deployment_search_query | trim | length > 0
       - tungchiahui_control_rate_limit_per_minute | int > 0
       - tungchiahui_control_rate_limit_per_minute | int <= 10000
       - tungchiahui_origin_bind_address in ['127.0.0.1', '::1']
@@ -189,12 +192,15 @@
       TUNGCHIAHUI_CONTENT_POLLING_ENABLED: "{{ tungchiahui_content_polling_enabled }}"
       TUNGCHIAHUI_CONTROL_RATE_LIMIT_PER_MINUTE: "{{ tungchiahui_control_rate_limit_per_minute }}"
       TUNGCHIAHUI_DATA_ROOT: "{{ tungchiahui_data_root }}"
+      TUNGCHIAHUI_DEPLOYMENT_ARTICLE_PATH: "{{ tungchiahui_deployment_article_path }}"
+      TUNGCHIAHUI_DEPLOYMENT_ASSET_PATH: "{{ tungchiahui_deployment_asset_path }}"
       TUNGCHIAHUI_BLUE_CONTAINER_NAME: "{{ tungchiahui_compose_project_name }}-web-blue-1"
       TUNGCHIAHUI_BLUE_DEPLOYMENT_SHA: "{{ tungchiahui_deployment_sha }}"
       TUNGCHIAHUI_DOCKER_SOCKET_GID: "{{ tungchiahui_docker_socket.stat.gid }}"
       TUNGCHIAHUI_DEPLOYMENT_BACKUP_MAX_AGE_SECONDS: "{{ tungchiahui_deployment_backup_max_age_seconds }}"
       TUNGCHIAHUI_DEPLOYMENT_STABILIZATION_SECONDS: "{{ tungchiahui_deployment_stabilization_seconds }}"
       TUNGCHIAHUI_DEPLOYMENT_IMAGE_REPOSITORY: "{{ tungchiahui_deployment_image_repository }}"
+      TUNGCHIAHUI_DEPLOYMENT_SEARCH_QUERY: "{{ tungchiahui_deployment_search_query }}"
       TUNGCHIAHUI_GREEN_CONTAINER_NAME: "{{ tungchiahui_compose_project_name }}-web-green-1"
       TUNGCHIAHUI_GREEN_DEPLOYMENT_SHA: "{{ tungchiahui_deployment_sha }}"
       TUNGCHIAHUI_MIGRATION_CONTAINER_NAME: "{{ tungchiahui_compose_project_name }}-database-migrate-1"

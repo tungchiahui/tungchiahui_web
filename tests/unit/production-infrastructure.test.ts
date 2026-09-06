@@ -131,6 +131,16 @@ describe('Phase 12 production foundation policy', () => {
     expect(inventorySource).toContain('ansible_user: tungchiahui')
     expect(inventorySource).not.toMatch(/ansible_host:\s*(?:\d{1,3}\.){3}\d{1,3}/)
     expect(composeSource).not.toContain('S3_CONTRACT_')
+    expect(composeSource).toContain(
+      'DEPLOYMENT_ARTICLE_PATH: ${TUNGCHIAHUI_DEPLOYMENT_ARTICLE_PATH:',
+    )
+    expect(composeSource).toContain('DEPLOYMENT_ASSET_PATH: ${TUNGCHIAHUI_DEPLOYMENT_ASSET_PATH:')
+    expect(composeSource).toContain(
+      'DEPLOYMENT_SEARCH_QUERY: ${TUNGCHIAHUI_DEPLOYMENT_SEARCH_QUERY:',
+    )
+    expect(productionRoleSource).toContain('TUNGCHIAHUI_DEPLOYMENT_ARTICLE_PATH')
+    expect(productionRoleSource).toContain('TUNGCHIAHUI_DEPLOYMENT_ASSET_PATH')
+    expect(productionRoleSource).toContain('TUNGCHIAHUI_DEPLOYMENT_SEARCH_QUERY')
     expect(productionRoleSource).toContain('replica: offsite-backup-s3')
     expect(productionRoleSource).not.toContain('primary-s3-and-r2')
   })

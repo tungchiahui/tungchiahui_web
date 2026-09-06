@@ -4,8 +4,11 @@ tungchiahui_config_root: /etc/tungchiahui
 tungchiahui_content_polling_enabled: "false"
 tungchiahui_control_rate_limit_per_minute: "120"
 tungchiahui_data_root: /var/lib/tungchiahui
+tungchiahui_deployment_article_path: /blog/2026-09-02-wm-lun-wen-luo-lie
+tungchiahui_deployment_asset_path: /docs/ros2/core/index.html
 tungchiahui_deployment_sha: ""
 tungchiahui_deployment_backup_max_age_seconds: ""
+tungchiahui_deployment_search_query: ROS2_Control
 tungchiahui_deployment_stabilization_seconds: ""
 tungchiahui_deployment_image_repository: ghcr.io/tungchiahui/tungchiahui_web
 tungchiahui_install_packages: true
