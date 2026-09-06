@@ -33,7 +33,7 @@ jobs:
       github.event.workflow_run.head_repository.full_name == github.repository) ||
       github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     permissions:
       actions: read
       contents: read
@@ -43,6 +43,9 @@ jobs:
       image_digest: ${{ steps.publish.outputs.image_digest }}
     env:
       IMAGE_REPOSITORY: ghcr.io/tungchiahui/tungchiahui_web
+      POSTGRES_IMAGE_REPOSITORY: ghcr.io/tungchiahui/tungchiahui_web-postgres
+      RECOVERY_IMAGE_REPOSITORY: ghcr.io/tungchiahui/tungchiahui_web-recovery
+      SERVICE_IMAGE_REPOSITORY: ghcr.io/tungchiahui/tungchiahui_web-service
     steps:
       - name: Resolve a Quality-Gate-approved main release
         id: release
@@ -79,19 +82,29 @@ jobs:
           GHCR_TOKEN: ${{ github.token }}
         run: echo "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
 
-      - name: Build and publish the Git-SHA image
+      - name: Build and publish the Git-SHA image set
         id: publish
         env:
           RELEASE_SHA: ${{ steps.release.outputs.git_sha }}
         shell: bash
         run: |
+          publish_image() {
+            repository="$1"
+            dockerfile="$2"
+            image_tag="$repository:$RELEASE_SHA"
+            docker build \
+              --build-arg "SITE_DEPLOYMENT_SHA=$RELEASE_SHA" \
+              --file "$dockerfile" \
+              --tag "$image_tag" \
+              .
+            docker push "$image_tag"
+          }
+          publish_image "$POSTGRES_IMAGE_REPOSITORY" ops/production/images/postgres.Dockerfile
+          publish_image "$RECOVERY_IMAGE_REPOSITORY" ops/production/images/recovery.Dockerfile
+          publish_image "$SERVICE_IMAGE_REPOSITORY" ops/production/images/services.Dockerfile
+          publish_image "$IMAGE_REPOSITORY" ops/production/images/web.Dockerfile
+
           image_tag="$IMAGE_REPOSITORY:$RELEASE_SHA"
-          docker build \
-            --build-arg "SITE_DEPLOYMENT_SHA=$RELEASE_SHA" \
-            --file ops/production/images/web.Dockerfile \
-            --tag "$image_tag" \
-            .
-          docker push "$image_tag"
           repository_digest="$(docker image inspect --format '{{index .RepoDigests 0}}' "$image_tag")"
           [[ "$repository_digest" == "$IMAGE_REPOSITORY@sha256:"* ]]
           image_digest="${repository_digest#*@}"
@@ -101,6 +114,7 @@ jobs:
   deploy:
     name: shared-control-plane-deployment
     needs: build
+    if: vars.PRODUCTION_DEPLOYMENT_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: production

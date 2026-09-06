@@ -2,6 +2,10 @@ import { createContentSync } from './content/control-client'
 import { createDeployment, createRollback, readDeploymentStatus } from './deployment/control-client'
 import { resetDevelopmentStack, startDevelopmentStack, stopDevelopmentStack } from './dev/runtime'
 import {
+  initializeProductionSecrets,
+  validateProductionSecrets,
+} from './production/initialize-secrets'
+import {
   createBackup,
   createBreakGlassRestore,
   createRestore,
@@ -38,6 +42,12 @@ Deployment:
   status
   deploy [git-sha] [--image-digest sha256:<digest>] [--reason <text>]
   rollback [--reason <text>]
+
+Production setup:
+  production secrets init
+            Generate internal credentials and an encrypted SOPS template without plaintext files
+  production secrets validate
+            Decrypt in memory and reject missing sections or unfilled placeholders
 
 Server lifecycle:
   provision <inventory-hostname-or-alias> [--reason <text>]
@@ -97,6 +107,12 @@ async function main() {
       return 0
     case 'help':
       console.log(usage)
+      return 0
+    case 'production-secrets-init':
+      initializeProductionSecrets()
+      return 0
+    case 'production-secrets-validate':
+      validateProductionSecrets()
       return 0
     case 'rollback-create': {
       console.log(JSON.stringify(await createRollback(command.reason), null, 2))

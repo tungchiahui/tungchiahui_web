@@ -99,7 +99,7 @@ Website V2 在满足以下标准之前，不视为 Production-ready。
 - [ ] WAL Archive Health 被监控。
 - [ ] Restore Drill 能恢复到 Disposable Database。
 - [ ] Restore 后 Integrity Check 通过。
-- [ ] R2 Replica 独立于 Primary Backup Location 存在。
+- [ ] Off-site Backup S3 独立于 Asset Store，且可从其完整重建 pgBackRest Repository 与 Control-state。
 - [ ] Production PostgreSQL 不可用时，`./site restore` 仍能创建、查询并推进 Recovery Operation。
 - [ ] Deploy/Rollback/Restore/Recovery State 独立于 Production PostgreSQL。
 - [ ] Control-state SQLite 使用 Transaction、WAL/同步落盘、Lock/Lease、Crash Recovery 和版本化 Schema。

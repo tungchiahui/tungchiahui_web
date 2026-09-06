@@ -106,8 +106,12 @@ describe('Phase 12 production foundation policy', () => {
     }
   })
 
-  it('routes by service DNS and keeps the origin domain-addressed and dual-stack', () => {
-    expect(openRestySource).toContain('listen [::]:8443 ssl ipv6only=off;')
+  it('routes by service DNS behind a loopback-only shared-host ingress', () => {
+    expect(openRestySource).toContain('listen 8082;')
+    expect(openRestySource).toContain('listen [::]:8082;')
+    expect(openRestySource).not.toContain('ssl_certificate')
+    expect(composeSource).toMatch(/host_ip: "\$\{TUNGCHIAHUI_ORIGIN_BIND_ADDRESS:-127\.0\.0\.1\}"/)
+    expect(composeSource).toMatch(/published: "\$\{TUNGCHIAHUI_ORIGIN_PORT:-3100\}"/)
     expect(openRestySource).toContain('server_name www.tungchiahui.cn ddns.tungchiahui.cn;')
     expect(openRestySource).toContain('location ^~ /api/ops/')
     expect(openRestySource).toContain('set $control_upstream control-api:8080;')
@@ -119,7 +123,8 @@ describe('Phase 12 production foundation policy', () => {
     expect(openRestySource).toContain('Strict-Transport-Security')
     expect(openRestySource).toContain('Content-Security-Policy')
     expect(openRestySource).toContain('location ^~ /api/internal/')
-    expect(inventorySource).toContain('ansible_host: tungchiahui-production-origin')
+    expect(inventorySource).toContain('ansible_host: Debian')
+    expect(inventorySource).toContain('ansible_user: tungchiahui')
     expect(inventorySource).not.toMatch(/ansible_host:\s*(?:\d{1,3}\.){3}\d{1,3}/)
     expect(composeSource).not.toContain('S3_CONTRACT_')
   })

@@ -28,6 +28,8 @@ export type SiteCommand =
   | Readonly<{ kind: 'dev-start' }>
   | Readonly<{ kind: 'dev-stop' }>
   | Readonly<{ kind: 'help' }>
+  | Readonly<{ kind: 'production-secrets-init' }>
+  | Readonly<{ kind: 'production-secrets-validate' }>
   | Readonly<{
       action: 'planned-migration' | 'provision-only'
       inventoryHost: string
@@ -68,6 +70,24 @@ export function assertToolchain(nodeVersion: string) {
 export function parseSiteCommand(arguments_: readonly string[]): SiteCommand {
   if (arguments_.length === 0) {
     return Object.freeze({ kind: 'help' })
+  }
+
+  if (
+    arguments_.length === 3 &&
+    arguments_[0] === 'production' &&
+    arguments_[1] === 'secrets' &&
+    arguments_[2] === 'init'
+  ) {
+    return Object.freeze({ kind: 'production-secrets-init' })
+  }
+
+  if (
+    arguments_.length === 3 &&
+    arguments_[0] === 'production' &&
+    arguments_[1] === 'secrets' &&
+    arguments_[2] === 'validate'
+  ) {
+    return Object.freeze({ kind: 'production-secrets-validate' })
   }
 
   if (arguments_[0] === 'deploy') {

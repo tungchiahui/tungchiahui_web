@@ -2,7 +2,7 @@
 
 ## Scope and safety boundary
 
-Phase 13 implements PostgreSQL backup, WAL/PITR, independent replicas, control-state recovery and a PostgreSQL-independent restore control path. It does not deploy to Production, run a destructive Production restore, contact the real AList/R2 targets, modify the legacy Nuxt repository, or implement Phase 14 blue-green deployment.
+Phase 13 implements PostgreSQL backup, WAL/PITR, an off-site replica, control-state recovery and a PostgreSQL-independent restore control path. ADR 0017 later simplified the original dual-remote topology to the single provider-neutral `BACKUP_S3_*` target described here. It does not deploy to Production, run a destructive Production restore, contact the real AList/R2 targets, modify the legacy Nuxt repository, or implement Phase 14 blue-green deployment.
 
 All destructive automated verification runs against a disposable PostgreSQL 18 data directory bearing an explicit `.tungchiahui-disposable-recovery-target` marker. Production restore additionally requires the exact `/var/lib/postgresql/18/docker` target and `RESTORE-PRODUCTION` confirmation.
 
@@ -16,11 +16,10 @@ Phase 13 therefore selects:
 PostgreSQL 18 + WAL archive
   -> encrypted pgBackRest 2.59.1 local repository
   -> immutable generation manifest + per-entry SHA-256
-  -> primary BACKUP_S3_* replica (AList in Production)
-  -> independent BACKUP_R2_* off-site replica
+  -> off-site BACKUP_S3_* replica (R2 in Production)
 ```
 
-Each generation captures regular files and pgBackRest relative symbolic links. Upload is followed by manifest, object-count and full streaming checksum verification. A backup record is valid only when pgBackRest `check`/`verify` and both independent replica read-backs pass. Restore always materializes the selected verified generation from R2, then invokes pgBackRest by backup set or timestamp.
+Each generation captures regular files and pgBackRest relative symbolic links. Upload is followed by manifest, object-count and full streaming checksum verification. A backup record is valid only when pgBackRest `check`/`verify` and the off-site replica read-back pass. Restore always materializes the selected verified generation from the configured Backup S3, then invokes pgBackRest by backup set or timestamp.
 
 The Production policy retains two full and four differential backups plus WAL for two full ranges. Full, differential and incremental execution all use the same engine and record Backup ID/type, start/completion, bytes, seconds, WAL maximum, repository generation, manifest hash and both replica states in host-local SQLite.
 
@@ -28,7 +27,7 @@ The Production policy retains two full and four differential backups plus WAL fo
 
 `./site backup`, `backup status` and `restore` use the signed independent Control API. Backup and restore requests become Version 4 SQLite infrastructure operations; `deploy-agent` claims only `recovery`/`restore` types with the existing transaction, lease and fencing model. Phase 14 deploy/rollback operations remain unimplemented and unclaimed.
 
-For a restore, the agent validates the runtime/control-state/request Environment, verified R2 record and manifest, confirms PostgreSQL is stopped, reconstructs and verifies the repository, validates the destructive target, clears only its contents, and runs pgBackRest. Errors are recorded as failed audited operations without marking unverified backups valid.
+For a restore, the agent validates the runtime/control-state/request Environment, verified Off-site record and manifest, confirms PostgreSQL is stopped, reconstructs and verifies the repository, validates the destructive target, clears only its contents, and runs pgBackRest. Errors are recorded as failed audited operations without marking unverified backups valid.
 
 If the Control API is unavailable, the CLI's explicit `--break-glass --inventory-host <stable-alias>` path invokes the recovery authorization entrypoint inside the same deploy-agent image. It writes `break_glass_restore_authorized` and the normal restore operation into the same SQLite state. It does not run a parallel restore script or accept a numeric public IP as durable identity.
 
@@ -36,7 +35,7 @@ If the Control API is unavailable, the CLI's explicit `--break-glass --inventory
 
 The SQLite schema adds recovery backup records while retaining the Phase 4/12 operation, active/previous slot and SHA metadata. A consistent snapshot performs WAL `TRUNCATE` checkpoint and `VACUUM INTO`, then records SQLite integrity, foreign-key status, schema version, environment, operation/audit counts, active/previous slot, current/last SHA and an append-only audit digest.
 
-The snapshot is encrypted with age and independently replicated to the primary backup target and R2. Each replica also receives an immutable snapshot manifest and a read-back-verified per-environment `latest.json`, so complete local control-state loss can discover the newest artifact from R2 without relying on the lost SQLite database. Restore verifies encrypted bytes, decrypts into a temporary file, checks integrity/schema/environment/audit evidence, then atomically replaces the target. The recovery services use a shared group-writable, setgid control-state directory and restrictive `0007` umask so the independent control-api and deploy-agent can safely share SQLite without broad filesystem permissions.
+The snapshot is encrypted with age and replicated to the off-site Backup S3. It also receives an immutable snapshot manifest and a read-back-verified per-environment `latest.json`, so complete local control-state loss can discover the newest artifact without relying on the lost SQLite database. Restore verifies encrypted bytes, decrypts into a temporary file, checks integrity/schema/environment/audit evidence, then atomically replaces the target. The recovery services use a shared group-writable, setgid control-state directory and restrictive `0007` umask so the independent control-api and deploy-agent can safely share SQLite without broad filesystem permissions.
 
 ## Disposable drill
 
@@ -45,11 +44,11 @@ The snapshot is encrypted with age and independently replicated to the primary b
 1. full backup and dual-replica verification;
 2. pre-target application write and WAL switch;
 3. post-target write, differential backup, later write and incremental backup;
-4. PostgreSQL stop and repository reconstruction solely from the R2-role replica;
+4. PostgreSQL stop and repository reconstruction solely from the Off-site replica;
 5. intentional pre-backup PITR rejection after guarded target preparation, followed by marker-authorized deterministic retry;
 6. valid timestamp PITR and PostgreSQL restart;
 7. PostgreSQL major, schema marker and representative application reads, including exclusion of post-target rows;
-8. R2 `latest.json` discovery、encrypted control-state restore and audit-digest comparison;
+8. Off-site `latest.json` discovery、encrypted control-state restore and audit-digest comparison;
 9. deterministic cleanup.
 
 Unit and HTTP gates additionally cover credential independence, repository corruption, target marker/confirmation/environment rejection, PostgreSQL-down create/query/claim, lease recovery, shared break-glass audit and SQLite snapshot integrity.

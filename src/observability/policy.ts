@@ -94,7 +94,7 @@ export const productionAlertRules = Object.freeze(
     },
     {
       component: 'backup',
-      description: 'Backup, WAL, primary replica, R2, or restore drill evidence is stale or failed',
+      description: 'Backup, WAL, off-site replica, or restore drill evidence is stale or failed',
       name: 'RecoveryEvidenceStale',
       runbook: 'docs/operations/runbook.md#backup-wal-r2-or-restore-drill',
       severity: 'critical',

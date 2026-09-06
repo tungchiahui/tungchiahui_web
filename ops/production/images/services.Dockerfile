@@ -29,6 +29,9 @@ RUN mkdir -p /workspace/dist \
   && cp ops/database/runtime-grants.sql deployment/ops/database/runtime-grants.sql
 
 FROM node:24.19.0-alpine3.23@sha256:244cc2b53f46f9e876304391d17682b0ddae9ac33491f4857e25e35a36ba7995 AS runtime
+ARG SITE_DEPLOYMENT_SHA
+LABEL org.opencontainers.image.revision=${SITE_DEPLOYMENT_SHA} \
+  org.opencontainers.image.source="https://github.com/tungchiahui/tungchiahui_web"
 ENV NODE_ENV=production
 
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /opt/yarn-v* \

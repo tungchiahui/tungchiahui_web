@@ -62,7 +62,7 @@ Controlled promotion
 ## 执行 Procedure
 
 1. 确认变更授权、稳定 Target Identity、维护窗口和回退责任人。
-2. 确认最新 Backup 是有效的：pgBackRest/WAL、Primary Replica、R2 Replica 与 Restore Evidence 均满足 Policy。
+2. 确认最新 Backup 是有效的：pgBackRest/WAL、Off-site Replica 与 Restore Evidence 均满足 Policy。
 3. 使用版本化 Ansible、精确 Git SHA/Digest Image 和 SOPS/age Secret Provision Target；连续运行两次，第二次必须 `changed=0`。
 4. 验证 Target Non-root、Read-only Root Filesystem、Drop-all Capability、Storage Ownership、Control-state Directory 和 IPv6 Reachability。
 5. 从 Source PostgreSQL 创建 Physical Base Backup 与 Replication Slot，启动 Target Standby。
@@ -82,7 +82,7 @@ Controlled promotion
 
 下列任一条件不成立都必须停止，Engine 会调用同一 Platform 的 `abortBeforePromotion`，不得强行 Promote：
 
-- Backup 不 Fresh、未经双副本验证或 Restore Evidence 不成立；
+- Backup 不 Fresh、未经 Off-site 完整读回验证或 Restore Evidence 不成立；
 - Replication 不 Healthy，Target 不是 Standby，Lag 不收敛或 Final WAL 不可证明；
 - Target Provision 不幂等、Stable Identity 漂移、Storage/Permission/Secret/Hardening 不一致；
 - Target Health、Ready、Version 或代表性 Application Smoke 失败；

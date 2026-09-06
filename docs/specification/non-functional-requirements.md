@@ -17,7 +17,7 @@
 - WAL Archival
 - PITR Capability
 - Off-host Backup Copy
-- Independent R2 Replica
+- 独立于 Asset Store 的 Off-site Backup S3（当前使用 R2）
 - Reproducible Server Provisioning
 - Independent `control-api` outside Next.js Blue/Green Slots
 - PostgreSQL-independent SQLite Control-plane Recovery State

@@ -36,11 +36,14 @@ RUN apk add --no-cache \
 
 FROM golang:1.25.7-alpine3.23@sha256:f6751d823c26342f9506c03797d2527668d095b0a15f1862cddb4d927a7a4ced AS age-build
 
-ARG AGE_VERSION=1.3.1
+ARG AGE_VERSION=1.3.2
 
 RUN CGO_ENABLED=0 GOBIN=/out go install filippo.io/age/cmd/age@v${AGE_VERSION}
 
 FROM node:24.19.0-alpine3.23@sha256:244cc2b53f46f9e876304391d17682b0ddae9ac33491f4857e25e35a36ba7995 AS runtime
+ARG SITE_DEPLOYMENT_SHA
+LABEL org.opencontainers.image.revision=${SITE_DEPLOYMENT_SHA} \
+  org.opencontainers.image.source="https://github.com/tungchiahui/tungchiahui_web"
 
 RUN apk add --no-cache ca-certificates libbz2 libcrypto3 libpq libssh2 libxml2 lz4-libs zlib zstd-libs \
   && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /opt/yarn-v* \

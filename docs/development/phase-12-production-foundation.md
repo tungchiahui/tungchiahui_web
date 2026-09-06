@@ -7,8 +7,8 @@ origin, changing DNS/EdgeOne, publishing images, cutting traffic, or implementin
 deployment engine. The source of truth is `ops/production`: Ansible, Compose, OpenResty, pinned
 tooling, image definitions and the SOPS secret schema are all version controlled.
 
-The inventory addresses the origin through the stable SSH alias
-`tungchiahui-production-origin`. Persistent application, Ansible and proxy configuration contains no
+The inventory addresses the origin through the Owner's existing stable SSH alias `Debian`.
+Persistent application, Ansible and proxy configuration contains no
 home public numeric IP. OpenResty listens on one dual-stack IPv6 socket with `ipv6only=off`, while
 Docker workloads use service DNS only.
 
@@ -52,8 +52,9 @@ a parallel root-capable service.
 Production input is one SOPS + age encrypted YAML document matching
 `ops/production/secrets/production.sops.yaml.example`. Ansible decrypts on the controller with task
 output suppressed, validates the required fields, and installs separate mode-restricted runtime files
-under `/run/tungchiahui/secrets`. Secret values are absent from build arguments, image layers and
-normal logs.
+under `/etc/tungchiahui/secrets`. The encrypted SOPS document remains the recoverable source while
+the root-owned runtime files persist across host reboot. Secret values are absent from build
+arguments, image layers and normal logs.
 
 The one-shot database bootstrap creates or reconciles four distinct non-superuser login identities
 and grants each exactly one existing NOLOGIN group role: `site_app`, `site_control_api`,

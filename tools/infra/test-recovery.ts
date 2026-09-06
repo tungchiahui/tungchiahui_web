@@ -14,8 +14,7 @@ const input = z
 
 const suffix = `${process.pid}-${Date.now()}`
 const postgresName = `phase13-postgres-${suffix}`
-const primaryName = `phase13-primary-s3-${suffix}`
-const r2Name = `phase13-r2-s3-${suffix}`
+const backupName = `phase13-offsite-s3-${suffix}`
 const postgresImage = `tungchiahui-postgres:${input.PHASE13_GIT_SHA}`
 const recoveryImage = `tungchiahui-recovery:${input.PHASE13_GIT_SHA}`
 const pgDataRoot = join(input.PHASE13_HOST_ROOT, 'postgres')
@@ -139,7 +138,7 @@ function psql(sql: string) {
   ]).stdout.trim()
 }
 
-function recoveryEnvironment(primaryPort: number, r2Port: number) {
+function recoveryEnvironment(backupPort: number) {
   return [
     'PGBACKREST_REPO1_CIPHER_PASS',
     cipher,
@@ -162,28 +161,16 @@ function recoveryEnvironment(primaryPort: number, r2Port: number) {
     'SITE_RUNTIME_MODE',
     'test',
     'BACKUP_S3_ENDPOINT',
-    `http://127.0.0.1:${String(primaryPort)}`,
+    `http://127.0.0.1:${String(backupPort)}`,
     'BACKUP_S3_REGION',
     'us-east-1',
     'BACKUP_S3_BUCKET',
-    'phase13-primary',
+    'phase13-offsite',
     'BACKUP_S3_ACCESS_KEY_ID',
-    'primary-only-access',
+    'backup-only-access',
     'BACKUP_S3_SECRET_ACCESS_KEY',
-    'primary-only-secret',
+    'backup-only-secret',
     'BACKUP_S3_FORCE_PATH_STYLE',
-    'true',
-    'BACKUP_R2_ENDPOINT',
-    `http://127.0.0.1:${String(r2Port)}`,
-    'BACKUP_R2_REGION',
-    'auto',
-    'BACKUP_R2_BUCKET',
-    'phase13-r2',
-    'BACKUP_R2_ACCESS_KEY_ID',
-    'r2-only-access',
-    'BACKUP_R2_SECRET_ACCESS_KEY',
-    'r2-only-secret',
-    'BACKUP_R2_FORCE_PATH_STYLE',
     'true',
   ].flatMap((value, index, values) =>
     index % 2 === 0 ? ['--env', `${value}=${values[index + 1]}`] : [],
@@ -191,8 +178,7 @@ function recoveryEnvironment(primaryPort: number, r2Port: number) {
 }
 
 function runRecovery(
-  primaryPort: number,
-  r2Port: number,
+  backupPort: number,
   action: 'backup' | 'control-state-restore' | 'restore',
   argument: string,
   allowFailure = false,
@@ -205,7 +191,7 @@ function runRecovery(
       'host',
       '--user',
       '70:10050',
-      ...recoveryEnvironment(primaryPort, r2Port),
+      ...recoveryEnvironment(backupPort),
       '--mount',
       `type=bind,source=${pgDataRoot},target=/var/lib/postgresql`,
       '--mount',
@@ -256,11 +242,9 @@ docker([
   '.',
 ])
 
-let primaryPort = 0
-let r2Port = 0
+let backupPort = 0
 try {
-  primaryPort = startS3(primaryName, 'phase13-primary')
-  r2Port = startS3(r2Name, 'phase13-r2')
+  backupPort = startS3(backupName, 'phase13-offsite')
   docker([
     'run',
     '--detach',
@@ -311,7 +295,7 @@ try {
   psql(
     "CREATE SCHEMA app; CREATE TABLE app.schema_marker(version integer PRIMARY KEY); INSERT INTO app.schema_marker VALUES (6); CREATE TABLE app.recovery_fixture(value text PRIMARY KEY); INSERT INTO app.recovery_fixture VALUES ('base');",
   )
-  const full = backupResultSchema.parse(runRecovery(primaryPort, r2Port, 'backup', 'full'))
+  const full = backupResultSchema.parse(runRecovery(backupPort, 'backup', 'full'))
   psql("INSERT INTO app.recovery_fixture VALUES ('before-target')")
   const targetTime = psql(
     'SELECT to_char(clock_timestamp() AT TIME ZONE \'UTC\', \'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"\');',
@@ -319,9 +303,9 @@ try {
   psql('SELECT pg_switch_wal()')
   psql('SELECT pg_sleep(1.2)')
   psql("INSERT INTO app.recovery_fixture VALUES ('after-target'); SELECT pg_switch_wal();")
-  const differential = backupResultSchema.parse(runRecovery(primaryPort, r2Port, 'backup', 'diff'))
+  const differential = backupResultSchema.parse(runRecovery(backupPort, 'backup', 'diff'))
   psql("INSERT INTO app.recovery_fixture VALUES ('incremental-later'); SELECT pg_switch_wal();")
-  const incremental = backupResultSchema.parse(runRecovery(primaryPort, r2Port, 'backup', 'incr'))
+  const incremental = backupResultSchema.parse(runRecovery(backupPort, 'backup', 'incr'))
   docker(['stop', '--time', '30', postgresName])
   const targetDataPath = join(pgDataRoot, '18', 'docker')
   writeFileSync(join(targetDataPath, '.tungchiahui-disposable-recovery-target'), 'test')
@@ -330,8 +314,7 @@ try {
     .passthrough()
     .parse(
       runRecovery(
-        primaryPort,
-        r2Port,
+        backupPort,
         'restore',
         JSON.stringify({
           confirmation: 'RESTORE-TEST',
@@ -349,8 +332,7 @@ try {
   writeFileSync(join(targetDataPath, '.tungchiahui-disposable-recovery-target'), 'test')
   const restoreStartedAt = performance.now()
   runRecovery(
-    primaryPort,
-    r2Port,
+    backupPort,
     'restore',
     JSON.stringify({
       confirmation: 'RESTORE-TEST',
@@ -378,8 +360,7 @@ try {
   const controlState = incremental.controlState
   const restoredControl = z.record(z.string(), z.unknown()).parse(
     runRecovery(
-      primaryPort,
-      r2Port,
+      backupPort,
       'control-state-restore',
       JSON.stringify({
         targetPath: '/control-state/restored-control.db',
@@ -400,15 +381,14 @@ try {
       pitrTarget: targetTime,
       partialRestoreRetry: 'pass',
       postgresDownRestore: 'pass',
-      primaryReplica: 'fresh-and-readable',
-      r2Replica: 'independent-fresh-and-restore-readable',
+      offsiteReplica: 'fresh-and-restore-readable',
       representativeApplicationRead: 'pass',
       restoreSeconds,
       status: 'pass',
     }),
   )
 } finally {
-  for (const name of [postgresName, primaryName, r2Name]) {
+  for (const name of [postgresName, backupName]) {
     docker(['rm', '--force', name], true)
   }
 }

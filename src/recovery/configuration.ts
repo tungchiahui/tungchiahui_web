@@ -21,12 +21,6 @@ const recoveryEnvironmentSchema = z.object({
   BACKUP_PGBACKREST_STANZA: z.string().regex(/^[a-z][a-z0-9-]{0,62}$/),
   BACKUP_POSTGRES_DATA_PATH: z.string().startsWith('/'),
   BACKUP_WORK_DIRECTORY: z.string().startsWith('/'),
-  BACKUP_R2_ACCESS_KEY_ID: z.string().min(1),
-  BACKUP_R2_BUCKET: z.string().min(3),
-  BACKUP_R2_ENDPOINT: z.url(),
-  BACKUP_R2_FORCE_PATH_STYLE: booleanStringSchema,
-  BACKUP_R2_REGION: z.string().min(1).default('auto'),
-  BACKUP_R2_SECRET_ACCESS_KEY: z.string().min(1),
   BACKUP_S3_ACCESS_KEY_ID: z.string().min(1),
   BACKUP_S3_BUCKET: z.string().min(3),
   BACKUP_S3_ENDPOINT: z.url(),
@@ -45,19 +39,10 @@ export type RecoveryConfiguration = Readonly<{
   mode: 'local' | 'production' | 'test'
   pgBackRestConfigPath: string
   postgresDataPath: string
-  primary: S3ConnectionConfiguration
-  r2: S3ConnectionConfiguration
+  backup: S3ConnectionConfiguration
   stanza: string
   workDirectory: string
 }>
-
-function sameStorageIdentity(left: S3ConnectionConfiguration, right: S3ConnectionConfiguration) {
-  return (
-    left.endpoint.origin === right.endpoint.origin &&
-    left.bucket === right.bucket &&
-    left.accessKeyId === right.accessKeyId
-  )
-}
 
 export function parseRecoveryConfiguration(
   input: Readonly<Record<string, string | undefined>>,
@@ -69,7 +54,7 @@ export function parseRecoveryConfiguration(
     )
   }
   const data = result.data
-  const primary = parseS3ConnectionConfiguration({
+  const backup = parseS3ConnectionConfiguration({
     accessKeyId: data.BACKUP_S3_ACCESS_KEY_ID,
     bucket: data.BACKUP_S3_BUCKET,
     endpoint: data.BACKUP_S3_ENDPOINT,
@@ -77,45 +62,27 @@ export function parseRecoveryConfiguration(
     region: data.BACKUP_S3_REGION,
     secretAccessKey: data.BACKUP_S3_SECRET_ACCESS_KEY,
   })
-  const r2 = parseS3ConnectionConfiguration({
-    accessKeyId: data.BACKUP_R2_ACCESS_KEY_ID,
-    bucket: data.BACKUP_R2_BUCKET,
-    endpoint: data.BACKUP_R2_ENDPOINT,
-    forcePathStyle: data.BACKUP_R2_FORCE_PATH_STYLE,
-    region: data.BACKUP_R2_REGION,
-    secretAccessKey: data.BACKUP_R2_SECRET_ACCESS_KEY,
-  })
   const issues: string[] = []
-  if (sameStorageIdentity(primary, r2)) {
-    issues.push('BACKUP_R2_*: off-site replica must use an independent endpoint/bucket/identity')
-  }
-  if (
-    data.ASSET_S3_ACCESS_KEY_ID === primary.accessKeyId ||
-    data.ASSET_S3_ACCESS_KEY_ID === r2.accessKeyId
-  ) {
+  if (data.ASSET_S3_ACCESS_KEY_ID === backup.accessKeyId) {
     issues.push('BACKUP_*_ACCESS_KEY_ID: backup credentials must differ from asset credentials')
   }
-  if (data.ASSET_S3_BUCKET === primary.bucket || data.ASSET_S3_BUCKET === r2.bucket) {
+  if (data.ASSET_S3_BUCKET === backup.bucket) {
     issues.push('BACKUP_*_BUCKET: backup buckets must differ from the asset bucket')
   }
-  if (
-    data.SITE_RUNTIME_MODE === 'production' &&
-    (primary.endpoint.protocol !== 'https:' || r2.endpoint.protocol !== 'https:')
-  ) {
-    issues.push('BACKUP_*_ENDPOINT: HTTPS is required in production')
+  if (data.SITE_RUNTIME_MODE === 'production' && backup.endpoint.protocol !== 'https:') {
+    issues.push('BACKUP_S3_ENDPOINT: HTTPS is required in production')
   }
   if (issues.length > 0) throw new StorageConfigurationError(issues)
 
   return Object.freeze({
     ageIdentityPath: data.BACKUP_AGE_IDENTITY_PATH,
     ageRecipient: data.BACKUP_AGE_RECIPIENT,
+    backup,
     controlStatePath: data.CONTROL_STATE_PATH,
     localRepositoryPath: data.BACKUP_LOCAL_REPOSITORY_PATH,
     mode: data.SITE_RUNTIME_MODE,
     pgBackRestConfigPath: data.BACKUP_PGBACKREST_CONFIG_PATH,
     postgresDataPath: data.BACKUP_POSTGRES_DATA_PATH,
-    primary,
-    r2,
     stanza: data.BACKUP_PGBACKREST_STANZA,
     workDirectory: data.BACKUP_WORK_DIRECTORY,
   })

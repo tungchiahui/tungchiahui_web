@@ -25,16 +25,15 @@ PostgreSQL
  pgBackRest 2.59.1 encrypted local repository
     |
 SHA-256 manifest + full read-back verification
-    |--------------------------------|
-primary BACKUP_S3_* target           independent BACKUP_R2_* target
-(Production: AList S3)               (Cloudflare R2)
+    |
+off-site BACKUP_S3_* target (Production: Cloudflare R2)
 ```
 
-Phase 11 的真实 AList 证据验证了 PUT/GET/HEAD/List/Overwrite/Metadata 等应用对象语义，但也记录了 ETag 缺失和 Cache-Control 规范化；这些证据不足以证明 pgBackRest 直接 Repository 所需的全部一致性语义。因此 Phase 13 明确选择 Local Repository + Verified Sync，不把 AList 当作 pgBackRest 原生 Repository。每个同步 Generation 包含完整 Repository、文件/符号链接类型、逐对象 SHA-256 和 Manifest SHA-256；只有主副本与 R2 都完成读回校验，Backup 才标记为有效。
+Phase 11 的真实 AList 证据验证了 PUT/GET/HEAD/List/Overwrite/Metadata 等应用对象语义，但也记录了 ETag 缺失和 Cache-Control 规范化；这些证据不足以证明 pgBackRest 直接 Repository 所需的全部一致性语义。因此 Recovery Flow 使用 Local Repository + Verified Sync，不把任意 S3 Provider 当作 pgBackRest 原生 Repository。每个同步 Generation 包含完整 Repository、文件/符号链接类型、逐对象 SHA-256 和 Manifest SHA-256；只有本地 pgBackRest/WAL 检查与 Off-site 完整读回校验都通过，Backup 才标记为有效。
 
-三类 Identity 必须独立：`ASSET_S3_*`、`BACKUP_S3_*`、`BACKUP_R2_*`。Parser 拒绝复用 Bucket/Endpoint/Access Key；Production Endpoint 必须是 HTTPS。Local Repository 不是唯一恢复副本，Restore 从已验证 R2 Generation 重建 Repository。
+ADR 0017 将 Production 收敛为两类 Identity：`ASSET_S3_*` 与 `BACKUP_S3_*`。Parser 拒绝两者复用 Bucket 或 Access Key，Production Backup Endpoint 必须是 HTTPS。Local Repository 不是唯一恢复副本；Restore 从完整读回验证的 Off-site Generation 重建 Repository。当前 `BACKUP_S3_*` 指向 R2，但 Adapter、CLI 与 Domain Type 不绑定 Provider。
 
-Retention 基线由 `ops/production/pgbackrest.conf` 固定：保留 2 个 Full、4 个 Differential，以及对应 2 个 Full 范围内的 WAL；定时策略运行 Full/Differential/Incremental。每次 Backup 后执行 pgBackRest `check` + `verify`，并验证两套对象副本。
+Retention 基线由 `ops/production/pgbackrest.conf` 固定：保留 2 个 Full、4 个 Differential，以及对应 2 个 Full 范围内的 WAL；定时策略运行 Full/Differential/Incremental。每次 Backup 后执行 pgBackRest `check` + `verify`，并验证 Off-site 对象副本。
 
 ## Backup Command
 
@@ -52,7 +51,7 @@ Retention 基线由 `ops/production/pgbackrest.conf` 固定：保留 2 个 Full�
 - 记录 Backup Metadata
 - 报告 Replica Status
 
-`backup status` 从 host-local Control-state SQLite 读取 Backup ID/Type、WAL Max、Measured Bytes/Seconds、Manifest Hash 和两套 Replica Freshness，因此 Production PostgreSQL Down 时仍可查询。
+`backup status` 从 host-local Control-state SQLite 读取 Backup ID/Type、WAL Max、Measured Bytes/Seconds、Manifest Hash 和 Off-site Replica Freshness，因此 Production PostgreSQL Down 时仍可查询。
 
 ## Restore
 
@@ -88,7 +87,7 @@ deploy-agent -> pgBackRest restore/PITR
   --confirm RESTORE-PRODUCTION \
   --reason "control-api unavailable" \
   --break-glass \
-  --inventory-host tungchiahui-production-origin
+  --inventory-host Debian
 ```
 
 Break-glass 只在正常 Control API 不可用时使用。它通过稳定 SSH Alias 调用 `deploy-agent` 镜像中的授权入口，向同一个 SQLite Operation/Audit 写入请求；后续仍由同一个 Agent、Lease/Fencing 与 Recovery Engine 执行，不提供任意 Host Shell 或第二套 Restore 实现。
@@ -103,7 +102,7 @@ Control-state SQLite 不是业务 Database，但它保存 Active/Previous Slot�
 - 在 Restore Drill 中验证 SQLite Integrity、Schema Version 与 Audit Continuity
 - 能够在 State 缺失/损坏时通过 Immutable Image、OpenResty Config 与受控人工对账进行明确重建
 
-一致性 Snapshot 使用 WAL `TRUNCATE` Checkpoint + SQLite `VACUUM INTO`，记录 Integrity、Foreign-key、Schema Version、Environment、Active/Previous Slot、Current/Last SHA、Operation/Audit Count 与 Audit Digest。Snapshot 经 age Recipient 加密后，分别写入主 Backup Target 和 R2；每套副本同时保存 immutable manifest 和经读回验证的 Environment-scoped `latest.json`，因此本地 SQLite 全损时可直接从 R2 发现最新 Artifact。Restore 前验证 Ciphertext SHA-256、解密后的 SQLite Integrity、Environment 和 Audit Digest。
+一致性 Snapshot 使用 WAL `TRUNCATE` Checkpoint + SQLite `VACUUM INTO`，记录 Integrity、Foreign-key、Schema Version、Environment、Active/Previous Slot、Current/Last SHA、Operation/Audit Count 与 Audit Digest。Snapshot 经 age Recipient 加密后写入 Off-site Backup Target，同时保存 immutable manifest 和经读回验证的 Environment-scoped `latest.json`，因此本地 SQLite 全损时可从 R2 发现最新 Artifact。Restore 前验证 Ciphertext SHA-256、解密后的 SQLite Integrity、Environment 和 Audit Digest。
 
 不得把 Control-state Backup 与待恢复 PostgreSQL 放在同一个唯一故障点中。
 
@@ -137,7 +136,7 @@ destroy disposable environment
 pnpm test:recovery
 ```
 
-该 Gate 只使用 Disposable PostgreSQL 与两套独立 S3Mock，不访问 Production/AList/R2。它执行真实 Full/Differential/Incremental、WAL Archive、从 R2 重建 Repository、指定时间 PITR、PostgreSQL 18/Schema/应用读取验证，以及 age 加密 Control-state Restore。
+该 Gate 只使用 Disposable PostgreSQL 与一套隔离 S3Mock，不访问 Production/AList/R2。它执行真实 Full/Differential/Incremental、WAL Archive、从 Off-site Replica 重建 Repository、指定时间 PITR、PostgreSQL 18/Schema/应用读取验证，以及 age 加密 Control-state Restore。
 
 ## RPO/RTO
 

@@ -59,8 +59,6 @@ const workRoot = join(input.PHASE12_HOST_ROOT, 'work')
 const identityPath = join(workRoot, 'age-identity.txt')
 const plainSecretPath = join(workRoot, 'production.plain.yaml')
 const encryptedSecretPath = join(workRoot, 'production.sops.yaml')
-const certificatePath = join(workRoot, 'origin.crt')
-const privateKeyPath = join(workRoot, 'origin.key')
 const inventoryPath = join(workRoot, 'inventory.yml')
 const variablesPath = join(workRoot, 'variables.json')
 const targetProjectName = `tungchiahui-phase17-target-${process.pid}`
@@ -134,13 +132,12 @@ function composeEnvironment() {
     TUNGCHIAHUI_OBSERVABILITY_ORIGIN_HOSTNAME: 'localhost',
     TUNGCHIAHUI_OBSERVABILITY_ORIGIN_IPV6_REQUIRED: 'false',
     TUNGCHIAHUI_OBSERVABILITY_ORIGIN_SERVER_NAME: 'ddns.tungchiahui.cn',
-    TUNGCHIAHUI_OBSERVABILITY_ORIGIN_URL: 'https://openresty:8443/api/ready',
+    TUNGCHIAHUI_OBSERVABILITY_ORIGIN_URL: 'http://openresty:8082/api/ready',
     TUNGCHIAHUI_OBSERVABILITY_PUBLIC_ASSET_PATH: '/api/assets/monitoring/health.svg',
     TUNGCHIAHUI_OBSERVABILITY_PUBLIC_SERVER_NAME: 'www.tungchiahui.cn',
-    TUNGCHIAHUI_OBSERVABILITY_PUBLIC_URL: 'https://openresty:8443/',
+    TUNGCHIAHUI_OBSERVABILITY_PUBLIC_URL: 'http://openresty:8082/',
     TUNGCHIAHUI_OBSERVABILITY_RESTORE_DRILL_MAX_AGE_SECONDS: '86400',
     TUNGCHIAHUI_OBSERVABILITY_RESTORE_DRILL_TIMESTAMP: new Date().toISOString(),
-    TUNGCHIAHUI_OBSERVABILITY_TLS_CA_PATH: '/run/observability/origin-ca.crt',
     TUNGCHIAHUI_POSTGRES_CONTAINER_NAME: `${projectName}-postgres-1`,
     TUNGCHIAHUI_POSTGRES_IMAGE: postgresImage,
     TUNGCHIAHUI_RECOVERY_IMAGE: recoveryImage,
@@ -178,6 +175,7 @@ function targetComposeEnvironment() {
     TUNGCHIAHUI_GREEN_CONTAINER_NAME: `${targetProjectName}-web-green-1`,
     TUNGCHIAHUI_MIGRATION_CONTAINER_NAME: `${targetProjectName}-database-migrate-1`,
     TUNGCHIAHUI_OPENRESTY_CONTAINER_NAME: `${targetProjectName}-openresty-1`,
+    TUNGCHIAHUI_ORIGIN_BIND_ADDRESS: '::1',
     TUNGCHIAHUI_ORIGIN_PORT: String(input.PHASE17_TARGET_ORIGIN_PORT),
     TUNGCHIAHUI_POSTGRES_CONTAINER_NAME: `${targetProjectName}-postgres-1`,
     TUNGCHIAHUI_SECRET_DIRECTORY: targetSecretRoot,
@@ -207,23 +205,6 @@ function createEncryptedSecret() {
   execute('age-keygen', ['--output', identityPath])
   chmodSync(identityPath, 0o600)
   const recipient = execute('age-keygen', ['--y', identityPath]).stdout.trim()
-  execute('openssl', [
-    'req',
-    '-x509',
-    '-newkey',
-    'rsa:2048',
-    '-nodes',
-    '-keyout',
-    privateKeyPath,
-    '-out',
-    certificatePath,
-    '-days',
-    '1',
-    '-subj',
-    '/CN=ddns.tungchiahui.cn',
-    '-addext',
-    'subjectAltName=DNS:ddns.tungchiahui.cn,DNS:www.tungchiahui.cn,IP:127.0.0.1,IP:::1',
-  ])
   const { privateKey, publicKey } = generateKeyPairSync('ed25519')
   const publicJwk = publicKey.export({ format: 'jwk' })
   const privateJwk = privateKey.export({ format: 'jwk' })
@@ -265,18 +246,12 @@ function createEncryptedSecret() {
     backup_env: [
       `PGBACKREST_REPO1_CIPHER_PASS=phase13-disposable-pgbackrest-cipher-${'x'.repeat(48)}`,
       `BACKUP_AGE_RECIPIENT=${recipient}`,
-      'BACKUP_S3_ENDPOINT=https://primary-backup.example.invalid',
-      'BACKUP_S3_REGION=us-east-1',
-      'BACKUP_S3_BUCKET=phase13-primary-backup',
-      'BACKUP_S3_ACCESS_KEY_ID=phase13-primary-only-access',
-      'BACKUP_S3_SECRET_ACCESS_KEY=phase13-primary-only-secret',
-      'BACKUP_S3_FORCE_PATH_STYLE=true',
-      'BACKUP_R2_ENDPOINT=https://phase13.r2.cloudflarestorage.com',
-      'BACKUP_R2_REGION=auto',
-      'BACKUP_R2_BUCKET=phase13-r2-offsite',
-      'BACKUP_R2_ACCESS_KEY_ID=phase13-r2-only-access',
-      'BACKUP_R2_SECRET_ACCESS_KEY=phase13-r2-only-secret',
-      'BACKUP_R2_FORCE_PATH_STYLE=false',
+      'BACKUP_S3_ENDPOINT=https://phase13.r2.cloudflarestorage.com',
+      'BACKUP_S3_REGION=auto',
+      'BACKUP_S3_BUCKET=phase13-offsite-backup',
+      'BACKUP_S3_ACCESS_KEY_ID=phase13-backup-only-access',
+      'BACKUP_S3_SECRET_ACCESS_KEY=phase13-backup-only-secret',
+      'BACKUP_S3_FORCE_PATH_STYLE=false',
     ].join('\n'),
     content_worker_env: [
       `DATABASE_URL=postgresql://site_content_worker_login:${workerPassword}@pgbouncer:6432/tungchiahui`,
@@ -303,8 +278,6 @@ function createEncryptedSecret() {
     database_migrate_env: [
       `DATABASE_URL=postgresql://site_migrator_login:${migratorPassword}@postgres:5432/tungchiahui`,
     ].join('\n'),
-    origin_certificate: readFileSync(certificatePath, 'utf8'),
-    origin_private_key: readFileSync(privateKeyPath, 'utf8'),
     observability_env: '\n',
     pgbouncer_userlist: [
       `"site_app_login" "${appPassword}"`,
@@ -525,6 +498,7 @@ function runProvision(identityPath: string) {
       tungchiahui_deployment_image_repository: registryRepository,
       tungchiahui_install_packages: false,
       tungchiahui_manage_stack: true,
+      tungchiahui_origin_bind_address: '127.0.0.1',
       tungchiahui_origin_port: String(input.PHASE12_ORIGIN_PORT),
       tungchiahui_observability_backup_max_age_seconds: '86400',
       tungchiahui_observability_disk_critical_percent: '99',
@@ -534,13 +508,12 @@ function runProvision(identityPath: string) {
       tungchiahui_observability_origin_hostname: 'localhost',
       tungchiahui_observability_origin_ipv6_required: 'false',
       tungchiahui_observability_origin_server_name: 'ddns.tungchiahui.cn',
-      tungchiahui_observability_origin_url: 'https://openresty:8443/api/ready',
+      tungchiahui_observability_origin_url: 'http://openresty:8082/api/ready',
       tungchiahui_observability_public_asset_path: '/api/assets/monitoring/health.svg',
       tungchiahui_observability_public_server_name: 'www.tungchiahui.cn',
-      tungchiahui_observability_public_url: 'https://openresty:8443/',
+      tungchiahui_observability_public_url: 'http://openresty:8082/',
       tungchiahui_observability_restore_drill_max_age_seconds: '86400',
       tungchiahui_observability_restore_drill_timestamp: new Date().toISOString(),
-      tungchiahui_observability_tls_ca_path: '/run/observability/origin-ca.crt',
       tungchiahui_postgres_image: postgresImage,
       tungchiahui_recovery_image: recoveryImage,
       tungchiahui_repository_root: '/workspace',
@@ -604,6 +577,7 @@ function runMigrationTargetProvision(identityPath: string) {
       tungchiahui_deployment_image_repository: registryRepository,
       tungchiahui_install_packages: false,
       tungchiahui_manage_stack: true,
+      tungchiahui_origin_bind_address: '::1',
       tungchiahui_origin_port: String(input.PHASE17_TARGET_ORIGIN_PORT),
       tungchiahui_observability_backup_max_age_seconds: '86400',
       tungchiahui_observability_disk_critical_percent: '99',
@@ -613,13 +587,12 @@ function runMigrationTargetProvision(identityPath: string) {
       tungchiahui_observability_origin_hostname: 'localhost',
       tungchiahui_observability_origin_ipv6_required: 'false',
       tungchiahui_observability_origin_server_name: 'ddns.tungchiahui.cn',
-      tungchiahui_observability_origin_url: 'https://openresty:8443/api/ready',
+      tungchiahui_observability_origin_url: 'http://openresty:8082/api/ready',
       tungchiahui_observability_public_asset_path: '/api/assets/monitoring/health.svg',
       tungchiahui_observability_public_server_name: 'www.tungchiahui.cn',
-      tungchiahui_observability_public_url: 'https://openresty:8443/',
+      tungchiahui_observability_public_url: 'http://openresty:8082/',
       tungchiahui_observability_restore_drill_max_age_seconds: '86400',
       tungchiahui_observability_restore_drill_timestamp: new Date().toISOString(),
-      tungchiahui_observability_tls_ca_path: '/run/observability/origin-ca.crt',
       tungchiahui_postgres_image: postgresImage,
       tungchiahui_recovery_image: recoveryImage,
       tungchiahui_repository_root: '/workspace',
@@ -842,7 +815,7 @@ function curl(arguments_: readonly string[], expectedStatus: number) {
 
 async function waitForPublicReadiness() {
   const deadline = Date.now() + 60_000
-  const url = `https://127.0.0.1:${String(input.PHASE12_ORIGIN_PORT)}/api/ready`
+  const url = `http://127.0.0.1:${String(input.PHASE12_ORIGIN_PORT)}/api/ready`
   while (Date.now() < deadline) {
     const result = execute(
       'curl',
@@ -880,7 +853,7 @@ function percentile(values: readonly number[], fraction: number) {
 }
 
 function parallelRequests(path: string, count: number) {
-  const url = `https://127.0.0.1:${String(input.PHASE12_ORIGIN_PORT)}${path}`
+  const url = `http://127.0.0.1:${String(input.PHASE12_ORIGIN_PORT)}${path}`
   const result = execute('curl', [
     '--insecure',
     '--noproxy',
@@ -919,7 +892,7 @@ async function verifySecurityAndLoad() {
     '-',
     '--output',
     '/dev/null',
-    `https://127.0.0.1:${port}/`,
+    `http://127.0.0.1:${port}/`,
   ]).stdout.toLowerCase()
   for (const header of [
     'content-security-policy:',
@@ -932,25 +905,9 @@ async function verifySecurityAndLoad() {
   ]) {
     expect(headers.includes(header), `Public response lacks ${header}`)
   }
-  expect(
-    execute(
-      'curl',
-      [
-        '--insecure',
-        '--noproxy',
-        '*',
-        '--silent',
-        '--tls-max',
-        '1.1',
-        `https://127.0.0.1:${port}/`,
-      ],
-      { allowFailure: true },
-    ).status !== 0,
-    'Origin accepted obsolete TLS 1.1',
-  )
-  curl(['--request', 'TRACE', `https://127.0.0.1:${port}/`], 405)
-  curl([`https://127.0.0.1:${port}/api/internal/revalidate`], 404)
-  curl([`https://127.0.0.1:${port}/api/search?q=`], 400)
+  curl(['--request', 'TRACE', `http://127.0.0.1:${port}/`], 405)
+  curl([`http://127.0.0.1:${port}/api/internal/revalidate`], 404)
+  curl([`http://127.0.0.1:${port}/api/search?q=`], 400)
 
   const baseline = parallelRequests('/', 80)
   expect(
@@ -963,7 +920,7 @@ async function verifySecurityAndLoad() {
     'Public origin rate limit did not engage',
   )
   await new Promise((resolveDelay) => setTimeout(resolveDelay, 2_500))
-  curl([`https://127.0.0.1:${port}/`], 200)
+  curl([`http://127.0.0.1:${port}/`], 200)
 
   const controlAbuse = parallelRequests('/api/ops/status', 100)
   expect(
@@ -975,7 +932,7 @@ async function verifySecurityAndLoad() {
     'Control auth boundary disappeared',
   )
   await new Promise((resolveDelay) => setTimeout(resolveDelay, 2_500))
-  curl([`https://127.0.0.1:${port}/api/ops/status`], 401)
+  curl([`http://127.0.0.1:${port}/api/ops/status`], 401)
 
   const observability = compose(['ps', '--quiet', 'observability-agent']).stdout.trim()
   const poolResult = execute('docker', [
@@ -1034,7 +991,7 @@ async function verifySecurityAndLoad() {
   ])
   const slowQueryDurationMs = performance.now() - slowQueryStartedAt
   expect(slowQueryDurationMs >= 180, 'Injected slow query did not exercise the latency path')
-  curl([`https://127.0.0.1:${port}/api/ready`], 200)
+  curl([`http://127.0.0.1:${port}/api/ready`], 200)
   readinessMeasurements = Object.freeze({
     poolSaturation80DurationMs: pool.durationMs,
     publicLoadCount: baseline.length,
@@ -1063,7 +1020,7 @@ function verifyNoSecretLeakage(secretSentinels: readonly string[]) {
     '*',
     '--silent',
     '--include',
-    `https://127.0.0.1:${String(input.PHASE12_ORIGIN_PORT)}/`,
+    `http://127.0.0.1:${String(input.PHASE12_ORIGIN_PORT)}/`,
   ]).stdout
   const controlResponse = execute('curl', [
     '--insecure',
@@ -1071,7 +1028,7 @@ function verifyNoSecretLeakage(secretSentinels: readonly string[]) {
     '*',
     '--silent',
     '--include',
-    `https://127.0.0.1:${String(input.PHASE12_ORIGIN_PORT)}/api/ops/status`,
+    `http://127.0.0.1:${String(input.PHASE12_ORIGIN_PORT)}/api/ops/status`,
   ]).stdout
   for (const sentinel of secretSentinels) {
     expect(!runtimeLogs.includes(sentinel), 'Runtime logs contain a disposable secret sentinel')
@@ -1088,14 +1045,19 @@ function verifyNoSecretLeakage(secretSentinels: readonly string[]) {
 
 async function verifyRoutingAndIpFamilies() {
   const port = String(input.PHASE12_ORIGIN_PORT)
-  curl(['--ipv4', `https://127.0.0.1:${port}/api/health`], 200)
-  curl(['--ipv6', `https://[::1]:${port}/api/health`], 200)
-  curl([`https://127.0.0.1:${port}/api/ops/status`], 401)
+  curl(['--ipv4', `http://127.0.0.1:${port}/api/health`], 200)
+  const ipv6Loopback = execute(
+    'curl',
+    ['--ipv6', '--noproxy', '*', '--silent', `http://[::1]:${port}/api/health`],
+    { allowFailure: true },
+  )
+  expect(ipv6Loopback.status !== 0, 'V2 gateway must not bind the host IPv6 interface')
+  curl([`http://127.0.0.1:${port}/api/ops/status`], 401)
   compose(['stop', 'web-blue', 'web-green'])
-  curl([`https://127.0.0.1:${port}/api/ops/status`], 401)
+  curl([`http://127.0.0.1:${port}/api/ops/status`], 401)
   compose(['start', 'web-blue', 'web-green'])
   compose(['stop', 'postgres'])
-  curl([`https://127.0.0.1:${port}/api/ops/status`], 401)
+  curl([`http://127.0.0.1:${port}/api/ops/status`], 401)
   const control = compose(['ps', '--quiet', 'control-api']).stdout.trim()
   const postgresDownHealth = z
     .object({
@@ -1142,15 +1104,18 @@ async function verifyRoutingAndIpFamilies() {
     'Application-job observability did not recover with PostgreSQL',
   )
   const config = readFileSync(join(configRoot, 'openresty.conf'), 'utf8')
-  expect(config.includes('listen [::]:8443 ssl ipv6only=off;'), 'OpenResty is not dual-stack')
+  expect(config.includes('listen 8082;'), 'Internal OpenResty gateway port drifted')
+  expect(config.includes('listen [::]:8082;'), 'Internal OpenResty IPv6 gateway port drifted')
   expect(
     config.includes('set $control_upstream control-api:8080;'),
     'Control API does not use service DNS',
   )
-  const configWithoutDockerDns = config.replaceAll('127.0.0.11', '')
+  const configuredIpv4Addresses = config.match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g) ?? []
   expect(
-    !/\b(?:\d{1,3}\.){3}\d{1,3}\b/.test(configWithoutDockerDns),
-    'OpenResty contains a numeric public IPv4',
+    configuredIpv4Addresses.every((address) =>
+      ['127.0.0.1', '127.0.0.11', '172.16.0.0'].includes(address),
+    ),
+    `OpenResty contains an unapproved numeric IPv4: ${configuredIpv4Addresses.join(', ')}`,
   )
 }
 
@@ -1220,7 +1185,7 @@ function publicVersion() {
           '--noproxy',
           '*',
           '--silent',
-          `https://127.0.0.1:${port}/api/version`,
+          `http://127.0.0.1:${port}/api/version`,
         ]).stdout,
       ) as unknown,
     )
@@ -1489,7 +1454,7 @@ async function verifyServerMigrationRehearsal(identityPath: string) {
         '/zh-cn/search?q=ROS2_Control',
         '/docs/ros2/core/index.html',
       ]) {
-        curl([`https://127.0.0.1:${targetPort}${path}`], 200)
+        curl([`http://[::1]:${targetPort}${path}`], 200)
       }
       const version = z
         .object({ gitSha: z.string().regex(/^[a-f0-9]{40}$/) })
@@ -1501,7 +1466,7 @@ async function verifyServerMigrationRehearsal(identityPath: string) {
               '--noproxy',
               '*',
               '--silent',
-              `https://127.0.0.1:${targetPort}/api/version`,
+              `http://[::1]:${targetPort}/api/version`,
             ]).stdout,
           ) as unknown,
         )
@@ -1667,7 +1632,7 @@ async function verifyServerMigrationRehearsal(identityPath: string) {
       return { finalWalLsn, lagBytes: 0, sourceWriting: false }
     },
     reconnectApplication: async () => {
-      curl([`https://127.0.0.1:${String(input.PHASE17_TARGET_ORIGIN_PORT)}/api/ready`], 200)
+      curl([`http://[::1]:${String(input.PHASE17_TARGET_ORIGIN_PORT)}/api/ready`], 200)
       measuredDowntimeMilliseconds = performance.now() - sourceStoppedAt
       targetCompose(['start', 'control-api', 'deploy-agent'])
       return { ready: true }
@@ -1700,11 +1665,9 @@ async function verifyServerMigrationRehearsal(identityPath: string) {
     },
     verifyPostSwitch: async () => {
       const port = String(input.PHASE17_TARGET_ORIGIN_PORT)
-      const stableUrl = `https://ddns.tungchiahui.cn:${port}`
+      const stableUrl = `http://ddns.tungchiahui.cn:${port}`
       for (const path of ['/api/health', '/api/ready', '/', '/blog/phase-3-seed']) {
         const result = execute('curl', [
-          '--cacert',
-          certificatePath,
           '--ipv6',
           '--noproxy',
           '*',

@@ -3,5 +3,5 @@ all:
     production_origins:
       hosts:
         production_origin:
-          ansible_host: tungchiahui-production-origin
-          ansible_user: deploy-bootstrap
+          ansible_host: Debian
+          ansible_user: tungchiahui

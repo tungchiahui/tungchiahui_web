@@ -5,21 +5,28 @@ Provisioning accepts one SOPS-encrypted YAML file matching
 absolute path as `tungchiahui_secret_file`. Only encrypted material may be committed.
 
 The Ansible role decrypts on the controller with `sops`, suppresses task output, and installs
-separate per-service files under `/run/tungchiahui/secrets`. The directory is runtime-only and must
-be reconstructed after reboot. No `S3_CONTRACT_*` value is accepted or deployed.
+separate per-service files under `/etc/tungchiahui/secrets`. These runtime files are persistent across
+host reboot, root-owned, mode-restricted and never committed or copied into a backup artifact; the
+encrypted SOPS document remains their recoverable source. No `S3_CONTRACT_*` value is accepted or
+deployed.
 
 `deployment-registry.env` belongs only to `deploy-agent` and contains a package-read identity for
 the single approved immutable image repository. GitHub Actions publishes with its short-lived
 repository token; it never receives this origin pull credential, a Docker socket, or a Host login.
 
-Example initialization, after replacing every placeholder in a private temporary copy:
+Initialize the encrypted document and generated internal credentials without a plaintext
+intermediate file:
 
 ```text
-sops --encrypt --age <production-age-recipient> \
-  --input-type yaml --output-type yaml \
-  production.plain.yaml > production.sops.yaml
+./site production secrets init
+sops ops/production/secrets/production.sops.yaml
+./site production secrets validate
 ```
 
-Delete the plaintext input immediately after verifying that the encrypted file decrypts with an
-authorized production age key. Never pass secret values through Ansible extra variables or Docker
-build arguments.
+The second command is only for replacing the provider-neutral asset S3, single off-site backup S3
+and GHCR placeholders. Production currently maps these to AList and Cloudflare R2 respectively.
+Never pass secret values through Ansible extra
+variables or Docker build arguments. The final command decrypts
+only in controller process memory and fails closed if the document shape is wrong or any
+`REPLACE_WITH_` placeholder remains; Ansible independently enforces the same placeholder gate before
+installing runtime files.

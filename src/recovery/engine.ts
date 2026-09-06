@@ -45,10 +45,9 @@ export async function executeDatabaseBackup(
     backup.backupId,
     generation,
   )
-  const [primary, r2] = await Promise.allSettled([
-    replicateRepository(configuration.localRepositoryPath, manifest, configuration.primary),
-    replicateRepository(configuration.localRepositoryPath, manifest, configuration.r2),
-  ])
+  const offsite = await Promise.allSettled([
+    replicateRepository(configuration.localRepositoryPath, manifest, configuration.backup),
+  ]).then(([result]) => result)
   const completedAt = new Date().toISOString()
   const record: RecoveryBackupRecord = Object.freeze({
     backupId: backup.backupId,
@@ -58,21 +57,19 @@ export async function executeDatabaseBackup(
     manifestSha256: repositoryManifestSha256(manifest),
     measuredBytes: manifest.totalBytes,
     measuredSeconds: (performance.now() - started) / 1_000,
-    primaryReplicaStatus: primary.status === 'fulfilled' ? 'fresh' : 'failed',
-    r2ReplicaStatus: r2.status === 'fulfilled' ? 'fresh' : 'failed',
+    offsiteReplicaStatus: offsite.status === 'fulfilled' ? 'fresh' : 'failed',
     repositoryGeneration: generation,
     stanza: configuration.stanza,
-    valid: primary.status === 'fulfilled' && r2.status === 'fulfilled',
+    valid: offsite.status === 'fulfilled',
     walArchiveMax: backup.walArchiveMax,
   })
   recordRecoveryBackup(configuration.controlStatePath, record)
   if (!record.valid) {
-    const failures = [primary, r2]
-      .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
-      .map((result) => (result.reason instanceof Error ? result.reason.message : 'unknown failure'))
-    throw new Error(
-      `Backup completed locally but one or more independent replicas failed: ${failures.join('; ')}`,
-    )
+    const failure =
+      offsite.status === 'rejected' && offsite.reason instanceof Error
+        ? offsite.reason.message
+        : 'unknown failure'
+    throw new Error(`Backup completed locally but the off-site replica failed: ${failure}`)
   }
   const controlState = await executeControlStateBackup(configuration)
   return Object.freeze({
@@ -95,11 +92,12 @@ export async function executeControlStateBackup(configuration: RecoveryConfigura
       encryptedPath,
       configuration.ageRecipient,
     )
-    const [primary, r2] = await Promise.all([
-      replicateControlStateArtifact(encryptedPath, artifact, configuration.primary),
-      replicateControlStateArtifact(encryptedPath, artifact, configuration.r2),
-    ])
-    return Object.freeze({ artifact, primary, r2 })
+    const offsite = await replicateControlStateArtifact(
+      encryptedPath,
+      artifact,
+      configuration.backup,
+    )
+    return Object.freeze({ artifact, offsite })
   } finally {
     rmSync(snapshotPath, { force: true })
     rmSync(encryptedPath, { force: true })
@@ -174,17 +172,21 @@ export async function executeDatabaseRestore(
     listRecoveryBackups(configuration.controlStatePath, 100),
     parsed.selector,
   )
-  if (!record?.valid || record.r2ReplicaStatus !== 'fresh') {
+  if (!record?.valid || record.offsiteReplicaStatus !== 'fresh') {
     throw new Error('No verified off-site backup is available for the requested restore selector')
   }
   const manifest = await readRepositoryManifestFromReplica(
     record.repositoryGeneration,
-    configuration.r2,
+    configuration.backup,
   )
   if (repositoryManifestSha256(manifest) !== record.manifestSha256) {
     throw new Error('Off-site repository manifest does not match the control-state backup record')
   }
-  await materializeRepositoryReplica(manifest, configuration.localRepositoryPath, configuration.r2)
+  await materializeRepositoryReplica(
+    manifest,
+    configuration.localRepositoryPath,
+    configuration.backup,
+  )
   prepareRestoreTarget(configuration.postgresDataPath, parsed.environment, parsed.confirmation)
   restorePgBackRest(
     { configPath: configuration.pgBackRestConfigPath, stanza: configuration.stanza },
@@ -193,7 +195,7 @@ export async function executeDatabaseRestore(
   return Object.freeze({
     backupId: record.backupId,
     manifestSha256: record.manifestSha256,
-    repositorySource: 'r2-off-site' as const,
+    repositorySource: 'off-site-s3' as const,
     target: parsed.selector,
   })
 }
@@ -214,7 +216,7 @@ export async function restoreControlStateFromReplica(
   const suffix = randomUUID()
   const encryptedPath = join(configuration.workDirectory, `control-restore-${suffix}.age`)
   const decryptedPath = join(configuration.workDirectory, `control-restore-${suffix}.sqlite`)
-  const storage = new S3ObjectStorageAdapter(configuration.r2)
+  const storage = new S3ObjectStorageAdapter(configuration.backup)
   try {
     const object = await storage.getObject(artifact.objectKey)
     writeFileSync(encryptedPath, new Uint8Array(await new Response(object.body).arrayBuffer()), {
@@ -239,6 +241,6 @@ export async function restoreLatestControlStateFromReplica(
   configuration: RecoveryConfiguration,
   targetPath: string,
 ) {
-  const artifact = await readLatestControlStateArtifact(configuration.r2, configuration.mode)
+  const artifact = await readLatestControlStateArtifact(configuration.backup, configuration.mode)
   return restoreControlStateFromReplica(configuration, artifact, targetPath)
 }

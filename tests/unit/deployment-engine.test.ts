@@ -338,8 +338,7 @@ describe('Phase 14 shared deployment engine', () => {
       manifestSha256: 'c'.repeat(64),
       measuredBytes: 1,
       measuredSeconds: 1,
-      primaryReplicaStatus: 'fresh' as const,
-      r2ReplicaStatus: 'fresh' as const,
+      offsiteReplicaStatus: 'fresh' as const,
       repositoryGeneration: 'generation-001',
       stanza: 'tungchiahui',
       valid: true,
@@ -347,9 +346,9 @@ describe('Phase 14 shared deployment engine', () => {
     }
     expect(hasFreshRecoverableBackup([record], 120, now)).toBe(true)
     expect(hasFreshRecoverableBackup([record], 30, now)).toBe(false)
-    expect(hasFreshRecoverableBackup([{ ...record, r2ReplicaStatus: 'failed' }], 120, now)).toBe(
-      false,
-    )
+    expect(
+      hasFreshRecoverableBackup([{ ...record, offsiteReplicaStatus: 'failed' }], 120, now),
+    ).toBe(false)
   })
 
   it.each([

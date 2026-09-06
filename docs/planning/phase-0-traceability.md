@@ -48,13 +48,14 @@
 
 ## 3. Accepted ADR Traceability
 
-全部 15 份 ADR 在 Discovery 时均为 `Status: Accepted`。
+Discovery 时的全部 15 份 ADR 均为 `Status: Accepted`。Phase 18 根据真实生产主机
+Inventory 新增并接受 ADR 0016 与 0017；它们不改写 Phase 0 结论，追加映射到 Phase 18。
 
 | ADR | Decision | Implement / verify Phase |
 | --- | --- | --- |
 | 0001 | New Next.js V2 Repository；Legacy read-only | 0、1、18 |
 | 0002 | PostgreSQL Runtime Content Store | 3、5、8、10、13 |
-| 0003 | AList S3 Asset/Backup；R2 Replica | 11、13 |
+| 0003 | Superseded：原 AList Asset/Backup + R2 双远程目标 | 11、13；由 0017 替代 |
 | 0004 | Full Blue-Green、Immutable、Rollback | 14、18 |
 | 0005 | TypeScript/TSX Application/Automation | 1；all later code gates |
 | 0006 | GitHub zh-CN Source of Truth | 0、5、8、18 |
@@ -67,6 +68,8 @@
 | 0013 | Separate content-worker/deploy-agent | 4、5、9、12–14、16 |
 | 0014 | Control API independent of Next.js slots | 4、12、14、16 |
 | 0015 | PostgreSQL-independent SQLite Recovery State | 4、12–14、17 |
+| 0016 | Shared-host OpenResty + loopback-only V2 gateway | 18 |
+| 0017 | Provider-neutral Asset S3 + 单一 Off-site Backup S3 | 13、18 |
 
 没有 Phase 0 Artifact Supersede 或改写 ADR。Legacy Nuxt、Client Search、Static Build、Pages Blob 和 Build-time locale generation 仅作为迁移证据，不成为平行 V2 Architecture。
 

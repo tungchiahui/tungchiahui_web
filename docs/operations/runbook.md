@@ -90,9 +90,9 @@ Rollback 只切到 Version 5 Control State 中保留的 Previous SHA/Digest，�
 
 检查 SQLite Integrity、Schema Version、WAL、Audit Count/Max ID、Operation Lease/Phase 和 Active/Previous Deployment Identity。不要依赖 Production PostgreSQL。Integrity 或 Audit Continuity 不成立时停止新的高权限 Operation，保留 Control-state Snapshot，按 Backup Verification/Break-glass 流程恢复；确认 `InfrastructureOperationStuck resolved` 后再开放创建操作。
 
-## Backup WAL R2 or Restore Drill
+## Backup WAL Off-site S3 or Restore Drill
 
-逐项验证最新 Backup Age/Validity、WAL Archive、Primary Replica、R2 Replica 和 Restore Drill Timestamp。任一失败都不能把 Backup 标记为可恢复。按 `backup-and-recovery.md` 在 Disposable Target 重做 Integrity/Read-back；Production Restore 仍需单独授权。全部证据恢复 Fresh 后确认 `RecoveryEvidenceStale resolved`。
+逐项验证最新 Backup Age/Validity、WAL Archive、Off-site Replica 和 Restore Drill Timestamp。任一失败都不能把 Backup 标记为可恢复。按 `backup-and-recovery.md` 在 Disposable Target 重做 Integrity/Read-back；Production Restore 仍需单独授权。全部证据恢复 Fresh 后确认 `RecoveryEvidenceStale resolved`。
 
 ## S3 Incident
 
@@ -103,7 +103,7 @@ Static Asset 与 Article Content 在运维上彼此独立。
 - AList Health
 - CDN/Origin Behavior
 - Bucket/Object Permission
-- R2 Backup Availability
+- Off-site Backup S3 Availability（当前为 R2）
 
 不要在没有更新并验证所有依赖 Service 的情况下 Rotation Production Credential。
 
@@ -130,7 +130,7 @@ Static Asset 与 Article Content 在运维上彼此独立。
 ./site provision <new-host-alias> --reason "<change reference>"
 ```
 
-确认 Backup/WAL/R2/Restore Evidence、Target Hardening、Storage、IPv6 与 Candidate Smoke 后，使用：
+确认 Backup/WAL/Off-site S3/Restore Evidence、Target Hardening、Storage、IPv6 与 Candidate Smoke 后，使用：
 
 ```bash
 ./site migrate-server <new-host-alias> --reason "<change reference>"
@@ -198,6 +198,10 @@ ddns.tungchiahui.cn
 
 OpenResty 必须把 `/api/ops/*` 直接路由到独立 `control-api`，而不是 Next.js Blue/Green Slot。因此 Next.js 全挂时先验证 Control API 与 Control-state SQLite，再决定 Deploy/Rollback。
 
+共享主机可以先用 `http://127.0.0.1:3100` 区分 V2 内部网关与 1Panel/TLS 故障：回环入口
+正常而 `https://ddns.tungchiahui.cn:8443` 异常时，检查 1Panel 站点、证书和转发 Header；
+两者都异常时再检查 V2 Compose、Active Slot 和 Control State。不要把回环入口发布到 LAN/WAN。
+
 如果 EdgeOne/OpenResty/`control-api` 也不可用，使用文档化的显式 Break-glass Mode，通过稳定 Ansible Inventory/SSH Alias 调用同一个 Recovery Engine。要求 Environment、Target、Reason、Confirmation 和 Audit；不得临时发明无审计的 Root Script。
 
 ```bash
@@ -206,7 +210,7 @@ OpenResty 必须把 `/api/ops/*` 直接路由到独立 `control-api`，而不是
   --confirm RESTORE-PRODUCTION \
   --reason "control-api unavailable: <incident reference>" \
   --break-glass \
-  --inventory-host tungchiahui-production-origin
+  --inventory-host Debian
 ```
 
 Break-glass 仅替换请求到达路径，不替换 Recovery Engine：它必须产生 `break_glass_restore_authorized` Audit、进入同一个 SQLite Queue，并由同一 Lease/Fencing Agent 执行。不要把公网数字 IP、临时 Root Script 或绕过 Confirmation 的命令写进 Runbook。
@@ -220,6 +224,6 @@ Break-glass 仅替换请求到达路径，不替换 Recovery Engine：它必须�
 ./site backup status
 ```
 
-只有同时满足以下证据才把 Backup 视为有效：pgBackRest `check`/`verify` 成功、WAL Max 已记录、主 `BACKUP_S3_*` 与独立 R2 均为 `fresh`、Manifest/逐对象 SHA-256 读回一致。任一副本失败会保留失败记录但 `valid=false`，不得用于自动 Restore 选择。
+只有同时满足以下证据才把 Backup 视为有效：pgBackRest `check`/`verify` 成功、WAL Max 已记录、`BACKUP_S3_*` Off-site Replica 为 `fresh`、Manifest/逐对象 SHA-256 读回一致。任一检查失败会保留失败记录但 `valid=false`，不得用于自动 Restore 选择。
 
 Production Restore Drill 必须另行获得明确授权；自动 `test:recovery` 只操作 Disposable Target。Control-state 恢复前必须验证 age Ciphertext Hash、SQLite Integrity/Foreign Key、Schema Version、Environment 和 Audit Digest。

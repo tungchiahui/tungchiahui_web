@@ -24,7 +24,6 @@ import {
   repositoryManifestSha256,
   verifyLocalRepository,
 } from '../../src/recovery/repository-replication'
-import { StorageConfigurationError } from '../../src/storage/contracts'
 
 const temporaryDirectories: string[] = []
 const actor: ActorIdentity = {
@@ -55,18 +54,12 @@ function recoveryEnvironment() {
     BACKUP_PGBACKREST_CONFIG_PATH: '/etc/pgbackrest/pgbackrest.conf',
     BACKUP_PGBACKREST_STANZA: 'tungchiahui',
     BACKUP_POSTGRES_DATA_PATH: '/var/lib/postgresql/18/docker',
-    BACKUP_R2_ACCESS_KEY_ID: 'r2-only-key',
-    BACKUP_R2_BUCKET: 'r2-offsite',
-    BACKUP_R2_ENDPOINT: 'https://account.r2.cloudflarestorage.com',
-    BACKUP_R2_FORCE_PATH_STYLE: 'false',
-    BACKUP_R2_REGION: 'auto',
-    BACKUP_R2_SECRET_ACCESS_KEY: 'r2-secret',
-    BACKUP_S3_ACCESS_KEY_ID: 'backup-only-key',
-    BACKUP_S3_BUCKET: 'primary-backup',
-    BACKUP_S3_ENDPOINT: 'https://s3.example.invalid',
-    BACKUP_S3_FORCE_PATH_STYLE: 'true',
-    BACKUP_S3_REGION: 'us-east-1',
-    BACKUP_S3_SECRET_ACCESS_KEY: 'backup-secret',
+    BACKUP_S3_ACCESS_KEY_ID: 'r2-backup-only-key',
+    BACKUP_S3_BUCKET: 'r2-offsite-backup',
+    BACKUP_S3_ENDPOINT: 'https://account.r2.cloudflarestorage.com',
+    BACKUP_S3_FORCE_PATH_STYLE: 'false',
+    BACKUP_S3_REGION: 'auto',
+    BACKUP_S3_SECRET_ACCESS_KEY: 'r2-backup-secret',
     BACKUP_WORK_DIRECTORY: '/var/lib/tungchiahui-backup-work',
     CONTROL_STATE_PATH: '/control-state/control.db',
     SITE_RUNTIME_MODE: 'production',
@@ -74,19 +67,9 @@ function recoveryEnvironment() {
 }
 
 describe('Phase 13 recovery boundary', () => {
-  it('requires independent primary, off-site, and asset identities', () => {
+  it('requires an off-site backup identity independent from the asset identity', () => {
     const configuration = parseRecoveryConfiguration(recoveryEnvironment())
-    expect(configuration.primary.bucket).toBe('primary-backup')
-    expect(configuration.r2.bucket).toBe('r2-offsite')
-
-    expect(() =>
-      parseRecoveryConfiguration({
-        ...recoveryEnvironment(),
-        BACKUP_R2_ACCESS_KEY_ID: 'backup-only-key',
-        BACKUP_R2_BUCKET: 'primary-backup',
-        BACKUP_R2_ENDPOINT: 'https://s3.example.invalid',
-      }),
-    ).toThrow(StorageConfigurationError)
+    expect(configuration.backup.bucket).toBe('r2-offsite-backup')
     expect(() =>
       parseRecoveryConfiguration({
         ...recoveryEnvironment(),
@@ -117,7 +100,7 @@ describe('Phase 13 recovery boundary', () => {
       auditEventMaxId: 1,
       environment: 'test',
       integrity: 'ok',
-      schemaVersion: 5,
+      schemaVersion: 6,
     })
     expect(inspectControlStateSnapshot(snapshot)).toEqual(evidence)
     expect(restoreControlStateSnapshot(snapshot, restored, 'test')).toEqual(evidence)
@@ -166,8 +149,7 @@ describe('Phase 13 recovery boundary', () => {
       manifestSha256: 'c'.repeat(64),
       measuredBytes: 1_024,
       measuredSeconds: 10,
-      primaryReplicaStatus: 'fresh',
-      r2ReplicaStatus: 'fresh',
+      offsiteReplicaStatus: 'fresh',
       repositoryGeneration: '20260825-120000F-generation',
       stanza: 'tungchiahui',
       valid: true,
@@ -176,8 +158,7 @@ describe('Phase 13 recovery boundary', () => {
     expect(listRecoveryBackups(path)).toMatchObject([
       {
         backupId: '20260825-120000F',
-        primaryReplicaStatus: 'fresh',
-        r2ReplicaStatus: 'fresh',
+        offsiteReplicaStatus: 'fresh',
         valid: true,
       },
     ])

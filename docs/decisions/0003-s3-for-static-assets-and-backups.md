@@ -1,6 +1,6 @@
 # ADR 0003：S3 用于 Static Asset 与 Backup Artifact
 
-- Status: Accepted
+- Status: Superseded by ADR 0017
 - Date: 2026-08-23
 
 ## Context

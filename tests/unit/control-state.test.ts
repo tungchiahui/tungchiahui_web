@@ -73,11 +73,11 @@ describe('control-state SQLite engine', () => {
       incompleteOperations: 0,
       initializedAt: '2026-08-23T00:00:00.000Z',
       journalMode: 'wal',
-      schemaVersion: 5,
+      schemaVersion: 6,
       synchronous: 2,
     })
     checkpointControlState(path)
-    expect(readControlState(path).schemaVersion).toBe(5)
+    expect(readControlState(path).schemaVersion).toBe(6)
   })
 
   it('refuses to reuse state from another environment', () => {
@@ -93,7 +93,7 @@ describe('control-state SQLite engine', () => {
     const summary = initializeControlState(path, 'production')
 
     expect(summary.environment).toBe('production')
-    expect(summary.schemaVersion).toBe(5)
+    expect(summary.schemaVersion).toBe(6)
   })
 
   it('does not relabel an existing pre-Version-3 state database as production', () => {

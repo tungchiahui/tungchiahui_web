@@ -104,6 +104,7 @@ export function analyzeWorkflowPolicies(root: string): readonly WorkflowPolicyIs
     'packages: write',
     'id-token: write',
     'environment: production',
+    "if: vars.PRODUCTION_DEPLOYMENT_ENABLED == 'true'",
     'ghcr.io/tungchiahui/tungchiahui_web',
     workflowShaReference,
     'SITE_CONTROL_API_URL: https://www.tungchiahui.cn',

@@ -33,6 +33,7 @@
 17. **Web Application Repository 合并或 Push 到 `main` 后，必须先通过 CI Quality Gates，再自动构建 Git SHA Immutable Image 并通过统一 Deployment Engine 执行 Production Blue-Green Deployment；Content Repository Push 只触发 Content Sync。**
 18. **Renovate 负责创建 Dependency Update PR；它不得直接修改 `main`，升级仍须通过 Review 与全部 CI Quality Gates。**
 19. **不得仅仅因为这是个人网站，就简化已经确定的工程要求。**
+20. **共享生产主机由 1Panel OpenResty 承担公网 TLS/HTTP 入口；V2 只在 `127.0.0.1:3100` 暴露内部网关，并在该网关内执行蓝绿切换与 `/api/ops/*` 分流。**
 
 ## 网络身份
 
@@ -48,7 +49,11 @@ Users / GitHub Actions / local ./site CLI
       ddns.tungchiahui.cn:8443
         DNS-only / DDNS origin
                   |
-              OpenResty
+       shared-host OpenResty
+                  |
+        http://127.0.0.1:3100
+                  |
+           V2 OpenResty
                /       \
               v         v
     Next Blue/Green   control-api
@@ -166,7 +171,7 @@ GitHub Actions 的手动 `workflow_dispatch` 可以触发同一个 Translation J
 - pgBackRest + WAL/PITR
 - Adobe S3Mock for local S3 emulation
 - AList S3 for production static assets
-- Cloudflare R2 as off-site backup target
+- Provider-neutral off-site Backup S3 (currently Cloudflare R2)
 - SQLite as host-local control-plane recovery state only
 - Renovate for Dependency Update PR automation
 

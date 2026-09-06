@@ -12,9 +12,9 @@
 | Migration PostgreSQL Login | one-shot `database-migrate` | `site_migrator` Versioned DDL | Runtime Traffic、Backup、Replication |
 | PostgreSQL Admin Bootstrap | one-shot role bootstrap | 建库与 Login Reconciliation | Web/Worker/Control Runtime |
 | Backup PostgreSQL / pgBackRest | recovery process | Backup、WAL、Restore 所需权限 | Application Runtime、Translation |
-| Asset S3 | Web asset gateway | 指定 Asset Bucket Read；确需写入时只限批准 Prefix | Backup Bucket、R2、Canonical Markdown |
+| Asset S3 | Web asset gateway | 指定 Asset Bucket Read；确需写入时只限批准 Prefix | Backup Bucket、Canonical Markdown |
 | S3 Contract Test | Operator test process | 指定非生产 Bucket/Prefix CRUD | Production Asset/Backup Bucket |
-| Backup S3 / R2 | recovery process | 各自 Bucket Backup Artifact Read/Write | Asset Bucket、Application DB |
+| Backup S3（当前 R2） | recovery process | Backup Bucket Artifact Read/Write | Asset Bucket、Application DB |
 | AI Provider | `content-worker` only | 指定 Provider/Model 与 Server-side Budget | Deploy Agent、GitHub Workflow、Public Browser |
 | Deploy Registry Pull | `deploy-agent` only | 批准 Repository Digest Pull | Registry Push、DB、AI、GitHub Write |
 | Operator Request-signing Key | Operator workstation / approved CI OIDC | Explicit Capability | DB、Host Root、Docker Socket |
@@ -37,7 +37,7 @@
 ## 专项验证与失败处理
 
 - Runtime/Migration：运行 Role Membership Gate；四个 Login 必须各只有一个批准 Group Role，且 `rolsuper=false`。
-- Backup/WAL/R2：轮换后必须执行非破坏性 `check`、Manifest Read-back 和两副本 Freshness；不要把 Credential 成功当作可恢复证据。
+- Backup/WAL/Off-site S3：轮换后必须执行非破坏性 `check`、Manifest Read-back 和 Replica Freshness；不要把 Credential 成功当作可恢复证据。
 - S3：先对非生产 Contract Prefix 运行完整 Contract；Production Asset Credential 只做代表性 Read，除非变更单明确授权写入。
 - AI：先 `--dry-run`，再用明确的小 Budget 做非生产 Contract；Public Request 与 Content Push 仍不得调用 Provider。
 - Deploy：用批准 Repository 的不存在 Digest Failure 和已知 Digest Pull 验证 Fail-closed；不得 Retag。

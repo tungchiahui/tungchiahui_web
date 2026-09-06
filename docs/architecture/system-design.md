@@ -38,7 +38,11 @@ www.tungchiahui.cn                  cdn.tungchiahui.cn
                ddns.tungchiahui.cn:8443
                   DNS-only/DDNS origin
                            |
-                       OpenResty
+                shared-host OpenResty
+                            |
+                 127.0.0.1:3100 HTTP
+                            |
+                     V2 OpenResty
                   /         |          \
                  /          |           \
         Next Blue/Green   control-api  AList S3
@@ -284,11 +288,11 @@ Application Deployment Workflow 和本地 `./site deploy [git-sha-or-release]` �
 - Attachment
 - Music
 - 选定的 Mirrored Static Library/Asset
-- Backup Artifact
 
-### Cloudflare R2
+### Backup S3
 
-保存独立/异地 Backup Copy。
+保存独立于 Asset Store 的加密异地 Backup Copy。接口保持 Provider-neutral S3-compatible；当前
+Production Provider 为 Cloudflare R2。
 
 ## 9. 开发
 

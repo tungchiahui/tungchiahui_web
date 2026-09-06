@@ -1,7 +1,7 @@
 # Website V2 分阶段实施计划
 
 > Status: In progress — Phase 0–17 complete
-> Current Phase: Awaiting Owner authorization for Phase 18
+> Current Phase: Phase 18 in progress — Owner authorized; production cutover not yet executed
 > Execution Model: Hard-gated, one Phase at a time
 > Scope: 从新的 Next.js V2 Repository 基线推进到替换旧 Nuxt Production Site
 
@@ -1141,7 +1141,7 @@ Public Asset Read 已在 Phase 6 形成，生产 Infrastructure 前必须用真�
 
 ### 目标
 
-实现 pgBackRest Base Backup、WAL Archival、PITR、Off-host/R2 Replica、Control-state Backup、PG-down Restore 和复用同一 Engine 的 Break-glass Path，并以 Restore Drill 证明可恢复。
+实现 pgBackRest Base Backup、WAL Archival、PITR、Off-site S3 Replica、Control-state Backup、PG-down Restore 和复用同一 Engine 的 Break-glass Path，并以 Restore Drill 证明可恢复。
 
 ### 为什么此时实施
 
@@ -1161,14 +1161,14 @@ Production-like Infrastructure 已存在，但在可恢复性经过真实 Drill 
 
 ### Scope
 
-- pgBackRest Policy、WAL/PITR、Repository Compatibility Decision、AList/R2 Copy、`./site backup/restore`、SQLite Snapshot/Integrity、Recovery Agent、Break-glass、Restore Drill。
+- pgBackRest Policy、WAL/PITR、Repository Compatibility Decision、Off-site S3 Copy、`./site backup/restore`、SQLite Snapshot/Integrity、Recovery Agent、Break-glass、Restore Drill。
 - 引用：ADR 0002、0003、0015；Backup and Recovery；Runbook；Security。
 
 ### Task Checklist
 
 - [x] 配置 pgBackRest Full/Differential/Incremental Policy、WAL Archive、Retention 和 Integrity Check。
 - [x] 使用 Phase 11 证据验证 pgBackRest-to-AList Semantics；决定 Direct S3 或 Local Repository + Verified Sync。
-- [x] 实现独立 Cloudflare R2 Off-site Replica 与 Freshness/Failure Report。
+- [x] 实现独立于 Asset Store 的 Provider-neutral Off-site S3 Replica（当前为 R2）与 Freshness/Failure Report。
 - [x] 实现 `./site backup`、`backup status` 的 Environment Identification、Metadata、WAL 与 Replica Validation。
 - [x] 实现 `./site restore <backup-or-time>` 的 Target Environment、Confirmation、Lock/Lease 和 Audit。
 - [x] 确保 `control-api`/`deploy-agent`/SQLite 在 Production PostgreSQL Down 时可创建、恢复和查询 Restore Operation。
@@ -1189,7 +1189,7 @@ Production-like Infrastructure 已存在，但在可恢复性经过真实 Drill 
 - [x] Production PostgreSQL 停止时，Restore Operation 仍可 Create/Claim/Resume/Query。
 - [x] Control API 不可用时，Break-glass 仍使用同一 Engine、SQLite Lock 和 Audit。
 - [x] Crash/Restart、Lease Expiry、Partial Restore、Wrong Environment 和 Confirmation Failure Test 通过。
-- [x] R2 Replica 独立性、Freshness 和 Restore Readability 有证据。
+- [x] Off-site S3 Replica 与 Asset Store 的身份隔离、Freshness 和 Restore Readability 有证据。
 - [x] Control-state SQLite Backup/Restore 后 Active/Previous SHA 与 Audit Continuity 正确。
 
 ### Acceptance Criteria
@@ -1200,14 +1200,14 @@ Production-like Infrastructure 已存在，但在可恢复性经过真实 Drill 
 
 ### Exit Gate
 
-- [x] Restore Drill、PITR、PG-down、Break-glass、R2 和 Control-state Gate 全部通过。
+- [x] Restore Drill、PITR、PG-down、Break-glass、Off-site S3 和 Control-state Gate 全部通过。
 - [x] Recovery Validation Plan、证据和未定义/已测 RPO/RTO 状态已报告 Owner。
 - [x] 创建聚焦 Commit，建议：`feat(recovery): complete phase 13 tested recovery`。
 - [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 14。
 
 ### 本阶段完成后形成的 Artifact / Capability
 
-- 经 Restore Drill 验证的 PostgreSQL/Control-state Backup、PITR、R2 Off-site Copy、PG-independent Restore 与 Break-glass Recovery。
+- 经 Restore Drill 验证的 PostgreSQL/Control-state Backup、PITR、Off-site S3 Copy、PG-independent Restore 与 Break-glass Recovery。
 
 ### Agent Rules for This Phase
 
@@ -1571,7 +1571,7 @@ Deployment Engine 已在 Production-like 环境证明安全，才能让 CI 只�
 ### Scope
 
 - Refresh Legacy Inventory、Full Content Sync、Route/Feature/Visual Audit、Production Readiness Review、Fresh Backup/Restore Evidence、V2 Candidate、DNS/Upstream Cutover、Public Smoke、Rollback Window、Post-cutover Observation。
-- 引用：ADR 0001、0004、0006、0011；Migration Guide；Acceptance Criteria；Deployment/Recovery/Runbook。
+- 引用：ADR 0001、0004、0006、0011、0016；Migration Guide；Acceptance Criteria；Deployment/Recovery/Runbook。
 
 ### Task Checklist
 
@@ -1579,7 +1579,7 @@ Deployment Engine 已在 Production-like 环境证明安全，才能让 CI 只�
 - [ ] 执行最终 GitHub Canonical Content Sync，核对 Count、Hash、Delete/Move 和 Translation Pending/Fallback。
 - [ ] 对 MUST KEEP/SHOULD KEEP、Visual Identity、Interaction、Search、Locale、Asset 和 Analytics-sensitive Route 做 Final Audit。
 - [ ] 运行完整 Quality Gate、Migration Gate、Storage Contract、Restore Drill、Security/Observability 和 Production Smoke Rehearsal。
-- [ ] 确认 Fresh Recoverable Backup、WAL/R2、Control-state Backup 和 Previous Nuxt Rollback Plan。
+- [ ] 确认 Fresh Recoverable Backup、WAL/Off-site S3、Control-state Backup 和 Previous Nuxt Rollback Plan。
 - [ ] 由 Owner 明确批准 Cutover Window、Abort Criteria、Communication 和 Rollback Window。
 - [ ] 通过 Shared Deployment Engine 部署 Git-SHA V2 Candidate 到 Inactive Slot。
 - [ ] 执行 Pre-cutover Health/Ready/Version/Home/Article/Locale/Search/Asset Smoke。
@@ -1672,7 +1672,7 @@ Deployment Engine 已在 Production-like 环境证明安全，才能让 CI 只�
 | --- | --- | --- |
 | ADR 0001 | 新 Next.js V2 Repository；旧 Nuxt 只读参考 | Phase 0、1、18 |
 | ADR 0002 | PostgreSQL Runtime Content Store | Phase 3、5、8、10、13 |
-| ADR 0003 | AList S3 Asset/Backup Artifact；R2 Replica | Phase 11、13 |
+| ADR 0003 | Superseded：原 AList Asset/Backup + R2 双远程目标 | ADR 0017 |
 | ADR 0004 | Full Blue-Green、Immutable Image、Rollback | Phase 14、18 |
 | ADR 0005 | TypeScript/TSX Application/Automation Source | Phase 1，并由每阶段 Gate 持续验证 |
 | ADR 0006 | GitHub zh-CN Canonical Content | Phase 0、5、8、18 |
@@ -1685,8 +1685,10 @@ Deployment Engine 已在 Production-like 环境证明安全，才能让 CI 只�
 | ADR 0013 | content-worker / deploy-agent Privilege Separation | Phase 4、5、9、12–14、16 |
 | ADR 0014 | Control API 独立于 Next.js Slot | Phase 4、12、14、16 |
 | ADR 0015 | PostgreSQL-independent SQLite Recovery State | Phase 4、12–14、17 |
+| ADR 0016 | Shared-host Loopback Ingress | Phase 18 |
+| ADR 0017 | Provider-neutral Asset S3 + 单一 Off-site Backup S3 | Phase 13、18 |
 
-Coverage Audit 结论：当前 15 份 Accepted ADR 均至少映射到一个实施 Phase 和一个明确 Verification/Exit Gate；没有 Accepted ADR 被遗漏或被本计划 Supersede。
+Coverage Audit 结论：当前 16 份 Accepted ADR 均至少映射到一个实施 Phase 和一个明确 Verification/Exit Gate；ADR 0003 已由 ADR 0017 Supersede。ADR 0016 是 Phase 18 根据真实生产共享主机 Inventory 接受的入口边界，ADR 0017 记录 Owner 确认的单一 R2 Backup Target，并映射到 Phase 18 Recovery/Cutover Gate。
 
 ## Dependency Cycle Audit
 

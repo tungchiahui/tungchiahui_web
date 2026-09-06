@@ -20,11 +20,16 @@ Web Application Repository 的正常 Production Trigger：
 ```text
 push/merge to main
  -> CI Quality Gates
- -> build Git-SHA-tagged immutable image
+ -> build Git-SHA-tagged immutable image set
  -> POST /api/ops/deployments
 ```
 
 Quality Gates 未全部通过时不得构建/发布 Production Candidate，也不得 Cutover。
+
+首次上线使用 Repository Actions Variable `PRODUCTION_DEPLOYMENT_ENABLED` 作为显式 Activation
+Gate。变量不存在或不等于 `true` 时，成功的 `main` Quality Run 仍发布完整 Immutable Image Set，
+但 Deploy Job 必须保持 Skipped。只有 Production Environment Protection、Origin Provision、Control
+API 与 Pre-cutover Gate 均通过后才设置为 `true`；该变量不能绕过 Quality Gate。
 
 Human-triggered/Retry/指定版本：
 
@@ -35,7 +40,7 @@ SITE_DEPLOYMENT_IMAGE_DIGEST=sha256:<digest> ./site deploy
 
 GitHub Actions 和 `./site deploy` 向同一个独立 `control-api` 完成认证，执行相同 Policy，并调用同一个底层 Deployment Engine；不得维护 CI/Manual 两套实现。
 
-Phase 15 的 Application Workflow 只接受成功的同仓库 `main` Quality run，或显式验证过成功 Quality run 且仍属于 `main` 历史的完整 SHA。Build Job 只持有 Repository Read 与 Package Write；Deploy Job 只持有 Repository Read 与 OIDC，进入受保护的 `production` Environment，并由单一 non-cancelling Concurrency Group 序列化。Workflow 不持有 Production DB、AI Provider、Host Login、Origin Pull Credential 或 Docker Socket。
+Application Workflow 只接受成功的同仓库 `main` Quality run，或显式验证过成功 Quality run 且仍属于 `main` 历史的完整 SHA。Build Job 只持有 Repository Read 与 Package Write，并以同一完整 SHA 发布 Web、Service、Recovery、PostgreSQL 四个不可变镜像；Web Manifest Digest 继续作为 Blue/Green Deployment Identity。Deploy Job 只持有 Repository Read 与 OIDC，进入受保护的 `production` Environment，并由单一 non-cancelling Concurrency Group 序列化。Workflow 不持有 Production DB、AI Provider、Host Login、Origin Pull Credential 或 Docker Socket。
 
 正常 Remote Operation 使用：
 
@@ -48,6 +53,16 @@ https://www.tungchiahui.cn/api/ops/deployments
 ## Control/Execution 分离
 
 `control-api` 校验请求并在 host-local SQLite 创建 Durable Deployment Operation。该 State 不依赖 Production PostgreSQL。
+
+## 共享主机入口
+
+生产 Compose 只把 V2 OpenResty 发布为 `http://127.0.0.1:3100`。已有 1Panel OpenResty
+负责 `ddns.tungchiahui.cn:8443` 的公网 TLS、HTTP 行为和证书，并静态反向代理到该回环入口。
+外层配置不参与每次应用发布；原子 Blue/Green Cutover 仍由 V2 OpenResty 完成。
+
+外层代理必须保留原始 `Host`，覆盖并传递可信的 `X-Forwarded-For` 与
+`X-Forwarded-Proto`，且不得缓存 `/api/ops/*`。不得把外层代理直接指向 `web-blue`、
+`web-green`、`control-api` 或任何容器 IP。
 
 内部 `deploy-agent` 执行高权限 Deployment Action。
 
@@ -62,7 +77,7 @@ Git commit
    |
 CI Quality Gates
    |
-build immutable Git-SHA image
+build immutable Git-SHA image set
    |
 deployment operation
    |

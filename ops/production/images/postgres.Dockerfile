@@ -15,6 +15,9 @@ RUN apk add --no-cache \
   && ninja -C /tmp/pgbackrest-build
 
 FROM groonga/pgroonga:4.0.8-alpine-18@sha256:b5c92fa3d86ad76ce75ddd8095f60542cf025348a58b8a38cd0b4a580fe4ce68
+ARG SITE_DEPLOYMENT_SHA
+LABEL org.opencontainers.image.revision=${SITE_DEPLOYMENT_SHA} \
+  org.opencontainers.image.source="https://github.com/tungchiahui/tungchiahui_web"
 
 RUN apk add --no-cache libbz2 libcrypto3 libpq libssh2 libxml2 lz4-libs zlib zstd-libs \
   && rm -f /usr/local/bin/gosu

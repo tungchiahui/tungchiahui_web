@@ -13,6 +13,12 @@ describe('site command boundary', () => {
     ).toEqual({ kind: 'dev-reset' })
     expect(parseSiteCommand([])).toEqual({ kind: 'help' })
     expect(parseSiteCommand(['status'])).toEqual({ kind: 'status' })
+    expect(parseSiteCommand(['production', 'secrets', 'init'])).toEqual({
+      kind: 'production-secrets-init',
+    })
+    expect(parseSiteCommand(['production', 'secrets', 'validate'])).toEqual({
+      kind: 'production-secrets-validate',
+    })
     expect(parseSiteCommand(['deploy'])).toEqual({
       kind: 'deployment-create',
       reason: 'manual operator deployment',

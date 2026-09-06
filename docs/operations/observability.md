@@ -18,7 +18,7 @@ Phase 16 的可执行 Catalog/Alert Policy 位于 `src/observability/policy.ts`�
 | PostgreSQL | Database | Next/Job Snapshot | bounded dependency failure | Database Incident |
 | PgBouncer | Database | internal TCP Probe | container log + probe event | Pool Saturation |
 | S3 | Storage | representative gateway object read | bounded gateway/probe event | S3 Incident |
-| Backup/WAL/R2 | Recovery | latest validated SQLite evidence | audited operation event | Backup/Restore |
+| Backup/WAL/Off-site S3 | Recovery | latest validated SQLite evidence | audited operation event | Backup/Restore |
 | Host | Operations | read-only bytes/inodes | snapshot event | Disk Pressure |
 | observability-agent | Operations | internal `/health`/`/metrics` | alert/snapshot JSON event | Control-state incident |
 
@@ -102,7 +102,7 @@ slot
 
 - Last Successful Backup
 - WAL Archive Freshness
-- R2 Replica Freshness
+- Off-site Backup Replica Freshness
 - Last Successful Restore Drill
 
 ## Alert

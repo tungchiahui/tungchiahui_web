@@ -3,6 +3,22 @@ import { z } from 'zod'
 const optionalNonempty = <Schema extends z.ZodType<string>>(schema: Schema) =>
   z.preprocess((value) => (value === '' ? undefined : value), schema.optional())
 
+const deploymentEntryUrlSchema = z.url().superRefine((value, context) => {
+  const url = new URL(value)
+  const isInternalGateway =
+    url.protocol === 'http:' &&
+    url.hostname === 'openresty' &&
+    url.port === '8082' &&
+    url.username === '' &&
+    url.password === ''
+  if (url.protocol !== 'https:' && !isInternalGateway) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Deployment entry URL must use HTTPS or the fixed internal OpenResty gateway',
+    })
+  }
+})
+
 export const deploymentConfigurationSchema = z
   .object({
     DEPLOYMENT_ACTIVE_SLOT_CONFIG_PATH: z.string().startsWith('/deployment-config/'),
@@ -21,7 +37,7 @@ export const deploymentConfigurationSchema = z
     DEPLOYMENT_MIGRATION_POLICY_PATH: z.string().startsWith('/app/deployment/'),
     DEPLOYMENT_OPENRESTY_CONTAINER_NAME: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,199}$/),
     DEPLOYMENT_POLLING_ENABLED: z.enum(['true', 'false']).default('true'),
-    DEPLOYMENT_PUBLIC_ENTRY_URL: z.url().startsWith('https://'),
+    DEPLOYMENT_PUBLIC_ENTRY_URL: deploymentEntryUrlSchema,
     DEPLOYMENT_REGISTRY_TOKEN: optionalNonempty(z.string().min(16).max(10_000)),
     DEPLOYMENT_REGISTRY_USERNAME: optionalNonempty(z.string().min(1).max(200)),
     DEPLOYMENT_SEARCH_QUERY: z.string().trim().min(1).max(200),

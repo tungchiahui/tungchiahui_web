@@ -106,13 +106,14 @@ Content Sync 必须：
 
 ### S3
 
-生产 AList S3 用于：
+生产 Asset S3（当前部署选择为 AList）用于：
 
 - 图片
 - 附件
 - 音乐/静态媒体
 - 网站有意镜像的第三方静态资源
-- 数据库备份制品
+
+生产 Backup S3（当前部署选择为 Cloudflare R2）用于数据库与 Control-state 的加密异地备份制品。
 
 不得在 S3 中存储 Canonical Article Markdown。
 

@@ -28,7 +28,7 @@ const controlStatusSchema = z.object({
     incompleteOperations: z.number().int().nonnegative(),
     initializedAt: z.string(),
     journalMode: z.literal('wal'),
-    schemaVersion: z.literal(5),
+    schemaVersion: z.literal(6),
     synchronous: z.literal(2),
   }),
   deployAgent: z.literal('fake'),

@@ -26,7 +26,11 @@ GET  /api/ops/status
 OpenResty 在选择 Next.js Blue/Green Upstream 之前按 Path 分流：
 
 ```text
-Internet -> EdgeOne -> ddns.tungchiahui.cn:8443 -> OpenResty
+Internet -> EdgeOne -> ddns.tungchiahui.cn:8443 -> shared-host OpenResty
+                                                        |
+                                                 127.0.0.1:3100
+                                                        |
+                                                  V2 OpenResty
                                                         |
                            +----------------------------+------------------+
                            |                                               |
@@ -140,7 +144,7 @@ Phase 14 以 Additive Version 5 Migration 为 Deployment Runtime 增加 Current/
 
 Phase 17 保持 Version 5 Schema 不变，为既有 `server-migration` Operation 增加唯一的 Typed State-machine Engine。`./site provision` 与 `./site migrate-server` 仍只通过独立 Control API 创建同一 SQLite Operation；Target 只接受 Stable Inventory/SSH Identity，Active Migration 独占 Infrastructure-operation Window。Engine 逐步记录 Provision、Physical Replication、Abort Gate、Candidate Smoke、Final WAL、Control-state Transfer、Promotion、Application/Origin Cutover、Post-switch Verify 与 Non-writing Rollback Evidence。Disposable Production-foundation Adapter 执行完整非生产演练；Production Target/SSH/DDNS Binding 不由默认配置自动激活，仍需独立 Owner 授权。
 
-`control-api` 与 `deploy-agent` 通过 setgid/最小组写权限共享同一个 Host-local Store；各自使用 restrictive umask，不获得彼此的业务 Credential。SQLite Snapshot 执行 WAL Checkpoint + `VACUUM INTO`，验证 Schema/Integrity/Environment/Active-Previous SHA/Audit Digest，经 age 加密并复制到主 Backup Target 与独立 R2。R2 的 read-back-verified `latest.json` 允许在本地 SQLite 全损时发现最新 Artifact。显式 Break-glass 仅替换到达路径，仍向同一 Store 写 Audit/Operation 并由同一 Agent/Engine 执行。
+`control-api` 与 `deploy-agent` 通过 setgid/最小组写权限共享同一个 Host-local Store；各自使用 restrictive umask，不获得彼此的业务 Credential。SQLite Snapshot 执行 WAL Checkpoint + `VACUUM INTO`，验证 Schema/Integrity/Environment/Active-Previous SHA/Audit Digest，经 age 加密并复制到独立于 Asset Store 的 Off-site `BACKUP_S3_*` Target。其 read-back-verified `latest.json` 允许在本地 SQLite 全损时发现最新 Artifact。显式 Break-glass 仅替换到达路径，仍向同一 Store 写 Audit/Operation 并由同一 Agent/Engine 执行。
 
 Operation State Machine 是 `queued -> claimed -> running -> completed|failed`；Claimed Lease 到期可重新排队并增加 Fencing Token。Recovery 的 Running Lease 到期进入 `needs-attention/reconcile-required`；Deployment 则进入 `needs-attention` 并保留最后的精确 Phase，由 Phase 14 Reconciler 对账。Heartbeat 只能由匹配 Owner/Fencing Token 的未过期 Lease 续期，旧 Token 不能 Start、Heartbeat 或 Finish。
 

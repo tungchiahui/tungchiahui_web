@@ -1,6 +1,11 @@
 import { resolve6 } from 'node:dns/promises'
 import { readFileSync, statfsSync } from 'node:fs'
-import { createServer, type ServerResponse } from 'node:http'
+import {
+  createServer,
+  request as httpRequest,
+  type IncomingMessage,
+  type ServerResponse,
+} from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { connect } from 'node:net'
 
@@ -12,6 +17,22 @@ import {
   productionAlertRules,
 } from '../../src/observability/policy'
 import { emitTelemetry, safeErrorAttributes } from '../../src/observability/telemetry'
+
+const httpsOrInternalGatewayUrl = z.url().superRefine((value, context) => {
+  const url = new URL(value)
+  const isInternalGateway =
+    url.protocol === 'http:' &&
+    url.hostname === 'openresty' &&
+    url.port === '8082' &&
+    url.username === '' &&
+    url.password === ''
+  if (url.protocol !== 'https:' && !isInternalGateway) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Probe URL must use HTTPS or the fixed internal OpenResty gateway',
+    })
+  }
+})
 
 const configuration = z
   .object({
@@ -30,13 +51,13 @@ const configuration = z
       .enum(['true', 'false'])
       .transform((value) => value === 'true'),
     OBSERVABILITY_ORIGIN_SERVER_NAME: z.string().min(1),
-    OBSERVABILITY_ORIGIN_URL: z.url().startsWith('https://'),
+    OBSERVABILITY_ORIGIN_URL: httpsOrInternalGatewayUrl,
     OBSERVABILITY_PGBOUNCER_HOST: z.string().min(1),
     OBSERVABILITY_PGBOUNCER_PORT: z.coerce.number().int().min(1).max(65_535),
     OBSERVABILITY_PORT: z.coerce.number().int().min(1024).max(65_535),
     OBSERVABILITY_PUBLIC_ASSET_PATH: z.string().startsWith('/'),
     OBSERVABILITY_PUBLIC_SERVER_NAME: z.string().min(1),
-    OBSERVABILITY_PUBLIC_URL: z.url().startsWith('https://'),
+    OBSERVABILITY_PUBLIC_URL: httpsOrInternalGatewayUrl,
     OBSERVABILITY_RESTORE_DRILL_MAX_AGE_SECONDS: z.coerce.number().int().positive(),
     OBSERVABILITY_RESTORE_DRILL_TIMESTAMP: z.iso.datetime({ offset: true }),
     OBSERVABILITY_TLS_CA_PATH: z.preprocess(
@@ -67,28 +88,35 @@ function requestProbe(url: string, servername?: string): Promise<Probe> {
   const startedAt = performance.now()
   const parsed = new URL(url)
   return new Promise((resolveProbe) => {
-    const request = httpsRequest(
-      parsed,
-      {
-        ...(configuration.OBSERVABILITY_TLS_CA_PATH === undefined
-          ? {}
-          : { ca: readFileSync(configuration.OBSERVABILITY_TLS_CA_PATH) }),
-        headers: { host: servername ?? parsed.hostname, 'user-agent': 'tungchiahui-readiness/1' },
-        method: 'GET',
-        servername: servername ?? parsed.hostname,
-        timeout: 5_000,
-      },
-      (response) => {
-        response.resume()
-        response.once('end', () =>
-          resolveProbe({
-            durationMs: performance.now() - startedAt,
-            ok: (response.statusCode ?? 500) >= 200 && (response.statusCode ?? 500) < 400,
-            status: response.statusCode ?? null,
-          }),
-        )
-      },
-    )
+    const handleResponse = (response: IncomingMessage) => {
+      response.resume()
+      response.once('end', () =>
+        resolveProbe({
+          durationMs: performance.now() - startedAt,
+          ok: (response.statusCode ?? 500) >= 200 && (response.statusCode ?? 500) < 400,
+          status: response.statusCode ?? null,
+        }),
+      )
+    }
+    const commonOptions = {
+      headers: { host: servername ?? parsed.hostname, 'user-agent': 'tungchiahui-readiness/1' },
+      method: 'GET',
+      timeout: 5_000,
+    }
+    const request =
+      parsed.protocol === 'https:'
+        ? httpsRequest(
+            parsed,
+            {
+              ...commonOptions,
+              ...(configuration.OBSERVABILITY_TLS_CA_PATH === undefined
+                ? {}
+                : { ca: readFileSync(configuration.OBSERVABILITY_TLS_CA_PATH) }),
+              servername: servername ?? parsed.hostname,
+            },
+            handleResponse,
+          )
+        : httpRequest(parsed, commonOptions, handleResponse)
     request.once('error', () =>
       resolveProbe({ durationMs: performance.now() - startedAt, ok: false, status: null }),
     )
@@ -158,8 +186,7 @@ const controlHealthSchema = z
       backup: z
         .object({
           ageSeconds: z.number().nonnegative(),
-          primaryReplicaStatus: z.string(),
-          r2ReplicaStatus: z.string(),
+          offsiteReplicaStatus: z.string(),
           valid: z.boolean(),
           walArchivePresent: z.boolean(),
         })
@@ -245,8 +272,7 @@ async function collect() {
     infrastructure?.backup === undefined ||
     infrastructure.backup.ageSeconds > configuration.OBSERVABILITY_BACKUP_MAX_AGE_SECONDS ||
     !infrastructure.backup.valid ||
-    infrastructure.backup.primaryReplicaStatus !== 'fresh' ||
-    infrastructure.backup.r2ReplicaStatus !== 'fresh' ||
+    infrastructure.backup.offsiteReplicaStatus !== 'fresh' ||
     !infrastructure.backup.walArchivePresent ||
     restoreDrillAgeSeconds > configuration.OBSERVABILITY_RESTORE_DRILL_MAX_AGE_SECONDS
   const currentProbeHas5xx = [publicPath.status, originPath.status].some(

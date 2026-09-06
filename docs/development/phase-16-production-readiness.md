@@ -2,7 +2,7 @@
 
 ## 设计结果
 
-Phase 16 增加独立、只读的 `observability-agent`，统一采集 Public 与 Direct-origin HTTPS、Next.js、Control API、Content Worker、Deploy Agent、PostgreSQL/PgBouncer、S3-backed 代表对象、Host Filesystem 以及 Backup/WAL/R2/Restore Drill 证据。它不持有 PostgreSQL、S3、AI、Registry 或 Docker Credential；Production PostgreSQL 不可用时，Control-state SQLite Integrity、Operation/Audit 和 Recovery Evidence 仍可读取。
+Phase 16 增加独立、只读的 `observability-agent`，统一采集 Public 与 Direct-origin HTTPS、Next.js、Control API、Content Worker、Deploy Agent、PostgreSQL/PgBouncer、S3-backed 代表对象、Host Filesystem 以及 Backup/WAL/Off-site S3/Restore Drill 证据。它不持有 PostgreSQL、S3、AI、Registry 或 Docker Credential；Production PostgreSQL 不可用时，Control-state SQLite Integrity、Operation/Audit 和 Recovery Evidence 仍可读取。
 
 所有 TypeScript Service 使用统一 JSON Telemetry Envelope：`timestamp`、`level`、`component`、`event`、`request_id` 和有界安全属性。字段名拒绝 Authorization/Cookie/Credential/Password/Private Key/Secret/Token/Connection String，错误文本再对 Bearer、PostgreSQL URL、age Key 与 Private Key 做 Redaction。OpenResty Access Log 使用 JSON 且不记录 Query、Client IP、Cookie、Authorization 或 Request Body。
 
@@ -12,9 +12,9 @@ Phase 16 增加独立、只读的 `observability-agent`，统一采集 Public �
 
 - PostgreSQL Application Job Backlog、Oldest Age、Expired Lease、24h Failure 与 Translation Budget Stop；
 - SQLite Integrity/Schema、Audit Count/Max ID、Operation Age/Lease/Failure；
-- 最新 Backup Validity、WAL Presence、Primary/R2 Freshness。
+- 最新 Backup Validity、WAL Presence、Off-site Replica Freshness。
 
-`observability-agent` 的内部 `/health` 与 `/metrics` 不暴露到 Public OpenResty。它产生 Firing/Resolved Transition，避免每次 Poll 重复告警；可选 Alert Webhook 必须是 HTTPS 且 Token 只存在于 agent 专属 SOPS Environment。Alert 覆盖 Availability、Latency、PostgreSQL、PgBouncer、Job/Operation Stuck、Backup/WAL/R2/Restore、Disk/Inode、S3 Asset 和 Origin IPv6，均链接到 `docs/operations/runbook.md` 的可操作章节。
+`observability-agent` 的内部 `/health` 与 `/metrics` 不暴露到 Public OpenResty。它产生 Firing/Resolved Transition，避免每次 Poll 重复告警；可选 Alert Webhook 必须是 HTTPS 且 Token 只存在于 agent 专属 SOPS Environment。Alert 覆盖 Availability、Latency、PostgreSQL、PgBouncer、Job/Operation Stuck、Backup/WAL/Off-site S3/Restore、Disk/Inode、S3 Asset 和 Origin IPv6，均链接到 `docs/operations/runbook.md` 的可操作章节。
 
 Public Probe 与 Origin Probe 使用不同 URL/Server Name；Origin AAAA 解析可配置为必须条件。S3 Probe 读取 `/api/assets/monitoring/health.svg`，Activation 前必须在 Production Asset Bucket 建立该稳定、无敏感内容的代表对象。未建立对象时只产生明确的 Storage Alert，不会绕过应用网关或写 Bucket。
 

@@ -119,7 +119,7 @@ docs/planning/implementation-plan.md
 
 ## Phase 13 Tested Recovery
 
-- `development/phase-13-tested-recovery.md` — pgBackRest Policy、Repository 决策、双副本、PITR、SQLite 与 Break-glass Recovery Contract。
+- `development/phase-13-tested-recovery.md` — pgBackRest Policy、Repository 决策、Off-site 副本、PITR、SQLite 与 Break-glass Recovery Contract。
 - `development/phase-13-verification-report.md` — Disposable Restore Drill、PG-down、R2、Control-state、安全失败与质量 Gate 证据。
 
 ## Phase 14 Shared Blue-Green Deployment

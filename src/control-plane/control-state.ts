@@ -20,7 +20,7 @@ import {
   infrastructureOperationTypeSchema,
 } from './contracts'
 
-const CONTROL_STATE_SCHEMA_VERSION = 5
+const CONTROL_STATE_SCHEMA_VERSION = 6
 
 const controlStateSummarySchema = z.object({
   environment: z.enum(['local', 'test', 'production']),
@@ -68,7 +68,7 @@ export type ControlStateSummary = Readonly<{
   incompleteOperations: number
   initializedAt: string
   journalMode: 'wal'
-  schemaVersion: 5
+  schemaVersion: 6
   synchronous: 2
 }>
 
@@ -109,6 +109,7 @@ const backupRecordSchema = z.object({
   manifest_sha256: z.string().regex(/^[a-f0-9]{64}$/),
   measured_bytes: z.number().int().nonnegative(),
   measured_seconds: z.number().nonnegative(),
+  offsite_replica_status: z.enum(['fresh', 'failed', 'pending']),
   primary_replica_status: z.enum(['fresh', 'failed', 'pending']),
   r2_replica_status: z.enum(['fresh', 'failed', 'pending']),
   repository_generation: z.string().min(1),
@@ -125,8 +126,7 @@ export type RecoveryBackupRecord = Readonly<{
   manifestSha256: string
   measuredBytes: number
   measuredSeconds: number
-  primaryReplicaStatus: 'failed' | 'fresh' | 'pending'
-  r2ReplicaStatus: 'failed' | 'fresh' | 'pending'
+  offsiteReplicaStatus: 'failed' | 'fresh' | 'pending'
   repositoryGeneration: string
   stanza: string
   valid: boolean
@@ -143,7 +143,7 @@ export type ControlStateSnapshotEvidence = Readonly<{
   integrity: 'ok'
   lastSha: string | null
   previousSlot: 'blue' | 'green' | 'none'
-  schemaVersion: 5
+  schemaVersion: 6
 }>
 
 const deploymentRuntimeStateRowSchema = z.object({
@@ -324,6 +324,14 @@ const migrations = [
     `,
     version: 5,
   },
+  {
+    sql: `
+      ALTER TABLE recovery_backup_records ADD COLUMN offsite_replica_status TEXT NOT NULL DEFAULT 'pending'
+        CHECK (offsite_replica_status IN ('pending', 'fresh', 'failed'));
+      UPDATE recovery_backup_records SET offsite_replica_status = r2_replica_status;
+    `,
+    version: 6,
+  },
 ] as const
 
 function openControlState(path: string) {
@@ -502,7 +510,7 @@ export function readControlObservabilitySnapshot(path: string, now = new Date())
       )
     const latestBackup = database
       .prepare(
-        `SELECT completed_at, primary_replica_status, r2_replica_status, valid, wal_archive_max
+        `SELECT completed_at, offsite_replica_status, valid, wal_archive_max
          FROM recovery_backup_records ORDER BY completed_at DESC, backup_id DESC LIMIT 1`,
       )
       .get()
@@ -510,8 +518,7 @@ export function readControlObservabilitySnapshot(path: string, now = new Date())
       ? z
           .object({
             completed_at: z.iso.datetime({ offset: true }),
-            primary_replica_status: z.enum(['pending', 'fresh', 'failed']),
-            r2_replica_status: z.enum(['pending', 'fresh', 'failed']),
+            offsite_replica_status: z.enum(['pending', 'fresh', 'failed']),
             valid: z.union([z.literal(0), z.literal(1)]),
             wal_archive_max: z.string().nullable(),
           })
@@ -532,8 +539,7 @@ export function readControlObservabilitySnapshot(path: string, now = new Date())
                 0,
                 (now.getTime() - new Date(backup.completed_at).getTime()) / 1_000,
               ),
-              primaryReplicaStatus: backup.primary_replica_status,
-              r2ReplicaStatus: backup.r2_replica_status,
+              offsiteReplicaStatus: backup.offsite_replica_status,
               valid: backup.valid === 1,
               walArchivePresent: backup.wal_archive_max !== null,
             }),
@@ -1518,8 +1524,7 @@ function mapBackupRecord(row: unknown): RecoveryBackupRecord {
     manifestSha256: parsed.manifest_sha256,
     measuredBytes: parsed.measured_bytes,
     measuredSeconds: parsed.measured_seconds,
-    primaryReplicaStatus: parsed.primary_replica_status,
-    r2ReplicaStatus: parsed.r2_replica_status,
+    offsiteReplicaStatus: parsed.offsite_replica_status,
     repositoryGeneration: parsed.repository_generation,
     stanza: parsed.stanza,
     valid: parsed.valid === 1,
@@ -1537,8 +1542,7 @@ export function recordRecoveryBackup(path: string, record: RecoveryBackupRecord)
       manifestSha256: z.string().regex(/^[a-f0-9]{64}$/),
       measuredBytes: z.number().int().nonnegative(),
       measuredSeconds: z.number().nonnegative(),
-      primaryReplicaStatus: z.enum(['fresh', 'failed', 'pending']),
-      r2ReplicaStatus: z.enum(['fresh', 'failed', 'pending']),
+      offsiteReplicaStatus: z.enum(['fresh', 'failed', 'pending']),
       repositoryGeneration: z.string().min(1).max(200),
       stanza: z.string().min(1).max(100),
       valid: z.boolean(),
@@ -1553,12 +1557,11 @@ export function recordRecoveryBackup(path: string, record: RecoveryBackupRecord)
         .prepare(
           `INSERT INTO recovery_backup_records
             (backup_id, backup_type, stanza, repository_generation, manifest_sha256,
-             wal_archive_max, primary_replica_status, r2_replica_status, valid,
-             measured_seconds, measured_bytes, created_at, completed_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             wal_archive_max, primary_replica_status, r2_replica_status,
+             offsite_replica_status, valid, measured_seconds, measured_bytes, created_at, completed_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT (backup_id) DO UPDATE SET
-             primary_replica_status = excluded.primary_replica_status,
-             r2_replica_status = excluded.r2_replica_status,
+             offsite_replica_status = excluded.offsite_replica_status,
              valid = excluded.valid,
              measured_seconds = excluded.measured_seconds,
              measured_bytes = excluded.measured_bytes,
@@ -1571,8 +1574,9 @@ export function recordRecoveryBackup(path: string, record: RecoveryBackupRecord)
           validated.repositoryGeneration,
           validated.manifestSha256,
           validated.walArchiveMax,
-          validated.primaryReplicaStatus,
-          validated.r2ReplicaStatus,
+          'fresh',
+          validated.offsiteReplicaStatus,
+          validated.offsiteReplicaStatus,
           validated.valid ? 1 : 0,
           validated.measuredSeconds,
           validated.measuredBytes,
@@ -1585,8 +1589,7 @@ export function recordRecoveryBackup(path: string, record: RecoveryBackupRecord)
         details: {
           backupId: validated.backupId,
           manifestSha256: validated.manifestSha256,
-          primaryReplicaStatus: validated.primaryReplicaStatus,
-          r2ReplicaStatus: validated.r2ReplicaStatus,
+          offsiteReplicaStatus: validated.offsiteReplicaStatus,
           valid: validated.valid,
         },
         eventType: 'recovery_backup_recorded',

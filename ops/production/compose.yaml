@@ -191,7 +191,6 @@ services:
       OBSERVABILITY_PUBLIC_URL: ${TUNGCHIAHUI_OBSERVABILITY_PUBLIC_URL:-https://www.tungchiahui.cn/}
       OBSERVABILITY_RESTORE_DRILL_MAX_AGE_SECONDS: ${TUNGCHIAHUI_OBSERVABILITY_RESTORE_DRILL_MAX_AGE_SECONDS:?restore-drill policy is required}
       OBSERVABILITY_RESTORE_DRILL_TIMESTAMP: ${TUNGCHIAHUI_OBSERVABILITY_RESTORE_DRILL_TIMESTAMP:?last restore-drill evidence is required}
-      OBSERVABILITY_TLS_CA_PATH: ${TUNGCHIAHUI_OBSERVABILITY_TLS_CA_PATH:-}
       OBSERVABILITY_WEB_URL: http://web-blue:3000/api/ready
       OBSERVABILITY_WORKER_URL: http://content-worker:8083/health
       SITE_RUNTIME_MODE: production
@@ -205,7 +204,6 @@ services:
     volumes:
       - ${TUNGCHIAHUI_DATA_ROOT:?data root is required}:/host-data:ro
       - ${TUNGCHIAHUI_DATA_ROOT:?data root is required}/control-state:/host-control-state:ro
-      - ${TUNGCHIAHUI_SECRET_DIRECTORY:?secret directory is required}/origin.crt:/run/observability/origin-ca.crt:ro
 
   web-blue:
     <<: *hardened-service
@@ -278,7 +276,7 @@ services:
       DEPLOYMENT_MIGRATION_POLICY_PATH: /app/deployment/drizzle/migration-policy.json
       DEPLOYMENT_OPENRESTY_CONTAINER_NAME: ${TUNGCHIAHUI_OPENRESTY_CONTAINER_NAME:?OpenResty container name is required}
       DEPLOYMENT_POLLING_ENABLED: "true"
-      DEPLOYMENT_PUBLIC_ENTRY_URL: https://openresty:8443
+      DEPLOYMENT_PUBLIC_ENTRY_URL: http://openresty:8082
       DEPLOYMENT_SEARCH_QUERY: ROS2_Control
       DEPLOYMENT_STABILIZATION_SECONDS: ${TUNGCHIAHUI_DEPLOYMENT_STABILIZATION_SECONDS:?stabilization policy is required}
       DEPLOY_AGENT_HOST: 0.0.0.0
@@ -323,21 +321,22 @@ services:
       control-api:
         condition: service_healthy
     healthcheck:
-      test: [CMD, curl, --insecure, --fail, --silent, https://127.0.0.1:8443/openresty-health]
+      test: [CMD, curl, --fail, --silent, http://127.0.0.1:8082/openresty-health]
       interval: 5s
       timeout: 3s
       retries: 30
     networks: [edge, deployment-probe]
     ports:
-      - "${TUNGCHIAHUI_ORIGIN_PORT:-8443}:8443"
+      - target: 8082
+        published: "${TUNGCHIAHUI_ORIGIN_PORT:-3100}"
+        host_ip: "${TUNGCHIAHUI_ORIGIN_BIND_ADDRESS:-127.0.0.1}"
+        protocol: tcp
     tmpfs:
       - /tmp:size=32m,mode=1777,noexec,nosuid,nodev
       - /var/run:size=8m,mode=755,nosuid,nodev
     volumes:
       - ${TUNGCHIAHUI_CONFIG_ROOT:?config root is required}/openresty.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro
       - ${TUNGCHIAHUI_CONFIG_ROOT:?config root is required}/deployment:/etc/tungchiahui/deployment:ro
-      - ${TUNGCHIAHUI_SECRET_DIRECTORY:?secret directory is required}/origin.crt:/run/secrets/origin.crt:ro
-      - ${TUNGCHIAHUI_SECRET_DIRECTORY:?secret directory is required}/origin.key:/run/secrets/origin.key:ro
 
 networks:
   application:

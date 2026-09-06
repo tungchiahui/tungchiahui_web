@@ -10,7 +10,8 @@ tungchiahui_deployment_stabilization_seconds: ""
 tungchiahui_deployment_image_repository: ghcr.io/tungchiahui/tungchiahui_web
 tungchiahui_install_packages: true
 tungchiahui_manage_stack: true
-tungchiahui_origin_port: "8443"
+tungchiahui_origin_bind_address: "127.0.0.1"
+tungchiahui_origin_port: "3100"
 tungchiahui_observability_backup_max_age_seconds: ""
 tungchiahui_observability_disk_critical_percent: "90"
 tungchiahui_observability_interval_seconds: "30"
@@ -25,13 +26,12 @@ tungchiahui_observability_public_server_name: www.tungchiahui.cn
 tungchiahui_observability_public_url: https://www.tungchiahui.cn/
 tungchiahui_observability_restore_drill_max_age_seconds: ""
 tungchiahui_observability_restore_drill_timestamp: ""
-tungchiahui_observability_tls_ca_path: ""
 tungchiahui_postgres_image: ""
 tungchiahui_recovery_image: ""
 tungchiahui_repository_root: "{{ playbook_dir }}/../../../.."
 tungchiahui_runtime_group_gid: 10050
 tungchiahui_secret_file: ""
-tungchiahui_secret_root: /run/tungchiahui/secrets
+tungchiahui_secret_root: /etc/tungchiahui/secrets
 tungchiahui_search_polling_enabled: "false"
 tungchiahui_service_image: ""
 tungchiahui_web_image: ""
