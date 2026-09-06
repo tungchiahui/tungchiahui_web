@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { createHash, createHmac, generateKeyPairSync, pbkdf2Sync, randomBytes } from 'node:crypto'
+import { generateKeyPairSync, randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, resolve } from 'node:path'
@@ -8,6 +8,7 @@ import { stringify } from 'yaml'
 import { z } from 'zod'
 
 import { capabilityValues } from '../../src/control-plane/contracts'
+import { createPostgresScramVerifier } from '../../src/database/postgres-scram'
 
 const publicJwkSchema = z
   .object({
@@ -125,15 +126,6 @@ export function validateProductionSecretDocument(input: unknown) {
     'DEPLOYMENT_REGISTRY_TOKEN',
   ])
   return Object.freeze({ sections: Object.keys(document).length })
-}
-
-export function createPostgresScramVerifier(password: string, salt = randomBytes(16)) {
-  const iterations = 4096
-  const saltedPassword = pbkdf2Sync(password, salt, iterations, 32, 'sha256')
-  const clientKey = createHmac('sha256', saltedPassword).update('Client Key').digest()
-  const storedKey = createHash('sha256').update(clientKey).digest('base64')
-  const serverKey = createHmac('sha256', saltedPassword).update('Server Key').digest('base64')
-  return `SCRAM-SHA-256$${String(iterations)}:${salt.toString('base64')}$${storedKey}:${serverKey}`
 }
 
 export function createSopsEncryptArguments(recipient: string) {

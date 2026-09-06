@@ -19,6 +19,7 @@ import {
   restoreControlStateSnapshot,
   startInfrastructureOperation,
 } from '../../src/control-plane/control-state'
+import { createPostgresScramVerifier } from '../../src/database/postgres-scram'
 import { seedDevelopmentDatabase } from '../../src/database/seed'
 import { SearchIndexRepository } from '../../src/search/repository'
 import {
@@ -244,6 +245,12 @@ function createEncryptedSecret() {
   const controlPassword = 'phase12-disposable-control-password-0001'
   const migratorPassword = 'phase12-disposable-migrator-password-0001'
   const workerPassword = 'phase12-disposable-worker-password-0001'
+  const scramVerifiers = {
+    app: createPostgresScramVerifier(appPassword),
+    control: createPostgresScramVerifier(controlPassword),
+    migrator: createPostgresScramVerifier(migratorPassword),
+    worker: createPostgresScramVerifier(workerPassword),
+  }
   const payload = {
     backup_age_identity: readFileSync(identityPath, 'utf8'),
     backup_env: [
@@ -283,10 +290,10 @@ function createEncryptedSecret() {
     ].join('\n'),
     observability_env: '\n',
     pgbouncer_userlist: [
-      `"site_app_login" "${appPassword}"`,
-      `"site_content_worker_login" "${workerPassword}"`,
-      `"site_control_api_login" "${controlPassword}"`,
-      `"site_migrator_login" "${migratorPassword}"`,
+      `"site_app_login" "${scramVerifiers.app}"`,
+      `"site_content_worker_login" "${scramVerifiers.worker}"`,
+      `"site_control_api_login" "${scramVerifiers.control}"`,
+      `"site_migrator_login" "${scramVerifiers.migrator}"`,
     ].join('\n'),
     postgres_env: [
       'POSTGRES_DB=tungchiahui',
@@ -763,7 +770,7 @@ function inspectHardening() {
   )
 }
 
-function verifyDatabaseRoleBindings() {
+function verifyDatabaseRoleBindings(workerPassword: string) {
   const postgres = compose(['ps', '--quiet', 'postgres']).stdout.trim()
   const bindings = [
     ['site_app_login', 'site_app'],
@@ -801,6 +808,29 @@ function verifyDatabaseRoleBindings() {
     ]).stdout.trim()
     expect(membershipCount === '1', `${login} has an unexpected group-role membership`)
   }
+  const authenticatedUser = execute('docker', [
+    'exec',
+    '--env',
+    `PGPASSWORD=${workerPassword}`,
+    postgres,
+    'psql',
+    '--host',
+    'pgbouncer',
+    '--port',
+    '6432',
+    '--username',
+    'site_content_worker_login',
+    '--dbname',
+    'tungchiahui',
+    '--tuples-only',
+    '--no-align',
+    '--command',
+    'SELECT current_user',
+  ]).stdout.trim()
+  expect(
+    authenticatedUser === 'site_content_worker_login',
+    'PgBouncer did not authenticate the worker through to PostgreSQL',
+  )
 }
 
 function curl(arguments_: readonly string[], expectedStatus: number) {
@@ -1799,7 +1829,7 @@ async function main() {
     verifyImageSecurity()
     runProvision(encrypted.identityPath)
     inspectHardening()
-    verifyDatabaseRoleBindings()
+    verifyDatabaseRoleBindings(encrypted.workerPassword)
     await initializeDeploymentFixture(encrypted.workerPassword)
     await verifyBlueGreenDeployment()
     await verifyRoutingAndIpFamilies()

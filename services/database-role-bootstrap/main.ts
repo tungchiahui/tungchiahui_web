@@ -3,6 +3,13 @@ import { readFileSync } from 'node:fs'
 import { Client } from 'pg'
 import { z } from 'zod'
 
+import {
+  parsePgbouncerScramUserlist,
+  verifyPostgresScramVerifier,
+} from '../../src/database/postgres-scram'
+
+const pgbouncerUserlistPath = '/run/secrets/pgbouncer-userlist.txt'
+
 const loginName = z.string().regex(/^[a-z][a-z0-9_]{2,62}$/)
 const secret = z.string().min(32)
 
@@ -43,6 +50,7 @@ type LoginBinding = Readonly<{
   groupRole: 'site_app' | 'site_content_worker' | 'site_control_api' | 'site_migrator'
   loginName: string
   password: string
+  verifier: string
 }>
 
 const groupRoles = [
@@ -54,7 +62,7 @@ const groupRoles = [
   'site_replication',
 ] as const
 
-const bindings: readonly LoginBinding[] = [
+const unverifiedBindings = [
   {
     groupRole: 'site_app',
     loginName: configuration.SITE_APP_LOGIN_NAME,
@@ -75,7 +83,24 @@ const bindings: readonly LoginBinding[] = [
     loginName: configuration.SITE_MIGRATOR_LOGIN_NAME,
     password: configuration.SITE_MIGRATOR_LOGIN_PASSWORD,
   },
-]
+] as const
+
+function bindScramVerifiers(): readonly LoginBinding[] {
+  const verifiers = parsePgbouncerScramUserlist(readFileSync(pgbouncerUserlistPath, 'utf8'))
+  const expectedNames = new Set(unverifiedBindings.map((binding) => binding.loginName))
+  const unexpectedNames = [...verifiers.keys()].filter((name) => !expectedNames.has(name))
+  if (verifiers.size !== expectedNames.size || unexpectedNames.length > 0) {
+    throw new Error('PgBouncer userlist does not exactly match database bootstrap login identities')
+  }
+  return unverifiedBindings.map((binding) => {
+    const verifier = verifiers.get(binding.loginName)
+    if (!verifier) throw new Error(`PgBouncer verifier is missing for ${binding.loginName}`)
+    if (!verifyPostgresScramVerifier(binding.password, verifier)) {
+      throw new Error(`PgBouncer verifier does not match ${binding.loginName}`)
+    }
+    return Object.freeze({ ...binding, verifier })
+  })
+}
 
 async function formatStatement(client: Client, format: string, values: readonly string[]) {
   const result = await client.query<{ statement: string }>(
@@ -96,7 +121,7 @@ async function reconcileLogin(client: Client, binding: LoginBinding) {
     exists.rowCount === 0
       ? 'CREATE ROLE %I LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD %L'
       : 'ALTER ROLE %I WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD %L',
-    [binding.loginName, binding.password],
+    [binding.loginName, binding.verifier],
   )
   await client.query(roleStatement)
   for (const groupRole of groupRoles) {
@@ -111,6 +136,7 @@ async function reconcileLogin(client: Client, binding: LoginBinding) {
 }
 
 async function main() {
+  const bindings = bindScramVerifiers()
   const client = new Client({
     application_name: 'site-production-role-bootstrap',
     connectionString: configuration.DATABASE_ADMIN_URL,

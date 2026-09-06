@@ -59,8 +59,13 @@ arguments, image layers and normal logs.
 The one-shot database bootstrap creates or reconciles four distinct non-superuser login identities
 and grants each exactly one existing NOLOGIN group role: `site_app`, `site_control_api`,
 `site_content_worker`, or `site_migrator`. The bootstrap uses the direct internal PostgreSQL service,
-runs only during provisioning/secret rotation, and is excluded from the normal Compose profile.
-Application services connect through PgBouncer with their dedicated login.
+runs only during provisioning, secret rotation, or a versioned bootstrap-policy upgrade, and is
+excluded from the normal Compose profile. It validates each plaintext bootstrap password against the
+corresponding PgBouncer SCRAM verifier, rejects missing, duplicate, unexpected, malformed or
+mismatched identities, and installs that exact verifier in PostgreSQL. This shared verifier is
+required for SCRAM pass-through from PgBouncer to PostgreSQL. Application services connect through
+PgBouncer with their dedicated login, and the production-like test proves a complete authenticated
+connection through both hops.
 
 Production control configuration now requires externally supplied operator keys and GitHub OIDC
 policy. `SITE_RUNTIME_MODE=production` is accepted by control-api and workers; the deterministic fake

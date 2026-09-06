@@ -81,6 +81,8 @@ services:
     command: [node, dist/database-role-bootstrap.cjs]
     env_file:
       - ${TUNGCHIAHUI_SECRET_DIRECTORY:?secret directory is required}/database-role-bootstrap.env
+    volumes:
+      - ${TUNGCHIAHUI_SECRET_DIRECTORY:?secret directory is required}/pgbouncer-userlist.txt:/run/secrets/pgbouncer-userlist.txt:ro
     depends_on:
       postgres:
         condition: service_healthy

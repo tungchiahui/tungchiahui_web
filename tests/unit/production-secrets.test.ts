@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
-
 import {
   createPostgresScramVerifier,
+  parsePgbouncerScramUserlist,
+  verifyPostgresScramVerifier,
+} from '../../src/database/postgres-scram'
+import {
   createSopsEncryptArguments,
   validateProductionSecretDocument,
 } from '../../tools/production/initialize-secrets'
@@ -17,6 +20,22 @@ describe('production secret initialization', () => {
       /^SCRAM-SHA-256\$4096:[A-Za-z0-9+/]+=*\$[A-Za-z0-9+/]+=*:[A-Za-z0-9+/]+=*$/,
     )
     expect(verifier).not.toContain('a-production-password-that-must-not-appear')
+    expect(
+      verifyPostgresScramVerifier('a-production-password-that-must-not-appear', verifier),
+    ).toBe(true)
+    expect(verifyPostgresScramVerifier('a-different-production-password', verifier)).toBe(false)
+  })
+
+  it('accepts only unique PgBouncer identities with valid SCRAM verifiers', () => {
+    const verifier = createPostgresScramVerifier('phase18-test-password-value')
+    const parsed = parsePgbouncerScramUserlist(`"site_app_login" "${verifier}"\n`)
+    expect(parsed.get('site_app_login')).toBe(verifier)
+    expect(() =>
+      parsePgbouncerScramUserlist(`"site_app_login" "${verifier}"\n"site_app_login" "${verifier}"`),
+    ).toThrow('Duplicate PgBouncer login identity')
+    expect(() => parsePgbouncerScramUserlist('"site_app_login" "plain-text-password"')).toThrow(
+      'Invalid PostgreSQL SCRAM-SHA-256 verifier',
+    )
   })
 
   it('rejects encrypted-document payloads that still contain operator placeholders', () => {

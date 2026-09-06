@@ -98,6 +98,9 @@ describe('Phase 12 production foundation policy', () => {
     })
     expect(compose.services['control-api']?.networks).not.toContain('deploy-control')
     expect(compose.services['content-worker']?.networks).not.toContain('deploy-control')
+    expect(JSON.stringify(compose.services['database-role-bootstrap']?.volumes)).toContain(
+      '/run/secrets/pgbouncer-userlist.txt:ro',
+    )
     expect(compose.services['observability-agent']?.networks).toEqual([
       'application',
       'deployment-probe',
@@ -143,6 +146,7 @@ describe('Phase 12 production foundation policy', () => {
     expect(productionRoleSource).toContain('TUNGCHIAHUI_DEPLOYMENT_SEARCH_QUERY')
     expect(productionRoleSource).toContain('replica: offsite-backup-s3')
     expect(productionRoleSource).not.toContain('primary-s3-and-r2')
+    expect(productionRoleSource).toContain('schema: 2')
   })
 
   it('requires externally supplied production authentication policy', () => {
