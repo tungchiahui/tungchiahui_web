@@ -337,11 +337,11 @@ const migrations = [
 function openControlState(path: string) {
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
   const database = new DatabaseSync(path)
+  database.exec('PRAGMA busy_timeout = 5000;')
   database.exec('PRAGMA foreign_keys = ON;')
   database.exec('PRAGMA journal_mode = WAL;')
   database.exec('PRAGMA synchronous = FULL;')
   database.exec('PRAGMA wal_autocheckpoint = 1000;')
-  database.exec('PRAGMA busy_timeout = 5000;')
   return database
 }
 

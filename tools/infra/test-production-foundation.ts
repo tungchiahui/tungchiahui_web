@@ -1766,11 +1766,18 @@ async function verifyServerMigrationRehearsal(identityPath: string) {
       targetIpv6OnlyPublicLikeProbe: 'pass',
     })
   } catch (error: unknown) {
-    finishInfrastructureOperation(sourceControlPath, running.id, lease, {
-      errorSummary: error instanceof Error ? error.message : 'unknown migration rehearsal failure',
-      phase: 'migration-failed',
-      status: 'failed',
-    })
+    try {
+      finishInfrastructureOperation(sourceControlPath, running.id, lease, {
+        errorSummary:
+          error instanceof Error ? error.message : 'unknown migration rehearsal failure',
+        phase: 'migration-failed',
+        status: 'failed',
+      })
+    } catch (auditError: unknown) {
+      console.error(
+        `Unable to persist migration rehearsal failure: ${auditError instanceof Error ? auditError.message : 'unknown control-state failure'}`,
+      )
+    }
     throw error
   }
 }
