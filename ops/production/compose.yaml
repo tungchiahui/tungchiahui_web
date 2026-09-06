@@ -151,7 +151,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 30
-    networks: [application]
+    networks: [application, content-egress]
     tmpfs: *node-tmpfs
 
   observability-agent:
@@ -350,6 +350,7 @@ networks:
   deployment-probe:
     internal: true
   backup-egress:
+  content-egress: {}
   edge:
     enable_ipv6: true
 

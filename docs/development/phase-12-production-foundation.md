@@ -19,7 +19,7 @@ Docker workloads use service DNS only.
 | OpenResty | TLS origin, active-slot website routing, direct `/api/ops/*` routing | edge network only; no Docker socket |
 | web-blue / web-green | immutable Next standalone application slots | edge + application; non-root, read-only root |
 | control-api | authenticated control HTTP and host-local SQLite | edge + application; no Docker socket |
-| content-worker | content/search workers; paid translation disabled by default | application only; no control-state or Docker socket |
+| content-worker | content/search workers; paid translation disabled by default | application + dedicated content egress; no control-state or Docker socket |
 | PostgreSQL / PgBouncer | runtime database and transaction pooling | isolated database network; dedicated durable bind mount |
 | deploy-agent | Phase 12 health/capability boundary | deploy-control only; the sole Docker socket holder; code permits only `GET /_ping` |
 | database-role-bootstrap | one-shot login/group-role reconciliation | provision profile + database network only |
@@ -39,7 +39,9 @@ Every practical long-running service uses a read-only root filesystem, drops all
 sets `no-new-privileges`, and receives only explicit tmpfs/bind mounts and isolated Compose networks.
 The PostgreSQL 18 mount follows its major-version directory contract at `/var/lib/postgresql`; its
 socket tmpfs has an explicit UID/GID. `control-api` and `content-worker` cannot reach the deploy
-network and never mount the Docker socket. OpenResty startup depends on control-api but not on a Next
+network and never mount the Docker socket. Only `content-worker` joins the dedicated
+`content-egress` network required for its validated, read-only GitHub API adapter; database and
+control-plane services remain on internal networks. OpenResty startup depends on control-api but not on a Next
 slot or PostgreSQL; content/search polling stays disabled until an explicit later binding enables it.
 
 The Phase 12 deploy-agent is deliberately not a deployment implementation. It can only test Docker
