@@ -255,7 +255,7 @@ function createEncryptedSecret() {
     ].join('\n'),
     content_worker_env: [
       `DATABASE_URL=postgresql://site_content_worker_login:${workerPassword}@pgbouncer:6432/tungchiahui`,
-      'GITHUB_CONTENT_REPOSITORY=tungchiahui/content',
+      'GITHUB_CONTENT_REPOSITORY=tungchiahui/tungchiahui_content',
       `SITE_REVALIDATION_SECRET=${testSecret}`,
     ].join('\n'),
     control_api_env: [
