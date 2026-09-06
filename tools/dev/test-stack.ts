@@ -114,18 +114,21 @@ async function readStatus(base: URL, nonce: string) {
 
 async function fetchAfterServiceRestart(url: URL) {
   let lastError = 'unknown error'
-  for (let attempt = 1; attempt <= 5; attempt += 1) {
+  for (let attempt = 1; attempt <= 30; attempt += 1) {
     try {
-      return await fetch(url, {
+      const response = await fetch(url, {
         headers: { connection: 'close' },
         signal: AbortSignal.timeout(5_000),
       })
+      if (response.ok) return response
+      lastError = `HTTP ${String(response.status)}`
+      await response.body?.cancel()
     } catch (error: unknown) {
       lastError =
         error instanceof Error ? `${error.message}: ${String(error.cause)}` : String(error)
-      if (attempt < 5) {
-        await new Promise<void>((resolveWait) => setTimeout(resolveWait, 250))
-      }
+    }
+    if (attempt < 30) {
+      await new Promise<void>((resolveWait) => setTimeout(resolveWait, 1_000))
     }
   }
   throw new Error(`Unable to reach restarted service at ${url.toString()}: ${lastError}`)
