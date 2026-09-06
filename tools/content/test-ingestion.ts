@@ -29,39 +29,21 @@ const snapshotAFiles = [
   {
     path: 'content/posts/2026-01-06-新博客启用.md',
     contents: markdown(
-      ['title: 新博客启用', 'date: 2026-01-06', 'path: newblogenable!'],
+      ['title: 新博客启用'],
       '# 新博客启用\n\n这是当前段落。\n\n这个区块保持待翻译。',
     ),
   },
   {
     path: 'content/posts/2026-01-14-W311MI_AX300驱动.md',
-    contents: markdown(
-      ['title: W311MI AX300 驱动', 'date: 2026-01-14', 'path: w311mi_ax300'],
-      '# 驱动',
-    ),
+    contents: markdown(['title: W311MI AX300 驱动'], '# 驱动'),
   },
   {
     path: 'content/posts/2026-02-09-新的todolist界面.md',
-    contents: markdown(
-      [
-        'title: 新的 todolist 界面',
-        'date: 2026-02-09',
-        'path: newtodolist',
-        'description: Legacy four-key frontmatter fixture',
-      ],
-      '# Todo',
-    ),
+    contents: markdown(['title: 新的 todolist 界面'], '# Todo'),
   },
   {
     path: 'content/posts/2026-07-21-VSCode任务栏启动Codex插件打不开.md',
-    contents: markdown(
-      [
-        'title: VSCode 任务栏启动 Codex 插件打不开',
-        'date: 2026-07-21',
-        'path: vscode-taskbar-codex-fix',
-      ],
-      '# Codex',
-    ),
+    contents: markdown(['title: VSCode 任务栏启动 Codex 插件打不开'], '# Codex'),
   },
   {
     path: 'content/wiki/2024-10-03-Docker教程/index.md',
@@ -91,17 +73,11 @@ const snapshotA = snapshot(commitA, snapshotAFiles)
 export const phase5FinalSnapshot = snapshot(commitB, [
   {
     ...snapshotAFiles[0],
-    contents: markdown(
-      ['title: 新博客启用', 'date: 2026-01-06', 'path: newblogenable!'],
-      '# 新博客启用\n\nModified at commit B.',
-    ),
+    contents: markdown(['title: 新博客启用'], '# 新博客启用\n\nModified at commit B.'),
   },
   {
     ...snapshotAFiles[1],
-    contents: markdown(
-      ['title: W311MI AX300 驱动', 'date: 2026-01-14', 'path: w311mi_ax300'],
-      '# 新博客启用',
-    ),
+    contents: markdown(['title: W311MI AX300 驱动'], '# 新博客启用'),
   },
   snapshotAFiles[2],
   snapshotAFiles[3],
@@ -258,10 +234,10 @@ export async function verifyPhase5Ingestion(connectionString: string, firstJobId
       throw new Error('OpenCC ingestion did not materialize both deterministic content locales')
     }
     const hongKongBlog = materializations.rows.find(
-      (row) => row.route_path === '/blog/newblogenable!' && row.locale === 'zh-hk',
+      (row) => row.route_path === '/blog/2026-01-06-xin-bo-ke-qi-yong' && row.locale === 'zh-hk',
     )
     const taiwanBlog = materializations.rows.find(
-      (row) => row.route_path === '/blog/newblogenable!' && row.locale === 'zh-tw',
+      (row) => row.route_path === '/blog/2026-01-06-xin-bo-ke-qi-yong' && row.locale === 'zh-tw',
     )
     if (
       !hongKongBlog?.translated_markdown.includes('# 新網誌啓用') ||
@@ -295,6 +271,19 @@ export async function verifyPhase5Ingestion(connectionString: string, firstJobId
     if (alias.rows.length !== 1 || !alias.rows[0]?.approval_reference.includes('Phase 0')) {
       throw new Error('Approved Legacy alias was not linked to the materialized Wiki document')
     }
+    const blogAlias = await client.query<{
+      approval_reference: string
+      route_path: string
+    }>(`SELECT alias.approval_reference, document.route_path
+         FROM app.content_aliases alias
+         JOIN app.documents document ON document.id = alias.document_id
+        WHERE alias.alias_path = '/blog/newblogenable!'`)
+    if (
+      blogAlias.rows[0]?.route_path !== '/blog/2026-01-06-xin-bo-ke-qi-yong' ||
+      !blogAlias.rows[0]?.approval_reference.includes('Phase 18')
+    ) {
+      throw new Error('Phase 0 Blog route was not linked to the Phase 18 canonical document')
+    }
 
     await createJob(jobCreator, commitA, 'replay')
     const replay = await worker.runOnce()
@@ -325,7 +314,7 @@ export async function verifyPhase5Ingestion(connectionString: string, firstJobId
          FROM app.document_translation_segments mapping
          JOIN app.documents document ON document.id = mapping.document_id
         WHERE mapping.segment_id = segment.id
-          AND document.route_path = '/blog/newblogenable!'
+          AND document.route_path = '/blog/2026-01-06-xin-bo-ke-qi-yong'
           AND segment.source_text IN ('# 新博客启用', '这是当前段落。')`,
     )
     await createJob(jobCreator, commitA, 'translation-memory-reuse')
@@ -347,7 +336,7 @@ export async function verifyPhase5Ingestion(connectionString: string, firstJobId
               translation.translated_segment_count
          FROM app.document_translations translation
          JOIN app.documents document ON document.id = translation.document_id
-        WHERE document.route_path = '/blog/newblogenable!'
+        WHERE document.route_path = '/blog/2026-01-06-xin-bo-ke-qi-yong'
           AND translation.locale = 'en-us'`)
     if (
       translatedBlog.rows[0]?.fallback_segment_count !== 1 ||
@@ -425,7 +414,7 @@ export async function verifyPhase5Ingestion(connectionString: string, firstJobId
     }>(`SELECT translation.translated_markdown, translation.translation_memory_hits
          FROM app.document_translations translation
          JOIN app.documents document ON document.id = translation.document_id
-        WHERE document.route_path = '/blog/w311mi_ax300'
+        WHERE document.route_path = '/blog/2026-01-14-w311mi-ax300-qu-dong'
           AND translation.locale = 'en-us'`)
     if (
       globalReuse.rows[0]?.translation_memory_hits !== 1 ||
@@ -444,7 +433,7 @@ export async function verifyPhase5Ingestion(connectionString: string, firstJobId
               translation.translation_memory_hits
          FROM app.document_translations translation
          JOIN app.documents document ON document.id = translation.document_id
-        WHERE document.route_path = '/blog/newblogenable!'
+        WHERE document.route_path = '/blog/2026-01-06-xin-bo-ke-qi-yong'
           AND translation.locale = 'en-us'`)
     if (
       mixedEnglish.rows[0]?.pending_segment_count !== 1 ||
@@ -459,7 +448,7 @@ export async function verifyPhase5Ingestion(connectionString: string, firstJobId
       )
     }
     const newBlog = await client.query<{ id: string }>(
-      "SELECT id FROM app.documents WHERE route_path = '/blog/newblogenable!'",
+      "SELECT id FROM app.documents WHERE route_path = '/blog/2026-01-06-xin-bo-ke-qi-yong'",
     )
     const patchContexts = await translationMemory.listTargetedPatchContexts(newBlog.rows[0]?.id)
     if (

@@ -89,4 +89,4 @@ Migration CI 验证：
 - Representative Production-like Data
 - Compatibility Assumption
 
-当前 Migration Suite 使用 Disposable PostgreSQL 18，分别验证 Empty -> Phase 5 Latest、由 `tests/fixtures/database/previous-schema.json` 固定的 Previous -> Latest、重复执行、Applied Hash、Representative Data Preservation、Role Boundary、数据库 Enum/JSON/Claim Constraint 和 transaction-mode PgBouncer + Drizzle Query。任何成功或失败路径都删除 Test Container、Network 和 Volume。
+当前 Migration Suite 使用 Disposable PostgreSQL 18，分别验证 Empty -> Phase 18 Latest、由 `tests/fixtures/database/previous-schema.json` 固定的 Previous -> Latest、重复执行、Applied Hash、Representative Data Preservation、Role Boundary、数据库 Enum/JSON/Claim/Content-alias Namespace Constraint 和 transaction-mode PgBouncer + Drizzle Query。任何成功或失败路径都删除 Test Container、Network 和 Volume。

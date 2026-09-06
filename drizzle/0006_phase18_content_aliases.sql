@@ -1,0 +1,2 @@
+ALTER TABLE "app"."content_aliases" DROP CONSTRAINT "content_aliases_wiki_only";--> statement-breakpoint
+ALTER TABLE "app"."content_aliases" ADD CONSTRAINT "content_aliases_content_route" CHECK ("app"."content_aliases"."alias_path" LIKE '/wiki/%' OR "app"."content_aliases"."alias_path" LIKE '/blog/%');

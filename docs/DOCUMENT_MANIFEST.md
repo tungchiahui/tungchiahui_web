@@ -63,6 +63,7 @@
 - `docs/development/testing-strategy.md`
 - `docs/migration/nuxt-to-next.md`
 - `docs/migration/legacy-discovery-baseline.md`
+- `docs/migration/phase-18-legacy-delta.md`
 - `docs/migration/legacy-risk-register.md`
 - `docs/migration/legacy-route-and-pinyin-fixtures.md`
 - `docs/migration/phase-0-verification-report.md`

@@ -311,7 +311,10 @@ export const contentAliases = applicationSchema.table(
   },
   (table) => [
     index('content_aliases_document_idx').on(table.documentId),
-    check('content_aliases_wiki_only', sql`${table.aliasPath} LIKE '/wiki/%'`),
+    check(
+      'content_aliases_content_route',
+      sql`${table.aliasPath} LIKE '/wiki/%' OR ${table.aliasPath} LIKE '/blog/%'`,
+    ),
     check('content_aliases_approval_not_empty', sql`length(${table.approvalReference}) > 0`),
   ],
 )

@@ -130,3 +130,4 @@ docs/planning/implementation-plan.md
 ## Current implementation handoff
 
 - `planning/current-state.md` — 已完成 Phase、实际能力、Stub/Fake、已知限制、Legacy 回查规则与下一 Phase Prerequisite。
+- `migration/phase-18-legacy-delta.md` — Phase 0 到最终 Cutover Source 的 Content/Route/Frontmatter Delta 与全量兼容重放证据。

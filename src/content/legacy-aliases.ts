@@ -1,4 +1,20 @@
-export const legacyWikiAliases = Object.freeze([
+export const legacyContentAliases = Object.freeze([
+  {
+    aliasPath: '/blog/newblogenable!',
+    canonicalRoute: '/blog/2026-01-06-xin-bo-ke-qi-yong',
+  },
+  {
+    aliasPath: '/blog/w311mi_ax300',
+    canonicalRoute: '/blog/2026-01-14-w311mi-ax300-qu-dong',
+  },
+  {
+    aliasPath: '/blog/newtodolist',
+    canonicalRoute: '/blog/2026-02-09-xin-de-todolist-jie-mian',
+  },
+  {
+    aliasPath: '/blog/vscode-taskbar-codex-fix',
+    canonicalRoute: '/blog/2026-07-21-vscode-ren-wu-lan-qi-dong-codex-cha-jian-da-bu-kai',
+  },
   {
     aliasPath: '/wiki/arm-keil-mdk6-tutorial',
     canonicalRoute: '/wiki/2024-01-21-arm-keil-mdk6-jiao-cheng',
@@ -29,4 +45,4 @@ export const legacyWikiAliases = Object.freeze([
   },
 ] as const)
 
-export const legacyAliasApprovalReference = 'Phase 0 O-007 / Legacy explicit alias fixture'
+export const legacyAliasApprovalReference = 'Phase 0 O-007 + Phase 18 final Legacy route delta'

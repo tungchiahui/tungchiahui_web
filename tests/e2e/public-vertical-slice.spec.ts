@@ -64,7 +64,7 @@ test('routes all approved locales, preserves logical switching and exposes conte
     '/en-us',
   )
 
-  await page.goto('/en-us/blog/newblogenable!')
+  await page.goto('/en-us/blog/2026-01-06-xin-bo-ke-qi-yong')
   await expect(page.getByRole('heading', { name: 'New blog enabled' })).toBeVisible()
   await expect(page.getByText('Revalidated without rebuilding.')).toBeVisible()
   await expect(page.locator('[data-content-locale-state="mixed"]')).toContainText(
@@ -87,6 +87,10 @@ test('keeps removed zh-hant routes negative without redirect', async ({ page }) 
 
 test('preserves exact Legacy article, Pinyin and approved alias routes', async ({ page }) => {
   for (const route of [
+    '/blog/2026-01-06-xin-bo-ke-qi-yong',
+    '/blog/2026-01-14-w311mi-ax300-qu-dong',
+    '/blog/2026-02-09-xin-de-todolist-jie-mian',
+    '/blog/2026-07-21-vscode-ren-wu-lan-qi-dong-codex-cha-jian-da-bu-kai',
     '/blog/newblogenable!',
     '/blog/w311mi_ax300',
     '/blog/newtodolist',
@@ -149,7 +153,7 @@ test('searches PostgreSQL + PGroonga by locale without shipping the corpus to th
 
   await page.goto('/en-us/search?q=New%20blog%20enabled')
   await expect(page.getByRole('heading', { name: 'Site search' })).toBeVisible()
-  await expect(page.locator('a[href="/en-us/blog/newblogenable!"]')).toBeVisible()
+  await expect(page.locator('a[href="/en-us/blog/2026-01-06-xin-bo-ke-qi-yong"]')).toBeVisible()
 
   const api = await request.get('/api/search?q=Docker%20教程&locale=zh-cn')
   expect(api.status()).toBe(200)
@@ -229,11 +233,11 @@ test('returns observable health, readiness, version and not-found semantics', as
 test('derives article metadata and excludes server secrets from client bundles', async ({
   page,
 }) => {
-  await page.goto('/blog/newtodolist')
+  await page.goto('/blog/2026-02-09-xin-de-todolist-jie-mian')
   await expect(page).toHaveTitle(/新的 todolist 界面/)
   await expect(page.locator('meta[name="description"]')).toHaveAttribute(
     'content',
-    'Legacy four-key frontmatter fixture',
+    '新的 todolist 界面',
   )
 
   const scripts = await page

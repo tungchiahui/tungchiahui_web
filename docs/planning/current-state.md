@@ -97,7 +97,7 @@ Cutover 或 DNS/EdgeOne 变更。
 - `./site provision` 与 `./site migrate-server` 通过独立 Control API 创建排他的 `server-migration` SQLite Operation；Stable Target 在 CLI/API/Engine 三层拒绝数字 IP。唯一 Typed Engine 记录 Provision、PostgreSQL 18 Physical Streaming、Abort Gate、Candidate Smoke、Final WAL、Control-state Transfer、Promotion、Application/Origin Cutover、Post-switch Verify 与 Non-writing Rollback Evidence。
 - Phase 17 Production-foundation Gate 用同一 Ansible/SOPS/age/Hardened Compose 从零重建第二个 Disposable Target，第二次 Provision `changed=0`；真实 Base Backup/WAL Streaming、Final LSN、Controlled Promotion、三阶段数据 Probe、Target Write、Old-source Stop、SQLite Snapshot/Reconcile 和 AAAA-only Public-like Smoke 全部通过。
 - Shared Database Client 监听 PostgreSQL Idle-client Error 并只记录脱敏 Structured Telemetry，避免 PgBouncer/PostgreSQL Down 时未监听 Event 退出 `control-api`；Active Query 仍显式失败。Integration 已证明 `/api/ops/*` SQLite Route 保持可用、PostgreSQL-backed Job 返回不可用。
-- `./site check` 覆盖 Biome、Source Policy、Workflow Policy、Drizzle、Typecheck、Renovate 与 webpack Production Build。`./site test` 依次包含 Unit、带真实 Registry Pull/Blue-Green/Rollback/Server Migration 的 Production-foundation、Disposable Recovery Drill、Application Integration/10 个 Playwright E2E 和 6-Migration Dedicated Suite。
+- `./site check` 覆盖 Biome、Source Policy、Workflow Policy、Drizzle、Typecheck、Renovate 与 webpack Production Build。`./site test` 依次包含 Unit、带真实 Registry Pull/Blue-Green/Rollback/Server Migration 的 Production-foundation、Disposable Recovery Drill、Application Integration/10 个 Playwright E2E 和 7-Migration Dedicated Suite。
 - Phase 4 Control API/SQLite Recovery 与 Phase 5 GitHub Ingestion/Worker 权限边界均保持不变；`/api/ops/*` 没有进入 Next.js。
 
 ## 5. 当前 Stub/Fake 与替换责任
@@ -127,7 +127,7 @@ Cutover 或 DNS/EdgeOne 变更。
 - Local Compose must quote the all-zero development SHA. Next dev explicitly allows only loopback `127.0.0.1` for the disposable browser origin.
 - Playwright uses one worker because the suite intentionally shares one mutable Disposable PostgreSQL/cache lifecycle, including a mid-run revalidation mutation。
 - `content-worker` side-effect replay depends on Hooks being idempotent. Translation/Search implementations preserve exact-input idempotency and must not turn Public requests into paid/provider calls.
-- PostgreSQL migrations are now six. `0005_phase10_pgroonga_search` is additive Expand：新增可重建 `search_documents`、Locale/Type B-tree 与 Multi-column PGroonga Index；不重写 Document/Translation，不得修改已应用 SQL/Metadata。
+- PostgreSQL migrations are now seven. `0006_phase18_content_aliases` 是低风险 Additive/Relaxation Expand：把 Alias Namespace 从 Wiki-only 扩展到明确的 Blog-or-Wiki，不重写任何 Row，保持旧应用兼容。`0005_phase10_pgroonga_search` 继续新增可重建 `search_documents`、Locale/Type B-tree 与 Multi-column PGroonga Index；不得修改任何已应用 SQL/Metadata。
 - Existing Runtime DB 在 Phase 7 应用代码发布后需要一次显式 Content Sync 才会回填区域物化；回填前 Server Renderer 使用相同确定性 Converter 作为只读 View。Public Request 绝不触发 Backfill。
 - Phase 8 Migration 不在 Migration-time 猜测/回填旧 English。现有 en-US Row 的 `source_hash` 为 NULL 时 Public DAL 忽略；应用 Phase 8 后必须显式 Content Sync 才会建立 Segment Mapping、Pending 和 Current Mixed Materialization。zh-CN 发布不等待该 Backfill，Public Request 也不写 DB。
 - Normalization Version 当前固定为 1。任何改变 Identity/Normalization 的实现必须显式提升版本、提供安全重放/迁移计划，并更新稳定身份与重复 Block Fixture。
@@ -155,7 +155,8 @@ Cutover 或 DNS/EdgeOne 变更。
 
 - Owner 已授权 Phase 18 Production Work，同时确定部署操作由 Owner 在服务器执行，Agent 提供逐步命令、验证和诊断；不要使用聊天中出现的明文 Credential 自动登录。
 - Start from the focused Phase 17 commit and a clean tracked worktree；`.env.local` remains Owner-owned、Gitignored and must never be staged.
-- Phase 18 已完成 Final Legacy Delta/Inventory Refresh：Legacy 当前 HEAD 与 Phase 0 Evidence 之间只有 `.nvmrc`、`package.json`、`package-lock.json` 变化；Content/Page/Component/ROS2 Tree 无行为变化，237 个 Markdown Route/Frontmatter 全部核对通过，旧仓库保持只读。
+- Phase 18 Final Legacy Delta/Inventory Refresh 已纠正并固化在 `docs/migration/phase-18-legacy-delta.md`：Legacy `feee48b1685e7cab8fed84941bff9e58fc32491c` 相对 Phase 0 有 1 篇 Blog 新增、8 篇 Markdown 修改与 Blog Route Helper 变更；Page/Component/ROS2 Tree 未变化。当前 5 Blog + 233 Wiki 的 238 个 Frontmatter/Route 均有效，Current Legacy/V2 全量 Route 无 Collision/Mismatch。V2 采用当前含日期 Blog Canonical Route，并为 Phase 0 的四条已公开 Blog URL 建立精确兼容 Alias；旧仓库保持只读。
+- Legacy GitHub Remote 当前解析为公开的 `tungchiahui/tungchiahui.github.io`，规划中的独立 `tungchiahui/content` 尚不存在。最终 Content Sync 必须先由 Owner 明确批准创建独立 Canonical Repository 并发布过滤后的 `content/**`，不得把不存在的仓库或对 Legacy 的写入当作已完成。
 - 为回答 Production Secret 传输边界而执行的定点 Legacy 配置检查确认：旧 Nuxt 以 Gitignored、`0600` 的单一明文 `.env` 注入 Compose，Backup/Instance Export 明确排除真实 `.env`、Token 与 Private Key，并要求另存加密 Secret。V2 保留进程所需的 env 注入形式，但由 Controller 上的 SOPS 密文在内存解密、经 SSH/Ansible 拆分安装到 `/etc/tungchiahui/secrets`；SOPS age Identity 不传服务器，Backup age Identity 仅按恢复职责单独安装。
 - 真实目标为 Debian 13 共享主机 `10.0.0.4`（只用于 Bootstrap，不得进入 Durable Config），已有 1Panel OpenResty 使用 host network，并监听 `80/443/8443/18080`；Docker/Compose 可用。
 - ADR 0016 已接受：外层 1Panel 负责公网 TLS/HTTP，V2 只发布 `http://127.0.0.1:3100`，并在内部 V2 OpenResty 保留 Blue/Green 与 `/api/ops/*` 路由；1Panel 不得直连 Slot/Control API。
@@ -166,7 +167,7 @@ Cutover 或 DNS/EdgeOne 变更。
 - Owner 在 Phase 18 明确生产对象存储职责只有两组：AList Asset S3 与 R2 Backup S3。ADR 0017 因此 Supersede ADR 0003；恢复引擎、Secret Schema、Observability 与 Gate 已改为单一 Provider-neutral Off-site `BACKUP_S3_*`，不再接受 `BACKUP_R2_*`。
 - 初次 Production Provision 需要 Web、Service、Recovery 与 PostgreSQL 四个同 SHA Immutable Image；Phase 18 已补齐受 Quality Gate 约束的 GitHub Build Job，使其以独立 GHCR Repository 发布完整 Image Set，Web Digest 仍是 Shared Blue/Green Engine 的唯一 Release Digest。
 - 初次 Push 前 `PRODUCTION_DEPLOYMENT_ENABLED` Repository Actions Variable 必须保持缺失/非 `true`；Quality 成功后只发布候选 Image Set。只有 Production Environment Protection、Origin Provision 与 Pre-cutover Gate 全部成立后才显式启用 Deploy Job，防止 Bootstrap 前产生伪部署。
-- Phase 18 Candidate 前完整本机 Gate 已通过：Biome/Source/Workflow/Drizzle/Typecheck/Renovate/Build/Security，29 个 Test File/134 个 Unit Test，Production-foundation（含 Trivy Critical/Secret Scan、Blue/Green/Rollback/IPv4+IPv6/迁机）、单 Off-site S3 Full/Diff/Incr/WAL/PITR/Control-state Restore、Application Integration、10 个 Public E2E 与 6 个 PostgreSQL Migration。全部使用 Disposable Local Target，`productionTraffic=false`。
+- Phase 18 Candidate 前完整本机 Gate 已通过：Biome/Source/Workflow/Drizzle/Typecheck/Renovate/Build/Security，29 个 Test File/135 个 Unit Test，Production-foundation（含 Trivy Critical/Secret Scan、Blue/Green/Rollback/IPv4+IPv6/迁机）、单 Off-site S3 Full/Diff/Incr/WAL/PITR/Control-state Restore、Application Integration、10 个 Public E2E 与 7 个 PostgreSQL Migration。全部使用 Disposable Local Target，`productionTraffic=false`。
 - 首次 GitHub PR Gate 暴露 Hosted Runner UID 与开发镜像 `node` UID 不同，导致 Test-only Control-state `0700` Bind Mount 无法写入；测试 Compose 覆盖层现显式使用 Runner UID/GID。该修复不改变 Production Container Identity/Permission。
 - 在任何真实 Cutover 前重新验证 GitHub `production` Environment/Required Check/Package Permission、Canonical Content Caller、Production Asset Probe/Alert Sink、Fresh Backup/WAL/R2/Restore、Control-state Backup、Target Inventory 与 Public/Origin IPv4/IPv6。
 - 若 Phase 18 不需要实际 Server Replacement，不绑定或触发 Migration Platform；若需要，必须先获得真实 Target/Primary/DDNS 的单独授权并复核 `server-migration.md` Abort/Rollback Gate。

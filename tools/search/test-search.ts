@@ -62,7 +62,7 @@ export async function verifyPhase10Search(connectionString: string, siteBaseUrl:
 
     const titleRanking = await index.search({ limit: 10, locale: 'zh-cn', query: '新博客启用' })
     if (
-      titleRanking[0]?.route !== '/zh-cn/blog/newblogenable!' ||
+      titleRanking[0]?.route !== '/zh-cn/blog/2026-01-06-xin-bo-ke-qi-yong' ||
       titleRanking[0]?.matchedContext !== 'title'
     ) {
       throw new Error(`Exact title ranking fixture failed: ${JSON.stringify(titleRanking)}`)
@@ -92,7 +92,7 @@ export async function verifyPhase10Search(connectionString: string, siteBaseUrl:
         context: 'heading',
         locale: 'en-us',
         query: 'New blog enabled',
-        route: '/en-us/blog/newblogenable!',
+        route: '/en-us/blog/2026-01-06-xin-bo-ke-qi-yong',
       },
       {
         context: 'body',
@@ -124,7 +124,7 @@ export async function verifyPhase10Search(connectionString: string, siteBaseUrl:
       locale: 'zh-cn',
       query: 'Modified at commit B.',
     })
-    if (api.results[0]?.route !== '/zh-cn/blog/newblogenable!') {
+    if (api.results[0]?.route !== '/zh-cn/blog/2026-01-06-xin-bo-ke-qi-yong') {
       throw new Error(`Search API/cache priming fixture failed: ${JSON.stringify(api)}`)
     }
     const serialized = JSON.stringify(api)
@@ -201,7 +201,7 @@ export async function verifyPhase10CacheInvalidation(siteBaseUrl: URL) {
   })
   if (
     oldResult.results.length !== 0 ||
-    current.results[0]?.route !== '/zh-cn/blog/newblogenable!'
+    current.results[0]?.route !== '/zh-cn/blog/2026-01-06-xin-bo-ke-qi-yong'
   ) {
     throw new Error(
       `Search projection/cache invalidation was not exact: ${JSON.stringify({ current, oldResult })}`,

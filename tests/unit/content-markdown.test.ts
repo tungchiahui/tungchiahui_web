@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { legacyWikiAliases } from '../../src/content/legacy-aliases'
+import { legacyContentAliases } from '../../src/content/legacy-aliases'
 import {
   ContentRouteCollisionError,
   prepareContentSnapshot,
@@ -13,8 +13,24 @@ function markdown(frontmatter: readonly string[], body = '# Fixture') {
 }
 
 describe('Legacy-compatible content parsing and routes', () => {
-  it('pins exactly the seven Owner-approved Phase 0 Wiki aliases', () => {
-    expect(legacyWikiAliases).toEqual([
+  it('pins the Owner-approved Phase 0 Wiki aliases and Phase 18 Blog aliases', () => {
+    expect(legacyContentAliases).toEqual([
+      {
+        aliasPath: '/blog/newblogenable!',
+        canonicalRoute: '/blog/2026-01-06-xin-bo-ke-qi-yong',
+      },
+      {
+        aliasPath: '/blog/w311mi_ax300',
+        canonicalRoute: '/blog/2026-01-14-w311mi-ax300-qu-dong',
+      },
+      {
+        aliasPath: '/blog/newtodolist',
+        canonicalRoute: '/blog/2026-02-09-xin-de-todolist-jie-mian',
+      },
+      {
+        aliasPath: '/blog/vscode-taskbar-codex-fix',
+        canonicalRoute: '/blog/2026-07-21-vscode-ren-wu-lan-qi-dong-codex-cha-jian-da-bu-kai',
+      },
       {
         aliasPath: '/wiki/arm-keil-mdk6-tutorial',
         canonicalRoute: '/wiki/2024-01-21-arm-keil-mdk6-jiao-cheng',
@@ -44,6 +60,23 @@ describe('Legacy-compatible content parsing and routes', () => {
         canonicalRoute: '/wiki/2023-09-29-ji-qi-ren-gong-cheng-shi-cheng-zhang-ji-hua',
       },
     ])
+  })
+
+  it('uses the Phase 18 current Legacy filename route when Blog path is absent', () => {
+    const prepared = prepareContentSnapshot({
+      sourceCommit,
+      files: [
+        {
+          path: 'content/posts/2026-09-02-WM论文罗列.md',
+          contents: markdown(['title: WM论文日志']),
+        },
+      ],
+    })
+
+    expect(prepared.documents[0]).toMatchObject({
+      routePath: '/blog/2026-09-02-wm-lun-wen-luo-lie',
+      sourceUpdatedAt: new Date('2026-09-02T00:00:00.000Z'),
+    })
   })
 
   it.each([

@@ -235,6 +235,21 @@ async function assertDatabaseConstraints(connectionString: string) {
     await client.query(
       "DELETE FROM app.operational_jobs WHERE id = '60000000-0000-4000-8000-000000000003'",
     )
+    await client.query(
+      `INSERT INTO app.content_aliases (alias_path, document_id, approval_reference)
+       SELECT '/blog/phase-18-compatible', id, 'Phase 18 migration test'
+         FROM app.documents
+        ORDER BY id
+        LIMIT 1`,
+    )
+    await expectQueryFailure(
+      client,
+      `INSERT INTO app.content_aliases (alias_path, document_id, approval_reference)
+       SELECT '/other/forbidden', id, 'invalid namespace'
+         FROM app.documents
+        ORDER BY id
+        LIMIT 1`,
+    )
   } finally {
     await client.end()
   }
@@ -319,9 +334,14 @@ async function run() {
     const postgresPort = compose.port('postgres', 5432)
     const pgbouncerPort = compose.port('pgbouncer', 6432)
     const cleanUrl = databaseUrl(postgresPort)
+    const expectedMigrationCount = journalSchema.parse(
+      JSON.parse(
+        readFileSync(resolve(repositoryRoot, 'drizzle/meta/_journal.json'), 'utf8'),
+      ) as unknown,
+    ).entries.length
 
     const clean = await runPostgresMigrations(cleanUrl, { repositoryRoot })
-    if (clean.migrationCount !== 6) {
+    if (clean.migrationCount !== expectedMigrationCount) {
       throw new Error('Empty database did not reach the latest migration')
     }
     const repeated = await runPostgresMigrations(cleanUrl, { repositoryRoot })
@@ -399,7 +419,7 @@ async function run() {
       await upgradedClient.end()
     }
 
-    console.log('PostgreSQL migration suite: PASS (through Phase 10)')
+    console.log(`PostgreSQL migration suite: PASS (${expectedMigrationCount} migrations)`)
   } finally {
     if (stackStarted) {
       compose.down(true)

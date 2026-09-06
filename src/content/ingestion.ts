@@ -15,7 +15,7 @@ import {
   type ContentIngestionHooks,
   contentHookInputSchema,
 } from './hooks'
-import { legacyAliasApprovalReference, legacyWikiAliases } from './legacy-aliases'
+import { legacyAliasApprovalReference, legacyContentAliases } from './legacy-aliases'
 import { ContentRouteCollisionError, prepareContentSnapshot } from './markdown'
 
 const jobIdSchema = z.uuid()
@@ -403,14 +403,14 @@ export class ContentIngestionRepository {
         .where(
           inArray(
             contentAliases.aliasPath,
-            legacyWikiAliases.map((alias) => alias.aliasPath),
+            legacyContentAliases.map((alias) => alias.aliasPath),
           ),
         )
       const existingAliasesByPath = new Map(
         existingAliases.map((alias) => [alias.aliasPath, alias]),
       )
       const desiredAliasPaths = new Set<string>()
-      for (const alias of legacyWikiAliases) {
+      for (const alias of legacyContentAliases) {
         const planned = plan.find((item) => item.incoming.routePath === alias.canonicalRoute)
         if (!planned) continue
         desiredAliasPaths.add(alias.aliasPath)

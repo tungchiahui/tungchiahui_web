@@ -43,6 +43,13 @@
       "when": 1787638870944,
       "tag": "0005_phase10_pgroonga_search",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788693459612,
+      "tag": "0006_phase18_content_aliases",
+      "breakpoints": true
     }
   ]
 }

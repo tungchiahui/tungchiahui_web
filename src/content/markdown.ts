@@ -14,7 +14,7 @@ import {
   type PreparedContentDocument,
   preparedContentDocumentSchema,
 } from './contracts'
-import { legacyWikiAliases } from './legacy-aliases'
+import { legacyContentAliases } from './legacy-aliases'
 
 const astNodeSchema: z.ZodType<unknown> = z.lazy(() =>
   z
@@ -115,8 +115,7 @@ function blogRoute(sourcePath: string, explicitPath: string | undefined) {
   }
 
   const filename = basename(sourcePath, '.md')
-  const withoutDate = filename.replace(/^\d{4}-\d{2}-\d{2}-/, '')
-  const slug = toLegacyPinyinSlug(withoutDate) || toLegacyPinyinSlug(filename) || 'post'
+  const slug = toLegacyPinyinSlug(filename) || 'post'
   return `/blog/${slug}`
 }
 
@@ -138,7 +137,7 @@ function sourceDate(sourcePath: string, frontmatterDate: string | undefined) {
     frontmatterDate ??
     (sourcePath.startsWith('content/wiki/')
       ? sourcePath.slice('content/wiki/'.length).match(/^\d{4}-\d{2}-\d{2}/)?.[0]
-      : undefined)
+      : basename(sourcePath, '.md').match(/^\d{4}-\d{2}-\d{2}/)?.[0])
   return candidate === undefined ? null : new Date(`${candidate}T00:00:00.000Z`)
 }
 
@@ -177,7 +176,8 @@ function assertUniqueRoutes(documents: readonly PreparedContentDocument[]) {
   const collisions = [...routeSources]
     .filter((entry) => entry[1].length > 1)
     .map(([routePath, sourcePaths]) => ({ routePath, sourcePaths: sourcePaths.toSorted() }))
-  for (const alias of legacyWikiAliases) {
+  for (const alias of legacyContentAliases) {
+    if (!routeSources.has(alias.canonicalRoute)) continue
     const aliasOwner = routeSources.get(alias.aliasPath)
     if (aliasOwner !== undefined) {
       collisions.push({

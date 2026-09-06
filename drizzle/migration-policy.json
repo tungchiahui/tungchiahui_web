@@ -48,6 +48,14 @@
       "requiresFreshRecoverableBackup": false,
       "reason": "Adds an independently rebuildable locale-aware search projection and PGroonga index without changing canonical documents, translations, routes, or existing application-job rows.",
       "recovery": "Retain the additive projection table for blue-green overlap. Disable search polling or public search on error, deploy a reviewed forward fix, and replay a PostgreSQL-backed search_reindex job from current runtime content."
+    },
+    {
+      "tag": "0006_phase18_content_aliases",
+      "changeKind": "expand",
+      "risk": "low",
+      "requiresFreshRecoverableBackup": false,
+      "reason": "Relaxes the existing content alias route check from Wiki-only to the explicit Blog-or-Wiki namespace required by the final Legacy delta; it does not rewrite rows and remains compatible with the previous application version.",
+      "recovery": "Retain the relaxed constraint for blue-green overlap. Disable or correct the affected explicit alias allowlist in a reviewed forward fix; do not contract the constraint while either application version may run."
     }
   ]
 }

@@ -70,7 +70,7 @@ class FailOnceRevalidationHooks implements ContentIngestionHooks {
 }
 
 async function readArticle(siteBaseUrl: URL) {
-  const response = await fetch(new URL('/blog/newblogenable!', siteBaseUrl), {
+  const response = await fetch(new URL('/blog/2026-01-06-xin-bo-ke-qi-yong', siteBaseUrl), {
     signal: AbortSignal.timeout(10_000),
   })
   if (!response.ok) throw new Error(`Revalidation fixture page returned HTTP ${response.status}`)
