@@ -54,6 +54,8 @@ function createRestrictedEnvironment(configuration: ComposeEnvironment) {
   const environment: NodeJS.ProcessEnv = {
     NODE_ENV: configuration.mode === 'test' ? 'test' : 'development',
     SITE_CONTROL_STATE_DIRECTORY: configuration.controlStateDirectory,
+    SITE_HOST_GID: String(process.getgid?.() ?? 1_000),
+    SITE_HOST_UID: String(process.getuid?.() ?? 1_000),
     SITE_OPENRESTY_PORT: String(configuration.openRestyPort),
     SITE_RUNTIME_MODE: configuration.mode,
     SITE_S3_BUCKET: configuration.s3Bucket,

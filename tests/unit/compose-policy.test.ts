@@ -7,6 +7,7 @@ import { assertLocalDockerEndpoint } from '../../tools/dev/compose'
 
 const compose = readFileSync(resolve('ops/dev/compose.yaml'), 'utf8')
 const devOverride = readFileSync(resolve('ops/dev/compose.dev.yaml'), 'utf8')
+const testOverride = readFileSync(resolve('ops/dev/compose.test.yaml'), 'utf8')
 
 describe('Phase 2 Compose policy', () => {
   it('pins every external image by stable version and digest', () => {
@@ -40,6 +41,14 @@ describe('Phase 2 Compose policy', () => {
 
     expect(publishedPorts).toHaveLength(7)
     expect(publishedPorts.every((line) => line.includes('127.0.0.1:'))).toBe(true)
+  })
+
+  it('maps the disposable control state writer to the hosted runner identity', () => {
+    const interpolationPrefix = '$'
+
+    expect(testOverride).toContain(
+      `user: "${interpolationPrefix}{SITE_HOST_UID:?SITE_HOST_UID is required}:${interpolationPrefix}{SITE_HOST_GID:?SITE_HOST_GID is required}"`,
+    )
   })
 
   it('rejects remote Docker contexts', () => {
