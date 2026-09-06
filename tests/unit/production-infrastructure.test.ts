@@ -97,7 +97,13 @@ describe('Phase 12 production foundation policy', () => {
       'control-api': { condition: 'service_healthy' },
     })
     expect(compose.services['control-api']?.networks).not.toContain('deploy-control')
-    expect(compose.services['content-worker']?.networks).not.toContain('deploy-control')
+    expect(compose.services['content-worker']?.networks).toEqual(['application', 'content-egress'])
+    expect(compose.networks['content-egress']).toEqual({})
+    expect(
+      Object.entries(compose.services)
+        .filter(([, service]) => service.networks?.includes('content-egress'))
+        .map(([name]) => name),
+    ).toEqual(['content-worker'])
     expect(JSON.stringify(compose.services['database-role-bootstrap']?.volumes)).toContain(
       '/run/secrets/pgbouncer-userlist.txt:ro',
     )
