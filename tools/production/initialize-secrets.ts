@@ -195,7 +195,7 @@ function githubOidcPolicies() {
         'tungchiahui/tungchiahui_web/.github/workflows/content-sync.yml@refs/heads/main',
       jwksUrl,
       ref,
-      repository: 'tungchiahui/content',
+      repository: 'tungchiahui/tungchiahui_content',
     },
   ]
 }
@@ -257,7 +257,7 @@ export function initializeProductionSecrets() {
     ].join('\n'),
     content_worker_env: [
       `DATABASE_URL=postgresql://site_content_worker_login:${workerPassword}@pgbouncer:6432/tungchiahui`,
-      'GITHUB_CONTENT_REPOSITORY=tungchiahui/content',
+      'GITHUB_CONTENT_REPOSITORY=tungchiahui/tungchiahui_content',
       'GITHUB_CONTENT_READ_TOKEN=',
       `SITE_REVALIDATION_SECRET=${revalidationSecret}`,
     ].join('\n'),

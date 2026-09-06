@@ -44,13 +44,14 @@ prefixing remains unchanged, and `zh-hant` remains an intentional negative route
 The exact current routes and compatibility aliases are recorded in
 `legacy-route-and-pinyin-fixtures.md` and enforced by source/unit/integration gates.
 
-## Canonical repository activation gap
+## Canonical repository activation
 
 The Legacy checkout's remote now resolves to the public repository
-`tungchiahui/tungchiahui.github.io`. The planned independent repository `tungchiahui/content` does
-not yet exist as of this audit. Production content sync must not silently read an invented repository
-or write back to the Legacy repository. Owner approval is required before creating the independent
-repository and publishing the filtered `content/**` history/snapshot.
+`tungchiahui/tungchiahui.github.io`. With explicit Owner approval, the independent public repository
+`tungchiahui/tungchiahui_content` was created from a temporary clone containing only the filtered
+`content/**` history. Its activation commit is `db3aad287eabf84b16b44c33957d57c02ae60e9f`: the current tree
+contains the same 238 Markdown files, and its caller workflow triggers only content sync. The import
+did not write to the Legacy repository and did not trigger a Production sync.
 
 ## Safety
 
