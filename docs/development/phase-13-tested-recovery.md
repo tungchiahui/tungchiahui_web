@@ -21,7 +21,7 @@ PostgreSQL 18 + WAL archive
 
 Each generation captures regular files and pgBackRest relative symbolic links. Upload is followed by manifest, object-count and full streaming checksum verification. A backup record is valid only when pgBackRest `check`/`verify` and the off-site replica read-back pass. Restore always materializes the selected verified generation from the configured Backup S3, then invokes pgBackRest by backup set or timestamp.
 
-The Production policy retains two full and four differential backups plus WAL for two full ranges. Full, differential and incremental execution all use the same engine and record Backup ID/type, start/completion, bytes, seconds, WAL maximum, repository generation, manifest hash and both replica states in host-local SQLite.
+The Production policy retains two full and four differential backups plus WAL for two full ranges. Full, differential and incremental execution all use the same engine and record Backup ID/type, start/completion, bytes, seconds, WAL maximum, repository generation, manifest hash and the single off-site replica state in host-local SQLite.
 
 ## Recovery control path
 
