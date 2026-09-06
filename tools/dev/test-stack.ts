@@ -434,7 +434,7 @@ async function run() {
     }
     const webHealth = await fetch(configuration.siteBaseUrl, {
       headers: { connection: 'close' },
-      signal: AbortSignal.timeout(5_000),
+      signal: AbortSignal.timeout(30_000),
     })
     if (!webHealth.ok) {
       throw new Error(`Disposable Next.js returned HTTP ${webHealth.status}`)

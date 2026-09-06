@@ -169,6 +169,7 @@ Cutover 或 DNS/EdgeOne 变更。
 - 初次 Push 前 `PRODUCTION_DEPLOYMENT_ENABLED` Repository Actions Variable 必须保持缺失/非 `true`；Quality 成功后只发布候选 Image Set。只有 Production Environment Protection、Origin Provision 与 Pre-cutover Gate 全部成立后才显式启用 Deploy Job，防止 Bootstrap 前产生伪部署。
 - Phase 18 Candidate 前完整本机 Gate 已通过：Biome/Source/Workflow/Drizzle/Typecheck/Renovate/Build/Security，29 个 Test File/135 个 Unit Test，Production-foundation（含 Trivy Critical/Secret Scan、Blue/Green/Rollback/IPv4+IPv6/迁机）、单 Off-site S3 Full/Diff/Incr/WAL/PITR/Control-state Restore、Application Integration、10 个 Public E2E 与 7 个 PostgreSQL Migration。全部使用 Disposable Local Target，`productionTraffic=false`。
 - 首次 GitHub PR Gate 暴露 Hosted Runner UID 与开发镜像 `node` UID 不同，导致 Test-only Control-state `0700` Bind Mount 无法写入；测试 Compose 覆盖层现显式使用 Runner UID/GID。该修复不改变 Production Container Identity/Permission。
+- GitHub Hosted Runner 的首次 Next.js Development Homepage 冷编译可超过 5 秒；Disposable Integration 的初次 Homepage Read Timeout 已调整为 30 秒，后续请求、Production Health/Smoke Policy 与 Production Timeout 均未放宽。
 - 在任何真实 Cutover 前重新验证 GitHub `production` Environment/Required Check/Package Permission、Canonical Content Caller、Production Asset Probe/Alert Sink、Fresh Backup/WAL/R2/Restore、Control-state Backup、Target Inventory 与 Public/Origin IPv4/IPv6。
 - 若 Phase 18 不需要实际 Server Replacement，不绑定或触发 Migration Platform；若需要，必须先获得真实 Target/Primary/DDNS 的单独授权并复核 `server-migration.md` Abort/Rollback Gate。
 - 不得把 Phase 16 Load、Phase 13 Restore 或 Phase 17 Disposable Migration Timing 伪装为 Production SLA/RPO/RTO。
