@@ -129,7 +129,7 @@ export class ComposeProject {
   }
 
   start(service: string) {
-    this.#run(['start', '--wait', service], true)
+    this.#run(['start', service], true)
   }
 
   stop(service: string) {
