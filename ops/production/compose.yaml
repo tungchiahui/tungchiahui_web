@@ -263,8 +263,8 @@ services:
       BACKUP_WORK_DIRECTORY: /var/lib/tungchiahui-backup-work
       CONTROL_STATE_PATH: /control-state/control.db
       DEPLOYMENT_ACTIVE_SLOT_CONFIG_PATH: /deployment-config/active-slot.conf
-      DEPLOYMENT_ARTICLE_PATH: /blog/phase-3-seed
-      DEPLOYMENT_ASSET_PATH: /docs/ros2/core/index.html
+      DEPLOYMENT_ARTICLE_PATH: ${TUNGCHIAHUI_DEPLOYMENT_ARTICLE_PATH:?representative article path is required}
+      DEPLOYMENT_ASSET_PATH: ${TUNGCHIAHUI_DEPLOYMENT_ASSET_PATH:?representative asset path is required}
       DEPLOYMENT_BACKUP_MAX_AGE_SECONDS: ${TUNGCHIAHUI_DEPLOYMENT_BACKUP_MAX_AGE_SECONDS:?backup freshness policy is required}
       DEPLOYMENT_BLUE_CONTAINER_NAME: ${TUNGCHIAHUI_BLUE_CONTAINER_NAME:?blue container name is required}
       DEPLOYMENT_BLUE_URL: http://web-blue:3000
@@ -277,7 +277,7 @@ services:
       DEPLOYMENT_OPENRESTY_CONTAINER_NAME: ${TUNGCHIAHUI_OPENRESTY_CONTAINER_NAME:?OpenResty container name is required}
       DEPLOYMENT_POLLING_ENABLED: "true"
       DEPLOYMENT_PUBLIC_ENTRY_URL: http://openresty:8082
-      DEPLOYMENT_SEARCH_QUERY: ROS2_Control
+      DEPLOYMENT_SEARCH_QUERY: ${TUNGCHIAHUI_DEPLOYMENT_SEARCH_QUERY:?representative search query is required}
       DEPLOYMENT_STABILIZATION_SECONDS: ${TUNGCHIAHUI_DEPLOYMENT_STABILIZATION_SECONDS:?stabilization policy is required}
       DEPLOY_AGENT_HOST: 0.0.0.0
       DEPLOY_AGENT_PORT: "8081"
