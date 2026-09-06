@@ -167,7 +167,7 @@
       source: {{ tungchiahui_data_root }}/control-state/control.db
       consistency: sqlite-wal-checkpoint-vacuum-snapshot
       encryption: age
-      replicas: primary-s3-and-r2
+      replica: offsite-backup-s3
       restore_validation: schema-integrity-audit-continuity
 
 - name: Read Docker socket ownership

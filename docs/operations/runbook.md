@@ -52,7 +52,7 @@ Rollback 只切到 Version 5 Control State 中保留的 Previous SHA/Digest，�
 
 1. 如果存在 Corruption/Data-loss Risk，停止高风险 Write Operation
 2. 保留 Log/State
-3. 使用 `./site backup status` 评估 Latest Verified Backup、WAL Max 和两套 Replica Freshness
+3. 使用 `./site backup status` 评估 Latest Verified Backup、WAL Max 和唯一 Off-site Replica Freshness
 4. 选择 Restore Target/Time
 5. 时间允许时，先 Restore 到 Disposable Validation Environment
 6. 记录批准者、Environment、Target 和 Reason

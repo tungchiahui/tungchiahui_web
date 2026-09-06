@@ -13,6 +13,10 @@ const inventorySource = readFileSync(
   resolve('ops/production/ansible/inventory/production.yml'),
   'utf8',
 )
+const productionRoleSource = readFileSync(
+  resolve('ops/production/ansible/roles/tungchiahui_production/tasks/main.yml'),
+  'utf8',
+)
 const composeSchema = z.object({
   networks: z.record(z.string(), z.unknown()),
   services: z.record(
@@ -127,6 +131,8 @@ describe('Phase 12 production foundation policy', () => {
     expect(inventorySource).toContain('ansible_user: tungchiahui')
     expect(inventorySource).not.toMatch(/ansible_host:\s*(?:\d{1,3}\.){3}\d{1,3}/)
     expect(composeSource).not.toContain('S3_CONTRACT_')
+    expect(productionRoleSource).toContain('replica: offsite-backup-s3')
+    expect(productionRoleSource).not.toContain('primary-s3-and-r2')
   })
 
   it('requires externally supplied production authentication policy', () => {
