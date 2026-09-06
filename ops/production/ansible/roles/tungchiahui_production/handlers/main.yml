@@ -1,0 +1,39 @@
+---
+- name: Validate OpenResty before reload
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-name
+      - "{{ tungchiahui_compose_project_name }}"
+      - --file
+      - "{{ tungchiahui_config_root }}/compose.yaml"
+      - exec
+      - --no-TTY
+      - openresty
+      - openresty
+      - -t
+  environment: "{{ tungchiahui_compose_environment }}"
+  changed_when: false
+  listen: Reload validated OpenResty configuration
+  when: tungchiahui_manage_stack | bool
+
+- name: Reload OpenResty after successful validation
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-name
+      - "{{ tungchiahui_compose_project_name }}"
+      - --file
+      - "{{ tungchiahui_config_root }}/compose.yaml"
+      - exec
+      - --no-TTY
+      - openresty
+      - openresty
+      - -s
+      - reload
+  environment: "{{ tungchiahui_compose_environment }}"
+  changed_when: true
+  listen: Reload validated OpenResty configuration
+  when: tungchiahui_manage_stack | bool

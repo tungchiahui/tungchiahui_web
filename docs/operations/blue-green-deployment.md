@@ -59,7 +59,13 @@ OpenResty Active-upstream Configuration 原子切换并安全 Reload。
 
 Reload 前先验证 Configuration。
 
-Active Slot、Previous Rollback Target、Current/Last Deployment SHA 与 Cutover Phase 必须先在 PostgreSQL-independent Control-state SQLite 中通过 Transaction 持久化。OpenResty Upstream 与 State Transition 的顺序要支持 Crash 后对账，不得只靠正在运行的 Container 推测状态。
+Active Slot、Previous Rollback Target、Current/Last Deployment SHA/Digest 与 Cutover Phase 必须在 PostgreSQL-independent Control-state SQLite 中通过 Transaction 持久化。Phase 14 在 Reload 前记录 Pending Slot/SHA/Digest Intent；切流后提交 Current/Previous State。Crash Reconciliation 同时读取 Persisted Phase、Pending Intent 与实际 OpenResty Slot，不只靠运行中的 Container 推测状态。
+
+动态 Upstream 文件位于独立、setgid 的 Deployment Config Directory。`deploy-agent` 先以临时文件提出配置、运行 `openresty -t`，恢复旧文件；只有验证成功后才原子 Rename 并发送 HUP。OpenResty 只读挂载整个 Directory，使 Rename 后的新 Inode 可见。
+
+## Candidate image supply chain
+
+Candidate Identity 是完整 Git SHA + Registry Manifest Digest。`deploy-agent` 只从配置的唯一 Approved Repository 解析 `<repository>@<digest>`；缺失时通过 Docker Engine 受控 Pull，并验证精确 `RepoDigest` 与 OCI `org.opencontainers.image.revision`。Registry Pull Credential 只存在于该 Agent 的运行时 Secret，不进入 Workflow 或 Image。Docker Local Config ID 与 Registry Manifest Digest 是不同标识，Container 必须单独保存后者供 State/Retained Target 验证。
 
 ## Smoke Test
 
@@ -71,7 +77,7 @@ Cutover 前：
 - Homepage
 - Representative Article
 - Locale Route
-- Search
+- Search：`/zh-cn/search?q=ROS2_Control` 页面与 `/api/search?q=ROS2_Control&locale=zh-cn`，验证 200、Locale Route、非空 Result 和 `Cache-Control: no-store`
 - Static Asset Fetch
 
 Cutover 后，通过真实 Production Entry 重复关键 Public-path Check。
@@ -83,6 +89,8 @@ Rollback 是 Traffic Switch，而不是 Rebuild。
 在新 Release 通过定义的 Stabilization Policy 前，Previous Slot 保持完整。
 
 Rollback Operation 与 Lock/Lease 保存在 Control-state SQLite，因此 Production PostgreSQL 不可用时仍能创建和恢复。Rollback 后必须执行能够运行的 Control-plane/OpenResty Check；Application Public Smoke 若因 Database Incident 失败，应明确报告 Dependency Failure，而不是丢失 Rollback State。
+
+当前实现的 Rollback Target 是 Version 5 SQLite 中的 Previous Slot + Last SHA/Digest。Engine 只验证保留 Container 与 Digest 并切流，不运行 Build、Candidate Prepare 或 Migration。在 Stabilization Deadline 前不得用另一 Release 覆盖该保留目标。
 
 ## Control Plane Independence
 

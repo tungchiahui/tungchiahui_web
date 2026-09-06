@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "migrations": [
+    {
+      "tag": "0000_phase3_core",
+      "changeKind": "expand",
+      "risk": "medium",
+      "requiresFreshRecoverableBackup": false,
+      "reason": "Initial V2 application schema on a new database; creates additive schema, enums, tables, constraints, and indexes only.",
+      "recovery": "On a disposable target, recreate the database. On a durable target, retain the additive schema and use a reviewed forward-fix migration."
+    },
+    {
+      "tag": "0001_phase3_translation_and_ingestion",
+      "changeKind": "expand",
+      "risk": "low",
+      "requiresFreshRecoverableBackup": false,
+      "reason": "Adds translation, ingestion, and explicitly approved alias structures without changing existing rows.",
+      "recovery": "Retain the additive structures for blue-green compatibility and use a reviewed forward-fix migration if needed."
+    },
+    {
+      "tag": "0002_phase5_job_claiming",
+      "changeKind": "expand",
+      "risk": "low",
+      "requiresFreshRecoverableBackup": false,
+      "reason": "Adds backward-compatible claim, lease, retry scheduling, and attempt-limit columns to PostgreSQL application jobs; replaces only the supporting claim index with a superset key.",
+      "recovery": "Retain the nullable/defaulted columns and superset index for blue-green compatibility; use a reviewed forward-fix migration if claim policy needs adjustment."
+    },
+    {
+      "tag": "0003_phase8_translation_memory",
+      "changeKind": "expand",
+      "risk": "low",
+      "requiresFreshRecoverableBackup": false,
+      "reason": "Adds backward-compatible document-to-segment mapping plus nullable source binding and zero-default materialization metrics; existing translations remain readable by older application code and are only trusted by Phase 8 after explicit content-sync backfill.",
+      "recovery": "Retain the additive table and columns for blue-green compatibility. If reconciliation policy needs correction, deploy a reviewed forward fix and replay an explicit idempotent content sync from the canonical GitHub commit."
+    },
+    {
+      "tag": "0004_phase9_budgeted_translation",
+      "changeKind": "expand",
+      "risk": "low",
+      "requiresFreshRecoverableBackup": false,
+      "reason": "Adds a backward-compatible execution mode, force/cancellation control, request counts and segment progress metrics to the existing translation-job table; all columns have safe defaults for Phase 8 application overlap.",
+      "recovery": "Retain the additive enum and columns for blue-green compatibility. Disable explicit translation execution, preserve completed segment rows, and deploy a reviewed forward fix before resuming jobs."
+    },
+    {
+      "tag": "0005_phase10_pgroonga_search",
+      "changeKind": "expand",
+      "risk": "low",
+      "requiresFreshRecoverableBackup": false,
+      "reason": "Adds an independently rebuildable locale-aware search projection and PGroonga index without changing canonical documents, translations, routes, or existing application-job rows.",
+      "recovery": "Retain the additive projection table for blue-green overlap. Disable search polling or public search on error, deploy a reviewed forward fix, and replay a PostgreSQL-backed search_reindex job from current runtime content."
+    },
+    {
+      "tag": "0006_phase18_content_aliases",
+      "changeKind": "expand",
+      "risk": "low",
+      "requiresFreshRecoverableBackup": false,
+      "reason": "Relaxes the existing content alias route check from Wiki-only to the explicit Blog-or-Wiki namespace required by the final Legacy delta; it does not rewrite rows and remains compatible with the previous application version.",
+      "recovery": "Retain the relaxed constraint for blue-green overlap. Disable or correct the affected explicit alias allowlist in a reviewed forward fix; do not contract the constraint while either application version may run."
+    }
+  ]
+}

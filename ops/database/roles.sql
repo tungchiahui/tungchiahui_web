@@ -1,0 +1,69 @@
+DO $roles$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'site_migrator') THEN
+    CREATE ROLE site_migrator NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'site_app') THEN
+    CREATE ROLE site_app NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'site_content_worker') THEN
+    CREATE ROLE site_content_worker NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'site_control_api') THEN
+    CREATE ROLE site_control_api NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'site_backup') THEN
+    CREATE ROLE site_backup NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'site_replication') THEN
+    CREATE ROLE site_replication NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE REPLICATION NOBYPASSRLS;
+  END IF;
+END
+$roles$;
+
+ALTER ROLE site_migrator WITH NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+ALTER ROLE site_app WITH NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+ALTER ROLE site_content_worker WITH NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+ALTER ROLE site_control_api WITH NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+ALTER ROLE site_backup WITH NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+ALTER ROLE site_replication WITH NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE REPLICATION NOBYPASSRLS;
+
+DO $database_grants$
+BEGIN
+  EXECUTE format('REVOKE ALL ON DATABASE %I FROM PUBLIC', current_database());
+  EXECUTE format('GRANT CONNECT, CREATE ON DATABASE %I TO site_migrator', current_database());
+  EXECUTE format('GRANT CONNECT ON DATABASE %I TO site_app, site_content_worker, site_control_api, site_backup', current_database());
+END
+$database_grants$;
+
+GRANT pg_read_all_data TO site_backup;
+GRANT pg_monitor TO site_backup;
+
+CREATE EXTENSION IF NOT EXISTS pgroonga;
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+
+DO $schema_grants$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'app') THEN
+    REVOKE ALL ON SCHEMA app FROM PUBLIC;
+    GRANT USAGE ON SCHEMA app TO site_app, site_content_worker, site_control_api, site_backup;
+    GRANT SELECT ON ALL TABLES IN SCHEMA app TO site_app, site_backup;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA app TO site_content_worker;
+    GRANT SELECT, INSERT ON app.operational_jobs TO site_control_api;
+    GRANT UPDATE (status, finished_at, error_summary) ON app.operational_jobs TO site_control_api;
+    GRANT SELECT ON app.documents TO site_control_api;
+    IF to_regclass('app.translation_jobs') IS NOT NULL THEN
+      GRANT SELECT, INSERT ON app.translation_jobs TO site_control_api;
+      GRANT UPDATE (status, finished_at, cancel_requested_at) ON app.translation_jobs TO site_control_api;
+    END IF;
+    GRANT SELECT, INSERT, UPDATE ON app.owner_managed_datasets TO site_control_api;
+    GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA app TO site_content_worker;
+    ALTER DEFAULT PRIVILEGES FOR ROLE site_migrator IN SCHEMA app GRANT SELECT ON TABLES TO site_app, site_backup;
+    ALTER DEFAULT PRIVILEGES FOR ROLE site_migrator IN SCHEMA app GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO site_content_worker;
+    ALTER DEFAULT PRIVILEGES FOR ROLE site_migrator IN SCHEMA app GRANT USAGE, SELECT ON SEQUENCES TO site_content_worker;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'drizzle') THEN
+    REVOKE ALL ON SCHEMA drizzle FROM PUBLIC;
+  END IF;
+END
+$schema_grants$;

@@ -42,13 +42,15 @@
 
 ### Static Asset
 
-AList S3 保存：
+Provider-neutral Asset S3（当前 Production 使用 AList）保存：
 
 - Image
 - Attachment
 - Music
 - 选定的 Static Library/Asset
-- Database Backup
+
+Provider-neutral Backup S3（当前 Production 使用 Cloudflare R2）保存数据库与 Control-state 的
+加密异地 Backup Artifact。
 
 现有 CDN Endpoint 继续作为 Public Asset Delivery Path。
 

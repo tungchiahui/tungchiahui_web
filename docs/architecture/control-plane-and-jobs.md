@@ -26,7 +26,11 @@ GET  /api/ops/status
 OpenResty 在选择 Next.js Blue/Green Upstream 之前按 Path 分流：
 
 ```text
-Internet -> EdgeOne -> ddns.tungchiahui.cn:8443 -> OpenResty
+Internet -> EdgeOne -> ddns.tungchiahui.cn:8443 -> shared-host OpenResty
+                                                        |
+                                                 127.0.0.1:3100
+                                                        |
+                                                  V2 OpenResty
                                                         |
                            +----------------------------+------------------+
                            |                                               |
@@ -127,6 +131,50 @@ Worker 安全 Claim Job，例如使用 PostgreSQL Transaction/Locking 语义中�
 - Control-state Schema Migration 必须版本化、向后兼容并可恢复
 
 SQLite 只用于 Control-plane Recovery State，绝不是业务 Production Database。Content、Translation、Search 和普通 Application Job 不得迁入该 Store。
+
+### Phase 4 executable baseline
+
+Phase 4 的 Local/Test 实现把上述边界具体化为：独立 Node/TypeScript `control-api`、PostgreSQL `site_control_api` NOLOGIN Role，以及 Version 2 SQLite Schema。Phase 12 以向后兼容 Version 3 Migration 增加 `production` Environment：原 Version 2 Metadata 先保留为 `local_control_metadata_v2`，再复制进扩展 Constraint 的新 Metadata Table。SQLite 继续使用 `BEGIN IMMEDIATE` Transaction、WAL、`synchronous=FULL`、`wal_autocheckpoint=1000`、Versioned Migration、Nonce Uniqueness、Append-only Audit Trigger 和 Lease Fencing Token。
+
+Phase 12 Production Compose 将该 Store 挂载到权限受限的 `/var/lib/tungchiahui/control-state`，并交付独立 `control-api` 与 `deploy-agent` 容器。此阶段 deploy-agent 只允许 Docker `GET /_ping`、对外报告 Production Mutation Disabled；它不是 Phase 14 Deployment Engine，也没有提前实现 Cutover/Rollback。Docker Socket 只进入 deploy-agent，`control-api` 与 `content-worker` 没有该 Mount 或 deploy-control Network。
+
+Phase 13 以向后兼容 Version 4 Migration 新增 `recovery_backup_records`，保存 Backup ID/Type、Repository Generation/Manifest Hash、WAL Max、双 Replica Freshness、有效性和真实 Bytes/Seconds；不把业务数据搬入 SQLite。`control-api` 新增 Backup/Restore Operation 与 Backup Status 路由，仍可在 PostgreSQL Down 时使用。
+
+Phase 14 以 Additive Version 5 Migration 为 Deployment Runtime 增加 Current/Last Digest、Pending Slot/SHA/Digest Cutover Intent、Cutover Timestamp 与 Stabilization Deadline。`control-api` 的 Deployment/Rollback Endpoint 与 `./site` 只创建/读取相同 SQLite Operation；既有 `deploy-agent` 分别 Filter Claim Deployment 与 Recovery 类型，并调用唯一 Shared Engine。Deployment Lease 到期保留精确 Persisted Phase，新的 Fencing Token 根据 Pending Intent 与实际 OpenResty Slot 对账，安全 Resume。`productionOperations` 只有在该 Engine 和 Production-like Gate 交付后才为 true。
+
+Phase 17 保持 Version 5 Schema 不变，为既有 `server-migration` Operation 增加唯一的 Typed State-machine Engine。`./site provision` 与 `./site migrate-server` 仍只通过独立 Control API 创建同一 SQLite Operation；Target 只接受 Stable Inventory/SSH Identity，Active Migration 独占 Infrastructure-operation Window。Engine 逐步记录 Provision、Physical Replication、Abort Gate、Candidate Smoke、Final WAL、Control-state Transfer、Promotion、Application/Origin Cutover、Post-switch Verify 与 Non-writing Rollback Evidence。Disposable Production-foundation Adapter 执行完整非生产演练；Production Target/SSH/DDNS Binding 不由默认配置自动激活，仍需独立 Owner 授权。
+
+`control-api` 与 `deploy-agent` 通过 setgid/最小组写权限共享同一个 Host-local Store；各自使用 restrictive umask，不获得彼此的业务 Credential。SQLite Snapshot 执行 WAL Checkpoint + `VACUUM INTO`，验证 Schema/Integrity/Environment/Active-Previous SHA/Audit Digest，经 age 加密并复制到独立于 Asset Store 的 Off-site `BACKUP_S3_*` Target。其 read-back-verified `latest.json` 允许在本地 SQLite 全损时发现最新 Artifact。显式 Break-glass 仅替换到达路径，仍向同一 Store 写 Audit/Operation 并由同一 Agent/Engine 执行。
+
+Operation State Machine 是 `queued -> claimed -> running -> completed|failed`；Claimed Lease 到期可重新排队并增加 Fencing Token。Recovery 的 Running Lease 到期进入 `needs-attention/reconcile-required`；Deployment 则进入 `needs-attention` 并保留最后的精确 Phase，由 Phase 14 Reconciler 对账。Heartbeat 只能由匹配 Owner/Fencing Token 的未过期 Lease 续期，旧 Token 不能 Start、Heartbeat 或 Finish。
+
+Local/Test OpenResty 在选择 Web Upstream 前直接把 `/api/ops/*` 路由到 `control-api`，隐藏 Upstream Cache Header 后强制单一 `Cache-Control: no-store`，并设置 Cache Bypass、Method/Rate-limit Test Boundary。当前 Baseline 可创建/查询 Application Job、验证 Owner Dataset Write，以及创建/查询 Infrastructure/Backup/Restore/Deploy/Rollback Operation；长时间工作不在 Request 内 Inline 执行。Deployment 由独立 Agent 完成 Inactive Lifecycle、Migration、Smoke、Atomic Cutover 与 Rollback。
+
+### Phase 5 application-job execution baseline
+
+Phase 5 保留 Phase 4 HTTP/Store 分流，并让 `content-worker` 执行 `content_sync`：
+
+- Claim 只选择 `queued`/到期 `retry_wait` 的 Content Job，并使用 `FOR UPDATE SKIP LOCKED` 防止并发重复执行；
+- Claim 记录 Worker、开始时间、Lease Expiry 与递增 Attempt；过期 Claim 转入 Retry 或在达到 Limit 后失败；
+- Progress 与 Completion/Failure 必须匹配当前 Worker Claim，完成后清除 Lease；
+- 瞬时 GitHub Read Failure 可重试；Frontmatter/AST/Route Collision/Identity 歧义属于确定性失败，不进行无意义重试；
+- `ingestion_runs`、Document Snapshot 和 Alias 均留在 PostgreSQL，SQLite Schema/Scope 没有变化；
+- `content-worker` 仍无 Docker Socket、OpenResty Admin、Host Shell 或 Control-state SQLite Write。
+
+Translation/Search/Cache Job 仍只创建/查询，不在 Phase 5 提前执行。Phase 5 Content Handler 只调用标明替换阶段的零成本 Typed Hook。
+
+### Phase 9 translation-job execution baseline
+
+Phase 9 在同一 PostgreSQL Application-job 边界上实现 Translation Operation：
+
+- `POST /api/ops/translations` 创建 Job；`GET /api/ops/translations/status` 与 `GET /api/ops/translations/:id` 查询状态；`POST /api/ops/translations/:id/cancel` 请求取消；
+- Estimate、Execute、Read、Cancel 使用独立 Capability；Payload、Scope、Budget、Force 和两种显式 Confirmation 都经过 Zod Validation；
+- `control-api` 只在事务中创建配对的 `operational_jobs`/`translation_jobs` Row 并快速返回，不持有 Provider Credential、不执行翻译；
+- `content-worker` 使用 PostgreSQL Claim/Lease/Attempt/Progress 执行 Segment-level Work，在每次 Provider Request 前重新读取累计 Cost 并执行 Budget Hard Stop；
+- 已完成 Segment、待重验证 Document、Usage 与 Provider/Model Audit 持久化，因此 Provider Failure 或 Revalidation Failure 可恢复而不重复已记录的付费请求；
+- Translation Job 从未进入 SQLite Recovery Store；PostgreSQL 不可用时 Endpoint 安全返回不可用。
+
+Manual GitHub Workflow 和本地 `./site translate` 都调用该 Control API。Workflow 仅获得 Translation Capability 的短期 OIDC Identity，不获得 Database、Provider 或 Host Credential。
 
 ## Normal 与 Break-glass Path
 

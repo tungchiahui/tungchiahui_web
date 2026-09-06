@@ -1,0 +1,66 @@
+name: Content-only Sync
+
+on:
+  workflow_call:
+    inputs:
+      source_commit:
+        description: Full canonical content repository commit SHA
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: content-sync-${{ inputs.source_commit }}
+  cancel-in-progress: false
+
+jobs:
+  validate-and-trigger:
+    name: validate-and-trigger-content-sync
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    env:
+      SITE_CONTROL_API_URL: https://www.tungchiahui.cn
+      SOURCE_COMMIT: ${{ inputs.source_commit }}
+    steps:
+      - name: Check out the canonical content commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: canonical-content
+          ref: ${{ inputs.source_commit }}
+
+      - name: Validate the immutable content identity
+        run: |
+          [[ "$SOURCE_COMMIT" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$(git -C canonical-content rev-parse HEAD)" == "$SOURCE_COMMIT" ]]
+
+      - name: Check out the reviewed control client
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: tungchiahui/tungchiahui_web
+          ref: main
+          path: automation
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@008330803749db0355799c700092d9a85fd074e9 # v6.0.9
+        with:
+          version: 11.23.0
+          run_install: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: automation/.node-version
+          cache: pnpm
+          cache-dependency-path: automation/pnpm-lock.yaml
+
+      - name: Install the locked content-sync client
+        working-directory: automation
+        run: pnpm install --frozen-lockfile
+
+      - name: Create the server-side content-sync job
+        working-directory: automation
+        run: ./site content sync "$SOURCE_COMMIT"

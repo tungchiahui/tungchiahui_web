@@ -30,7 +30,9 @@
 专门的 Test Suite 对以下两者运行相同 Storage Behavior：
 
 1. Local S3Mock
-2. 指定的 AList Non-production Test Bucket
+2. 指定的 S3-compatible Non-production Test Bucket
+
+Suite 与配置、CLI、Report Contract 必须保持 Provider-neutral。当前生产部署选择 AList，所以 Phase 11 的真实 Provider Evidence 使用 Owner 指定的 AList 非生产 Bucket；这不允许把 Adapter 或配置命名绑定到 AList。
 
 至少测试：
 
@@ -81,6 +83,18 @@ Test Command 必须：
 8. 运行 Playwright
 9. 即使失败也执行 Cleanup
 
+Phase 2 已实现 Disposable Infrastructure Entry Point；Phase 3 已加入真实 Migration/Role/PgBouncer Suite 和真实 Migration/Seed Hook。Phase 6 已用真实 Playwright Suite 替换 Placeholder，覆盖 zh-CN Home/Blog/Wiki、Legacy Route、Markdown、S3Mock Asset、Special Page、Health/Ready/Version、404、Metadata 与 Client Secret Negative Scan。该 Suite 对共享的 Disposable Runtime/Cache 串行执行，并在任一失败时输出 Web Log 后清理全部资源。
+
+Phase 12 在 Unit 与 Disposable Application Integration 之间加入独立 Production-foundation Gate。它使用提交锁定的 Ansible/SOPS/age/Compose Toolchain，在临时 Host Root 上生成真实 age 密文、构建 Git-SHA 标识的 Production Image、执行两次 Provision，并验证第二次 `changed=0`。同一 Gate 检查 Image History、Container User/Readonly/Capability/Socket、四个数据库登录身份、OpenResty Validation/Reload、IPv4+IPv6 和 Next Slots 全停后的独立 Control Route；只绑定临时本机端口，不承载 Public Traffic。
+
+Phase 13 另加入 `test:recovery`：构建固定 pgBackRest 版本的 PostgreSQL/Recovery Image，启动一次性 PostgreSQL 和隔离 S3Mock，执行真实 Full/Differential/Incremental、WAL Archive、Off-site 副本逐对象校验、从异地副本重建 Repository、指定时间 PITR、Version/Schema/代表性应用读取，以及加密 Control-state SQLite Restore。所有 Destructive 操作都要求一次性 Target Marker；Gate 不读取生产 Credential，也不访问真实 AList/R2。
+
+Phase 14 扩展 `test:infra`：在同一临时 Host Root 和 Hardened Compose 中先 Migration/Seed/Reindex，再通过签名 Control API 执行真实 Inactive Green Deploy、全部 Candidate/Public Smoke、OpenResty Cutover、Retained Blue Rollback、Missing Digest Failure 和 PostgreSQL-down Dependency Failure。Unit Gate 注入 Pre/Post Smoke、Invalid Config 与四个 Crash Phase；Migration Suite 继续证明 Previous Schema/Blue-Green Overlap。测试不启用 Public Production Traffic。
+
+Phase 15 再把临时 OCI Registry 纳入 `test:infra`：Candidate 先以完整 Git SHA Label 推送，再从 Host Local Store 移除，强制 `deploy-agent` 只按 approved Repository + Registry Manifest Digest Pull，并验证 `RepoDigest` 与 OCI Revision。Workflow Policy Gate 解析 Quality/Application/Content/Translation 四条 Workflow，校验 Trigger、Environment、Concurrency、Permission、Pinned Action、共享 CLI 和 Forbidden Credential/Command；OIDC Unit 覆盖错误 Issuer/Audience/Repository/Ref/Environment/Workflow Claim 及 reusable `job_workflow_ref`。全部验证只使用 Production-like Local Resource，不调用 GitHub 或 Public Production Control API。
+
+Phase 17 在同一 `test:infra` 中 Provision 第二个隔离 Host Root，第二次 Ansible 必须 `changed=0`，并验证 Target Hardening。Gate 使用 PostgreSQL 18 Physical Base Backup/Streaming Slot，把 Base、Streaming、Final-WAL 三条唯一 Row 复制到 Target；在 Final LSN Catch-up 后停止 Source、Promote Target、验证 Application Ready/Target Write/Old-source Non-writing。Control-state 执行一致 Snapshot/Restore 与最终 Reconcile，核对 Active/Previous Identity、Operation Lease/Phase 和 Audit Digest；最终 Origin Probe 强制 AAAA-only。Unit Test 另注入 Promotion 前 Failure，证明安全 Abort 且不会 Promote。所有 Target、Certificate、Credential、Port 与 Registry 都是 Disposable，输出明确 `productionTraffic=false`。
+
 ## Migration Test
 
 CI 必须测试：
@@ -90,15 +104,19 @@ CI 必须测试：
 - Blue Application Against Expanded Schema
 - 在可行时测试 Green Application Against Expanded Schema
 
+Phase 3 还验证 Migration Metadata/Backup Policy、Applied SQL Hash/Timestamp、Application/Worker Role Grant、非法 Locale/Job Type/JSON Payload Constraint，以及 Previous-schema Representative Row 在 Expand 后仍存在。
+
 ## Restore Test
 
 Restore Drill 属于 Operations，但它们是 Backup Validity 的自动化测试。
 
 从未被恢复过的 Backup 不可信。
 
+Phase 13 Unit/HTTP Gate 还覆盖 Repository Corruption、Restore Target Marker/Environment/Confirmation、PostgreSQL-down Operation Create/Query/Claim、Lease/Reconcile、Break-glass 共用 SQLite/Audit，以及 Control-state Snapshot Integrity/Schema/Audit Continuity。
+
 ## Control-plane Test
 
-测试：
+Phase 4 已把以下项纳入 Unit 与 Disposable Integration；后续 Phase 在扩展真实执行能力时继续保持这些 Gate：
 
 - Authentication Failure
 - Authorization/Capability Boundary
@@ -112,6 +130,16 @@ Restore Drill 属于 Operations，但它们是 Backup Validity 的自动化测�
 - Production PostgreSQL 不可用时，Deploy/Rollback/Restore/Recovery Operation 仍可创建、恢复并查询
 - SQLite Transaction、Lock/Lease、Crash Restart/Resume 与 Audit Record
 - Content/Translation/Search Job 仍使用 PostgreSQL，且在数据库不可用时安全失败
+
+Phase 5 在同一 Disposable Integration 增加 PostgreSQL Application-job Execution Gate：`FOR UPDATE SKIP LOCKED` 并发 Claim、Retry/Attempt/Progress、Representative Minimal Frontmatter、同 Commit Idempotency、Add/Modify/Delete/Move、Identity Continuity、批准 Alias、Pinyin Collision 原子失败与旧 Runtime Snapshot 保留。GitHub Adapter Unit Test 断言精确 Tree/Blob Snapshot 只发出 `GET`，拒绝 Truncated Tree/Blob Hash Drift，且 Content Execution Module 不导入 AI Provider、Build/Deploy Process 或 GitHub Write Capability。
+
+Phase 6 在此基础上增加缓存副作用 Failure Gate：预热 Route Cache，提交新 Snapshot，注入一次 Revalidation Failure，断言 PostgreSQL Job 保存 `side_effects` Progress、Retry 不重复 Fetch/Materialize，并在无 Rebuild/Restart 下读到新正文。
+
+Phase 8 增加 Semantic-block/Translation Memory Gate：位置变化不改变身份；AST/Code/URL/Identifier 必须保持；Hash Hit 全局复用；Hash Miss Pending；局部 Change 只回退当前 Block；Superseded Pending 变 Stale；Targeted Patch Context 保留；同 Snapshot/Delta 重放不重复 Row、Mapping 或 Hook。真实 Public E2E 同时覆盖 full fallback 与 mixed en-US State。所有这些 Path 结构上不导入 Provider，并记录 `providerCalls: 0`。
+
+Phase 9 在同一 Disposable Stack 增加 Control API Translation Create/Idempotency/Read/List、四种 Scope、Force Confirmation、Dry-run 零调用、逐请求 Budget Stop/Partial、Cancellation、Provider Failure Retry、Revalidation Failure Resume、Published reviewed Translation Preservation，以及 Token/Cost/Provider/Model Audit。Phase 9 数据变更在 Public E2E 之后运行，避免测试互相污染。Automated Suite 只使用 Fake Provider；真实 Provider Contract Test 必须先获得明确的非生产 Target 与付费授权。
+
+Phase 10 在同一 Disposable Stack 先通过 PostgreSQL Durable Job 重建四 Locale Search Projection，再验证 PGroonga Query Plan/`REINDEX`、Concurrent Claim、Retry、Locale Isolation、Exact Title/Heading/Body/中文/English/Mixed Identifier Ranking、Snippet/Public Contract/Secret Negative、真实 Content Update 后精确 Search Cache Invalidation。Playwright 验证 Localized Search Page/API/Route 和 Client Bundle 不含完整 Corpus。
 
 ## Deployment Pipeline Test
 

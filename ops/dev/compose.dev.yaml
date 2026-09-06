@@ -1,0 +1,25 @@
+services:
+  content-worker:
+    environment:
+      TRANSLATION_WORKER_POLLING_ENABLED: "true"
+  postgres:
+    ports:
+      - "127.0.0.1:${SITE_POSTGRES_PORT:-15432}:5432"
+  pgbouncer:
+    ports:
+      - "127.0.0.1:${SITE_PGBOUNCER_PORT:-16432}:6432"
+  s3mock:
+    ports:
+      - "127.0.0.1:${SITE_S3_PORT:-19090}:9090"
+  control-api:
+    ports:
+      - "127.0.0.1:${SITE_CONTROL_API_PORT:-18080}:8080"
+  fake-deploy-agent:
+    ports:
+      - "127.0.0.1:${SITE_FAKE_DEPLOY_AGENT_PORT:-18081}:8081"
+  openresty:
+    ports:
+      - "127.0.0.1:${SITE_OPENRESTY_PORT:-18443}:8082"
+  web:
+    ports:
+      - "127.0.0.1:${SITE_WEB_PORT:-3000}:3000"

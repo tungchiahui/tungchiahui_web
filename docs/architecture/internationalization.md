@@ -71,6 +71,16 @@ Pending Block 的英文渲染使用最新 Canonical zh-CN Source Block 作为 Fa
 
 不要维护三份人工编写的 Source Article 副本。
 
+Phase 7 的实现契约：
+
+- `content-worker` 在 Content Ingestion Transaction 内把两种确定性结果物化到 `document_translations`；
+- Versioned Glossary 同时提供可审计 Version 和正整数 Persistence Revision；
+- 未改变的 Markdown/Hash/Revision 不重写 `generated_at`，同一 Snapshot 可安全重放；
+- 只替换 Markdown AST `text` Node 的 Source Range，Frontmatter、Code Fence、Inline Code、Raw HTML 和 Link/Image Destination 不进入转换边界；
+- Public DAL 按 Locale 读取物化结果并隔离 Cache Key；Backfill 前允许 Server Renderer 使用同一确定性转换作只读 View，但 Public Request 永不写 DB。
+
+实现与 Backfill 细节见 `docs/development/phase-7-deterministic-locales.md`。
+
 ## Locale 切换
 
 在可行情况下，Locale Switch 应保留同一个 Logical Document Route。
@@ -79,6 +89,8 @@ Pending Block 的英文渲染使用最新 Canonical zh-CN Source Block 作为 Fa
 
 - UI Message Locale
 - Document Translation Locale
+
+Unprefixed Route 与 `/zh-cn/**` 均为 zh-CN。其余批准 Prefix 为 `/zh-hk/**`、`/zh-tw/**`、`/en-us/**`；Locale Switch 只改变 Prefix 并保持 Logical Document Path。`zh-hant` 明确不受支持且不得 Redirect。
 
 ## Fallback
 
@@ -91,3 +103,11 @@ Pending Block 的英文渲染使用最新 Canonical zh-CN Source Block 作为 Fa
 - 仅仅因为一个 Translation Block Pending 就返回 404
 - 把过期旧英文显示成最新 zh-CN 改动对应的翻译
 - 从 Public Page Request 触发付费翻译
+
+Phase 7 在 Block-level State 建立前使用更严格的全 Document zh-CN Fallback，并明确忽略已有 en-US Materialization；Phase 8 才负责把该基线替换为 Semantic-block Translation Memory 与混合 Fallback。
+
+Phase 8 已实现该替换：顶层 mdast Semantic Block 使用版本化 Normalization、Source Hash 和 AST/受保护值 Context Fingerprint 建立全局 Translation Memory；Document Ordinal 仅用于当前拼装，不是翻译身份。en-US Materialization 必须绑定当前 Canonical `source_hash`，并记录 Pending、Fallback、Translated 与 Memory-hit Count。Public DAL 只读取 Source Hash 匹配的当前行，按实际内容暴露 `fallback`、`mixed` 或 `translated`；缺失/旧行继续安全回退到最新完整 zh-CN。
+
+实现与安全 Backfill 见 `docs/development/phase-8-translation-memory.md`。
+
+Phase 9 在该数据层之上增加显式 Translation Job。Provider Adapter 的 Request、Estimate、Response 和 Usage 都经过 Runtime Validation；Worker 逐个 Current Segment 执行，每次调用前强制 Budget，并在写入后按受影响 Document 重新物化与精确 Revalidate。Dry-run 只读取候选并估算，Provider Call Count 必须为零。Provider 厂商不是架构常量；Local/Test 固定使用 Fake Provider，具体 Production Adapter 必须通过相同 Boundary 和经授权的非生产 Contract Test。

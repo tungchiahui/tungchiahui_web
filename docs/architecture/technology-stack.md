@@ -89,7 +89,7 @@ SQLite 是 ADR 0015 定义的专用 Control-plane State Mechanism，不得用于
 - 不依赖生产 AList
 - 适合 Integration Testing
 
-必须另有一套 Storage Contract Suite 在 AList 非生产 Test Bucket 上运行，因为任何 S3 Emulator 都不能保证与每个 S3-compatible Implementation 完全一致。
+必须另有一套 Provider-neutral Storage Contract Suite，可由配置指向任意明确授权的 S3-compatible 非生产 Target。当前 Production Provider 选用 AList，因此 Production-readiness Evidence 必须包含同一 Suite 在 AList 非生产 Test Bucket 上的结果；Adapter、CLI、Environment Variable 和 Domain Type 不得绑定 AList。
 
 ## 未经 ADR 禁止替换
 

@@ -36,3 +36,5 @@ ADR 是不可变的历史记录。
 - `0013-separate-content-worker-and-deploy-agent.md`
 - `0014-decouple-control-api-from-nextjs-slots.md`
 - `0015-postgresql-independent-control-plane-recovery-state.md`
+- `0016-shared-host-loopback-ingress.md`
+- `0017-single-offsite-s3-backup-target.md`

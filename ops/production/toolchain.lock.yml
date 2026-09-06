@@ -1,0 +1,15 @@
+version: 1
+ansible_core:
+  version: 2.21.3
+docker_compose:
+  version: 5.4.0
+  linux_amd64_sha256: 837fd1d35bf6a494f41b5b5988269a7be79de337cf1a1a6ff0e45ab51bb4e9be
+sops:
+  version: 3.13.3
+  linux_amd64_sha256: e5bec3346a873ae91d871550f3e698c1aad962aff462a080e40f25fde17fef6b
+age:
+  version: 1.3.2
+  linux_amd64_sha256: cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10
+trivy:
+  version: 0.74.0
+  image: aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969

@@ -1,0 +1,420 @@
+{
+  "id": "4adab1da-6356-4935-9c3f-a59d9e7811af",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "app.documents": {
+      "name": "documents",
+      "schema": "app",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "content_type": {
+          "name": "content_type",
+          "type": "content_type",
+          "typeSchema": "app",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_path": {
+          "name": "source_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_commit": {
+          "name": "source_commit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "raw_frontmatter": {
+          "name": "raw_frontmatter",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "raw_markdown": {
+          "name": "raw_markdown",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_hash": {
+          "name": "source_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "route_path": {
+          "name": "route_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "source_updated_at": {
+          "name": "source_updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ingested_at": {
+          "name": "ingested_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "is_deleted": {
+          "name": "is_deleted",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "documents_source_path_unique": {
+          "name": "documents_source_path_unique",
+          "columns": [
+            {
+              "expression": "source_path",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "documents_route_path_unique": {
+          "name": "documents_route_path_unique",
+          "columns": [
+            {
+              "expression": "route_path",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "documents_content_type_idx": {
+          "name": "documents_content_type_idx",
+          "columns": [
+            {
+              "expression": "content_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "documents_source_path_not_empty": {
+          "name": "documents_source_path_not_empty",
+          "value": "length(\"app\".\"documents\".\"source_path\") > 0"
+        },
+        "documents_route_path_absolute": {
+          "name": "documents_route_path_absolute",
+          "value": "\"app\".\"documents\".\"route_path\" LIKE '/%'"
+        },
+        "documents_source_hash_sha256": {
+          "name": "documents_source_hash_sha256",
+          "value": "\"app\".\"documents\".\"source_hash\" ~ '^[a-f0-9]{64}$'"
+        },
+        "documents_source_commit_hash": {
+          "name": "documents_source_commit_hash",
+          "value": "\"app\".\"documents\".\"source_commit\" ~ '^(?:[a-f0-9]{40}|[a-f0-9]{64})$'"
+        },
+        "documents_frontmatter_object": {
+          "name": "documents_frontmatter_object",
+          "value": "jsonb_typeof(\"app\".\"documents\".\"raw_frontmatter\") = 'object'"
+        },
+        "documents_delete_timestamp_consistent": {
+          "name": "documents_delete_timestamp_consistent",
+          "value": "(\"app\".\"documents\".\"is_deleted\" AND \"app\".\"documents\".\"deleted_at\" IS NOT NULL) OR (NOT \"app\".\"documents\".\"is_deleted\" AND \"app\".\"documents\".\"deleted_at\" IS NULL)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "app.operational_jobs": {
+      "name": "operational_jobs",
+      "schema": "app",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "job_type": {
+          "name": "job_type",
+          "type": "application_job_type",
+          "typeSchema": "app",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "application_job_status",
+          "typeSchema": "app",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'queued'"
+        },
+        "requested_by": {
+          "name": "requested_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "progress": {
+          "name": "progress",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "attempt_count": {
+          "name": "attempt_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error_summary": {
+          "name": "error_summary",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "operational_jobs_idempotency_key_unique": {
+          "name": "operational_jobs_idempotency_key_unique",
+          "columns": [
+            {
+              "expression": "idempotency_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "operational_jobs_claim_idx": {
+          "name": "operational_jobs_claim_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "operational_jobs_requested_by_not_empty": {
+          "name": "operational_jobs_requested_by_not_empty",
+          "value": "length(\"app\".\"operational_jobs\".\"requested_by\") > 0"
+        },
+        "operational_jobs_payload_object": {
+          "name": "operational_jobs_payload_object",
+          "value": "jsonb_typeof(\"app\".\"operational_jobs\".\"payload\") = 'object'"
+        },
+        "operational_jobs_progress_object": {
+          "name": "operational_jobs_progress_object",
+          "value": "jsonb_typeof(\"app\".\"operational_jobs\".\"progress\") = 'object'"
+        },
+        "operational_jobs_attempt_nonnegative": {
+          "name": "operational_jobs_attempt_nonnegative",
+          "value": "\"app\".\"operational_jobs\".\"attempt_count\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "app.owner_managed_datasets": {
+      "name": "owner_managed_datasets",
+      "schema": "app",
+      "columns": {
+        "dataset_key": {
+          "name": "dataset_key",
+          "type": "owner_dataset_key",
+          "typeSchema": "app",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revision": {
+          "name": "revision",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "owner_managed_datasets_payload_object": {
+          "name": "owner_managed_datasets_payload_object",
+          "value": "jsonb_typeof(\"app\".\"owner_managed_datasets\".\"payload\") = 'object'"
+        },
+        "owner_managed_datasets_revision_nonnegative": {
+          "name": "owner_managed_datasets_revision_nonnegative",
+          "value": "\"app\".\"owner_managed_datasets\".\"revision\" >= 0"
+        },
+        "owner_managed_datasets_updated_by_not_empty": {
+          "name": "owner_managed_datasets_updated_by_not_empty",
+          "value": "length(\"app\".\"owner_managed_datasets\".\"updated_by\") > 0"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "app.application_job_status": {
+      "name": "application_job_status",
+      "schema": "app",
+      "values": ["queued", "running", "retry_wait", "completed", "failed", "cancelled"]
+    },
+    "app.application_job_type": {
+      "name": "application_job_type",
+      "schema": "app",
+      "values": ["content_sync", "translation", "search_reindex", "cache_revalidation"]
+    },
+    "app.content_type": {
+      "name": "content_type",
+      "schema": "app",
+      "values": ["blog", "wiki"]
+    },
+    "app.owner_dataset_key": {
+      "name": "owner_dataset_key",
+      "schema": "app",
+      "values": ["tech_footprint", "weight_loss"]
+    }
+  },
+  "schemas": {
+    "app": "app"
+  },
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

@@ -1,0 +1,79 @@
+name: Quality Gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    name: quality-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: true
+      NEXT_TELEMETRY_DISABLED: 1
+      SITE_BASE_URL: https://www.tungchiahui.cn
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@008330803749db0355799c700092d9a85fd074e9 # v6.0.9
+        with:
+          version: 11.23.0
+          run_install: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Format and lint
+        run: pnpm run check:biome
+
+      - name: TypeScript source and boundary policy
+        run: pnpm run check:source
+
+      - name: GitHub workflow trigger and credential policy
+        run: pnpm run check:workflows
+
+      - name: Drizzle migration consistency
+        run: pnpm run check:drizzle
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Unit tests
+        run: pnpm run test:unit
+
+      - name: Production foundation, recovery and blue-green tests
+        run: pnpm run test:infra && pnpm run test:recovery
+
+      - name: Disposable infrastructure integration and critical E2E tests
+        run: pnpm run test:integration
+
+      - name: PostgreSQL migration suite
+        run: pnpm run test:migration
+
+      - name: Validate Renovate policy
+        run: pnpm run renovate:validate
+
+      - name: Production build
+        run: pnpm run build

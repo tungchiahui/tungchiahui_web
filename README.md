@@ -1,7 +1,7 @@
 # TungChiaHui Website V2 — 工程文档
 
-> 状态：架构基线  
-> 基线日期：2026-08-23  
+> 状态：Phase 0–17 实现完成；等待 Owner 授权 Phase 18
+> 状态日期：2026-08-27
 > 目的：在不继承旧实现技术债的前提下，将个人网站重建为一个可长期维护、生产级的 Next.js 系统。
 
 本仓库是一个**全新的实现**，不是在 Nuxt 项目中原地迁移。
@@ -33,6 +33,7 @@
 17. **Web Application Repository 合并或 Push 到 `main` 后，必须先通过 CI Quality Gates，再自动构建 Git SHA Immutable Image 并通过统一 Deployment Engine 执行 Production Blue-Green Deployment；Content Repository Push 只触发 Content Sync。**
 18. **Renovate 负责创建 Dependency Update PR；它不得直接修改 `main`，升级仍须通过 Review 与全部 CI Quality Gates。**
 19. **不得仅仅因为这是个人网站，就简化已经确定的工程要求。**
+20. **共享生产主机由 1Panel OpenResty 承担公网 TLS/HTTP 入口；V2 只在 `127.0.0.1:3100` 暴露内部网关，并在该网关内执行蓝绿切换与 `/api/ops/*` 分流。**
 
 ## 网络身份
 
@@ -48,7 +49,11 @@ Users / GitHub Actions / local ./site CLI
       ddns.tungchiahui.cn:8443
         DNS-only / DDNS origin
                   |
-              OpenResty
+       shared-host OpenResty
+                  |
+        http://127.0.0.1:3100
+                  |
+           V2 OpenResty
                /       \
               v         v
     Next Blue/Green   control-api
@@ -166,7 +171,7 @@ GitHub Actions 的手动 `workflow_dispatch` 可以触发同一个 Translation J
 - pgBackRest + WAL/PITR
 - Adobe S3Mock for local S3 emulation
 - AList S3 for production static assets
-- Cloudflare R2 as off-site backup target
+- Provider-neutral off-site Backup S3 (currently Cloudflare R2)
 - SQLite as host-local control-plane recovery state only
 - Renovate for Dependency Update PR automation
 
@@ -190,6 +195,25 @@ push/merge to main
 ```
 
 `./site deploy [git-sha-or-release]` 保留为人工触发、重试或指定版本部署入口，并调用完全相同的 Control Plane 与 Deployment Engine。Content Repository 的 Markdown Push 只触发 Content Sync，不触发 Next.js Image Build 或 Blue-Green Deployment。
+
+## 本地工程入口
+
+使用 Node.js `24.19.0` 与 pnpm `11.23.0`：
+
+```bash
+pnpm install --frozen-lockfile
+./site dev
+./site check
+./site test
+```
+
+`./site dev` 启动只绑定 Loopback 的 PostgreSQL 18 + PGroonga、PgBouncer、Adobe S3Mock、Next.js、Local `control-api`、Control-state SQLite 和 Fake Deploy Agent。它不读取 Production DB/S3/AI Credential。使用 `./site dev stop` 保留数据；删除数据必须显式执行：
+
+```bash
+./site dev reset --environment local --confirm RESET-LOCAL-DATA
+```
+
+完整端口、隔离、测试生命周期和镜像锁定见 `docs/development/phase-2-hermetic-local-platform.md`。
 
 ## 文档地图
 
@@ -241,6 +265,12 @@ push/merge to main
 ### 迁移
 
 - `docs/migration/nuxt-to-next.md`
+
+### 当前实施状态
+
+- Phase 0–15 已完成；Phase 16 尚未开始，等待 Owner 明确授权。
+- `docs/planning/current-state.md` — 新会话开始当前 Phase 前的简洁交接入口。
+- `docs/planning/implementation-plan.md` — Phase 0–18 的硬 Gate、依赖与进度。
 
 ### 架构决策
 

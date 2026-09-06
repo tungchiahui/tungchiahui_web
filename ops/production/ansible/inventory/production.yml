@@ -1,0 +1,7 @@
+all:
+  children:
+    production_origins:
+      hosts:
+        production_origin:
+          ansible_host: Debian
+          ansible_user: tungchiahui

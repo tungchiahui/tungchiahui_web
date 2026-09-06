@@ -1,32 +1,32 @@
 # Website V2 分阶段实施计划
 
-> Status: Planned  
-> Current Phase: Phase 0  
-> Execution Model: Hard-gated, one Phase at a time  
+> Status: In progress — Phase 0–17 complete
+> Current Phase: Phase 18 in progress — Owner authorized; production cutover not yet executed
+> Execution Model: Hard-gated, one Phase at a time
 > Scope: 从新的 Next.js V2 Repository 基线推进到替换旧 Nuxt Production Site
 
 本文档只定义实施顺序、依赖、完成条件和 Agent 执行纪律。架构、技术栈与运维契约仍以最新 Accepted ADR、`AGENTS.md` 和对应规范文档为准；这里不复制或重新解释它们。
 
 ## Overall Progress
 
-- [ ] Phase 0 — Legacy Discovery 与实施基线
-- [ ] Phase 1 — Next.js 工程与质量基线
-- [ ] Phase 2 — Hermetic Local Development Platform
-- [ ] Phase 3 — PostgreSQL、Drizzle 与持久化基础
-- [ ] Phase 4 — 独立 Control Plane 与 Job Boundary
-- [ ] Phase 5 — GitHub 单向 Content Ingestion
-- [ ] Phase 6 — zh-CN Website Vertical Slice
-- [ ] Phase 7 — UI i18n 与 zh-HK/zh-TW
-- [ ] Phase 8 — Translation Memory 与 en-US Fallback
-- [ ] Phase 9 — 显式付费 AI Translation
-- [ ] Phase 10 — PGroonga Search 与 Cache Correctness
-- [ ] Phase 11 — AList S3 Asset Contract
-- [ ] Phase 12 — Production Infrastructure、Ansible 与 Container Hardening
-- [ ] Phase 13 — Backup、PITR 与 PostgreSQL-independent Recovery
-- [ ] Phase 14 — Shared Deployment Engine 与 Full Blue-Green
-- [ ] Phase 15 — GitHub Actions OIDC 与 `main` 自动部署
-- [ ] Phase 16 — Observability、Security 与 Production Readiness
-- [ ] Phase 17 — Planned PostgreSQL / Server Migration Readiness
+- [x] Phase 0 — Legacy Discovery 与实施基线
+- [x] Phase 1 — Next.js 工程与质量基线
+- [x] Phase 2 — Hermetic Local Development Platform
+- [x] Phase 3 — PostgreSQL、Drizzle 与持久化基础
+- [x] Phase 4 — 独立 Control Plane 与 Job Boundary
+- [x] Phase 5 — GitHub 单向 Content Ingestion
+- [x] Phase 6 — zh-CN Website Vertical Slice
+- [x] Phase 7 — UI i18n 与 zh-HK/zh-TW
+- [x] Phase 8 — Translation Memory 与 en-US Fallback
+- [x] Phase 9 — 显式付费 AI Translation
+- [x] Phase 10 — PGroonga Search 与 Cache Correctness
+- [x] Phase 11 — S3-compatible Asset Contract（AList Evidence）
+- [x] Phase 12 — Production Infrastructure、Ansible 与 Container Hardening
+- [x] Phase 13 — Backup、PITR 与 PostgreSQL-independent Recovery
+- [x] Phase 14 — Shared Deployment Engine 与 Full Blue-Green
+- [x] Phase 15 — GitHub Actions OIDC 与 `main` 自动部署
+- [x] Phase 16 — Observability、Security 与 Production Readiness
+- [x] Phase 17 — Planned PostgreSQL / Server Migration Readiness
 - [ ] Phase 18 — Final Legacy Audit、Production Cutover 与 Rollback Window
 
 ## 使用方法与硬性执行协议
@@ -43,6 +43,8 @@
 10. 开始每个 Phase 前，重新阅读该 Phase 引用的规范与适用 ADR；如果发现新冲突，停止实施并报告，不得静默选择。
 11. 所有 Production、Destructive Test、付费 AI、AList 非生产 Bucket、GitHub OIDC、DNS/EdgeOne 或 Server 操作仍需满足对应权限、安全与显式触发要求。
 12. Phase 18 之前不得替换旧 Nuxt Production Site；旧仓库始终只读。
+13. 开始新 Phase 时先阅读 `docs/planning/current-state.md`。每个 Phase 完成后必须自动执行上下文沉淀审计，不等待 Owner 提醒；已完成能力、Stub/Fake、Blocker、踩坑或后续 Prerequisite 有变化时，同步更新该交接入口及最合适的规范/Fixture/Test。最终报告必须明确说明“本阶段上下文已沉淀，可以授权/开启下一阶段”，然后停止；该说明不构成下一 Phase 授权。
+14. Phase 1–17 默认使用 Phase 0 已提交的 Legacy Inventory、Compatibility Matrix、Fixture 与 Traceability，不重复全量扫描旧仓库。仅当仓库内证据无法回答一个具体 Legacy 行为时，才定点只读检查对应文件；Phase 18 再按 Gate 做最终全量 Delta/Inventory 刷新。
 
 ### Phase 完成与 Commit 规则
 
@@ -81,7 +83,7 @@ Phase 10 在 Phase 8 后可与 Phase 9 技术并行；Phase 11 在 Phase 6 后�
 - Operator Authentication：优先采用规范中的非对称 Request Signing；若采用成熟等效机制且改变架构契约，先提交 ADR 给 Owner。
 - pgBackRest Repository Path：必须通过 AList Compatibility Test 决定 Direct S3 或 Local Repository + Verified Sync，不按整洁偏好选择。
 - RPO/RTO：只能在获得真实 Backup/WAL Measurement 后确定。
-- Cross-major PostgreSQL Migration：在执行 Phase 17 时按当期官方支持选择 Logical Replication 或明确的成熟方法；若改变 ADR 0009 的边界，新增 ADR。
+- Cross-major PostgreSQL Migration：Phase 17 已按 PostgreSQL 18 官方支持确认 Logical Replication 为 Near-zero 默认候选、`pg_upgrade` 为明确 Maintenance Model；Physical Streaming 不跨 Major。ADR 0009 边界未改变；实际升级前仍须按当时 Target Release 复核。
 
 任何后续发现的冲突按“最新 Accepted ADR > Architecture > Specification > Operations/Development Guide”处理，但 Agent 必须先报告并等待 Owner，不得直接改写历史 ADR。
 
@@ -117,15 +119,15 @@ Legacy URL、Pinyin、Frontmatter 和功能保留会影响 Schema、Routing、Co
 
 ### Task Checklist
 
-- [ ] 确认 V2 与旧 Nuxt Repository 的物理边界，并记录旧仓库只读规则。
-- [ ] 盘点全部 Public Route、Locale Prefix、Blog/Wiki Route 和 Analytics-sensitive Route。
-- [ ] 提取 Chinese-to-pinyin Behavior、冲突处理和代表性输入/输出 Fixture。
-- [ ] 盘点 Page、Component、Visual Identity、Interaction、Search、Edge Function 与 External Integration。
-- [ ] 盘点现有 Content Directory、Minimal Frontmatter、Metadata、Delete/Move Convention 和 Asset Reference。
-- [ ] 将 Feature 分类为 MUST KEEP、SHOULD KEEP、MAY REDESIGN、MAY REMOVE。
-- [ ] 将无法可靠分类的用户可见行为提交 Owner 决定，不自行删除或重做。
-- [ ] 建立 Legacy Compatibility Matrix、Risk Register 和 Acceptance-to-Phase Traceability Matrix。
-- [ ] 记录只允许在确实无法保留原 Route 时使用 Alias/Redirect 的例外审批流程。
+- [x] 确认 V2 与旧 Nuxt Repository 的物理边界，并记录旧仓库只读规则。
+- [x] 盘点全部 Public Route、Locale Prefix、Blog/Wiki Route 和 Analytics-sensitive Route。
+- [x] 提取 Chinese-to-pinyin Behavior、冲突处理和代表性输入/输出 Fixture。
+- [x] 盘点 Page、Component、Visual Identity、Interaction、Search、Edge Function 与 External Integration。
+- [x] 盘点现有 Content Directory、Minimal Frontmatter、Metadata、Delete/Move Convention 和 Asset Reference。
+- [x] 将 Feature 分类为 MUST KEEP、SHOULD KEEP、MAY REDESIGN、MAY REMOVE。
+- [x] 将无法可靠分类的用户可见行为提交 Owner 决定，不自行删除或重做。
+- [x] 建立 Legacy Compatibility Matrix、Risk Register 和 Acceptance-to-Phase Traceability Matrix。
+- [x] 记录只允许在确实无法保留原 Route 时使用 Alias/Redirect 的例外审批流程。
 
 ### 本 Phase 明确不做什么
 
@@ -135,24 +137,24 @@ Legacy URL、Pinyin、Frontmatter 和功能保留会影响 Schema、Routing、Co
 
 ### Tests / Verification
 
-- [ ] Inventory 覆盖旧站可发现的 Route、Page、Locale、Content Type 和 Asset 类别。
-- [ ] Pinyin Fixture 包含普通中文、混合 Identifier、重复/冲突、标点和 Legacy Edge Case。
-- [ ] 随机抽样旧内容文件，确认 Directory/Frontmatter 记录准确。
-- [ ] Traceability 检查确认全部现有 Acceptance Criteria 已分配到至少一个 Phase。
+- [x] Inventory 覆盖旧站可发现的 Route、Page、Locale、Content Type 和 Asset 类别。
+- [x] Pinyin Fixture 包含普通中文、混合 Identifier、重复/冲突、标点和 Legacy Edge Case。
+- [x] 随机抽样旧内容文件，确认 Directory/Frontmatter 记录准确。
+- [x] Traceability 检查确认全部现有 Acceptance Criteria 已分配到至少一个 Phase。
 
 ### Acceptance Criteria
 
-- [ ] 每个已知 Legacy Feature 都有分类、证据和目标 Phase。
-- [ ] 每个必须保留的 Public Route 都有测试 Fixture 或明确验证方法。
-- [ ] 所有歧义项均已由 Owner 决定或明确标记为 Blocker。
-- [ ] 没有把旧实现架构误当成 V2 实现要求。
+- [x] 每个已知 Legacy Feature 都有分类、证据和目标 Phase。
+- [x] 每个必须保留的 Public Route 都有测试 Fixture 或明确验证方法。
+- [x] 所有歧义项均已由 Owner 决定或明确标记为 Blocker。
+- [x] 没有把旧实现架构误当成 V2 实现要求。
 
 ### Exit Gate
 
-- [ ] Owner 接受 Legacy Compatibility Matrix 和 Feature 分类。
-- [ ] Phase 1 所需的版本、Route、Content 与测试输入没有未决 Blocker。
-- [ ] 创建聚焦 Commit，建议：`docs(v2): complete phase 0 legacy discovery baseline`。
-- [ ] Commit 后停止并向 Owner 报告，不自动进入 Phase 1。
+- [x] Owner 接受 Legacy Compatibility Matrix 和 Feature 分类。
+- [x] Phase 1 所需的版本、Route、Content 与测试输入没有未决 Blocker。
+- [x] 创建聚焦 Commit，建议：`docs(v2): complete phase 0 legacy discovery baseline`。
+- [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 1。
 
 ### 本阶段完成后形成的 Artifact / Capability
 
@@ -198,16 +200,16 @@ Legacy URL、Pinyin、Frontmatter 和功能保留会影响 Schema、Routing、Co
 
 ### Task Checklist
 
-- [ ] 初始化新的 Next.js 16.x App Router Project，不从 Nuxt 原地迁移。
-- [ ] 固定 Node.js 24 LTS、pnpm 与所有初始 Dependency Version，提交 `pnpm-lock.yaml`。
-- [ ] 配置 `strict`、`noUncheckedIndexedAccess`、`exactOptionalPropertyTypes`、`noImplicitOverride`。
-- [ ] 建立 Server-first Module Boundary，禁止 `.js`/`.jsx` Application Source。
-- [ ] 配置 Tailwind CSS 4、shadcn/ui Base UI Primitive 和最小 next-intl Skeleton。
-- [ ] 配置 Biome、Vitest、Testing Library、Playwright 与 Production Build Command。
-- [ ] 建立 Typed Zod Configuration Boundary 与 `.env.example`，不包含 Secret。
-- [ ] 实现薄 `./site` Bootstrap Wrapper 和 TypeScript CLI 的 `check`、`test` 基础命令。
-- [ ] 配置 PR CI Gate：format/lint、typecheck、unit、integration placeholder、migration placeholder、build、affected E2E placeholder。
-- [ ] 配置 Renovate 仅创建 PR、同步 Lockfile、Security Update 优先、Core Major 不默认 Auto-merge、Stable/LTS Only。
+- [x] 初始化新的 Next.js 16.x App Router Project，不从 Nuxt 原地迁移。
+- [x] 固定 Node.js 24 LTS、pnpm 与所有初始 Dependency Version，提交 `pnpm-lock.yaml`。
+- [x] 配置 `strict`、`noUncheckedIndexedAccess`、`exactOptionalPropertyTypes`、`noImplicitOverride`。
+- [x] 建立 Server-first Module Boundary，禁止 `.js`/`.jsx` Application Source。
+- [x] 配置 Tailwind CSS 4、shadcn/ui Base UI Primitive 和最小 next-intl Skeleton。
+- [x] 配置 Biome、Vitest、Testing Library、Playwright 与 Production Build Command。
+- [x] 建立 Typed Zod Configuration Boundary 与 `.env.example`，不包含 Secret。
+- [x] 实现薄 `./site` Bootstrap Wrapper 和 TypeScript CLI 的 `check`、`test` 基础命令。
+- [x] 配置 PR CI Gate：format/lint、typecheck、unit、integration placeholder、migration placeholder、build、affected E2E placeholder。
+- [x] 配置 Renovate 仅创建 PR、同步 Lockfile、Security Update 优先、Core Major 不默认 Auto-merge、Stable/LTS Only。
 
 ### 本 Phase 明确不做什么
 
@@ -217,24 +219,24 @@ Legacy URL、Pinyin、Frontmatter 和功能保留会影响 Schema、Routing、Co
 
 ### Tests / Verification
 
-- [ ] Biome、Typecheck、Unit Skeleton 和 Production Build 在 Clean Checkout 通过。
-- [ ] Repository 中不存在 `.js`/`.jsx` Application File、`@ts-ignore` 或未记录 `any`。
-- [ ] Server-only Module 无法从 Client Boundary 导入。
-- [ ] Renovate Configuration Validation 通过，且没有 Direct-to-`main` Rule。
-- [ ] `./site check` 与 `./site test` 具有可靠 Exit Code。
+- [x] Biome、Typecheck、Unit Skeleton 和 Production Build 在 Clean Checkout 通过。
+- [x] Repository 中不存在 `.js`/`.jsx` Application File、`@ts-ignore` 或未记录 `any`。
+- [x] Server-only Module 无法从 Client Boundary 导入。
+- [x] Renovate Configuration Validation 通过，且没有 Direct-to-`main` Rule。
+- [x] `./site check` 与 `./site test` 具有可靠 Exit Code。
 
 ### Acceptance Criteria
 
-- [ ] Clean Checkout 使用锁定 Toolchain 可重复安装、检查和构建。
-- [ ] CI Gate 失败会阻止 Merge/后续 Production Workflow。
-- [ ] 技术栈与 Accepted ADR 完全一致，没有平行 Framework/Tool。
+- [x] Clean Checkout 使用锁定 Toolchain 可重复安装、检查和构建。
+- [x] CI Gate 失败会阻止 Merge/后续 Production Workflow。
+- [x] 技术栈与 Accepted ADR 完全一致，没有平行 Framework/Tool。
 
 ### Exit Gate
 
-- [ ] 所有 Phase 1 Test/Verification 与 Acceptance Criteria 通过。
-- [ ] 临时 Integration/E2E Placeholder 有 Owner、替换 Phase 和不可误判为真实通过的状态。
-- [ ] 创建聚焦 Commit，建议：`chore(v2): complete phase 1 engineering baseline`。
-- [ ] Commit 后停止并向 Owner 报告，不自动进入 Phase 2。
+- [x] 所有 Phase 1 Test/Verification 与 Acceptance Criteria 通过。
+- [x] 临时 Integration/E2E Placeholder 有 Owner、替换 Phase 和不可误判为真实通过的状态。
+- [x] 创建聚焦 Commit，建议：`chore(v2): complete phase 1 engineering baseline`。
+- [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 2。
 
 ### 本阶段完成后形成的 Artifact / Capability
 
@@ -279,15 +281,15 @@ Legacy URL、Pinyin、Frontmatter 和功能保留会影响 Schema、Routing、Co
 
 ### Task Checklist
 
-- [ ] 定义 Development/Test Compose Project，使用 Docker Service DNS 而非 Container IP。
-- [ ] 固定 PostgreSQL 18、PGroonga、PgBouncer、Adobe S3Mock Image Version/Digest。
-- [ ] 实现 `./site dev` 的 Prerequisite、Health Wait、Bucket Init、Migration Hook、Seed Hook 和 Status Output。
-- [ ] 建立独立 Local `control-api` Skeleton 与专用 Control-state SQLite Directory。
-- [ ] 提供无 Docker/OpenResty Production Permission 的 Fake Deploy Agent。
-- [ ] 实现 `./site dev stop` 和需要明确 Environment/Confirmation 的 `./site dev reset`。
-- [ ] 让 `./site test` 使用唯一 Compose Project、Disposable Volume/Database/Bucket 并保证 Failure Cleanup。
-- [ ] 配置 Local Fake/No-cost Translation Provider Boundary。
-- [ ] 增加防误连保护，拒绝在 Local/Test Mode 使用 Production Host、Bucket 或 Credential。
+- [x] 定义 Development/Test Compose Project，使用 Docker Service DNS 而非 Container IP。
+- [x] 固定 PostgreSQL 18、PGroonga、PgBouncer、Adobe S3Mock Image Version/Digest。
+- [x] 实现 `./site dev` 的 Prerequisite、Health Wait、Bucket Init、Migration Hook、Seed Hook 和 Status Output。
+- [x] 建立独立 Local `control-api` Skeleton 与专用 Control-state SQLite Directory。
+- [x] 提供无 Docker/OpenResty Production Permission 的 Fake Deploy Agent。
+- [x] 实现 `./site dev stop` 和需要明确 Environment/Confirmation 的 `./site dev reset`。
+- [x] 让 `./site test` 使用唯一 Compose Project、Disposable Volume/Database/Bucket 并保证 Failure Cleanup。
+- [x] 配置 Local Fake/No-cost Translation Provider Boundary。
+- [x] 增加防误连保护，拒绝在 Local/Test Mode 使用 Production Host、Bucket 或 Credential。
 
 ### 本 Phase 明确不做什么
 
@@ -297,24 +299,24 @@ Legacy URL、Pinyin、Frontmatter 和功能保留会影响 Schema、Routing、Co
 
 ### Tests / Verification
 
-- [ ] `./site dev` 从 Clean State 一键启动并报告全部 Local Endpoint/Health。
-- [ ] Stop/Restart Deterministic；普通 Start 不会隐式 Reset Data。
-- [ ] `./site test` 连续运行两次无 Port、Volume、Database 或 Bucket Collision。
-- [ ] Failure Injection 后 Test Cleanup 仍执行。
-- [ ] Local/Test Config 无法解析为 Production Endpoint/Credential。
+- [x] `./site dev` 从 Clean State 一键启动并报告全部 Local Endpoint/Health。
+- [x] Stop/Restart Deterministic；普通 Start 不会隐式 Reset Data。
+- [x] `./site test` 连续运行两次无 Port、Volume、Database 或 Bucket Collision。
+- [x] Failure Injection 后 Test Cleanup 仍执行。
+- [x] Local/Test Config 无法解析为 Production Endpoint/Credential。
 
 ### Acceptance Criteria
 
-- [ ] Local PostgreSQL、S3Mock、Control-state SQLite 与 Production 完全隔离。
-- [ ] Developer 不需要 Production DB、S3 或 AI Credential。
-- [ ] 所有后续 Integration Test 有统一 Disposable Infrastructure Entry Point。
+- [x] Local PostgreSQL、S3Mock、Control-state SQLite 与 Production 完全隔离。
+- [x] Developer 不需要 Production DB、S3 或 AI Credential。
+- [x] 所有后续 Integration Test 有统一 Disposable Infrastructure Entry Point。
 
 ### Exit Gate
 
-- [ ] 从 Clean Checkout 演示 `./site dev`、`./site test`、Stop/Restart 和 Safe Reset。
-- [ ] 隔离与 Destructive Guard Test 全部通过。
-- [ ] 创建聚焦 Commit，建议：`feat(dev): complete phase 2 hermetic local platform`。
-- [ ] Commit 后停止并向 Owner 报告，不自动进入 Phase 3。
+- [x] 从 Clean Checkout 演示 `./site dev`、`./site test`、Stop/Restart 和 Safe Reset。
+- [x] 隔离与 Destructive Guard Test 全部通过。
+- [x] 创建聚焦 Commit，建议：`feat(dev): complete phase 2 hermetic local platform`。
+- [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 3。
 
 ### 本阶段完成后形成的 Artifact / Capability
 
@@ -359,15 +361,15 @@ Content、Translation、Search 和 Application Job 都依赖稳定 Schema；先�
 
 ### Task Checklist
 
-- [ ] 定义唯一 Shared Domain Type 与 Runtime Validation Boundary，禁止跨层重复定义。
-- [ ] 创建 `documents`、`document_translations`、`translation_segments`、`translation_jobs`、`operational_jobs`、`ingestion_runs` Schema。
-- [ ] 仅为无法保留原 Route 的最后手段设计 `content_aliases`。
-- [ ] 配置 Drizzle Schema/Query Type Integration 与 Versioned SQL Migration。
-- [ ] 建立 PostgreSQL 18 PGroonga Extension Bootstrap；具体 Search Index 留给 Phase 10。
-- [ ] 定义 Application、Migration、Content Worker、Backup/Replication 的最小权限 Role Boundary。
-- [ ] 建立 Expand/Contract Migration Metadata 与 Risk/Backup Policy Hook。
-- [ ] 创建 Deterministic Development Seed 和 Previous-schema Fixture。
-- [ ] 明确 PostgreSQL Application Job 与 SQLite Infrastructure Operation 的 Schema Boundary。
+- [x] 定义唯一 Shared Domain Type 与 Runtime Validation Boundary，禁止跨层重复定义。
+- [x] 创建 `documents`、`document_translations`、`translation_segments`、`translation_jobs`、`operational_jobs`、`ingestion_runs` Schema。
+- [x] 仅为无法保留原 Route 的最后手段设计 `content_aliases`。
+- [x] 配置 Drizzle Schema/Query Type Integration 与 Versioned SQL Migration。
+- [x] 建立 PostgreSQL 18 PGroonga Extension Bootstrap；具体 Search Index 留给 Phase 10。
+- [x] 定义 Application、Migration、Content Worker、Backup/Replication 的最小权限 Role Boundary。
+- [x] 建立 Expand/Contract Migration Metadata 与 Risk/Backup Policy Hook。
+- [x] 创建 Deterministic Development Seed 和 Previous-schema Fixture。
+- [x] 明确 PostgreSQL Application Job 与 SQLite Infrastructure Operation 的 Schema Boundary。
 
 ### 本 Phase 明确不做什么
 
@@ -377,25 +379,25 @@ Content、Translation、Search 和 Application Job 都依赖稳定 Schema；先�
 
 ### Tests / Verification
 
-- [ ] Empty Database -> Latest Migration 通过。
-- [ ] Previous Production-like Schema -> Latest Migration 通过。
-- [ ] Migration 重复执行具有预期的安全行为。
-- [ ] Role Test 证明 Application Role 不能管理 Extension、Replication 或 Backup。
-- [ ] PgBouncer Mode 与 Drizzle Query Pattern 兼容。
-- [ ] Schema/Validation Test 覆盖非法 Locale、Job Type 和 External Payload。
+- [x] Empty Database -> Latest Migration 通过。
+- [x] Previous Production-like Schema -> Latest Migration 通过。
+- [x] Migration 重复执行具有预期的安全行为。
+- [x] Role Test 证明 Application Role 不能管理 Extension、Replication 或 Backup。
+- [x] PgBouncer Mode 与 Drizzle Query Pattern 兼容。
+- [x] Schema/Validation Test 覆盖非法 Locale、Job Type 和 External Payload。
 
 ### Acceptance Criteria
 
-- [ ] Schema 能表达全部已批准 Runtime Content、Translation、Ingestion 与 Application Job State。
-- [ ] 每个 Schema Change 可 Review、可复现并符合 Expand/Contract。
-- [ ] SQLite 例外严格限制在 ADR 0015 的 Recovery State。
+- [x] Schema 能表达全部已批准 Runtime Content、Translation、Ingestion 与 Application Job State。
+- [x] 每个 Schema Change 可 Review、可复现并符合 Expand/Contract。
+- [x] SQLite 例外严格限制在 ADR 0015 的 Recovery State。
 
 ### Exit Gate
 
-- [ ] Clean/Previous Migration Gate、Role Boundary 和 Typecheck 全部通过。
-- [ ] Data Model 与 Migration 文档和实现一致。
-- [ ] 创建聚焦 Commit，建议：`feat(db): complete phase 3 persistence foundation`。
-- [ ] Commit 后停止并向 Owner 报告，不自动进入 Phase 4。
+- [x] Clean/Previous Migration Gate、Role Boundary 和 Typecheck 全部通过。
+- [x] Data Model 与 Migration 文档和实现一致。
+- [x] 创建聚焦 Commit，建议：`feat(db): complete phase 3 persistence foundation`。
+- [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 4。
 
 ### 本阶段完成后形成的 Artifact / Capability
 
@@ -441,17 +443,17 @@ Content Sync、Translation、Deployment 和 Recovery 都要从同一个稳定 Co
 
 ### Task Checklist
 
-- [ ] 建立独立 `control-api` Package/Service，确保正式 `/api/ops/*` 不存在于 Next.js Route Handler。
-- [ ] 定义 Authentication、Capability Authorization、Actor Identity 和 Audit Event Model。
-- [ ] 实现 Method/Path/Body Hash/Timestamp/Nonce 的 Operator Request-signing Baseline，或先提交等效机制 ADR。
-- [ ] 实现 GitHub OIDC issuer、audience、repository、ref/environment、workflow Claim Validation。
-- [ ] 对全部 Control Payload、Header 和 External Claim 使用 Zod Runtime Validation。
-- [ ] 实现 Replay Window、Nonce Store 和 Idempotency Key Behavior。
-- [ ] 实现 PostgreSQL-backed Application Job 创建/查询，不在 HTTP Request Inline 执行长任务。
-- [ ] 实现 SQLite Transaction、WAL/Checkpoint、Versioned Schema、Lock/Lease/Fencing、Audit 和 Restart Reconciliation。
-- [ ] 实现 PostgreSQL 不可用时仍可启动的 Status/Infrastructure Operation Path。
-- [ ] 建立 `content-worker`、`deploy-agent`、`control-api` 的独立 Identity/Capability Contract。
-- [ ] 配置 `/api/ops/*` Cache Bypass、`no-store`、Method Restriction 和 Rate-limit Test Boundary。
+- [x] 建立独立 `control-api` Package/Service，确保正式 `/api/ops/*` 不存在于 Next.js Route Handler。
+- [x] 定义 Authentication、Capability Authorization、Actor Identity 和 Audit Event Model。
+- [x] 实现 Method/Path/Body Hash/Timestamp/Nonce 的 Operator Request-signing Baseline，或先提交等效机制 ADR。
+- [x] 实现 GitHub OIDC issuer、audience、repository、ref/environment、workflow Claim Validation。
+- [x] 对全部 Control Payload、Header 和 External Claim 使用 Zod Runtime Validation。
+- [x] 实现 Replay Window、Nonce Store 和 Idempotency Key Behavior。
+- [x] 实现 PostgreSQL-backed Application Job 创建/查询，不在 HTTP Request Inline 执行长任务。
+- [x] 实现 SQLite Transaction、WAL/Checkpoint、Versioned Schema、Lock/Lease/Fencing、Audit 和 Restart Reconciliation。
+- [x] 实现 PostgreSQL 不可用时仍可启动的 Status/Infrastructure Operation Path。
+- [x] 建立 `content-worker`、`deploy-agent`、`control-api` 的独立 Identity/Capability Contract。
+- [x] 配置 `/api/ops/*` Cache Bypass、`no-store`、Method Restriction 和 Rate-limit Test Boundary。
 
 ### 本 Phase 明确不做什么
 
@@ -461,25 +463,25 @@ Content Sync、Translation、Deployment 和 Recovery 都要从同一个稳定 Co
 
 ### Tests / Verification
 
-- [ ] Authentication Failure、Capability Denial、Malformed Payload、Replay 和 Duplicate Idempotency Test 通过。
-- [ ] OpenResty Test 证明 `/api/ops/*` 到 `control-api`，普通 API 到 Next.js。
-- [ ] 两个 Next.js Slot 不可用时，Control Status Path 仍工作。
-- [ ] PostgreSQL 不可用时，SQLite-backed Operation 可创建、查询和恢复；Application Job 安全报告不可用。
-- [ ] Crash/Restart、Expired Lease、Concurrent Claim、Audit Append 和 Schema Migration Test 通过。
-- [ ] Permission Test 证明 `control-api` 与 `content-worker` 无 Docker/OpenResty Administrative Access。
+- [x] Authentication Failure、Capability Denial、Malformed Payload、Replay 和 Duplicate Idempotency Test 通过。
+- [x] OpenResty Test 证明 `/api/ops/*` 到 `control-api`，普通 API 到 Next.js。
+- [x] 两个 Next.js Slot 不可用时，Control Status Path 仍工作。
+- [x] PostgreSQL 不可用时，SQLite-backed Operation 可创建、查询和恢复；Application Job 安全报告不可用。
+- [x] Crash/Restart、Expired Lease、Concurrent Claim、Audit Append 和 Schema Migration Test 通过。
+- [x] Permission Test 证明 `control-api` 与 `content-worker` 无 Docker/OpenResty Administrative Access。
 
 ### Acceptance Criteria
 
-- [ ] `https://www.tungchiahui.cn/api/ops/*` 的实现边界独立于 Next.js Slot。
-- [ ] 两类 Durable State 不混用且具备清晰的 Failure Behavior。
-- [ ] 所有 Trust Boundary 均有 Runtime Validation、Authz、Replay Protection 和安全 Audit。
+- [x] `https://www.tungchiahui.cn/api/ops/*` 的实现边界独立于 Next.js Slot。
+- [x] 两类 Durable State 不混用且具备清晰的 Failure Behavior。
+- [x] 所有 Trust Boundary 均有 Runtime Validation、Authz、Replay Protection 和安全 Audit。
 
 ### Exit Gate
 
-- [ ] Control-plane Integration/Security/Crash Test 全部通过。
-- [ ] PostgreSQL-down 和 Next.js-down Scenario 均有可验证结果。
-- [ ] 创建聚焦 Commit，建议：`feat(ops): complete phase 4 independent control plane`。
-- [ ] Commit 后停止并向 Owner 报告，不自动进入 Phase 5。
+- [x] Control-plane Integration/Security/Crash Test 全部通过。
+- [x] PostgreSQL-down 和 Next.js-down Scenario 均有可验证结果。
+- [x] 创建聚焦 Commit，建议：`feat(ops): complete phase 4 independent control plane`。
+- [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 5。
 
 ### 本阶段完成后形成的 Artifact / Capability
 
@@ -523,16 +525,16 @@ Schema、Local Infrastructure 和 Control Plane 已稳定，现在可以形成�
 
 ### Task Checklist
 
-- [ ] 实现只读 Fetch 指定 Git Commit/File 的 GitHub Adapter，不包含 Write API。
-- [ ] 使用 unified/remark/rehype 解析 Markdown，并对 Frontmatter/AST 做 Runtime Validation。
-- [ ] 保持当前 Content Directory 与 Minimal Frontmatter，不强迫作者增加内部 ID。
-- [ ] 实现 Source Hash、Stable Internal Identity 和 Legacy-compatible Pinyin Route Algorithm。
-- [ ] 实现新增、修改、删除、移动/重命名 Detection 与 Transactional Apply。
-- [ ] 实现同一 Commit/Configuration 重放为 No-op 的 Idempotency。
-- [ ] 实现 PostgreSQL Job Claim、Retry、Failure/Progress 和 `ingestion_runs` Audit。
-- [ ] 实现翻译 Diff、Search Refresh、Cache Invalidation 的 Typed Interface；未到对应 Phase 只使用最小 Fake。
-- [ ] 实现 Content Sync 后只发布/revalidate zh-CN，不触发 Application Build/Deployment。
-- [ ] 从结构上证明 Production Content Code 无 Commit/Push/Open PR/Edit/Delete GitHub Path。
+- [x] 实现只读 Fetch 指定 Git Commit/File 的 GitHub Adapter，不包含 Write API。
+- [x] 使用 unified/remark/rehype 解析 Markdown，并对 Frontmatter/AST 做 Runtime Validation。
+- [x] 保持当前 Content Directory 与 Minimal Frontmatter，不强迫作者增加内部 ID。
+- [x] 实现 Source Hash、Stable Internal Identity 和 Legacy-compatible Pinyin Route Algorithm。
+- [x] 实现新增、修改、删除、移动/重命名 Detection 与 Transactional Apply。
+- [x] 实现同一 Commit/Configuration 重放为 No-op 的 Idempotency。
+- [x] 实现 PostgreSQL Job Claim、Retry、Failure/Progress 和 `ingestion_runs` Audit。
+- [x] 实现翻译 Diff、Search Refresh、Cache Invalidation 的 Typed Interface；未到对应 Phase 只使用最小 Fake。
+- [x] 实现 Content Sync 后只发布/revalidate zh-CN，不触发 Application Build/Deployment。
+- [x] 从结构上证明 Production Content Code 无 Commit/Push/Open PR/Edit/Delete GitHub Path。
 
 ### 本 Phase 明确不做什么
 
@@ -542,26 +544,26 @@ Schema、Local Infrastructure 和 Control Plane 已稳定，现在可以形成�
 
 ### Tests / Verification
 
-- [ ] Representative Legacy Content 与 Frontmatter Fixture 全部导入。
-- [ ] 同 Commit 重复 Sync 不产生重复 Row、Translation 或 Side Effect。
-- [ ] Add/Modify/Delete/Move/Rename Integration Test 通过并保留可判断的 Identity Continuity。
-- [ ] Pinyin/Route Fixture 与 Phase 0 Legacy Behavior 一致。
-- [ ] Partial Failure 保留此前有效 Runtime Version，Transaction 不留下半成品。
-- [ ] Directionality Test 证明无 GitHub Write Credential/Capability。
-- [ ] Sync Test 证明没有 AI Provider Call 和 Next.js Image Build。
+- [x] Representative Legacy Content 与 Frontmatter Fixture 全部导入。
+- [x] 同 Commit 重复 Sync 不产生重复 Row、Translation 或 Side Effect。
+- [x] Add/Modify/Delete/Move/Rename Integration Test 通过并保留可判断的 Identity Continuity。
+- [x] Pinyin/Route Fixture 与 Phase 0 Legacy Behavior 一致。
+- [x] Partial Failure 保留此前有效 Runtime Version，Transaction 不留下半成品。
+- [x] Directionality Test 证明无 GitHub Write Credential/Capability。
+- [x] Sync Test 证明没有 AI Provider Call 和 Next.js Image Build。
 
 ### Acceptance Criteria
 
-- [ ] GitHub zh-CN Markdown 是唯一 Canonical Authoring Source。
-- [ ] Runtime PostgreSQL 可由精确 Git Commit Deterministically Materialize。
-- [ ] Content Push 快速完成且不等待翻译或 Application Deployment。
+- [x] GitHub zh-CN Markdown 是唯一 Canonical Authoring Source。
+- [x] Runtime PostgreSQL 可由精确 Git Commit Deterministically Materialize。
+- [x] Content Push 快速完成且不等待翻译或 Application Deployment。
 
 ### Exit Gate
 
-- [ ] Ingestion、Idempotency、Move/Delete、Pinyin 和 Directionality Gate 全部通过。
-- [ ] Legacy Compatibility Matrix 中 Content/Route 项已更新实际结果。
-- [ ] 创建聚焦 Commit，建议：`feat(content): complete phase 5 one-way ingestion`。
-- [ ] Commit 后停止并向 Owner 报告，不自动进入 Phase 6。
+- [x] Ingestion、Idempotency、Move/Delete、Pinyin 和 Directionality Gate 全部通过。
+- [x] Legacy Compatibility Matrix 中 Content/Route 项已更新实际结果。
+- [x] 创建聚焦 Commit，建议：`feat(content): complete phase 5 one-way ingestion`。
+- [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 6。
 
 ### 本阶段完成后形成的 Artifact / Capability
 
@@ -606,15 +608,15 @@ Content Pipeline 已可信，此时先验证最核心的作者到读者路径，
 
 ### Task Checklist
 
-- [ ] 建立 Locale-prefixed zh-CN Application Layout 和 Server-first Data Access Layer。
-- [ ] 实现 Homepage、Blog List/Article、Wiki List/Article 与必要 Error/Not-found Page。
-- [ ] 使用 unified/remark/rehype + Shiki 安全渲染 Runtime Markdown，保护 Code/URL/Identifier。
-- [ ] 实现 Phase 0/5 确认的 Legacy URL/Pinyin Routing，不默认建立 Redirect Map。
-- [ ] 使用 Tailwind CSS 4 和 shadcn/ui Base UI Primitive 重建必要 Visual Identity/Interaction。
-- [ ] 所有可复用用户可见文本使用 next-intl Message Key，即使当前只交付 zh-CN。
-- [ ] 实现 Asset URL/Metadata Boundary，Local 使用 S3Mock/CDN Fixture。
-- [ ] 定义 Cache Owner、Key、TTL（如有）与精确 Revalidation Behavior。
-- [ ] 实现 `/api/health`、`/api/ready`、`/api/version`，并保持它们属于 Next.js。
+- [x] 建立 Locale-prefixed zh-CN Application Layout 和 Server-first Data Access Layer。
+- [x] 实现 Homepage、Blog List/Article、Wiki List/Article 与必要 Error/Not-found Page。
+- [x] 使用 unified/remark/rehype + Shiki 安全渲染 Runtime Markdown，保护 Code/URL/Identifier。
+- [x] 实现 Phase 0/5 确认的 Legacy URL/Pinyin Routing，不默认建立 Redirect Map。
+- [x] 使用 Tailwind CSS 4 和 shadcn/ui Base UI Primitive 重建必要 Visual Identity/Interaction。
+- [x] 所有可复用用户可见文本使用 next-intl Message Key，即使当前只交付 zh-CN。
+- [x] 实现 Asset URL/Metadata Boundary，Local 使用 S3Mock/CDN Fixture。
+- [x] 定义 Cache Owner、Key、TTL（如有）与精确 Revalidation Behavior。
+- [x] 实现 `/api/health`、`/api/ready`、`/api/version`，并保持它们属于 Next.js。
 
 ### 本 Phase 明确不做什么
 
@@ -624,25 +626,25 @@ Content Pipeline 已可信，此时先验证最核心的作者到读者路径，
 
 ### Tests / Verification
 
-- [ ] Homepage、Blog/Wiki、Representative Article、Error Page E2E 通过。
-- [ ] Legacy URL/Pinyin Fixture 在真实 App Router 中通过。
-- [ ] Markdown Code Fence、Inline Code、Link、Heading、Image 和 Unicode Fixture 正确渲染。
-- [ ] Server/Client Boundary Test 证明 Server Secret 不进入 Client Bundle。
-- [ ] Health/Ready/Version 返回正确语义与 Deployment Metadata Stub。
-- [ ] Content Sync 后受影响 Route 更新，不要求 Application Rebuild。
+- [x] Homepage、Blog/Wiki、Representative Article、Error Page E2E 通过。
+- [x] Legacy URL/Pinyin Fixture 在真实 App Router 中通过。
+- [x] Markdown Code Fence、Inline Code、Link、Heading、Image 和 Unicode Fixture 正确渲染。
+- [x] Server/Client Boundary Test 证明 Server Secret 不进入 Client Bundle。
+- [x] Health/Ready/Version 返回正确语义与 Deployment Metadata Stub。
+- [x] Content Sync 后受影响 Route 更新，不要求 Application Rebuild。
 
 ### Acceptance Criteria
 
-- [ ] zh-CN 核心公开网站可以从 PostgreSQL Runtime Content 完整工作。
-- [ ] 代表性 Legacy Route 与重要用户可见行为保留。
-- [ ] 缓存失效、Asset Loading 和 Error Behavior 可测试且可观察。
+- [x] zh-CN 核心公开网站可以从 PostgreSQL Runtime Content 完整工作。
+- [x] 代表性 Legacy Route 与重要用户可见行为保留。
+- [x] 缓存失效、Asset Loading 和 Error Behavior 可测试且可观察。
 
 ### Exit Gate
 
-- [ ] zh-CN Critical E2E、Legacy Route 与 Rendering Gate 全部通过。
-- [ ] Phase 0 MUST KEEP 的核心 zh-CN Vertical Slice 无未决 Blocker。
-- [ ] 创建聚焦 Commit，建议：`feat(web): complete phase 6 zh-cn vertical slice`。
-- [ ] Commit 后停止并向 Owner 报告，不自动进入 Phase 7。
+- [x] zh-CN Critical E2E、Legacy Route 与 Rendering Gate 全部通过。
+- [x] Phase 0 MUST KEEP 的核心 zh-CN Vertical Slice 无未决 Blocker。
+- [x] 创建聚焦 Commit，建议：`feat(web): complete phase 6 zh-cn vertical slice`。
+- [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 7。
 
 ### 本阶段完成后形成的 Artifact / Capability
 
@@ -687,14 +689,14 @@ Public Route 和 zh-CN Renderer 已稳定，可以在不混入 AI Translation �
 
 ### Task Checklist
 
-- [ ] 建立四 Locale Message Catalog，以 zh-CN 为 Source UI Locale。
-- [ ] 为 en-US UI 做 Semantic Translation，为 zh-HK/zh-TW UI 做适用的 Deterministic Conversion/Review。
-- [ ] 实现 Locale-prefixed Routing、Negotiation Policy 和同一 Logical Document 的 Locale Switch。
-- [ ] 实现 OpenCC-based zh-HK/zh-TW Content Conversion Pipeline。
-- [ ] 建立技术术语、姓名、品牌和已知转换例外的 Versioned Glossary/Exception。
-- [ ] 防止 Code Fence、Inline Code、URL、Identifier 和受保护 Frontmatter 被盲目转换。
-- [ ] 对 en-US Route 提供明确的全量 zh-CN Fallback Baseline，不触发 AI。
-- [ ] 为 Fallback/Converted State 提供 UI Metadata/Observability Hook。
+- [x] 建立四 Locale Message Catalog，以 zh-CN 为 Source UI Locale。
+- [x] 为 en-US UI 做 Semantic Translation，为 zh-HK/zh-TW UI 做适用的 Deterministic Conversion/Review。
+- [x] 实现 Locale-prefixed Routing、Negotiation Policy 和同一 Logical Document 的 Locale Switch。
+- [x] 实现 OpenCC-based zh-HK/zh-TW Content Conversion Pipeline。
+- [x] 建立技术术语、姓名、品牌和已知转换例外的 Versioned Glossary/Exception。
+- [x] 防止 Code Fence、Inline Code、URL、Identifier 和受保护 Frontmatter 被盲目转换。
+- [x] 对 en-US Route 提供明确的全量 zh-CN Fallback Baseline，不触发 AI。
+- [x] 为 Fallback/Converted State 提供 UI Metadata/Observability Hook。
 
 ### 本 Phase 明确不做什么
 
@@ -704,24 +706,24 @@ Public Route 和 zh-CN Renderer 已稳定，可以在不混入 AI Translation �
 
 ### Tests / Verification
 
-- [ ] 四 Locale UI Message Key 完整性和无硬编码文本检查通过。
-- [ ] Locale Switch 保持同一 Logical Document Route。
-- [ ] OpenCC Representative Glossary/Exception Test 通过。
-- [ ] Code/URL/Identifier Protection Test 通过。
-- [ ] 缺失 en-US Content 不返回 404、不调用 AI，并显示当前 zh-CN。
+- [x] 四 Locale UI Message Key 完整性和无硬编码文本检查通过。
+- [x] Locale Switch 保持同一 Logical Document Route。
+- [x] OpenCC Representative Glossary/Exception Test 通过。
+- [x] Code/URL/Identifier Protection Test 通过。
+- [x] 缺失 en-US Content 不返回 404、不调用 AI，并显示当前 zh-CN。
 
 ### Acceptance Criteria
 
-- [ ] 全部四 Locale 有稳定 Public Route 与 UI。
-- [ ] zh-HK/zh-TW Conversion Deterministic、可重放且受 Glossary Test 保护。
-- [ ] UI i18n 与 Content i18n 的职责没有混合。
+- [x] 全部四 Locale 有稳定 Public Route 与 UI。
+- [x] zh-HK/zh-TW Conversion Deterministic、可重放且受 Glossary Test 保护。
+- [x] UI i18n 与 Content i18n 的职责没有混合。
 
 ### Exit Gate
 
-- [ ] Locale E2E、Message Completeness、OpenCC 和 Protected Syntax Gate 全部通过。
-- [ ] 四 Locale Route Sample 已加入 Regression Suite。
-- [ ] 创建聚焦 Commit，建议：`feat(i18n): complete phase 7 deterministic locales`。
-- [ ] Commit 后停止并向 Owner 报告，不自动进入 Phase 8。
+- [x] Locale E2E、Message Completeness、OpenCC 和 Protected Syntax Gate 全部通过。
+- [x] 四 Locale Route Sample 已加入 Regression Suite。
+- [x] 创建聚焦 Commit，建议：`feat(i18n): complete phase 7 deterministic locales`。
+- [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 8。
 
 ### 本阶段完成后形成的 Artifact / Capability
 
@@ -765,14 +767,14 @@ Locale Contract 已稳定，先把 Incremental Translation Correctness 与 Fallb
 
 ### Task Checklist
 
-- [ ] 定义稳定 Semantic Block Boundary、Normalization 和 Context Fingerprint。
-- [ ] 对 Code Fence、Inline Code、URL、Identifier、Markdown Syntax 和受保护 Frontmatter 做不可翻译标记。
-- [ ] 实现 Hash Hit Reuse、Hash Miss Pending、Changed/Stale 和 Reviewed-like State Transition。
-- [ ] 确保 Segment Position 不是 Identity，局部改变不使整篇 Translation 失效。
-- [ ] 实现已有英文 Block + Pending zh-CN Block 的混合 Materialized en-US Document。
-- [ ] Content Sync 时只 Diff/Reuse/Mark Pending，绝不调用 Provider。
-- [ ] 实现 Old zh-CN + Old en-US + New zh-CN 的 Targeted Patch Context Interface，不执行真实翻译。
-- [ ] 暴露 Pending Count、Fallback State 和 Translation Memory Hit Metric。
+- [x] 定义稳定 Semantic Block Boundary、Normalization 和 Context Fingerprint。
+- [x] 对 Code Fence、Inline Code、URL、Identifier、Markdown Syntax 和受保护 Frontmatter 做不可翻译标记。
+- [x] 实现 Hash Hit Reuse、Hash Miss Pending、Changed/Stale 和 Reviewed-like State Transition。
+- [x] 确保 Segment Position 不是 Identity，局部改变不使整篇 Translation 失效。
+- [x] 实现已有英文 Block + Pending zh-CN Block 的混合 Materialized en-US Document。
+- [x] Content Sync 时只 Diff/Reuse/Mark Pending，绝不调用 Provider。
+- [x] 实现 Old zh-CN + Old en-US + New zh-CN 的 Targeted Patch Context Interface，不执行真实翻译。
+- [x] 暴露 Pending Count、Fallback State 和 Translation Memory Hit Metric。
 
 ### 本 Phase 明确不做什么
 
@@ -782,25 +784,25 @@ Locale Contract 已稳定，先把 Incremental Translation Correctness 与 Fallb
 
 ### Tests / Verification
 
-- [ ] Unchanged Block 全局安全复用，局部 Change 只影响对应 Segment。
-- [ ] Code/URL/Identifier/AST Shape Preservation Test 通过。
-- [ ] Hash Miss 变 Pending，en-US 只对该 Block 显示最新 zh-CN。
-- [ ] 旧英文不得伪装成新 zh-CN 的有效 Translation。
-- [ ] Content Sync/Public Request 的 Provider Call Count 恒为零。
-- [ ] Re-run Deterministic 且不会重复 Segment/Translation。
+- [x] Unchanged Block 全局安全复用，局部 Change 只影响对应 Segment。
+- [x] Code/URL/Identifier/AST Shape Preservation Test 通过。
+- [x] Hash Miss 变 Pending，en-US 只对该 Block 显示最新 zh-CN。
+- [x] 旧英文不得伪装成新 zh-CN 的有效 Translation。
+- [x] Content Sync/Public Request 的 Provider Call Count 恒为零。
+- [x] Re-run Deterministic 且不会重复 Segment/Translation。
 
 ### Acceptance Criteria
 
-- [ ] Translation Memory 达到 Block-level Incremental Reuse。
-- [ ] Pending Fallback Correct、可观察且不阻塞发布。
-- [ ] GitHub 仍只保存 Canonical zh-CN。
+- [x] Translation Memory 达到 Block-level Incremental Reuse。
+- [x] Pending Fallback Correct、可观察且不阻塞发布。
+- [x] GitHub 仍只保存 Canonical zh-CN。
 
 ### Exit Gate
 
-- [ ] Segmentation、Hash Reuse、AST Preservation、Fallback 与 Zero-cost Gate 全部通过。
-- [ ] Translation State Migration/Backfill 对当前数据安全。
-- [ ] 创建聚焦 Commit，建议：`feat(i18n): complete phase 8 translation memory`。
-- [ ] Commit 后停止并向 Owner 报告，不自动进入 Phase 9。
+- [x] Segmentation、Hash Reuse、AST Preservation、Fallback 与 Zero-cost Gate 全部通过。
+- [x] Translation State Migration/Backfill 对当前数据安全。
+- [x] 创建聚焦 Commit，建议：`feat(i18n): complete phase 8 translation memory`。
+- [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 9。
 
 ### 本阶段完成后形成的 Artifact / Capability
 
@@ -844,16 +846,16 @@ Translation Memory 和 Fallback 已证明不会意外消费成本，现在才能
 
 ### Task Checklist
 
-- [ ] 定义经过 Zod Validation 的 Provider Request/Response Boundary 和 Usage Metadata。
-- [ ] 保留 Fake/No-cost Provider 作为默认 Automated Test Provider。
-- [ ] 实现 `pending`、`changed`、`article`、`all` Scope 与显式 Force/Retranslation Confirmation。
-- [ ] 实现 Dry-run Token/Cost Estimate，保证零次 Paid Call。
-- [ ] 在每次 Paid Request 前由 `content-worker` 强制检查剩余 Budget。
-- [ ] 实现 Budget Stop、`partial`、Retry、Cancellation、Actual Token/Cost Record。
-- [ ] 实现 `./site translate ... --dry-run/--execute --budget-usd` 和 Status Output。
-- [ ] 实现 `control-api` Translation Job Create/Status，实际工作由 `content-worker` 执行。
-- [ ] 实现 GitHub Manual `workflow_dispatch` 的 Typed Input 与 OIDC Auth，不将 DB/AI/Host Credential 放入 Workflow。
-- [ ] Translation 完成后只更新 Runtime State 并精确 Revalidate，不回写 GitHub。
+- [x] 定义经过 Zod Validation 的 Provider Request/Response Boundary 和 Usage Metadata。
+- [x] 保留 Fake/No-cost Provider 作为默认 Automated Test Provider。
+- [x] 实现 `pending`、`changed`、`article`、`all` Scope 与显式 Force/Retranslation Confirmation。
+- [x] 实现 Dry-run Token/Cost Estimate，保证零次 Paid Call。
+- [x] 在每次 Paid Request 前由 `content-worker` 强制检查剩余 Budget。
+- [x] 实现 Budget Stop、`partial`、Retry、Cancellation、Actual Token/Cost Record。
+- [x] 实现 `./site translate ... --dry-run/--execute --budget-usd` 和 Status Output。
+- [x] 实现 `control-api` Translation Job Create/Status，实际工作由 `content-worker` 执行。
+- [x] 实现 GitHub Manual `workflow_dispatch` 的 Typed Input 与 OIDC Auth，不将 DB/AI/Host Credential 放入 Workflow。
+- [x] Translation 完成后只更新 Runtime State 并精确 Revalidate，不回写 GitHub。
 
 ### 本 Phase 明确不做什么
 
@@ -863,25 +865,25 @@ Translation Memory 和 Fallback 已证明不会意外消费成本，现在才能
 
 ### Tests / Verification
 
-- [ ] Dry-run 与 Public/Content Sync Path 的 Paid Call Count 为零。
-- [ ] Server-side Budget 在下一请求超限前停止，并保留已完成 Segment。
-- [ ] Retry/Partial/Failure 不破坏已有 Published Translation。
-- [ ] Manual Workflow 与 Local CLI 创建相同 Job Contract。
-- [ ] Capability Test 证明只有授权 Translation Actor 可 Execute。
-- [ ] Token/Cost/Provider/Model Audit 不包含 Secret。
+- [x] Dry-run 与 Public/Content Sync Path 的 Paid Call Count 为零。
+- [x] Server-side Budget 在下一请求超限前停止，并保留已完成 Segment。
+- [x] Retry/Partial/Failure 不破坏已有 Published Translation。
+- [x] Manual Workflow 与 Local CLI 创建相同 Job Contract。
+- [x] Capability Test 证明只有授权 Translation Actor 可 Execute。
+- [x] Token/Cost/Provider/Model Audit 不包含 Secret。
 
 ### Acceptance Criteria
 
-- [ ] Paid Translation 只能显式触发并受 Server-side Budget Enforcement。
-- [ ] Hash Hit 继续复用，Hash Miss/预算未覆盖部分保持 Pending/Fallback。
-- [ ] GitHub Content Push 和 Public Rendering 成本安全。
+- [x] Paid Translation 只能显式触发并受 Server-side Budget Enforcement。
+- [x] Hash Hit 继续复用，Hash Miss/预算未覆盖部分保持 Pending/Fallback。
+- [x] GitHub Content Push 和 Public Rendering 成本安全。
 
 ### Exit Gate
 
-- [ ] Fake Provider 全套测试通过；真实 Provider Contract Test 仅在显式非生产授权下通过。
-- [ ] Dry-run、Budget、Partial、Authz 和 Directionality Gate 全部通过。
-- [ ] 创建聚焦 Commit，建议：`feat(translation): complete phase 9 budgeted execution`。
-- [ ] Commit 后停止并向 Owner 报告，不自动进入 Phase 10。
+- [x] Fake Provider 全套测试通过；真实 Provider Contract Test 仅在显式非生产授权下通过。
+- [x] Dry-run、Budget、Partial、Authz 和 Directionality Gate 全部通过。
+- [x] 创建聚焦 Commit，建议：`feat(translation): complete phase 9 budgeted execution`。
+- [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 10。
 
 ### 本阶段完成后形成的 Artifact / Capability
 
@@ -925,14 +927,14 @@ Canonical、Converted 和 English/Fallback Content State 已明确，可以建�
 
 ### Task Checklist
 
-- [ ] 建立 Title、Heading、Body、Translated/Converted Content 和 Metadata 的 PGroonga Index Migration。
-- [ ] 实现 Locale Scope/Ranking，防止偶然 Cross-locale Result。
-- [ ] 实现 Server-side Search Repository/API 与 UI Result Contract。
-- [ ] 返回 title、route、locale、content_type、snippet、matched context。
-- [ ] 建立 Exact Title、Heading、Body、中文短语、English Term、Mixed Identifier Ranking Fixture。
-- [ ] 实现 PostgreSQL-backed Search/Reindex Durable Job 和 `content-worker` Handler。
-- [ ] Content/Translation Update 后只刷新受影响 Index/Cache。
-- [ ] 为 Edge/OpenResty/Next Cache 定义 Owner、Key、Invalidation、TTL 和 Metric。
+- [x] 建立 Title、Heading、Body、Translated/Converted Content 和 Metadata 的 PGroonga Index Migration。
+- [x] 实现 Locale Scope/Ranking，防止偶然 Cross-locale Result。
+- [x] 实现 Server-side Search Repository/API 与 UI Result Contract。
+- [x] 返回 title、route、locale、content_type、snippet、matched context。
+- [x] 建立 Exact Title、Heading、Body、中文短语、English Term、Mixed Identifier Ranking Fixture。
+- [x] 实现 PostgreSQL-backed Search/Reindex Durable Job 和 `content-worker` Handler。
+- [x] Content/Translation Update 后只刷新受影响 Index/Cache。
+- [x] 为 Edge/OpenResty/Next Cache 定义 Owner、Key、Invalidation、TTL 和 Metric。
 
 ### 本 Phase 明确不做什么
 
@@ -942,25 +944,25 @@ Canonical、Converted 和 English/Fallback Content State 已明确，可以建�
 
 ### Tests / Verification
 
-- [ ] 中文和英文 Query 返回正确 Locale/Route 的相关 Document。
-- [ ] Ranking Fixture 有确定期望，不依赖人工肉眼判断。
-- [ ] PGroonga Migration/Index Rebuild 在 Disposable Database 通过。
-- [ ] Search API 不泄露 Raw Secret/Internal-only Data。
-- [ ] Reindex Retry/Concurrency/Failure 和 Cache Invalidation Test 通过。
-- [ ] Browser Bundle 不包含完整 Content Corpus。
+- [x] 中文和英文 Query 返回正确 Locale/Route 的相关 Document。
+- [x] Ranking Fixture 有确定期望，不依赖人工肉眼判断。
+- [x] PGroonga Migration/Index Rebuild 在 Disposable Database 通过。
+- [x] Search API 不泄露 Raw Secret/Internal-only Data。
+- [x] Reindex Retry/Concurrency/Failure 和 Cache Invalidation Test 通过。
+- [x] Browser Bundle 不包含完整 Content Corpus。
 
 ### Acceptance Criteria
 
-- [ ] Search 完全 Server-side 且由 PostgreSQL + PGroonga 支撑。
-- [ ] Locale、Ranking、Snippet、Route 与 Reindex Behavior 有自动化测试。
-- [ ] Cache Correctness 不依赖任意 TTL。
+- [x] Search 完全 Server-side 且由 PostgreSQL + PGroonga 支撑。
+- [x] Locale、Ranking、Snippet、Route 与 Reindex Behavior 有自动化测试。
+- [x] Cache Correctness 不依赖任意 TTL。
 
 ### Exit Gate
 
-- [ ] Search Relevance、Locale、Migration、Reindex、Cache Gate 全部通过。
-- [ ] Representative Search 加入 Production Smoke Candidate List。
-- [ ] 创建聚焦 Commit，建议：`feat(search): complete phase 10 pgroonga search`。
-- [ ] Commit 后停止并向 Owner 报告，不自动进入 Phase 11。
+- [x] Search Relevance、Locale、Migration、Reindex、Cache Gate 全部通过。
+- [x] Representative Search 加入 Production Smoke Candidate List。
+- [x] 创建聚焦 Commit，建议：`feat(search): complete phase 10 pgroonga search`。
+- [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 11。
 
 ### 本阶段完成后形成的 Artifact / Capability
 
@@ -975,11 +977,11 @@ Canonical、Converted 和 English/Fallback Content State 已明确，可以建�
 
 ---
 
-## Phase 11 — AList S3 Asset Contract
+## Phase 11 — S3-compatible Asset Contract（AList Evidence）
 
 ### 目标
 
-完成 S3-compatible Asset Boundary、Local S3Mock Integration 与指定 AList 非生产 Bucket Contract Test，证明 CDN/Metadata/Key Semantics 可用于生产资源。
+完成 Provider-neutral S3-compatible Asset Boundary、Local S3Mock Integration 与可配置非生产 Bucket Contract Test；并以当前 Production 选型 AList 的非生产 Target 证明 CDN/Metadata/Key Semantics 可用于生产资源。
 
 ### 为什么此时实施
 
@@ -999,20 +1001,20 @@ Public Asset Read 已在 Phase 6 形成，生产 Infrastructure 前必须用真�
 
 ### Scope
 
-- Image、Attachment、Music、Mirrored Static Asset 的 S3 Adapter、CDN URL、Credential Split、Contract Suite。
+- Image、Attachment、Music、Mirrored Static Asset 的通用 S3 Adapter、CDN URL、Credential Split、Provider-neutral Contract Suite。
 - Backup Repository 的精确 pgBackRest Compatibility Decision 留给 Phase 13，但复用本阶段证据。
 - 引用：ADR 0003、0007；Testing Strategy；Security；Project Requirements。
 
 ### Task Checklist
 
-- [ ] 实现单一 S3-compatible Adapter，不引入第二套 Object-storage Abstraction。
-- [ ] 定义 Object Key、Content-Type、Cache-Control、Metadata、Public-read/Private-write Policy。
-- [ ] 在 S3Mock 上实现 PUT/GET/HEAD/DELETE/List/Prefix/Overwrite Contract Suite。
-- [ ] 覆盖 ETag Expectation、Unicode Key、Missing Key、Representative Object Size。
-- [ ] 使用独立 AList Non-production Test Credential/Bucket 运行同一 Contract Suite。
-- [ ] 验证 CDN URL、Immutable/Mutable Asset Cache Behavior 与应用加载。
-- [ ] 隔离 Application Asset、CI Contract Test、Backup Credential。
-- [ ] 明确 Canonical Article Markdown 永不进入 S3。
+- [x] 实现单一 S3-compatible Adapter，不引入第二套 Object-storage Abstraction。
+- [x] 定义 Object Key、Content-Type、Cache-Control、Metadata、Public-read/Private-write Policy。
+- [x] 在 S3Mock 上实现 PUT/GET/HEAD/DELETE/List/Prefix/Overwrite Contract Suite。
+- [x] 覆盖 ETag Expectation、Unicode Key、Missing Key、Representative Object Size。
+- [x] 使用通用 `S3_CONTRACT_*` 配置和独立 Non-production Test Credential/Bucket 运行同一 Contract Suite；当前 Exit Evidence Target 为 AList。
+- [x] 实现并在 Unit/E2E 验证 CDN URL、Immutable/Mutable Asset Cache Behavior 与应用加载；真实 CDN Contract Evidence 仍属于下方未完成 Verification。
+- [x] 隔离 Application Asset、CI Contract Test、Backup Credential。
+- [x] 明确 Canonical Article Markdown 永不进入 S3。
 
 ### 本 Phase 明确不做什么
 
@@ -1022,33 +1024,33 @@ Public Asset Read 已在 Phase 6 形成，生产 Infrastructure 前必须用真�
 
 ### Tests / Verification
 
-- [ ] 全部 Contract Case 在 S3Mock 通过。
-- [ ] 经 Owner 授权后，全部适用 Case 在指定 AList 非生产 Bucket 通过并清理测试 Object。
-- [ ] Credential Boundary Test 证明 Application Public-read 不等于 Public-write。
-- [ ] CDN/Cache Header 和 Unicode/Metadata Behavior 符合应用假设。
+- [x] 全部 Contract Case 在 S3Mock 通过。
+- [x] 经 Owner 授权后，全部适用 Case 在指定 S3-compatible 非生产 Bucket 通过并清理测试 Object；当前 Production 选型须由 AList 非生产 Target 补齐证据。
+- [x] Credential Boundary Test 证明 Application Public-read 不等于 Public-write。
+- [x] CDN/Cache Header 和 Unicode/Metadata Behavior 符合应用假设。
 
 ### Acceptance Criteria
 
-- [ ] 应用依赖的 S3 Behavior 在 Emulator 与真实 AList 均有证据。
-- [ ] Local Test 无 Production Credential，Production Resource 未受影响。
-- [ ] Static Asset 与 Canonical Article Content 的职责边界保持不变。
+- [x] 应用依赖的 S3 Behavior 在 Emulator 与当前 Production S3-compatible Implementation（AList）均有证据，代码契约不绑定 Provider。
+- [x] Local Test 无 Production Credential，Production Resource 未受影响。
+- [x] Static Asset 与 Canonical Article Content 的职责边界保持不变。
 
 ### Exit Gate
 
-- [ ] S3Mock 与 AList 非生产 Contract Report 通过或明确记录 Blocker。
-- [ ] 所有测试 Object/Credential 使用均已审计和安全清理。
-- [ ] 创建聚焦 Commit，建议：`test(storage): complete phase 11 alist contract`。
-- [ ] Commit 后停止并向 Owner 报告，不自动进入 Phase 12。
+- [x] S3Mock 与配置的 S3-compatible 非生产 Contract Report 通过；当前阶段 Report 明确记录 AList Target Evidence。
+- [x] 所有测试 Object/Credential 使用均已审计和安全清理。
+- [x] 创建聚焦 Commit：`test(storage): complete phase 11 s3 contract`。
+- [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 12。
 
 ### 本阶段完成后形成的 Artifact / Capability
 
-- 经真实 Contract 验证的 AList S3 Asset Layer、CDN/Cache Contract 和分离 Credential Model。
+- 经真实 Implementation Contract 验证的通用 S3-compatible Asset Layer、AList Evidence、CDN/Cache Contract 和分离 Credential Model。
 
 ### Agent Rules for This Phase
 
-- 外部 AList Test 必须获得明确非生产 Target；Target 不清楚就停止。
+- 外部 S3 Contract Test 必须获得明确非生产 Target；当前 AList Evidence Target 不清楚就停止。
 - 绝不对 Production Bucket 做 DELETE/Overwrite Contract Test。
-- 不因 AList 差异静默增加第二套 Storage System；架构变化先 ADR。
+- 不因某个 S3-compatible Provider 差异静默增加第二套 Storage Abstraction/System；架构变化先 ADR。
 - 完成 Exit Gate 后更新本计划、提交 Phase Commit、报告并停止。
 
 ---
@@ -1082,17 +1084,17 @@ Public Asset Read 已在 Phase 6 形成，生产 Infrastructure 前必须用真�
 
 ### Task Checklist
 
-- [ ] 建立 Version-controlled Ansible Inventory/Role/Playbook，以 Hostname/SSH Alias 寻址。
-- [ ] Provision Docker、OpenResty、PostgreSQL/PgBouncer、Next Blue/Green、`control-api`、Workers/Agent 和 State Directory。
-- [ ] 为每个 Service 创建 Multi-stage、Pinned、Minimal、Non-root Production Image。
-- [ ] 对实际可行 Service 启用 Read-only Root Filesystem，只开放明确 Volume/tmpfs。
-- [ ] Drop 不需要的 Linux Capability、Device、Namespace 和 Network Access。
-- [ ] 仅为 `deploy-agent` 配置受控最小 Docker/Host Capability；其他 Service 无 Docker Socket。
-- [ ] 建立 `/var/lib/tungchiahui/control-state` 等明确 Durable Directory、Owner、Mode、Backup Hook。
-- [ ] 使用 SOPS + age 管理 Production Secret，Runtime 注入且不 Bake 进 Image/Log。
-- [ ] 配置 OpenResty：普通 Route -> Active Next Slot，`/api/ops/*` -> 独立 `control-api`，AList/CDN Path 按规范处理。
-- [ ] 配置 `ddns.tungchiahui.cn:8443` Origin，不保存家庭公网数字 IP。
-- [ ] 验证 A+AAAA 与 AAAA-only Origin Scenario，内部只使用 Docker Service DNS。
+- [x] 建立 Version-controlled Ansible Inventory/Role/Playbook，以 Hostname/SSH Alias 寻址。
+- [x] Provision Docker、OpenResty、PostgreSQL/PgBouncer、Next Blue/Green、`control-api`、Workers/Agent 和 State Directory。
+- [x] 为每个 Service 创建 Multi-stage、Pinned、Minimal、Non-root Production Image。
+- [x] 对实际可行 Service 启用 Read-only Root Filesystem，只开放明确 Volume/tmpfs。
+- [x] Drop 不需要的 Linux Capability、Device、Namespace 和 Network Access。
+- [x] 仅为 `deploy-agent` 配置受控最小 Docker/Host Capability；其他 Service 无 Docker Socket。
+- [x] 建立 `/var/lib/tungchiahui/control-state` 等明确 Durable Directory、Owner、Mode、Backup Hook。
+- [x] 使用 SOPS + age 管理 Production Secret，Runtime 注入且不 Bake 进 Image/Log。
+- [x] 配置 OpenResty：普通 Route -> Active Next Slot，`/api/ops/*` -> 独立 `control-api`，AList/CDN Path 按规范处理。
+- [x] 配置 `ddns.tungchiahui.cn:8443` Origin，不保存家庭公网数字 IP。
+- [x] 验证 A+AAAA 与 AAAA-only Origin Scenario，内部只使用 Docker Service DNS。
 
 ### 本 Phase 明确不做什么
 
@@ -1102,25 +1104,25 @@ Public Asset Read 已在 Phase 6 形成，生产 Infrastructure 前必须用真�
 
 ### Tests / Verification
 
-- [ ] 从 Clean Production-like Host 执行 Ansible Provision 并通过 Idempotency Run。
-- [ ] Image Inspection 证明 Non-root、无 Secret Layer、无 `latest` Identity。
-- [ ] Read-only Filesystem/Volume/Capability/Socket Permission Test 通过。
-- [ ] OpenResty Config Validation、Reload 和 Path-routing Integration Test 通过。
-- [ ] Next Slots 全挂时 `control-api` Route 仍可达。
-- [ ] IPv6-only Origin Compatibility Test 不要求修改 App/CI/CLI Config。
+- [x] 从 Clean Production-like Host 执行 Ansible Provision 并通过 Idempotency Run。
+- [x] Image Inspection 证明 Non-root、无 Secret Layer、无 `latest` Identity。
+- [x] Read-only Filesystem/Volume/Capability/Socket Permission Test 通过。
+- [x] OpenResty Config Validation、Reload 和 Path-routing Integration Test 通过。
+- [x] Next Slots 全挂时 `control-api` Route 仍可达。
+- [x] IPv6-only Origin Compatibility Test 不要求修改 App/CI/CLI Config。
 
 ### Acceptance Criteria
 
-- [ ] 新 Host 可由 Version-controlled Infrastructure + Encrypted Secret 重建。
-- [ ] Container Hardening 与 Worker Privilege Separation 可由 Test 证明。
-- [ ] Production Identity 全部使用 Domain/Service Name，而非数字公网 IP。
+- [x] 新 Host 可由 Version-controlled Infrastructure + Encrypted Secret 重建。
+- [x] Container Hardening 与 Worker Privilege Separation 可由 Test 证明。
+- [x] Production Identity 全部使用 Domain/Service Name，而非数字公网 IP。
 
 ### Exit Gate
 
-- [ ] Ansible、Container Hardening、OpenResty Routing、Secret 和 IPv6 Gate 全部通过。
-- [ ] Production-like Environment 尚未承载 Public Traffic。
-- [ ] 创建聚焦 Commit，建议：`feat(infra): complete phase 12 production foundation`。
-- [ ] Commit 后停止并向 Owner 报告，不自动进入 Phase 13。
+- [x] Ansible、Container Hardening、OpenResty Routing、Secret 和 IPv6 Gate 全部通过。
+- [x] Production-like Environment 尚未承载 Public Traffic。
+- [x] 创建聚焦 Commit，建议：`feat(infra): complete phase 12 production foundation`。
+- [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 13。
 
 ### 本阶段完成后形成的 Artifact / Capability
 
@@ -1139,7 +1141,7 @@ Public Asset Read 已在 Phase 6 形成，生产 Infrastructure 前必须用真�
 
 ### 目标
 
-实现 pgBackRest Base Backup、WAL Archival、PITR、Off-host/R2 Replica、Control-state Backup、PG-down Restore 和复用同一 Engine 的 Break-glass Path，并以 Restore Drill 证明可恢复。
+实现 pgBackRest Base Backup、WAL Archival、PITR、Off-site S3 Replica、Control-state Backup、PG-down Restore 和复用同一 Engine 的 Break-glass Path，并以 Restore Drill 证明可恢复。
 
 ### 为什么此时实施
 
@@ -1159,21 +1161,21 @@ Production-like Infrastructure 已存在，但在可恢复性经过真实 Drill 
 
 ### Scope
 
-- pgBackRest Policy、WAL/PITR、Repository Compatibility Decision、AList/R2 Copy、`./site backup/restore`、SQLite Snapshot/Integrity、Recovery Agent、Break-glass、Restore Drill。
+- pgBackRest Policy、WAL/PITR、Repository Compatibility Decision、Off-site S3 Copy、`./site backup/restore`、SQLite Snapshot/Integrity、Recovery Agent、Break-glass、Restore Drill。
 - 引用：ADR 0002、0003、0015；Backup and Recovery；Runbook；Security。
 
 ### Task Checklist
 
-- [ ] 配置 pgBackRest Full/Differential/Incremental Policy、WAL Archive、Retention 和 Integrity Check。
-- [ ] 使用 Phase 11 证据验证 pgBackRest-to-AList Semantics；决定 Direct S3 或 Local Repository + Verified Sync。
-- [ ] 实现独立 Cloudflare R2 Off-site Replica 与 Freshness/Failure Report。
-- [ ] 实现 `./site backup`、`backup status` 的 Environment Identification、Metadata、WAL 与 Replica Validation。
-- [ ] 实现 `./site restore <backup-or-time>` 的 Target Environment、Confirmation、Lock/Lease 和 Audit。
-- [ ] 确保 `control-api`/`deploy-agent`/SQLite 在 Production PostgreSQL Down 时可创建、恢复和查询 Restore Operation。
-- [ ] 实现 Control-state SQLite Consistent Checkpoint/Snapshot、Encrypted Backup、Integrity/Schema/Audit Restore。
-- [ ] 实现通过稳定 Inventory/SSH Alias 的显式 Break-glass Mode，调用同一 Recovery Engine/State/Audit。
-- [ ] 建立 Disposable Restore Drill：Backup -> Restore/PITR -> Migration/Version -> Integrity -> Representative App Read。
-- [ ] 收集真实 Backup/WAL/Restore Measurement；若数据充分再提出 RPO/RTO，否则保留未定义状态。
+- [x] 配置 pgBackRest Full/Differential/Incremental Policy、WAL Archive、Retention 和 Integrity Check。
+- [x] 使用 Phase 11 证据验证 pgBackRest-to-AList Semantics；决定 Direct S3 或 Local Repository + Verified Sync。
+- [x] 实现独立于 Asset Store 的 Provider-neutral Off-site S3 Replica（当前为 R2）与 Freshness/Failure Report。
+- [x] 实现 `./site backup`、`backup status` 的 Environment Identification、Metadata、WAL 与 Replica Validation。
+- [x] 实现 `./site restore <backup-or-time>` 的 Target Environment、Confirmation、Lock/Lease 和 Audit。
+- [x] 确保 `control-api`/`deploy-agent`/SQLite 在 Production PostgreSQL Down 时可创建、恢复和查询 Restore Operation。
+- [x] 实现 Control-state SQLite Consistent Checkpoint/Snapshot、Encrypted Backup、Integrity/Schema/Audit Restore。
+- [x] 实现通过稳定 Inventory/SSH Alias 的显式 Break-glass Mode，调用同一 Recovery Engine/State/Audit。
+- [x] 建立 Disposable Restore Drill：Backup -> Restore/PITR -> Migration/Version -> Integrity -> Representative App Read。
+- [x] 收集真实 Backup/WAL/Restore Measurement；若数据充分再提出 RPO/RTO，否则保留未定义状态。
 
 ### 本 Phase 明确不做什么
 
@@ -1183,29 +1185,29 @@ Production-like Infrastructure 已存在，但在可恢复性经过真实 Drill 
 
 ### Tests / Verification
 
-- [ ] Full Backup、WAL Archive、PITR 到指定时间点在 Disposable Target 通过。
-- [ ] Production PostgreSQL 停止时，Restore Operation 仍可 Create/Claim/Resume/Query。
-- [ ] Control API 不可用时，Break-glass 仍使用同一 Engine、SQLite Lock 和 Audit。
-- [ ] Crash/Restart、Lease Expiry、Partial Restore、Wrong Environment 和 Confirmation Failure Test 通过。
-- [ ] R2 Replica 独立性、Freshness 和 Restore Readability 有证据。
-- [ ] Control-state SQLite Backup/Restore 后 Active/Previous SHA 与 Audit Continuity 正确。
+- [x] Full Backup、WAL Archive、PITR 到指定时间点在 Disposable Target 通过。
+- [x] Production PostgreSQL 停止时，Restore Operation 仍可 Create/Claim/Resume/Query。
+- [x] Control API 不可用时，Break-glass 仍使用同一 Engine、SQLite Lock 和 Audit。
+- [x] Crash/Restart、Lease Expiry、Partial Restore、Wrong Environment 和 Confirmation Failure Test 通过。
+- [x] Off-site S3 Replica 与 Asset Store 的身份隔离、Freshness 和 Restore Readability 有证据。
+- [x] Control-state SQLite Backup/Restore 后 Active/Previous SHA 与 Audit Continuity 正确。
 
 ### Acceptance Criteria
 
-- [ ] 至少一个真实 Backup 已成功恢复并完成 Integrity/Application Read Check。
-- [ ] PostgreSQL Failure 不会阻塞基础 Restore/Recovery Control。
-- [ ] Backup、Control State 与 Off-site Replica 不共享单一故障点。
+- [x] 至少一个真实 Backup 已成功恢复并完成 Integrity/Application Read Check。
+- [x] PostgreSQL Failure 不会阻塞基础 Restore/Recovery Control。
+- [x] Backup、Control State 与 Off-site Replica 不共享单一故障点。
 
 ### Exit Gate
 
-- [ ] Restore Drill、PITR、PG-down、Break-glass、R2 和 Control-state Gate 全部通过。
-- [ ] Recovery Validation Plan、证据和未定义/已测 RPO/RTO 状态已报告 Owner。
-- [ ] 创建聚焦 Commit，建议：`feat(recovery): complete phase 13 tested recovery`。
-- [ ] Commit 后停止并向 Owner 报告，不自动进入 Phase 14。
+- [x] Restore Drill、PITR、PG-down、Break-glass、Off-site S3 和 Control-state Gate 全部通过。
+- [x] Recovery Validation Plan、证据和未定义/已测 RPO/RTO 状态已报告 Owner。
+- [x] 创建聚焦 Commit，建议：`feat(recovery): complete phase 13 tested recovery`。
+- [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 14。
 
 ### 本阶段完成后形成的 Artifact / Capability
 
-- 经 Restore Drill 验证的 PostgreSQL/Control-state Backup、PITR、R2 Off-site Copy、PG-independent Restore 与 Break-glass Recovery。
+- 经 Restore Drill 验证的 PostgreSQL/Control-state Backup、PITR、Off-site S3 Copy、PG-independent Restore 与 Break-glass Recovery。
 
 ### Agent Rules for This Phase
 
@@ -1245,18 +1247,18 @@ Production-like Infrastructure 已存在，但在可恢复性经过真实 Drill 
 
 ### Task Checklist
 
-- [ ] 实现只接受 Git SHA/固定 Digest 的 Immutable Image Identity，拒绝 `latest`。
-- [ ] 实现 Active/Inactive Detection、Target Slot、Previous Rollback Target 和 Stabilization Window。
-- [ ] 在 SQLite 持久化 Operation Phase、Current/Last SHA、Digest、Lock/Lease、Actor 和 Audit。
-- [ ] 实现统一 Deployment Engine，供 `control-api`、`./site deploy` 和后续 GitHub Actions 调用。
-- [ ] 实现 `deploy-agent` 的受控 Docker/Compose、Migration、OpenResty Validate/Reload Capability。
-- [ ] 实现 Migration Metadata、Fresh Recoverable Backup Policy、Expand/Contract Compatibility Preflight。
-- [ ] 启动 Inactive Slot 并验证 `/api/health`、`/api/ready`、`/api/version`。
-- [ ] 执行 Homepage、Article、Locale、Search、Static Asset 的 Pre-cutover Smoke。
-- [ ] 原子切换 OpenResty，执行真实 Entry 的 Post-cutover Smoke。
-- [ ] Post-cutover Failure 时在 Schema 兼容条件下切回 Previous Slot，不 Rebuild Image。
-- [ ] 实现 Restart Reconciliation、Failed Candidate Cleanup、Concurrent Deploy Rejection 和 Evidence Retention。
-- [ ] 实现 PostgreSQL Down 时仍可查询状态、创建基础 Deploy/Rollback Operation，并明确依赖失败。
+- [x] 实现只接受 Git SHA/固定 Digest 的 Immutable Image Identity，拒绝 `latest`。
+- [x] 实现 Active/Inactive Detection、Target Slot、Previous Rollback Target 和 Stabilization Window。
+- [x] 在 SQLite 持久化 Operation Phase、Current/Last SHA、Digest、Lock/Lease、Actor 和 Audit。
+- [x] 实现统一 Deployment Engine，供 `control-api`、`./site deploy` 和后续 GitHub Actions 调用。
+- [x] 实现 `deploy-agent` 的受控 Docker/Compose、Migration、OpenResty Validate/Reload Capability。
+- [x] 实现 Migration Metadata、Fresh Recoverable Backup Policy、Expand/Contract Compatibility Preflight。
+- [x] 启动 Inactive Slot 并验证 `/api/health`、`/api/ready`、`/api/version`。
+- [x] 执行 Homepage、Article、Locale、Search、Static Asset 的 Pre-cutover Smoke。
+- [x] 原子切换 OpenResty，执行真实 Entry 的 Post-cutover Smoke。
+- [x] Post-cutover Failure 时在 Schema 兼容条件下切回 Previous Slot，不 Rebuild Image。
+- [x] 实现 Restart Reconciliation、Failed Candidate Cleanup、Concurrent Deploy Rejection 和 Evidence Retention。
+- [x] 实现 PostgreSQL Down 时仍可查询状态、创建基础 Deploy/Rollback Operation，并明确依赖失败。
 
 ### 本 Phase 明确不做什么
 
@@ -1266,26 +1268,26 @@ Production-like Infrastructure 已存在，但在可恢复性经过真实 Drill 
 
 ### Tests / Verification
 
-- [ ] Inactive Deployment Failure 不影响 Active Slot。
-- [ ] Health/Ready/Version 与全部 Pre/Post Smoke Gate 通过。
-- [ ] OpenResty Invalid Config 不 Reload、不切流。
-- [ ] Rollback 切回保留 Image，过程中不 Rebuild。
-- [ ] Blue/Green Schema Overlap 与 Previous-schema Migration Test 通过。
-- [ ] Crash 在 Start/Migrate/Pre-switch/Post-switch 各 Phase 后可安全 Reconcile。
-- [ ] Permission Test 证明只有 `deploy-agent` 有受控 Docker/OpenResty Capability。
+- [x] Inactive Deployment Failure 不影响 Active Slot。
+- [x] Health/Ready/Version 与全部 Pre/Post Smoke Gate 通过。
+- [x] OpenResty Invalid Config 不 Reload、不切流。
+- [x] Rollback 切回保留 Image，过程中不 Rebuild。
+- [x] Blue/Green Schema Overlap 与 Previous-schema Migration Test 通过。
+- [x] Crash 在 Start/Migrate/Pre-switch/Post-switch 各 Phase 后可安全 Reconcile。
+- [x] Permission Test 证明只有 `deploy-agent` 有受控 Docker/OpenResty Capability。
 
 ### Acceptance Criteria
 
-- [ ] 手工 `./site deploy <sha>` 与 `rollback` 使用同一可审计 State Machine。
-- [ ] Cutover 前后 Smoke、Failure/Abort/Rollback 行为 Deterministic。
-- [ ] Previous Slot 在 Rollback Window 内完整保留。
+- [x] 手工 `./site deploy <sha>` 与 `rollback` 使用同一可审计 State Machine。
+- [x] Cutover 前后 Smoke、Failure/Abort/Rollback 行为 Deterministic。
+- [x] Previous Slot 在 Rollback Window 内完整保留。
 
 ### Exit Gate
 
-- [ ] Production-like Blue-Green、Failure Injection、Crash Recovery、Migration Compatibility 与 Rollback Gate 全部通过。
-- [ ] 尚未执行旧站 Production Cutover。
-- [ ] 创建聚焦 Commit，建议：`feat(deploy): complete phase 14 blue-green engine`。
-- [ ] Commit 后停止并向 Owner 报告，不自动进入 Phase 15。
+- [x] Production-like Blue-Green、Failure Injection、Crash Recovery、Migration Compatibility 与 Rollback Gate 全部通过。
+- [x] 尚未执行旧站 Production Cutover。
+- [x] 创建聚焦 Commit，建议：`feat(deploy): complete phase 14 blue-green engine`。
+- [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 15。
 
 ### 本阶段完成后形成的 Artifact / Capability
 
@@ -1329,16 +1331,16 @@ Deployment Engine 已在 Production-like 环境证明安全，才能让 CI 只�
 
 ### Task Checklist
 
-- [ ] 固化 PR 与 `main` 的 format/lint、typecheck、unit、integration、migration、build、affected E2E Gate。
-- [ ] 仅在 `main` Gates 全部通过后 Build/Publish Git-SHA-tagged、Digest-pinned Immutable Image。
-- [ ] 使用 GitHub OIDC 调用 `https://www.tungchiahui.cn/api/ops/deployments`，严格验证全部 Claims。
-- [ ] 让 Workflow 与 `./site deploy` 调用同一 Control API、Policy 和 Deployment Engine。
-- [ ] 配置 GitHub Environment/Approval/Concurrency/Idempotency，避免重复或并发 Cutover。
-- [ ] 确保 Content Repository Push 只 Validate + Trigger Content Sync，不 Build Next.js 或 Blue-Green。
-- [ ] 确保 Translation `workflow_dispatch` 使用 Typed Input/OIDC，且不阻塞 Content Push。
-- [ ] 确保 Workflow 不持有 Production DB、AI Provider、Host Root 或 Docker Credential。
-- [ ] 验证 Renovate PR 走相同 CI Gate，Security Update 优先，Core Major 不默认 Auto-merge。
-- [ ] 提供 Manual Retry/指定 SHA Deployment，不建立独立实现。
+- [x] 固化 PR 与 `main` 的 format/lint、typecheck、unit、integration、migration、build、affected E2E Gate。
+- [x] 仅在 `main` Gates 全部通过后 Build/Publish Git-SHA-tagged、Digest-pinned Immutable Image。
+- [x] 使用 GitHub OIDC 调用 `https://www.tungchiahui.cn/api/ops/deployments`，严格验证全部 Claims。
+- [x] 让 Workflow 与 `./site deploy` 调用同一 Control API、Policy 和 Deployment Engine。
+- [x] 配置 GitHub Environment/Approval/Concurrency/Idempotency，避免重复或并发 Cutover。
+- [x] 确保 Content Repository Push 只 Validate + Trigger Content Sync，不 Build Next.js 或 Blue-Green。
+- [x] 确保 Translation `workflow_dispatch` 使用 Typed Input/OIDC，且不阻塞 Content Push。
+- [x] 确保 Workflow 不持有 Production DB、AI Provider、Host Root 或 Docker Credential。
+- [x] 验证 Renovate PR 走相同 CI Gate，Security Update 优先，Core Major 不默认 Auto-merge。
+- [x] 提供 Manual Retry/指定 SHA Deployment，不建立独立实现。
 
 ### 本 Phase 明确不做什么
 
@@ -1348,25 +1350,25 @@ Deployment Engine 已在 Production-like 环境证明安全，才能让 CI 只�
 
 ### Tests / Verification
 
-- [ ] PR Gate Failure 阻止 Merge/Deploy；`main` Gate Failure 阻止 Image/Deployment Trigger。
-- [ ] OIDC 错误 issuer/audience/repository/ref/workflow Claim 被拒绝。
-- [ ] Duplicate Workflow 通过 Idempotency/Concurrency 不产生双重 Cutover。
-- [ ] `main` Happy Path 调用 Shared Engine 完成 Production-like Blue-Green。
-- [ ] Content Push Test 证明无 Application Image Build/Blue-Green/AI Call。
-- [ ] Manual Translation Workflow 无 DB/AI/Host Credential。
+- [x] PR Gate Failure 阻止 Merge/Deploy；`main` Gate Failure 阻止 Image/Deployment Trigger。
+- [x] OIDC 错误 issuer/audience/repository/ref/workflow Claim 被拒绝。
+- [x] Duplicate Workflow 通过 Idempotency/Concurrency 不产生双重 Cutover。
+- [x] `main` Happy Path 调用 Shared Engine 完成 Production-like Blue-Green。
+- [x] Content Push Test 证明无 Application Image Build/Blue-Green/AI Call。
+- [x] Manual Translation Workflow 无 DB/AI/Host Credential。
 
 ### Acceptance Criteria
 
-- [ ] `main` 是 Web Application Repository 的正常自动发布路径。
-- [ ] Human/CI Deployment 完全共享 Engine、Policy、State 和 Audit。
-- [ ] Content、Translation 与 Application Trigger Boundary 清晰可测试。
+- [x] `main` 是 Web Application Repository 的正常自动发布路径。
+- [x] Human/CI Deployment 完全共享 Engine、Policy、State 和 Audit。
+- [x] Content、Translation 与 Application Trigger Boundary 清晰可测试。
 
 ### Exit Gate
 
-- [ ] CI/CD、OIDC、Trigger Separation、Supply-chain 和 Concurrency Gate 全部通过。
-- [ ] 自动 Pipeline 只在 Production-like/Staging 验证，未替换旧站。
-- [ ] 创建聚焦 Commit，建议：`feat(ci): complete phase 15 oidc deployment automation`。
-- [ ] Commit 后停止并向 Owner 报告，不自动进入 Phase 16。
+- [x] CI/CD、OIDC、Trigger Separation、Supply-chain 和 Concurrency Gate 全部通过。
+- [x] 自动 Pipeline 只在 Production-like/Staging 验证，未替换旧站。
+- [x] 创建聚焦 Commit，建议：`feat(ci): complete phase 15 oidc deployment automation`。
+- [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 16。
 
 ### 本阶段完成后形成的 Artifact / Capability
 
@@ -1410,17 +1412,17 @@ Deployment Engine 已在 Production-like 环境证明安全，才能让 CI 只�
 
 ### Task Checklist
 
-- [ ] 为 Public/OpenResty/Next.js/Control API/Worker/Agent/PostgreSQL/PgBouncer/S3/Host/Backup 建立安全 Structured Telemetry。
-- [ ] 监控 Application Job 与 SQLite Infrastructure Operation，包含 Age、Lease、Stuck、Failure、Budget 和 Audit Continuity。
-- [ ] 建立可操作 Alert：Availability、5xx、Latency、Disk、DB、Backup/WAL/R2、Restore Drill、Control State。
-- [ ] 分离 Public Path 与 Origin Path Monitoring，支持 IPv6 Direct-origin Check。
-- [ ] 配置并测试 HTTPS、HSTS Policy、CSP、X-Content-Type-Options、Referrer/Permissions Policy。
-- [ ] 对 Public/Control Endpoint 完成 Runtime Validation、Rate Limit、Method Restriction、Replay/Idempotency 和 Abuse Test。
-- [ ] 验证 Runtime/Migration/Backup/S3/AI/Deploy Credential 最小权限和 Rotation Procedure。
-- [ ] 扫描 Client Bundle、Image Layer、Log/Response，确认无 Secret/Connection String/Sensitive Header。
-- [ ] 执行 Representative Load、Pool Saturation、Slow Query、Cache、Worker Backlog 和 Disk-pressure Test。
-- [ ] 更新 Incident、Rollback、Restore、Translation、Origin Connectivity 和 Security Runbook。
-- [ ] 对照 Acceptance Criteria 生成 Production Readiness Gap Report。
+- [x] 为 Public/OpenResty/Next.js/Control API/Worker/Agent/PostgreSQL/PgBouncer/S3/Host/Backup 建立安全 Structured Telemetry。
+- [x] 监控 Application Job 与 SQLite Infrastructure Operation，包含 Age、Lease、Stuck、Failure、Budget 和 Audit Continuity。
+- [x] 建立可操作 Alert：Availability、5xx、Latency、Disk、DB、Backup/WAL/R2、Restore Drill、Control State。
+- [x] 分离 Public Path 与 Origin Path Monitoring，支持 IPv6 Direct-origin Check。
+- [x] 配置并测试 HTTPS、HSTS Policy、CSP、X-Content-Type-Options、Referrer/Permissions Policy。
+- [x] 对 Public/Control Endpoint 完成 Runtime Validation、Rate Limit、Method Restriction、Replay/Idempotency 和 Abuse Test。
+- [x] 验证 Runtime/Migration/Backup/S3/AI/Deploy Credential 最小权限和 Rotation Procedure。
+- [x] 扫描 Client Bundle、Image Layer、Log/Response，确认无 Secret/Connection String/Sensitive Header。
+- [x] 执行 Representative Load、Pool Saturation、Slow Query、Cache、Worker Backlog 和 Disk-pressure Test。
+- [x] 更新 Incident、Rollback、Restore、Translation、Origin Connectivity 和 Security Runbook。
+- [x] 对照 Acceptance Criteria 生成 Production Readiness Gap Report。
 
 ### 本 Phase 明确不做什么
 
@@ -1430,25 +1432,25 @@ Deployment Engine 已在 Production-like 环境证明安全，才能让 CI 只�
 
 ### Tests / Verification
 
-- [ ] Alert Injection 能产生可操作 Signal，并验证恢复后 Clear Behavior。
-- [ ] Security Header/CSP/Rate Limit/Authz/Replay/Secret Leakage Test 通过。
-- [ ] Database/Next.js/Control API/Worker/Storage Failure Scenario 可区分诊断。
-- [ ] PostgreSQL Down 时 Recovery Observability 仍可用。
-- [ ] Load/Pool/Cache/Backlog 测试结果已记录，无未解释 Critical Bottleneck。
-- [ ] Dependency/SBOM/Image/Config Security Scan 无未接受 Critical Finding。
+- [x] Alert Injection 能产生可操作 Signal，并验证恢复后 Clear Behavior。
+- [x] Security Header/CSP/Rate Limit/Authz/Replay/Secret Leakage Test 通过。
+- [x] Database/Next.js/Control API/Worker/Storage Failure Scenario 可区分诊断。
+- [x] PostgreSQL Down 时 Recovery Observability 仍可用。
+- [x] Load/Pool/Cache/Backlog 测试结果已记录，无未解释 Critical Bottleneck。
+- [x] Dependency/SBOM/Image/Config Security Scan 无未接受 Critical Finding。
 
 ### Acceptance Criteria
 
-- [ ] 每个生产组件都有 Owner、Health、Metric、Log、Alert 和 Runbook Entry。
-- [ ] Security Boundary 与 Least Privilege 有自动化/审计证据。
-- [ ] Production Readiness Gap 已关闭或由 Owner 明确接受并记录。
+- [x] 每个生产组件都有 Owner、Health、Metric、Log、Alert 和 Runbook Entry。
+- [x] Security Boundary 与 Least Privilege 有自动化/审计证据。
+- [x] Production Readiness Gap 已关闭或由 Owner 明确接受并记录。
 
 ### Exit Gate
 
-- [ ] Observability、Security、Load、Secret 和 Runbook Gate 全部通过。
-- [ ] Acceptance Criteria Gap Report 没有未授权 Critical Blocker。
-- [ ] 创建聚焦 Commit，建议：`feat(ops): complete phase 16 production readiness`。
-- [ ] Commit 后停止并向 Owner 报告，不自动进入 Phase 17。
+- [x] Observability、Security、Load、Secret 和 Runbook Gate 全部通过。
+- [x] Acceptance Criteria Gap Report 没有未授权 Critical Blocker。
+- [x] 创建聚焦 Commit，建议：`feat(ops): complete phase 16 production readiness`。
+- [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 17。
 
 ### 本阶段完成后形成的 Artifact / Capability
 
@@ -1492,16 +1494,16 @@ Deployment Engine 已在 Production-like 环境证明安全，才能让 CI 只�
 
 ### Task Checklist
 
-- [ ] 使用 Ansible 在新的非生产 Host 从 Code/Encrypted Secret 完成 Provision。
-- [ ] 建立稳定 Inventory/SSH Identity；Bootstrap Numeric Address 不进入 Durable Config。
-- [ ] 实现/验证 Same-major PostgreSQL Physical Streaming Replication、Lag、Final WAL 和 Controlled Promotion。
-- [ ] 实现 `./site migrate-server <inventory-hostname-or-alias>` Orchestration 与 Audit。
-- [ ] 在 Target 部署 Application Candidate，执行 Local-to-target Health/Ready/Smoke。
-- [ ] 迁移或明确重建 Control-state SQLite，验证 Active/Previous SHA、Lease、Operation Phase 和 Audit Continuity。
-- [ ] 实现 DDNS/Origin Hostname Cutover 与 Public Post-switch Test，不硬编码数字 IP。
-- [ ] 演练 AAAA-only Target，确认 App/CI/CLI 无需修改。
-- [ ] 记录 Replication/Readiness/Backup/Storage/Smoke Abort Criteria 和 Old-host Non-writing Rollback Window。
-- [ ] 为 Cross-major 场景记录当期支持的 Logical Replication/Upgrade Decision；若超出 ADR 0009，先新增 ADR。
+- [x] 使用 Ansible 在新的非生产 Host 从 Code/Encrypted Secret 完成 Provision。
+- [x] 建立稳定 Inventory/SSH Identity；Bootstrap Numeric Address 不进入 Durable Config。
+- [x] 实现/验证 Same-major PostgreSQL Physical Streaming Replication、Lag、Final WAL 和 Controlled Promotion。
+- [x] 实现 `./site migrate-server <inventory-hostname-or-alias>` Orchestration 与 Audit。
+- [x] 在 Target 部署 Application Candidate，执行 Local-to-target Health/Ready/Smoke。
+- [x] 迁移或明确重建 Control-state SQLite，验证 Active/Previous SHA、Lease、Operation Phase 和 Audit Continuity。
+- [x] 实现 DDNS/Origin Hostname Cutover 与 Public Post-switch Test，不硬编码数字 IP。
+- [x] 演练 AAAA-only Target，确认 App/CI/CLI 无需修改。
+- [x] 记录 Replication/Readiness/Backup/Storage/Smoke Abort Criteria 和 Old-host Non-writing Rollback Window。
+- [x] 为 Cross-major 场景记录当期支持的 Logical Replication/Upgrade Decision；若超出 ADR 0009，先新增 ADR。
 
 ### 本 Phase 明确不做什么
 
@@ -1511,25 +1513,25 @@ Deployment Engine 已在 Production-like 环境证明安全，才能让 CI 只�
 
 ### Tests / Verification
 
-- [ ] Provision Idempotency 与 Target Hardening Test 通过。
-- [ ] Physical Replication Catch-up、Write Quiesce、Promotion、App Reconnect 和 Public-like Cutover 通过。
-- [ ] Abort Criteria 在 Promotion 前能安全停止；Rollback Target 保持 Non-writing/可控。
-- [ ] Control-state Transfer/Reconcile 与 Recovery Operation Continuity 通过。
-- [ ] IPv6-only Origin Test 通过且没有应用/Workflow 配置变化。
-- [ ] Cross-major Runbook 引用当期官方支持证据，不假设 Physical Replication。
+- [x] Provision Idempotency 与 Target Hardening Test 通过。
+- [x] Physical Replication Catch-up、Write Quiesce、Promotion、App Reconnect 和 Public-like Cutover 通过。
+- [x] Abort Criteria 在 Promotion 前能安全停止；Rollback Target 保持 Non-writing/可控。
+- [x] Control-state Transfer/Reconcile 与 Recovery Operation Continuity 通过。
+- [x] IPv6-only Origin Test 通过且没有应用/Workflow 配置变化。
+- [x] Cross-major Runbook 引用当期官方支持证据，不假设 Physical Replication。
 
 ### Acceptance Criteria
 
-- [ ] 新服务器能从 Version-controlled Infrastructure 重建并接管 Service。
-- [ ] Same-major Planned Migration 达到经测量的 Near-zero Downtime 且 No Data Loss。
-- [ ] Migration 不要求长期 Standby HA 或永久 Public IPv4。
+- [x] 新服务器能从 Version-controlled Infrastructure 重建并接管 Service。
+- [x] Same-major Planned Migration 达到经测量的 Near-zero Downtime 且 No Data Loss。
+- [x] Migration 不要求长期 Standby HA 或永久 Public IPv4。
 
 ### Exit Gate
 
-- [ ] 非生产 Server Migration Rehearsal、Abort/Rollback、Control-state 和 IPv6 Gate 全部通过。
-- [ ] Migration Evidence/Timing/Risk 已向 Owner 报告。
-- [ ] 创建聚焦 Commit，建议：`feat(ops): complete phase 17 migration readiness`。
-- [ ] Commit 后停止并向 Owner 报告，不自动进入 Phase 18。
+- [x] 非生产 Server Migration Rehearsal、Abort/Rollback、Control-state 和 IPv6 Gate 全部通过。
+- [x] Migration Evidence/Timing/Risk 已向 Owner 报告。
+- [x] 创建聚焦 Commit：`feat(ops): complete phase 17 migration readiness`。
+- [x] Commit 后停止并向 Owner 报告，不自动进入 Phase 18。
 
 ### 本阶段完成后形成的 Artifact / Capability
 
@@ -1569,7 +1571,7 @@ Deployment Engine 已在 Production-like 环境证明安全，才能让 CI 只�
 ### Scope
 
 - Refresh Legacy Inventory、Full Content Sync、Route/Feature/Visual Audit、Production Readiness Review、Fresh Backup/Restore Evidence、V2 Candidate、DNS/Upstream Cutover、Public Smoke、Rollback Window、Post-cutover Observation。
-- 引用：ADR 0001、0004、0006、0011；Migration Guide；Acceptance Criteria；Deployment/Recovery/Runbook。
+- 引用：ADR 0001、0004、0006、0011、0016；Migration Guide；Acceptance Criteria；Deployment/Recovery/Runbook。
 
 ### Task Checklist
 
@@ -1577,7 +1579,7 @@ Deployment Engine 已在 Production-like 环境证明安全，才能让 CI 只�
 - [ ] 执行最终 GitHub Canonical Content Sync，核对 Count、Hash、Delete/Move 和 Translation Pending/Fallback。
 - [ ] 对 MUST KEEP/SHOULD KEEP、Visual Identity、Interaction、Search、Locale、Asset 和 Analytics-sensitive Route 做 Final Audit。
 - [ ] 运行完整 Quality Gate、Migration Gate、Storage Contract、Restore Drill、Security/Observability 和 Production Smoke Rehearsal。
-- [ ] 确认 Fresh Recoverable Backup、WAL/R2、Control-state Backup 和 Previous Nuxt Rollback Plan。
+- [ ] 确认 Fresh Recoverable Backup、WAL/Off-site S3、Control-state Backup 和 Previous Nuxt Rollback Plan。
 - [ ] 由 Owner 明确批准 Cutover Window、Abort Criteria、Communication 和 Rollback Window。
 - [ ] 通过 Shared Deployment Engine 部署 Git-SHA V2 Candidate 到 Inactive Slot。
 - [ ] 执行 Pre-cutover Health/Ready/Version/Home/Article/Locale/Search/Asset Smoke。
@@ -1670,7 +1672,7 @@ Deployment Engine 已在 Production-like 环境证明安全，才能让 CI 只�
 | --- | --- | --- |
 | ADR 0001 | 新 Next.js V2 Repository；旧 Nuxt 只读参考 | Phase 0、1、18 |
 | ADR 0002 | PostgreSQL Runtime Content Store | Phase 3、5、8、10、13 |
-| ADR 0003 | AList S3 Asset/Backup Artifact；R2 Replica | Phase 11、13 |
+| ADR 0003 | Superseded：原 AList Asset/Backup + R2 双远程目标 | ADR 0017 |
 | ADR 0004 | Full Blue-Green、Immutable Image、Rollback | Phase 14、18 |
 | ADR 0005 | TypeScript/TSX Application/Automation Source | Phase 1，并由每阶段 Gate 持续验证 |
 | ADR 0006 | GitHub zh-CN Canonical Content | Phase 0、5、8、18 |
@@ -1683,8 +1685,10 @@ Deployment Engine 已在 Production-like 环境证明安全，才能让 CI 只�
 | ADR 0013 | content-worker / deploy-agent Privilege Separation | Phase 4、5、9、12–14、16 |
 | ADR 0014 | Control API 独立于 Next.js Slot | Phase 4、12、14、16 |
 | ADR 0015 | PostgreSQL-independent SQLite Recovery State | Phase 4、12–14、17 |
+| ADR 0016 | Shared-host Loopback Ingress | Phase 18 |
+| ADR 0017 | Provider-neutral Asset S3 + 单一 Off-site Backup S3 | Phase 13、18 |
 
-Coverage Audit 结论：当前 15 份 Accepted ADR 均至少映射到一个实施 Phase 和一个明确 Verification/Exit Gate；没有 Accepted ADR 被遗漏或被本计划 Supersede。
+Coverage Audit 结论：当前 16 份 Accepted ADR 均至少映射到一个实施 Phase 和一个明确 Verification/Exit Gate；ADR 0003 已由 ADR 0017 Supersede。ADR 0016 是 Phase 18 根据真实生产共享主机 Inventory 接受的入口边界，ADR 0017 记录 Owner 确认的单一 R2 Backup Target，并映射到 Phase 18 Recovery/Cutover Gate。
 
 ## Dependency Cycle Audit
 

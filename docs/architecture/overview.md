@@ -14,7 +14,12 @@
                  ddns.tungchiahui.cn:8443
                     DNS-only/DDNS origin
                               |
-                          OpenResty
+                  Shared-host OpenResty
+                       TLS termination
+                              |
+                  http://127.0.0.1:3100
+                              |
+                        V2 OpenResty
                     /          |          \
                    /           |           \
         Next.js Blue/Green   control-api   AList S3
@@ -40,13 +45,14 @@
              read-only fetch
 
 
-AList S3
+AList Asset S3
 ├─ images
-├─ attachments/media/libs
-└─ database backup artifacts
+└─ attachments/media/libs
+
+Local encrypted pgBackRest repository + WAL
           |
           v
-   Cloudflare R2 replica
+Cloudflare R2 via provider-neutral BACKUP_S3_*
 ```
 
 ## 网络身份
@@ -133,7 +139,11 @@ Static/Binary Storage。
 - Attachment
 - Music
 - Mirrored Static Asset
-- Backup Artifact
+
+### Backup S3
+
+独立于 Asset Store 的加密 Off-site Backup Artifact；接口保持 S3-compatible，当前 Production
+Provider 为 Cloudflare R2。Backup/Restore 不依赖 AList。
 
 ### Next.js Blue/Green Application
 
@@ -190,6 +200,10 @@ Application Job 使用 PostgreSQL；Deploy/Rollback/Restore/Recovery 使用 host
 - Host/Path Routing
 - `/api/ops/*` 到独立 `control-api` 的直接 Routing
 
+生产主机已有的 1Panel OpenResty 是共享公网入口，负责 `ddns.tungchiahui.cn:8443` 的 TLS
+与静态反向代理。V2 自己的 OpenResty 仅发布到 `127.0.0.1:3100`，继续独立拥有
+Blue/Green Upstream Selection 和 Path Ownership；外层代理不直接指向任一 Next.js Slot。
+
 ### PgBouncer
 
 在重叠运行的 Blue/Green Application Slot 与 PostgreSQL 之间提供稳定的 PostgreSQL Connection Pooling。
@@ -200,7 +214,7 @@ Application Job 使用 PostgreSQL；Deploy/Rollback/Restore/Recovery 使用 host
 zh-CN Markdown authority  -> GitHub
 Runtime content authority -> PostgreSQL materialized state
 Static assets authority   -> AList S3
-Production backup copy    -> backup repository + R2 replica
+Production backup copy    -> local encrypted repository + off-site Backup S3 (currently R2)
 Application authority     -> Git repository + immutable image
 Infrastructure recovery   -> host-local control-state SQLite + immutable artifacts
 ```
