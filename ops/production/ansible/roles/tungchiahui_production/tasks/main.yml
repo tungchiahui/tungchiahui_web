@@ -310,6 +310,21 @@
     path: "{{ tungchiahui_config_root }}/database-role-bootstrap.complete"
   register: tungchiahui_database_role_marker
 
+- name: Read database role bootstrap marker
+  ansible.builtin.slurp:
+    path: "{{ tungchiahui_config_root }}/database-role-bootstrap.complete"
+  register: tungchiahui_database_role_marker_content
+  when: tungchiahui_database_role_marker.stat.exists
+
+- name: Determine whether database roles require reconciliation
+  ansible.builtin.set_fact:
+    tungchiahui_database_role_bootstrap_required: >-
+      {{
+        tungchiahui_runtime_secrets.changed
+        or not tungchiahui_database_role_marker.stat.exists
+        or ((tungchiahui_database_role_marker_content.content | default('') | b64decode | trim) != 'schema: 2')
+      }}
+
 - name: Reconcile least-privilege database login identities
   ansible.builtin.command:
     argv:
@@ -329,7 +344,7 @@
   no_log: true
   when:
     - tungchiahui_manage_stack | bool
-    - tungchiahui_runtime_secrets.changed or not tungchiahui_database_role_marker.stat.exists
+    - tungchiahui_database_role_bootstrap_required | bool
 
 - name: Record successful database role bootstrap
   ansible.builtin.copy:
@@ -338,10 +353,10 @@
     group: tungchiahui-runtime
     mode: "0640"
     content: |
-      schema: 1
+      schema: 2
   when:
     - tungchiahui_manage_stack | bool
-    - tungchiahui_runtime_secrets.changed or not tungchiahui_database_role_marker.stat.exists
+    - tungchiahui_database_role_bootstrap_required | bool
 
 - name: Reconcile hardened production-like services
   ansible.builtin.command:
