@@ -11,6 +11,14 @@ type BackupRequest = Readonly<{
   reason: string
 }>
 
+const backupRequestSchema = z
+  .object({
+    backupType: z.enum(['full', 'diff', 'incr']),
+    environment: z.enum(['local', 'test', 'production']),
+    reason: z.string().trim().min(1).max(1_000),
+  })
+  .strip()
+
 type RestoreRequest = Readonly<{
   confirmation: string
   environment: 'local' | 'production' | 'test'
@@ -23,12 +31,17 @@ function idempotencyKey(purpose: string) {
 }
 
 export function createBackup(request: BackupRequest) {
+  const body = createBackupRequestBody(request)
   return controlRequest('/api/ops/backups', {
-    body: request,
+    body,
     idempotencyKey: idempotencyKey('backup'),
     method: 'POST',
     purpose: 'backup',
   })
+}
+
+export function createBackupRequestBody(request: unknown): BackupRequest {
+  return Object.freeze(backupRequestSchema.parse(request))
 }
 
 export function readBackupStatus() {
