@@ -61,6 +61,12 @@ describe('PGroonga search contracts and materialization', () => {
       searchRequestSchema.parse({ limit: 10, locale: 'zh-cn', query: '  ROS2   Control ' }),
     ).toEqual({ limit: 10, locale: 'zh-cn', query: 'ROS2 Control' })
     expect(() => searchRequestSchema.parse({ locale: 'zh-hant', query: 'ROS2' })).toThrow()
+    expect(
+      searchRequestSchema.parse({ contentType: 'wiki', locale: 'zh-cn', query: 'ROS2' }),
+    ).toMatchObject({ contentType: 'wiki' })
+    expect(() =>
+      searchRequestSchema.parse({ contentType: 'page', locale: 'zh-cn', query: 'ROS2' }),
+    ).toThrow()
     expect(() =>
       searchResponseSchema.parse({
         locale: 'zh-cn',

@@ -300,7 +300,7 @@ async function assertPgBouncerDrizzleCompatibility(connectionString: string) {
         await transaction.execute(sql`SET LOCAL ROLE site_app`)
         return transaction.select({ id: documents.id }).from(documents)
       })
-      if (rows.length !== 2) {
+      if (rows.length !== 5) {
         throw new Error('Drizzle query through transaction-mode PgBouncer returned wrong rows')
       }
     }

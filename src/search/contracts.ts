@@ -14,6 +14,7 @@ export const searchQuerySchema = z
 
 export const searchRequestSchema = z
   .object({
+    contentType: contentTypeSchema.optional(),
     limit: z.number().int().min(1).max(50).default(20),
     locale: localeSchema,
     query: searchQuerySchema,

@@ -1,15 +1,18 @@
+const developmentEvalSource = process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : ''
+const approvedAnalyticsOrigin = 'https://umami.tungchiahui.cn'
+
 export const browserSecurityHeaders = Object.freeze({
   'content-security-policy': [
     "default-src 'self'",
     "base-uri 'self'",
-    "connect-src 'self'",
+    `connect-src 'self' ${approvedAnalyticsOrigin}`,
     "font-src 'self' data:",
     "form-action 'self'",
     "frame-ancestors 'none'",
     "img-src 'self' data: https:",
     "media-src 'self' https:",
     "object-src 'none'",
-    "script-src 'self' 'unsafe-inline'",
+    `script-src 'self' 'unsafe-inline'${developmentEvalSource} ${approvedAnalyticsOrigin}`,
     "style-src 'self' 'unsafe-inline'",
     'upgrade-insecure-requests',
   ].join('; '),

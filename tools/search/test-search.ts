@@ -18,6 +18,7 @@ async function fetchSearch(siteBaseUrl: URL, request: SearchRequest) {
   url.searchParams.set('q', request.query)
   url.searchParams.set('locale', request.locale)
   url.searchParams.set('limit', String(request.limit))
+  if (request.contentType) url.searchParams.set('type', request.contentType)
   const response = await fetch(url, { signal: AbortSignal.timeout(10_000) })
   const body = await response.text()
   if (!response.ok) throw new Error(`Search API returned HTTP ${response.status}: ${body}`)
@@ -130,6 +131,18 @@ export async function verifyPhase10Search(connectionString: string, siteBaseUrl:
     const serialized = JSON.stringify(api)
     for (const forbidden of ['rawMarkdown', 'sourceHash', 'sourcePath', 'projectionHash']) {
       if (serialized.includes(forbidden)) throw new Error(`Search API leaked ${forbidden}`)
+    }
+    const wikiOnly = await fetchSearch(siteBaseUrl, {
+      contentType: 'wiki',
+      limit: 10,
+      locale: 'zh-cn',
+      query: 'ROS2_Control',
+    })
+    if (
+      wikiOnly.results.length === 0 ||
+      wikiOnly.results.some((result) => result.contentType !== 'wiki')
+    ) {
+      throw new Error(`Search content association filter failed: ${JSON.stringify(wikiOnly)}`)
     }
 
     await client.query('SET enable_seqscan = off')

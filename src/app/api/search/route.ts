@@ -7,6 +7,7 @@ export const dynamic = 'force-dynamic'
 
 const queryParametersSchema = z
   .object({
+    type: z.enum(['blog', 'wiki']).optional(),
     limit: z.coerce.number().int().min(1).max(50).default(20),
     locale: z.enum(['zh-cn', 'zh-hk', 'zh-tw', 'en-us']).default('zh-cn'),
     q: z.string().trim().min(1).max(200),
@@ -24,6 +25,7 @@ export async function GET(request: Request) {
     )
   }
   const searchRequest = searchRequestSchema.parse({
+    contentType: parsed.data.type,
     limit: parsed.data.limit,
     locale: parsed.data.locale,
     query: parsed.data.q,

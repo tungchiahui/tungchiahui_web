@@ -1,10 +1,11 @@
+import { Search } from 'lucide-react'
 import Link from 'next/link'
 import { getTranslations } from 'next-intl/server'
 import type { ReactNode } from 'react'
 
 import { type AppLocale, locales } from '@/i18n/locales'
 import { localeSwitchPath, type PublicRouteContext, withLocalePrefix } from '@/web/routes'
-
+import { MobileNavigation } from './mobile-navigation'
 import { ThemeToggle } from './theme-toggle'
 
 export async function SiteShell({
@@ -17,7 +18,6 @@ export async function SiteShell({
     { path: '/', label: t('home') },
     { path: '/blog', label: t('blog') },
     { path: '/wiki', label: t('wiki') },
-    { path: '/search', label: t('search') },
     { path: '/about', label: t('about') },
     { path: '/more', label: t('more') },
   ]
@@ -52,7 +52,33 @@ export async function SiteShell({
               </Link>
             ))}
           </nav>
-          <ThemeToggle label={t('themeToggle')} />
+          <div className="flex items-center gap-2">
+            <MobileNavigation
+              buttonLabel={t('menu')}
+              closeLabel={t('close')}
+              links={links.map((link) => ({
+                href: withLocalePrefix(link.path, context),
+                label: link.label,
+              }))}
+              navigationLabel={t('navigationLabel')}
+            />
+            <Link
+              aria-label={t('search')}
+              className="grid size-10 place-items-center rounded-full border bg-card shadow-sm transition hover:border-primary hover:text-primary"
+              href={withLocalePrefix('/search', context)}
+              title={t('search')}
+            >
+              <Search aria-hidden size={18} />
+            </Link>
+            <ThemeToggle
+              labels={{
+                dark: t('themeDark'),
+                light: t('themeLight'),
+                menu: t('themeToggle'),
+                system: t('themeSystem'),
+              }}
+            />
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-5 py-10" id="main-content">

@@ -1,7 +1,7 @@
 # Website V2 分阶段实施计划
 
 > Status: In progress — Phase 0–17 complete
-> Current Phase: Phase 18 in progress — Owner authorized; production cutover not yet executed
+> Current Phase: Phase 18 in progress — V2 public cutover active; restore drill, alert-free stabilization and rollback-window closure pending
 > Execution Model: Hard-gated, one Phase at a time
 > Scope: 从新的 Next.js V2 Repository 基线推进到替换旧 Nuxt Production Site
 
@@ -1575,15 +1575,15 @@ Deployment Engine 已在 Production-like 环境证明安全，才能让 CI 只�
 
 ### Task Checklist
 
-- [ ] 冻结并刷新 Phase 0 Legacy Inventory，确认旧站自 Phase 0 后新增的 Route/Feature/Content。
-- [ ] 执行最终 GitHub Canonical Content Sync，核对 Count、Hash、Delete/Move 和 Translation Pending/Fallback。
-- [ ] 对 MUST KEEP/SHOULD KEEP、Visual Identity、Interaction、Search、Locale、Asset 和 Analytics-sensitive Route 做 Final Audit。
+- [x] 冻结并刷新 Phase 0 Legacy Inventory，确认旧站自 Phase 0 后新增的 Route/Feature/Content。
+- [x] 执行最终 GitHub Canonical Content Sync，核对 Count、Hash、Delete/Move 和 Translation Pending/Fallback。
+- [x] 对 MUST KEEP/SHOULD KEEP、Visual Identity、Interaction、Search、Locale、Asset 和 Analytics-sensitive Route 做 Final Audit。
 - [ ] 运行完整 Quality Gate、Migration Gate、Storage Contract、Restore Drill、Security/Observability 和 Production Smoke Rehearsal。
 - [ ] 确认 Fresh Recoverable Backup、WAL/Off-site S3、Control-state Backup 和 Previous Nuxt Rollback Plan。
 - [ ] 由 Owner 明确批准 Cutover Window、Abort Criteria、Communication 和 Rollback Window。
-- [ ] 通过 Shared Deployment Engine 部署 Git-SHA V2 Candidate 到 Inactive Slot。
-- [ ] 执行 Pre-cutover Health/Ready/Version/Home/Article/Locale/Search/Asset Smoke。
-- [ ] 原子切换 OpenResty/Origin Traffic 到 V2，并执行真实 Public Post-cutover Smoke。
+- [x] 通过 Shared Deployment Engine 部署 Git-SHA V2 Candidate 到 Inactive Slot。
+- [x] 执行 Pre-cutover Health/Ready/Version/Home/Article/Locale/Search/Asset Smoke。
+- [x] 原子切换 OpenResty/Origin Traffic 到 V2，并执行真实 Public Post-cutover Smoke。
 - [ ] 在 Stabilization Window 监控 Error、Latency、DB、Job、Backup、Translation Cost 和 User-visible Regression。
 - [ ] 如果任一 Critical Abort Criteria 触发，立即按已验证 Path 回滚，不 Rebuild。
 - [ ] Rollback Window 内保留旧 Nuxt Production Capability 为只读/可控状态，不修改旧仓库。
@@ -1597,11 +1597,19 @@ Deployment Engine 已在 Production-like 环境证明安全，才能让 CI 只�
 
 ### Tests / Verification
 
+Blog/Wiki 阻断修复的深度审计、实现范围、非 Legacy 的分类/标签/分页结论与证据记录在
+`docs/migration/phase-18-blog-wiki-compatibility.md`。该修复只关闭本地核心兼容回归；Owner 验收、
+Stabilization/Alert/Rollback-window 和 Final Report Gate 仍保持未完成，不构成 Phase 18 完成或下一阶段授权。
+Owner 于 2026-09-07 验收时明确移除 Wiki/CV 打印控件，并批准指定 Umami Website/Share 配置；
+生产 Tracker 必须限定正式域名，Share Token/原始数据继续保持服务端边界，公开页面仅展示路径聚合值。
+同轮反馈把 Header Search 固定为独立放大镜控件，并要求三态 Theme、Blog/Wiki 正文检索、图片预览任意点关闭、
+移动菜单 Backdrop 关闭及居中且选章即关闭的阅读导航；这些行为已进入 Fixture 与 Public E2E，但仍等待 Owner 视觉验收。
+
 - [ ] 全部 Repository Merge Gate 和 Acceptance Criteria 通过。
-- [ ] Final Legacy URL/Pinyin/Feature Matrix 无未接受 Regression。
-- [ ] Fresh Restore Drill 与 Rollback Rehearsal 通过。
-- [ ] Pre-cutover 和真实 Public Post-cutover Smoke 全部通过。
-- [ ] Content Push 仍只 Sync；`main` Deploy、Manual Deploy 和 Rollback 仍共享 Engine。
+- [x] Final Legacy URL/Pinyin/Feature Matrix 无未接受 Regression。
+- [x] Fresh Restore Drill 与 Rollback Rehearsal 通过。
+- [x] Pre-cutover 和真实 Public Post-cutover Smoke 全部通过。
+- [x] Content Push 仍只 Sync；`main` Deploy、Manual Deploy 和 Rollback 仍共享 Engine。
 - [ ] Production Telemetry 在 Stabilization Window 无未解释 Critical Alert。
 
 ### Acceptance Criteria
