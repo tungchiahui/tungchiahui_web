@@ -22,6 +22,7 @@ import { prepareRestoreTarget } from '../../src/recovery/engine'
 import {
   createRepositoryManifest,
   repositoryManifestSha256,
+  repositoryReplicaFileKeys,
   verifyLocalRepository,
 } from '../../src/recovery/repository-replication'
 
@@ -230,6 +231,19 @@ describe('Phase 13 recovery boundary', () => {
     expect(verifyLocalRepository(repository, manifest).status).toBe('readable')
     writeFileSync(join(repository, 'archive.info'), 'corrupted')
     expect(() => verifyLocalRepository(repository, manifest)).toThrow('size mismatch')
+  })
+
+  it('ignores repeated AList virtual directory markers without hiding extra files', () => {
+    const prefix = 'backups/database-backups/generation-001/repository/'
+    expect(
+      repositoryReplicaFileKeys(
+        [prefix, `${prefix}archive.info`, prefix, `${prefix}backup/site/manifest`, prefix],
+        prefix,
+      ),
+    ).toEqual([`${prefix}archive.info`, `${prefix}backup/site/manifest`])
+    expect(
+      repositoryReplicaFileKeys([`${prefix}archive.info`, `${prefix}unexpected-object`], prefix),
+    ).toEqual([`${prefix}archive.info`, `${prefix}unexpected-object`])
   })
 
   it('leaves a disposable restore target untouched until marker and confirmation pass', () => {
