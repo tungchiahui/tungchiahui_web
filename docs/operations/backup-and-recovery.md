@@ -25,23 +25,25 @@ PostgreSQL
  pgBackRest 2.59.1 encrypted local repository
     |
 SHA-256 manifest + full read-back verification
-    |\
-    | \-> primary BACKUP_S3_* target (Production: AList)
-    \---> off-site BACKUP_OFFSITE_S3_* target (Production: Cloudflare R2)
+    |
+    \-> primary BACKUP_S3_* target (Production: AList)
+              |
+              \-> off-site BACKUP_OFFSITE_S3_* mirror (Production: Cloudflare R2)
 ```
 
-Phase 11 的真实 AList 证据验证了 PUT/GET/HEAD/List/Overwrite/Metadata 等应用对象语义，但也记录了 ETag 缺失和 Cache-Control 规范化；这些证据不足以证明 pgBackRest 直接 Repository 所需的全部一致性语义。因此 Recovery Flow 使用 Local Repository + Verified Sync，不把任意 S3 Provider 当作 pgBackRest 原生 Repository。每个同步 Generation 包含完整 Repository、文件/符号链接类型、逐对象 SHA-256 和 Manifest SHA-256；只有本地 pgBackRest/WAL 检查与 AList Primary、R2 Off-site 完整读回校验都通过，Backup 才标记为有效。
+Phase 11 的真实 AList 证据验证了 PUT/GET/HEAD/List/Overwrite/Metadata 等应用对象语义，但也记录了 ETag 缺失和 Cache-Control 规范化；这些证据不足以证明 pgBackRest 直接 Repository 所需的全部一致性语义。因此 Recovery Flow 使用 Local Repository + Verified Sync，不把任意 S3 Provider 当作 pgBackRest 原生 Repository。每个同步 Generation 包含完整 Repository、文件/符号链接类型、逐对象 SHA-256 和 Manifest SHA-256；Local 先以最多 8 路有界并发写入并完整读回 AList，只有 Primary Fresh 后才从 AList 读取同一 Generation 镜像到 R2 并再次完整验证。只有本地 pgBackRest/WAL 检查与 AList Primary、R2 Off-site 完整读回校验都通过，Backup 才标记为有效。
 
-ADR 0018 定义两套远程存储连接：`ASSET_S3_*`/AList Primary `BACKUP_S3_*` 在 Production 指向同一 AList Bucket/Pair，Recovery Engine 只写固定 `backups/`；`BACKUP_OFFSITE_S3_*` 指向独立 R2。Parser 拒绝 AList/R2 Credential 复用和 Production HTTP Endpoint。Local Repository 不是唯一恢复副本；Restore 优先从完整读回验证的 AList Generation 重建，失败时回退同一 R2 Generation。Adapter、CLI 与 Domain Type 不绑定 Provider。
+ADR 0018 定义两套远程存储连接：`ASSET_S3_*`/AList Primary `BACKUP_S3_*` 在 Production 指向同一 AList Bucket/Pair，Recovery Engine 只写固定 `backups/`；`BACKUP_OFFSITE_S3_*` 指向独立 R2。ADR 0019 进一步规定 Primary-first 顺序、每日调度和 Off-site-only Retry。Parser 拒绝 AList/R2 Credential 复用和 Production HTTP Endpoint。Local Repository 不是唯一恢复副本；Restore 优先从完整读回验证的 AList Generation 重建，失败时回退同一 R2 Generation。Adapter、CLI 与 Domain Type 不绑定 Provider。
 
 AList v3 的 `ListObjectsV2` 可能为查询的 Repository Prefix 返回重复的同名虚拟目录标记。Replica Verification 只去重并忽略精确等于 `.../repository/` 的该 Prefix Marker；随后仍要求远端 Key Set 与 Manifest 文件集合精确相等，并逐对象读回验证 SHA-256。任何嵌套目录标记、未知对象、缺失对象或内容差异仍会 Fail Closed，不能以 Provider 兼容为由跳过。
 
-Retention 基线由 `ops/production/pgbackrest.conf` 固定：保留 2 个 Full、4 个 Differential，以及对应 2 个 Full 范围内的 WAL；定时策略运行 Full/Differential/Incremental。每次 Backup 后执行 pgBackRest `check` + `verify`，并验证 Primary 与 Off-site 对象副本。
+Retention 基线由 `ops/production/pgbackrest.conf` 固定：保留 2 个 Full、Differential Retention Count 4，以及对应 2 个 Full 范围内的 WAL。pgBackRest 在每次成功 Backup 后自动执行 Expire；没有独立的每日本地清理 Timer。Production Timer 安装后仍默认关闭，Owner 明确启用才会每天 03:05 Asia/Hong_Kong 创建幂等 Operation：周日 Full、其余日期 Differential。每次 Backup 后执行 pgBackRest `check` + `verify`，再按 AList Primary -> R2 Mirror 顺序验证副本。
 
 ## Backup Command
 
 ```bash
 ./site backup --environment production --type full --reason "scheduled full backup"
+./site backup retry-offsite <backup-id> --environment production --reason "retry verified AList generation"
 ./site backup status
 ```
 
@@ -53,6 +55,13 @@ Retention 基线由 `ops/production/pgbackrest.conf` 固定：保留 2 个 Full�
 - 验证 WAL Archive Health
 - 记录 Backup Metadata
 - 报告 Replica Status
+
+若 AList 已 Fresh 而 R2 失败，`retry-offsite` 会重新完整验证已记录的 AList Manifest/对象并只重试
+R2；它不创建新的 pgBackRest Backup，也不更新原 Backup 的数据完成时间。AList 失败时 R2 不会被
+写入。每端结构化结果分别报告 Transfer、Verification 和 Total Seconds。
+
+本地 pgBackRest Expire 不会删除 AList/R2 的 Immutable Generation。当前远程对象不隐式清理；
+AList 删除也不传播到 R2。任何远程清理都必须先列出精确 Generation/Object 集合并取得独立批准。
 
 `backup status` 从 host-local Control-state SQLite 读取 Backup ID/Type、WAL Max、Measured Bytes/Seconds、Manifest Hash 和两端 Replica Freshness，因此 Production PostgreSQL Down 时仍可查询。
 
@@ -105,7 +114,7 @@ Control-state SQLite 不是业务 Database，但它保存 Active/Previous Slot�
 - 在 Restore Drill 中验证 SQLite Integrity、Schema Version 与 Audit Continuity
 - 能够在 State 缺失/损坏时通过 Immutable Image、OpenResty Config 与受控人工对账进行明确重建
 
-一致性 Snapshot 使用 WAL `TRUNCATE` Checkpoint + SQLite `VACUUM INTO`，记录 Integrity、Foreign-key、Schema Version、Environment、Active/Previous Slot、Current/Last SHA、Operation/Audit Count 与 Audit Digest。Snapshot 经 age Recipient 加密后写入 Off-site Backup Target，同时保存 immutable manifest 和经读回验证的 Environment-scoped `latest.json`，因此本地 SQLite 全损时可从 R2 发现最新 Artifact。Restore 前验证 Ciphertext SHA-256、解密后的 SQLite Integrity、Environment 和 Audit Digest。
+一致性 Snapshot 使用 WAL `TRUNCATE` Checkpoint + SQLite `VACUUM INTO`，记录 Integrity、Foreign-key、Schema Version、Environment、Active/Previous Slot、Current/Last SHA、Operation/Audit Count 与 Audit Digest。Snapshot 经 age Recipient 加密后先写入并验证 AList Primary，再从 Primary 镜像到 R2，同时保存 immutable manifest 和经读回验证的 Environment-scoped `latest.json`；本地 SQLite 全损时可优先从 AList、失败时从 R2 发现最新 Artifact。Restore 前验证 Ciphertext SHA-256、解密后的 SQLite Integrity、Environment 和 Audit Digest。
 
 不得把 Control-state Backup 与待恢复 PostgreSQL 放在同一个唯一故障点中。
 

@@ -221,9 +221,14 @@ Break-glass 仅替换请求到达路径，不替换 Recovery Engine：它必须�
 
 ```bash
 ./site backup --environment production --type full --reason "scheduled full backup"
+./site backup retry-offsite <backup-id> \
+  --environment production \
+  --reason "retry verified AList generation"
 ./site backup status
 ```
 
-只有同时满足以下证据才把 Backup 视为有效：pgBackRest `check`/`verify` 成功、WAL Max 已记录、AList Primary `BACKUP_S3_*` 与 R2 Off-site `BACKUP_OFFSITE_S3_*` 均为 `fresh`、两端 Manifest/逐对象 SHA-256 读回一致。任一检查失败会保留失败记录但 `valid=false`，不得用于自动 Restore 选择。
+只有同时满足以下证据才把 Backup 视为有效：pgBackRest `check`/`verify` 成功、WAL Max 已记录、AList Primary `BACKUP_S3_*` 与 R2 Off-site `BACKUP_OFFSITE_S3_*` 均为 `fresh`、两端 Manifest/逐对象 SHA-256 读回一致。任一检查失败会保留失败记录但 `valid=false`，不得用于自动 Restore 选择。写入顺序固定为 Local -> AList 完整验证 -> 从 AList 镜像 R2；AList 失败时不得触碰 R2。只有 Primary 已 Fresh 时才可用 `retry-offsite` 单独重试 R2，该命令不会新建 pgBackRest Backup。
+
+Production 定时器固定在 `03:05 Asia/Hong_Kong`，周日 Full、其余日期 Differential，并以日期构造稳定幂等键。Provision 默认不安装也不启用该 Timer；安装或启用都必须先取得 Owner 对精确 Production 操作的批准。pgBackRest 每次成功 Backup 后自动执行本地 Expire；远端 Generation 不自动删除，AList Delete 不传播到 R2。
 
 Production Restore Drill 必须另行获得明确授权；自动 `test:recovery` 只操作 Disposable Target。Control-state 恢复前必须验证 age Ciphertext Hash、SQLite Integrity/Foreign Key、Schema Version、Environment 和 Audit Digest。

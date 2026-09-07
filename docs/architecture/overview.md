@@ -50,11 +50,12 @@ AList Asset S3
 └─ attachments/media/libs
 
 Local encrypted pgBackRest repository + WAL
-          |\
-          | \-> AList Primary Backup via BACKUP_S3_*
-          |      |
-          |      v
-          \----> Cloudflare R2 Off-site via BACKUP_OFFSITE_S3_*
+          |
+          v
+AList Primary Backup via BACKUP_S3_*
+          |
+          v
+Cloudflare R2 Off-site via BACKUP_OFFSITE_S3_*
 ```
 
 ## 网络身份
@@ -147,7 +148,8 @@ Static/Binary Storage。
 加密 Recovery Artifact 位于现有 AList Bucket 的固定 `backups/` Namespace，AList 是 Primary，
 Cloudflare R2 是整个 AList Bucket 的 Off-site Replica；两者接口均保持 S3-compatible，R2 使用
 独立 Credential。AList v3 的 S3 Credential 是实例级，因此 Asset/Backup 以固定 Prefix、应用
-只读接口和 Public Prefix Deny 隔离。Restore 优先 AList，并在 Primary 不可用或校验失败时回退 R2。
+只读接口和 Public Prefix Deny 隔离。Recovery Generation 必须先完整写入并验证 AList，再从 AList
+镜像到 R2；Restore 优先 AList，并在 Primary 不可用或校验失败时回退 R2。
 
 ### Next.js Blue/Green Application
 

@@ -40,6 +40,17 @@ function latestArtifactKey(environment: ControlStateEnvironment) {
   return recoveryObjectKey(`control-state/${environment}/latest.json`)
 }
 
+function immutableArtifactManifestKey(artifact: EncryptedControlStateArtifact) {
+  return recoveryObjectKey(
+    `control-state/${artifact.environment}/manifests/${artifact.snapshotId}.json`,
+  )
+}
+
+async function readObjectBody(storage: S3ObjectStorageAdapter, key: string) {
+  const object = await storage.getObject(key)
+  return new Uint8Array(await new Response(object.body).arrayBuffer())
+}
+
 function runAge(arguments_: readonly string[]) {
   const result = spawnSync('age', arguments_, { encoding: 'utf8' })
   if (result.error) throw new Error(`Unable to run age: ${result.error.message}`)
@@ -133,9 +144,7 @@ export async function replicateControlStateArtifact(
     const manifestBody = serializeArtifact(validated)
     const manifestSha256 = createHash('sha256').update(manifestBody).digest('hex')
     for (const key of [
-      recoveryObjectKey(
-        `control-state/${validated.environment}/manifests/${validated.snapshotId}.json`,
-      ),
+      immutableArtifactManifestKey(validated),
       latestArtifactKey(validated.environment),
     ]) {
       await storage.putObject({
@@ -146,18 +155,36 @@ export async function replicateControlStateArtifact(
         metadata: { sha256: manifestSha256 },
       })
     }
-    const object = await storage.getObject(validated.objectKey)
-    const remoteBody = new Uint8Array(await new Response(object.body).arrayBuffer())
+    return await verifyControlStateArtifactReplica(validated, configuration)
+  } finally {
+    storage.destroy()
+  }
+}
+
+export async function verifyControlStateArtifactReplica(
+  artifact: EncryptedControlStateArtifact,
+  configuration: S3ConnectionConfiguration,
+) {
+  const validated = encryptedControlStateArtifactSchema.parse(artifact)
+  const storage = new S3ObjectStorageAdapter(configuration)
+  try {
+    const remoteBody = await readObjectBody(storage, validated.objectKey)
     const digest = createHash('sha256').update(remoteBody).digest('hex')
     if (digest !== validated.encryptedSha256) {
       throw new Error('Control-state replica checksum validation failed')
     }
-    const latest = await storage.getObject(latestArtifactKey(validated.environment))
-    const remoteArtifact = encryptedControlStateArtifactSchema.parse(
-      JSON.parse(await new Response(latest.body).text()) as unknown,
-    )
-    if (serializeArtifact(remoteArtifact) !== manifestBody) {
-      throw new Error('Control-state replica latest manifest validation failed')
+    const expectedManifest = serializeArtifact(validated)
+    for (const key of [
+      immutableArtifactManifestKey(validated),
+      latestArtifactKey(validated.environment),
+    ]) {
+      const body = await readObjectBody(storage, key)
+      const remoteArtifact = encryptedControlStateArtifactSchema.parse(
+        JSON.parse(new TextDecoder().decode(body)) as unknown,
+      )
+      if (serializeArtifact(remoteArtifact) !== expectedManifest) {
+        throw new Error('Control-state replica manifest validation failed')
+      }
     }
     return Object.freeze({
       checkedAt: new Date().toISOString(),
@@ -166,6 +193,45 @@ export async function replicateControlStateArtifact(
     })
   } finally {
     storage.destroy()
+  }
+}
+
+export async function mirrorControlStateArtifact(
+  artifact: EncryptedControlStateArtifact,
+  sourceConfiguration: S3ConnectionConfiguration,
+  targetConfiguration: S3ConnectionConfiguration,
+) {
+  const validated = encryptedControlStateArtifactSchema.parse(artifact)
+  await verifyControlStateArtifactReplica(validated, sourceConfiguration)
+  const source = new S3ObjectStorageAdapter(sourceConfiguration)
+  const target = new S3ObjectStorageAdapter(targetConfiguration)
+  try {
+    const encryptedBody = await readObjectBody(source, validated.objectKey)
+    await target.putObject({
+      body: encryptedBody,
+      cacheControl: 'private, no-store',
+      contentType: 'application/octet-stream',
+      key: validated.objectKey,
+      metadata: { sha256: validated.encryptedSha256 },
+    })
+    const manifestBody = serializeArtifact(validated)
+    const manifestSha256 = createHash('sha256').update(manifestBody).digest('hex')
+    for (const key of [
+      immutableArtifactManifestKey(validated),
+      latestArtifactKey(validated.environment),
+    ]) {
+      await target.putObject({
+        body: manifestBody,
+        cacheControl: 'private, no-store',
+        contentType: 'application/json',
+        key,
+        metadata: { sha256: manifestSha256 },
+      })
+    }
+    return await verifyControlStateArtifactReplica(validated, targetConfiguration)
+  } finally {
+    source.destroy()
+    target.destroy()
   }
 }
 

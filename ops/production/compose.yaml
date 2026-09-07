@@ -262,6 +262,7 @@ services:
       BACKUP_PGBACKREST_CONFIG_PATH: /etc/pgbackrest/pgbackrest.conf
       BACKUP_PGBACKREST_STANZA: tungchiahui
       BACKUP_POSTGRES_DATA_PATH: /var/lib/postgresql/18/docker
+      BACKUP_REPLICATION_CONCURRENCY: ${TUNGCHIAHUI_BACKUP_REPLICATION_CONCURRENCY:-8}
       BACKUP_WORK_DIRECTORY: /var/lib/tungchiahui-backup-work
       CONTROL_STATE_PATH: /control-state/control.db
       DEPLOYMENT_ACTIVE_SLOT_CONFIG_PATH: /deployment-config/active-slot.conf

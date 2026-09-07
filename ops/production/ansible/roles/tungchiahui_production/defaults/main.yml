@@ -1,5 +1,8 @@
 ---
 tungchiahui_compose_project_name: tungchiahui-production
+tungchiahui_backup_replication_concurrency: "8"
+tungchiahui_backup_schedule_enabled: false
+tungchiahui_manage_backup_schedule: false
 tungchiahui_config_root: /etc/tungchiahui
 tungchiahui_content_polling_enabled: "false"
 tungchiahui_control_rate_limit_per_minute: "120"

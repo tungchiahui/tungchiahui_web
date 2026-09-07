@@ -21,6 +21,7 @@ import {
   executeControlStateBackup,
   executeDatabaseBackup,
   executeDatabaseRestore,
+  executeOffsiteReplicaRetry,
 } from '../../src/recovery/engine'
 
 process.umask(0o007)
@@ -115,7 +116,15 @@ async function executeClaimedRecovery() {
           })
           .strict()
           .parse(claimed.target)
-        await executeDatabaseBackup(recovery, target.backupType)
+        const result = await executeDatabaseBackup(recovery, target.backupType)
+        console.log(
+          JSON.stringify({
+            backupId: result.backup.backupId,
+            event: 'database_backup_completed',
+            measuredSeconds: result.backup.measuredSeconds,
+            replication: result.replication,
+          }),
+        )
       } else if (claimed.target.action === 'control-state-backup') {
         z.object({
           action: z.literal('control-state-backup'),
@@ -124,6 +133,24 @@ async function executeClaimedRecovery() {
           .strict()
           .parse(claimed.target)
         await executeControlStateBackup(recovery)
+      } else if (claimed.target.action === 'offsite-retry') {
+        const target = z
+          .object({
+            action: z.literal('offsite-retry'),
+            backupId: z.string().min(1).max(200),
+            environment: z.literal('production'),
+          })
+          .strict()
+          .parse(claimed.target)
+        const result = await executeOffsiteReplicaRetry(recovery, target.backupId)
+        console.log(
+          JSON.stringify({
+            backupId: result.backup,
+            event: 'offsite_backup_retry_completed',
+            offsite: result.offsite,
+            primary: result.primary,
+          }),
+        )
       } else {
         throw new Error('Recovery operation is not implemented by the Phase 13 engine')
       }

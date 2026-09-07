@@ -35,6 +35,7 @@ const backupResultSchema = z
       backupId: z.string(),
       measuredBytes: z.number().int().nonnegative(),
       measuredSeconds: z.number().nonnegative(),
+      repositoryGeneration: z.string().min(1),
       valid: z.literal(true),
       walArchiveMax: z.string().nullable(),
     }),
@@ -193,7 +194,7 @@ function recoveryEnvironment(backupPort: number) {
 
 function runRecovery(
   backupPort: number,
-  action: 'backup' | 'control-state-restore' | 'restore',
+  action: 'backup' | 'control-state-restore' | 'offsite-retry' | 'restore',
   argument: string,
   allowFailure = false,
 ) {
@@ -233,6 +234,31 @@ function runRecovery(
   }
   const lines = result.stdout.trim().split('\n')
   return JSON.parse(lines.at(-1) ?? '{}') as unknown
+}
+
+async function removeOffsiteBackupGeneration(backupPort: number, generation: string) {
+  const storage = new S3ObjectStorageAdapter(
+    parseS3ConnectionConfiguration({
+      accessKeyId: 'offsite-backup-only-access',
+      bucket: 'phase13-offsite',
+      endpoint: `http://127.0.0.1:${String(backupPort)}`,
+      forcePathStyle: true,
+      region: 'us-east-1',
+      secretAccessKey: 'offsite-backup-only-secret',
+    }),
+  )
+  const prefix = `backups/database-backups/${generation}/`
+  try {
+    const keys = await storage.listObjects(prefix)
+    expect(keys.length > 0, 'Off-site backup generation was not created')
+    for (const key of keys) await storage.deleteObject(key)
+    expect(
+      (await storage.listObjects(prefix)).length === 0,
+      'Off-site backup generation deletion failed',
+    )
+  } finally {
+    storage.destroy()
+  }
 }
 
 async function removePrimaryReplica(backupPort: number) {
@@ -331,6 +357,19 @@ async function main() {
       "CREATE SCHEMA app; CREATE TABLE app.schema_marker(version integer PRIMARY KEY); INSERT INTO app.schema_marker VALUES (6); CREATE TABLE app.recovery_fixture(value text PRIMARY KEY); INSERT INTO app.recovery_fixture VALUES ('base');",
     )
     const full = backupResultSchema.parse(runRecovery(backupPort, 'backup', 'full'))
+    await removeOffsiteBackupGeneration(backupPort, full.backup.repositoryGeneration)
+    const offsiteRetry = z
+      .object({
+        backup: z.string(),
+        offsite: z.object({ files: z.number().int().positive() }).passthrough(),
+        primary: z.object({ files: z.number().int().positive() }).passthrough(),
+      })
+      .passthrough()
+      .parse(runRecovery(backupPort, 'offsite-retry', full.backup.backupId))
+    expect(
+      offsiteRetry.backup === full.backup.backupId,
+      'Off-site retry changed the backup identity',
+    )
     psql("INSERT INTO app.recovery_fixture VALUES ('before-target')")
     const targetTime = psql(
       'SELECT to_char(clock_timestamp() AT TIME ZONE \'UTC\', \'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"\');',
@@ -416,6 +455,7 @@ async function main() {
         controlState: 'encrypted-snapshot-restored',
         pitrTarget: targetTime,
         partialRestoreRetry: 'pass',
+        offsiteOnlyRetry: 'pass',
         postgresDownRestore: 'pass',
         replicas: 'primary-and-offsite-fresh-with-offsite-fallback-restore',
         representativeApplicationRead: 'pass',

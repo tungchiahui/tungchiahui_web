@@ -113,6 +113,50 @@ function replicaPrefix(manifest: RepositoryManifest) {
   return recoveryObjectKey(`database-backups/${manifest.generation}`)
 }
 
+function validatedConcurrency(value: number) {
+  return z.number().int().min(1).max(32).parse(value)
+}
+
+async function runWithConcurrency<T>(
+  values: readonly T[],
+  concurrency: number,
+  task: (value: T) => Promise<void>,
+) {
+  let nextIndex = 0
+  async function worker() {
+    while (true) {
+      const value = values[nextIndex]
+      nextIndex += 1
+      if (value === undefined) return
+      await task(value)
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(validatedConcurrency(concurrency), values.length) }, worker),
+  )
+}
+
+async function readBodyAndSha256(body: ReadableStream<Uint8Array>) {
+  const reader = body.getReader()
+  const chunks: Uint8Array[] = []
+  const digest = createHash('sha256')
+  let bytes = 0
+  while (true) {
+    const chunk = await reader.read()
+    if (chunk.done) break
+    chunks.push(chunk.value)
+    bytes += chunk.value.byteLength
+    digest.update(chunk.value)
+  }
+  const value = new Uint8Array(bytes)
+  let offset = 0
+  for (const chunk of chunks) {
+    value.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return Object.freeze({ body: value, sha256: digest.digest('hex') })
+}
+
 export function repositoryReplicaFileKeys(keys: readonly string[], repositoryPrefix: string) {
   return Object.freeze(
     Array.from(new Set(keys))
@@ -146,11 +190,13 @@ export async function replicateRepository(
   repositoryPath: string,
   manifest: RepositoryManifest,
   configuration: S3ConnectionConfiguration,
+  concurrency = 8,
 ) {
+  const started = performance.now()
   const storage = new S3ObjectStorageAdapter(configuration)
   const prefix = replicaPrefix(manifest)
   try {
-    for (const entry of manifest.entries) {
+    await runWithConcurrency(manifest.entries, concurrency, async (entry) => {
       const body =
         entry.type === 'symlink'
           ? Buffer.from(entry.linkTarget ?? '')
@@ -162,7 +208,7 @@ export async function replicateRepository(
         key: `${prefix}/repository/${entry.path}`,
         metadata: { sha256: entry.sha256 },
       })
-    }
+    })
     await storage.putObject({
       body: serializeManifest(manifest),
       cacheControl: 'private, no-store',
@@ -170,16 +216,72 @@ export async function replicateRepository(
       key: `${prefix}/manifest.json`,
       metadata: { sha256: repositoryManifestSha256(manifest) },
     })
-    return await verifyRepositoryReplica(manifest, configuration)
+    const uploadedAt = performance.now()
+    const verified = await verifyRepositoryReplica(manifest, configuration, concurrency)
+    return Object.freeze({
+      ...verified,
+      totalSeconds: (performance.now() - started) / 1_000,
+      transferSeconds: (uploadedAt - started) / 1_000,
+      verificationSeconds: verified.verificationSeconds,
+    })
   } finally {
     storage.destroy()
+  }
+}
+
+export async function mirrorRepositoryReplica(
+  manifest: RepositoryManifest,
+  sourceConfiguration: S3ConnectionConfiguration,
+  targetConfiguration: S3ConnectionConfiguration,
+  concurrency = 8,
+) {
+  const started = performance.now()
+  const source = new S3ObjectStorageAdapter(sourceConfiguration)
+  const target = new S3ObjectStorageAdapter(targetConfiguration)
+  const prefix = replicaPrefix(manifest)
+  try {
+    await runWithConcurrency(manifest.entries, concurrency, async (entry) => {
+      const sourceObject = await source.getObject(`${prefix}/repository/${entry.path}`)
+      const value = await readBodyAndSha256(sourceObject.body)
+      if (value.sha256 !== entry.sha256) {
+        throw new Error(`Primary backup replica checksum mismatch while mirroring: ${entry.path}`)
+      }
+      await target.putObject({
+        body: value.body,
+        cacheControl: 'private, no-store',
+        contentType: 'application/octet-stream',
+        key: `${prefix}/repository/${entry.path}`,
+        metadata: { sha256: entry.sha256 },
+      })
+    })
+    const manifestBody = serializeManifest(manifest)
+    await target.putObject({
+      body: manifestBody,
+      cacheControl: 'private, no-store',
+      contentType: 'application/json',
+      key: `${prefix}/manifest.json`,
+      metadata: { sha256: repositoryManifestSha256(manifest) },
+    })
+    const mirroredAt = performance.now()
+    const verified = await verifyRepositoryReplica(manifest, targetConfiguration, concurrency)
+    return Object.freeze({
+      ...verified,
+      totalSeconds: (performance.now() - started) / 1_000,
+      transferSeconds: (mirroredAt - started) / 1_000,
+      verificationSeconds: verified.verificationSeconds,
+    })
+  } finally {
+    source.destroy()
+    target.destroy()
   }
 }
 
 export async function verifyRepositoryReplica(
   manifest: RepositoryManifest,
   configuration: S3ConnectionConfiguration,
+  concurrency = 8,
 ) {
+  const started = performance.now()
   const storage = new S3ObjectStorageAdapter(configuration)
   const prefix = replicaPrefix(manifest)
   try {
@@ -201,7 +303,7 @@ export async function verifyRepositoryReplica(
     if (keys.length !== manifest.entries.length || keys.some((key) => !expectedKeys.has(key))) {
       throw new Error('Backup replica file count does not match the repository manifest')
     }
-    for (const entry of manifest.entries) {
+    await runWithConcurrency(manifest.entries, concurrency, async (entry) => {
       const remote = await storage.getObject(`${prefix}/repository/${entry.path}`)
       const digest = createHash('sha256')
       const reader = remote.body.getReader()
@@ -213,13 +315,14 @@ export async function verifyRepositoryReplica(
       if (digest.digest('hex') !== entry.sha256) {
         throw new Error(`Backup replica checksum mismatch: ${entry.path}`)
       }
-    }
+    })
     return Object.freeze({
       checkedAt: new Date().toISOString(),
       files: manifest.entries.length,
       manifestSha256: repositoryManifestSha256(manifest),
       status: 'fresh' as const,
       totalBytes: manifest.totalBytes,
+      verificationSeconds: (performance.now() - started) / 1_000,
     })
   } finally {
     storage.destroy()
