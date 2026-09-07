@@ -5,6 +5,7 @@ import { parseAssetStorageConfiguration } from '@/storage/configuration'
 import { StorageObjectNotFoundError } from '@/storage/contracts'
 import { resolveAssetResponseCacheControl } from '@/storage/policy'
 import { S3ReadOnlyObjectStorageAdapter } from '@/storage/s3-adapter'
+import { streamWithCleanup } from '@/storage/stream'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,6 +40,7 @@ export async function GET(
   }
   const key = parsedKey.data.join('/')
   const storage = new S3ReadOnlyObjectStorageAdapter(parseAssetStorageConfiguration(process.env))
+  let responseOwnsStorage = false
   try {
     const object = await storage.getObject(key)
     const headers = new Headers({
@@ -48,7 +50,14 @@ export async function GET(
       'x-content-type-options': 'nosniff',
     })
     if (object.etag) headers.set('etag', object.etag)
-    return new Response(object.body, { headers })
+    const response = new Response(
+      streamWithCleanup(object.body, () => {
+        storage.destroy()
+      }),
+      { headers },
+    )
+    responseOwnsStorage = true
+    return response
   } catch (error: unknown) {
     console.error(
       JSON.stringify({
@@ -63,6 +72,6 @@ export async function GET(
       { headers: { 'cache-control': 'no-store' }, status: missing ? 404 : 502 },
     )
   } finally {
-    storage.destroy()
+    if (!responseOwnsStorage) storage.destroy()
   }
 }
