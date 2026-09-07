@@ -10,6 +10,7 @@ import {
   createBreakGlassRestore,
   createRestore,
   readBackupStatus,
+  retryOffsiteBackup,
 } from './recovery/control-client'
 import { createServerMigration } from './server-migration/control-client'
 import {
@@ -59,6 +60,7 @@ Automation:
 
 Recovery:
   backup --environment <local|test|production> --type <full|diff|incr> --reason <text>
+  backup retry-offsite <backup-id> --environment <environment> --reason <text>
   backup status
   restore <backup-id-or-ISO-time> --environment <environment> --confirm RESTORE-<ENV> --reason <text>
   restore ... --break-glass --inventory-host <stable-ssh-alias>
@@ -89,6 +91,19 @@ async function main() {
       return 0
     case 'backup-create': {
       console.log(JSON.stringify(await createBackup(command), null, 2))
+      return 0
+    }
+    case 'backup-offsite-retry': {
+      console.log(
+        JSON.stringify(
+          await retryOffsiteBackup(command.backupId, {
+            environment: command.environment,
+            reason: command.reason,
+          }),
+          null,
+          2,
+        ),
+      )
       return 0
     }
     case 'backup-status': {

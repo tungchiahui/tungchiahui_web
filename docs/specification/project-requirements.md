@@ -51,7 +51,8 @@ Provider-neutral Asset S3（当前 Production 使用 AList）保存：
 
 Provider-neutral Recovery S3 使用两个独立 Target 保存数据库与 Control-state 加密 Artifact：当前
 Production 以现有 AList Bucket 的 `backups/` Namespace 为 Primary、Cloudflare R2 整桶副本为
-Off-site Replica。两端均需完整读回验证，Restore 优先 Primary 并回退 Off-site。
+Off-site Replica。Recovery Generation 先写入并完整验证 Primary，再从 Primary 镜像并完整验证
+Off-site；Restore 优先 Primary 并回退 Off-site。
 
 现有 CDN Endpoint 继续作为 Public Asset Delivery Path。
 

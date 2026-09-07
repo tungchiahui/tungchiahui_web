@@ -18,6 +18,7 @@
 - PITR Capability
 - Off-host Backup Copy
 - AList `backups/` Primary Recovery Namespace 与完整 R2 Off-site Replica
+- 每日 03:05 Asia/Hong_Kong 创建幂等 Backup Operation；周日 Full、其余日期 Differential
 - Reproducible Server Provisioning
 - Independent `control-api` outside Next.js Blue/Green Slots
 - PostgreSQL-independent SQLite Control-plane Recovery State
@@ -41,7 +42,7 @@
 - Secure Response Header
 - Client Bundle 不包含 Secret
 - 显式 Trust-boundary Validation
-- Runtime/Migration/Backup Credential 尽量分离；AList v3 实例级 S3 Pair 例外按 ADR 0018 以固定
+- Runtime/Migration/Backup Credential 尽量分离；AList v3 实例级 S3 Pair 例外按 ADR 0018/0019 以固定
   Prefix、只读应用 Adapter、Public Prefix Deny、Artifact Encryption 和独立 R2 Credential 补偿
 - Multi-stage/Minimal/Non-root Production Container
 - Read-only Root Filesystem where practical, with explicit Writable Volume/tmpfs

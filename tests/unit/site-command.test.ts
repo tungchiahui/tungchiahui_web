@@ -88,6 +88,22 @@ describe('site command boundary', () => {
     expect(parseSiteCommand(['backup', 'status'])).toEqual({ kind: 'backup-status' })
     expect(
       parseSiteCommand([
+        'backup',
+        'retry-offsite',
+        '20260907-034059F',
+        '--environment',
+        'production',
+        '--reason',
+        'retry verified AList generation',
+      ]),
+    ).toEqual({
+      backupId: '20260907-034059F',
+      environment: 'production',
+      kind: 'backup-offsite-retry',
+      reason: 'retry verified AList generation',
+    })
+    expect(
+      parseSiteCommand([
         'restore',
         '2026-08-25T12:00:00.000Z',
         '--environment',

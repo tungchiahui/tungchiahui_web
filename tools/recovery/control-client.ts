@@ -48,6 +48,26 @@ export function readBackupStatus() {
   return controlRequest('/api/ops/backups/status', { purpose: 'backup-status' })
 }
 
+export function retryOffsiteBackup(
+  backupId: string,
+  request: Readonly<{ environment: BackupRequest['environment']; reason: string }>,
+) {
+  const id = z.string().min(1).max(200).parse(backupId)
+  const body = z
+    .object({
+      environment: z.enum(['local', 'test', 'production']),
+      reason: z.string().trim().min(1).max(1_000),
+    })
+    .strict()
+    .parse(request)
+  return controlRequest(`/api/ops/backups/${encodeURIComponent(id)}/retry-offsite`, {
+    body,
+    idempotencyKey: idempotencyKey('backup-offsite-retry'),
+    method: 'POST',
+    purpose: 'backup-offsite-retry',
+  })
+}
+
 export function createRestore(request: RestoreRequest) {
   return controlRequest('/api/ops/restores', {
     body: request,

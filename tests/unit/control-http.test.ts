@@ -10,6 +10,7 @@ import type { Capability } from '../../src/control-plane/contracts'
 import {
   initializeControlState,
   listControlAuditEvents,
+  recordRecoveryBackup,
 } from '../../src/control-plane/control-state'
 import { createControlApiServer } from '../../src/control-plane/http-server'
 import { createLocalOperatorHeaders } from '../../tools/dev/control-auth-fixture'
@@ -188,7 +189,7 @@ describe('independent control-api HTTP boundary', () => {
   })
 
   it('creates backup and guarded restore operations while PostgreSQL is unavailable', async () => {
-    const { base } = await serverFixture()
+    const { base, statePath } = await serverFixture()
     const backup = await signedFetch(base, '/api/ops/backups', {
       body: {
         backupType: 'full',
@@ -205,6 +206,38 @@ describe('independent control-api HTTP boundary', () => {
         operationType: 'recovery',
         status: 'queued',
         target: { action: 'backup', backupType: 'full', environment: 'test' },
+      },
+    })
+
+    recordRecoveryBackup(statePath, {
+      backupId: '20260907-034059F',
+      backupType: 'full',
+      completedAt: '2026-09-07T03:40:59.000Z',
+      createdAt: '2026-09-07T03:40:00.000Z',
+      manifestSha256: 'a'.repeat(64),
+      measuredBytes: 1_024,
+      measuredSeconds: 60,
+      offsiteReplicaStatus: 'failed',
+      primaryReplicaStatus: 'fresh',
+      repositoryGeneration: '20260907-034059F-generation',
+      stanza: 'tungchiahui',
+      valid: false,
+      walArchiveMax: '000000010000000000000001',
+    })
+    const retry = await signedFetch(base, '/api/ops/backups/20260907-034059F/retry-offsite', {
+      body: { environment: 'test', reason: 'retry only the failed off-site mirror' },
+      idempotencyKey: 'phase13:http:backup:retry:001',
+      method: 'POST',
+      nonce: 'phase13-backup-retry-001',
+    })
+    expect(retry.status).toBe(202)
+    expect(await retry.json()).toMatchObject({
+      operation: {
+        target: {
+          action: 'offsite-retry',
+          backupId: '20260907-034059F',
+          environment: 'test',
+        },
       },
     })
 
@@ -241,7 +274,9 @@ describe('independent control-api HTTP boundary', () => {
       nonce: 'phase13-http-backup-status',
     })
     expect(status.status).toBe(200)
-    expect(await status.json()).toEqual({ backups: [] })
+    expect(await status.json()).toMatchObject({
+      backups: [{ backupId: '20260907-034059F', primaryReplicaStatus: 'fresh' }],
+    })
   })
 
   it('rejects malformed payloads, request replay and abusive request rates', async () => {

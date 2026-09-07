@@ -293,7 +293,8 @@ Application Deployment Workflow 和本地 `./site deploy [git-sha-or-release]` �
 
 保存与 Asset 同处 AList Bucket、但位于固定 `backups/` Namespace 的加密 Recovery Copy。接口
 保持 Provider-neutral S3-compatible；当前 Production 使用 AList 作为 Primary、Cloudflare R2
-作为整桶 Off-site Replica。Backup 必须双端完整读回验证，Restore 优先 Primary 并回退 Off-site。
+作为整桶 Off-site Replica。Backup 必须先完整写入并验证 Primary，再从 Primary 镜像并完整验证
+Off-site；Restore 优先 Primary 并回退 Off-site。
 
 ## 9. 开发
 

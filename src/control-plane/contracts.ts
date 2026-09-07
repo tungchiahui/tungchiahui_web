@@ -85,6 +85,13 @@ const infrastructureTargetSchemas = {
       .strict(),
     z
       .object({
+        action: z.literal('offsite-retry'),
+        backupId: z.string().min(1).max(200),
+        environment: environmentSchema,
+      })
+      .strict(),
+    z
+      .object({
         environment: environmentSchema,
         recoveryKind: z.enum(['control-state', 'database', 'host']),
       })

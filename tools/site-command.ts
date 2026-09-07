@@ -16,6 +16,12 @@ export type SiteCommand =
       reason: string
     }>
   | Readonly<{ kind: 'backup-status' }>
+  | Readonly<{
+      backupId: string
+      environment: 'local' | 'production' | 'test'
+      kind: 'backup-offsite-retry'
+      reason: string
+    }>
   | Readonly<{ kind: 'check' }>
   | Readonly<{
       gitSha?: string
@@ -252,6 +258,36 @@ export function parseSiteCommand(arguments_: readonly string[]): SiteCommand {
 
   if (arguments_.length === 2 && arguments_[0] === 'backup' && arguments_[1] === 'status') {
     return Object.freeze({ kind: 'backup-status' })
+  }
+
+  if (arguments_[0] === 'backup' && arguments_[1] === 'retry-offsite') {
+    const backupId = z.string().min(1).max(200).parse(arguments_[2])
+    let environment: 'local' | 'production' | 'test' | undefined
+    let reason: string | undefined
+    let index = 3
+    while (index < arguments_.length) {
+      const argument = arguments_[index]
+      if (argument === '--environment') {
+        environment = z.enum(['local', 'test', 'production']).parse(arguments_[index + 1])
+        index += 2
+        continue
+      }
+      if (argument === '--reason') {
+        reason = z
+          .string()
+          .trim()
+          .min(1)
+          .max(1_000)
+          .parse(arguments_[index + 1])
+        index += 2
+        continue
+      }
+      throw new SiteUsageError(`Unknown backup retry argument: ${String(argument)}`)
+    }
+    if (!environment || !reason) {
+      throw new SiteUsageError('backup retry-offsite requires --environment and --reason')
+    }
+    return Object.freeze({ backupId, environment, kind: 'backup-offsite-retry', reason })
   }
 
   if (arguments_[0] === 'backup') {

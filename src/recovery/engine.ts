@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path'
 import { z } from 'zod'
 
 import {
+  getRecoveryBackup,
   listRecoveryBackups,
   type RecoveryBackupRecord,
   readControlState,
@@ -16,6 +17,7 @@ import type { RecoveryConfiguration } from './configuration'
 import {
   createEncryptedControlStateArtifact,
   type EncryptedControlStateArtifact,
+  mirrorControlStateArtifact,
   readLatestControlStateArtifact,
   replicateControlStateArtifact,
   restoreEncryptedControlStateArtifact,
@@ -24,9 +26,12 @@ import { checkPgBackRest, restorePgBackRest, runPgBackRestBackup } from './pgbac
 import {
   createRepositoryManifest,
   materializeRepositoryReplica,
+  mirrorRepositoryReplica,
+  type RepositoryManifest,
   readRepositoryManifestFromReplica,
   replicateRepository,
   repositoryManifestSha256,
+  verifyRepositoryReplica,
 } from './repository-replication'
 
 export async function executeDatabaseBackup(
@@ -46,10 +51,35 @@ export async function executeDatabaseBackup(
     backup.backupId,
     generation,
   )
-  const [primary, offsite] = await Promise.allSettled([
-    replicateRepository(configuration.localRepositoryPath, manifest, configuration.primary),
-    replicateRepository(configuration.localRepositoryPath, manifest, configuration.offsite),
-  ])
+  const primary = await Promise.resolve()
+    .then(() =>
+      replicateRepository(
+        configuration.localRepositoryPath,
+        manifest,
+        configuration.primary,
+        configuration.replicationConcurrency,
+      ),
+    )
+    .then(
+      (value) => Object.freeze({ status: 'fulfilled' as const, value }),
+      (reason: unknown) => Object.freeze({ reason, status: 'rejected' as const }),
+    )
+  const offsite =
+    primary.status === 'fulfilled'
+      ? await Promise.resolve()
+          .then(() =>
+            mirrorRepositoryReplica(
+              manifest,
+              configuration.primary,
+              configuration.offsite,
+              configuration.replicationConcurrency,
+            ),
+          )
+          .then(
+            (value) => Object.freeze({ status: 'fulfilled' as const, value }),
+            (reason: unknown) => Object.freeze({ reason, status: 'rejected' as const }),
+          )
+      : Object.freeze({ status: 'pending' as const })
   const completedAt = new Date().toISOString()
   const record: RecoveryBackupRecord = Object.freeze({
     backupId: backup.backupId,
@@ -59,7 +89,12 @@ export async function executeDatabaseBackup(
     manifestSha256: repositoryManifestSha256(manifest),
     measuredBytes: manifest.totalBytes,
     measuredSeconds: (performance.now() - started) / 1_000,
-    offsiteReplicaStatus: offsite.status === 'fulfilled' ? 'fresh' : 'failed',
+    offsiteReplicaStatus:
+      offsite.status === 'fulfilled'
+        ? 'fresh'
+        : offsite.status === 'pending'
+          ? 'pending'
+          : 'failed',
     primaryReplicaStatus: primary.status === 'fulfilled' ? 'fresh' : 'failed',
     repositoryGeneration: generation,
     stanza: configuration.stanza,
@@ -85,8 +120,75 @@ export async function executeDatabaseBackup(
     backup: record,
     controlState,
     databaseBytes: backup.databaseBytes,
+    replication: {
+      offsite: offsite.status === 'fulfilled' ? offsite.value : null,
+      primary: primary.status === 'fulfilled' ? primary.value : null,
+    },
     repositoryBytes: backup.repositoryBytes,
   })
+}
+
+export async function executeOffsiteReplicaRetry(
+  configuration: RecoveryConfiguration,
+  backupId: string,
+) {
+  const record = getRecoveryBackup(configuration.controlStatePath, backupId)
+  if (!record) throw new Error('Backup record was not found for off-site retry')
+  if (record.primaryReplicaStatus !== 'fresh') {
+    throw new Error('Off-site retry requires a fresh primary replica')
+  }
+  let manifest: RepositoryManifest
+  let primary: Awaited<ReturnType<typeof verifyRepositoryReplica>>
+  try {
+    manifest = await readRepositoryManifestFromReplica(
+      record.repositoryGeneration,
+      configuration.primary,
+    )
+    if (
+      manifest.backupId !== record.backupId ||
+      manifest.generation !== record.repositoryGeneration ||
+      repositoryManifestSha256(manifest) !== record.manifestSha256
+    ) {
+      throw new Error('Primary replica manifest does not match the recorded backup identity')
+    }
+    primary = await verifyRepositoryReplica(
+      manifest,
+      configuration.primary,
+      configuration.replicationConcurrency,
+    )
+  } catch (error: unknown) {
+    recordRecoveryBackup(configuration.controlStatePath, {
+      ...record,
+      primaryReplicaStatus: 'failed',
+      valid: false,
+    })
+    throw error
+  }
+  let offsite: Awaited<ReturnType<typeof mirrorRepositoryReplica>>
+  try {
+    offsite = await mirrorRepositoryReplica(
+      manifest,
+      configuration.primary,
+      configuration.offsite,
+      configuration.replicationConcurrency,
+    )
+  } catch (error: unknown) {
+    recordRecoveryBackup(configuration.controlStatePath, {
+      ...record,
+      offsiteReplicaStatus: 'failed',
+      primaryReplicaStatus: 'fresh',
+      valid: false,
+    })
+    throw error
+  }
+  recordRecoveryBackup(configuration.controlStatePath, {
+    ...record,
+    offsiteReplicaStatus: 'fresh',
+    primaryReplicaStatus: 'fresh',
+    valid: true,
+  })
+  const controlState = await executeControlStateBackup(configuration)
+  return Object.freeze({ backup: record.backupId, controlState, offsite, primary })
 }
 
 export async function executeControlStateBackup(configuration: RecoveryConfiguration) {
@@ -101,10 +203,16 @@ export async function executeControlStateBackup(configuration: RecoveryConfigura
       encryptedPath,
       configuration.ageRecipient,
     )
-    const [primary, offsite] = await Promise.all([
-      replicateControlStateArtifact(encryptedPath, artifact, configuration.primary),
-      replicateControlStateArtifact(encryptedPath, artifact, configuration.offsite),
-    ])
+    const primary = await replicateControlStateArtifact(
+      encryptedPath,
+      artifact,
+      configuration.primary,
+    )
+    const offsite = await mirrorControlStateArtifact(
+      artifact,
+      configuration.primary,
+      configuration.offsite,
+    )
     return Object.freeze({ artifact, offsite, primary })
   } finally {
     rmSync(snapshotPath, { force: true })

@@ -16,7 +16,8 @@ COPY tsconfig.json ./
 RUN mkdir -p /workspace/dist \
   && pnpm exec esbuild services/deploy-agent/main.ts --bundle --format=cjs --platform=node --target=node24 --outfile=dist/deploy-agent.cjs \
   && pnpm exec esbuild services/recovery-drill/main.ts --bundle --format=cjs --platform=node --target=node24 --outfile=dist/recovery-drill.cjs \
-  && pnpm exec esbuild services/recovery-break-glass/main.ts --bundle --format=cjs --platform=node --target=node24 --outfile=dist/recovery-break-glass.cjs
+  && pnpm exec esbuild services/recovery-break-glass/main.ts --bundle --format=cjs --platform=node --target=node24 --outfile=dist/recovery-break-glass.cjs \
+  && pnpm exec esbuild services/recovery-scheduler/main.ts --bundle --format=cjs --platform=node --target=node24 --outfile=dist/recovery-scheduler.cjs
 
 FROM node:24.19.0-alpine3.23@sha256:244cc2b53f46f9e876304391d17682b0ddae9ac33491f4857e25e35a36ba7995 AS pgbackrest-build
 

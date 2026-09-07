@@ -1634,6 +1634,18 @@ export function listRecoveryBackups(path: string, limit = 20) {
   }
 }
 
+export function getRecoveryBackup(path: string, backupId: string) {
+  const database = openControlState(path)
+  try {
+    const row = database
+      .prepare('SELECT * FROM recovery_backup_records WHERE backup_id = ?')
+      .get(z.string().min(1).max(200).parse(backupId))
+    return row ? mapBackupRecord(row) : null
+  } finally {
+    database.close()
+  }
+}
+
 function inspectControlStateDatabase(database: DatabaseSync): ControlStateSnapshotEvidence {
   const integrityRows = database.prepare('PRAGMA integrity_check').all()
   const integrity = z.array(z.object({ integrity_check: z.literal('ok') })).parse(integrityRows)

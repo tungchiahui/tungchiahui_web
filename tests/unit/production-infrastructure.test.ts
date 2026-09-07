@@ -17,6 +17,14 @@ const productionRoleSource = readFileSync(
   resolve('ops/production/ansible/roles/tungchiahui_production/tasks/main.yml'),
   'utf8',
 )
+const productionRoleDefaultsSource = readFileSync(
+  resolve('ops/production/ansible/roles/tungchiahui_production/defaults/main.yml'),
+  'utf8',
+)
+const recoveryDockerfileSource = readFileSync(
+  resolve('ops/production/images/recovery.Dockerfile'),
+  'utf8',
+)
 const composeSchema = z.object({
   networks: z.record(z.string(), z.unknown()),
   services: z.record(
@@ -170,5 +178,21 @@ describe('Phase 12 production foundation policy', () => {
         CONTROL_OPERATOR_KEYS_JSON: '[]',
       }),
     ).toThrow()
+  })
+
+  it('defines the owner-gated 03:05 production backup schedule', () => {
+    expect(productionRoleDefaultsSource).toContain('tungchiahui_manage_backup_schedule: false')
+    expect(productionRoleDefaultsSource).toContain('tungchiahui_backup_schedule_enabled: false')
+    expect(productionRoleDefaultsSource).toContain(
+      'tungchiahui_backup_replication_concurrency: "8"',
+    )
+    expect(composeSource).toContain(
+      'BACKUP_REPLICATION_CONCURRENCY: $' + '{TUNGCHIAHUI_BACKUP_REPLICATION_CONCURRENCY:-8}',
+    )
+    expect(productionRoleSource).toContain('OnCalendar=*-*-* 03:05:00 Asia/Hong_Kong')
+    expect(productionRoleSource).toContain('Persistent=true')
+    expect(productionRoleSource).toContain('node dist/recovery-scheduler.cjs')
+    expect(productionRoleSource).toContain('when: tungchiahui_manage_backup_schedule | bool')
+    expect(recoveryDockerfileSource).toContain('dist/recovery-scheduler.cjs')
   })
 })

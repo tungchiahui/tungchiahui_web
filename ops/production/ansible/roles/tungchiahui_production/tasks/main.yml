@@ -189,6 +189,7 @@
   ansible.builtin.set_fact:
     tungchiahui_compose_environment:
       TUNGCHIAHUI_CONFIG_ROOT: "{{ tungchiahui_config_root }}"
+      TUNGCHIAHUI_BACKUP_REPLICATION_CONCURRENCY: "{{ tungchiahui_backup_replication_concurrency }}"
       TUNGCHIAHUI_CONTENT_POLLING_ENABLED: "{{ tungchiahui_content_polling_enabled }}"
       TUNGCHIAHUI_CONTROL_RATE_LIMIT_PER_MINUTE: "{{ tungchiahui_control_rate_limit_per_minute }}"
       TUNGCHIAHUI_DATA_ROOT: "{{ tungchiahui_data_root }}"
@@ -377,6 +378,52 @@
     'Started' in tungchiahui_compose_up.stderr or
     'Recreated' in tungchiahui_compose_up.stderr
   when: tungchiahui_manage_stack | bool
+
+- name: Install the audited daily backup scheduler service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/tungchiahui-backup.service
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Enqueue the audited Tungchiahui production backup
+      Requires=docker.service
+      After=docker.service
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/bin/docker exec {{ tungchiahui_compose_project_name }}-deploy-agent-1 node dist/recovery-scheduler.cjs
+      TimeoutStartSec=60
+  when: tungchiahui_manage_backup_schedule | bool
+
+- name: Install the 03:05 Asia Hong Kong daily backup timer
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/tungchiahui-backup.timer
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Run the Tungchiahui production backup near 03:00 daily
+
+      [Timer]
+      OnCalendar=*-*-* 03:05:00 Asia/Hong_Kong
+      Persistent=true
+      AccuracySec=1min
+      RandomizedDelaySec=0
+
+      [Install]
+      WantedBy=timers.target
+  when: tungchiahui_manage_backup_schedule | bool
+
+- name: Apply the explicitly selected daily backup schedule state
+  ansible.builtin.systemd_service:
+    name: tungchiahui-backup.timer
+    daemon_reload: true
+    enabled: "{{ tungchiahui_backup_schedule_enabled | bool }}"
+    state: "{{ 'started' if tungchiahui_backup_schedule_enabled | bool else 'stopped' }}"
+  when: tungchiahui_manage_backup_schedule | bool
 
 - name: Prepare the stopped least-privilege migration runner for deploy-agent
   ansible.builtin.command:

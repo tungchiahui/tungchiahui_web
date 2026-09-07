@@ -38,6 +38,7 @@ import {
   consumeControlNonce,
   createInfrastructureOperation,
   getInfrastructureOperation,
+  getRecoveryBackup,
   listRecoveryBackups,
   readControlObservabilitySnapshot,
   readControlState,
@@ -134,6 +135,14 @@ function routeShape(pathname: string) {
   }
   if (pathname === '/api/ops/backups/status') {
     return Object.freeze({ allow: 'GET', kind: 'backup-list' as const })
+  }
+  const offsiteRetry = /^\/api\/ops\/backups\/([^/]+)\/retry-offsite$/.exec(pathname)
+  if (offsiteRetry?.[1]) {
+    return Object.freeze({
+      allow: 'POST',
+      backupId: offsiteRetry[1],
+      kind: 'backup-offsite-retry' as const,
+    })
   }
   if (pathname === '/api/ops/deployments') {
     return Object.freeze({ allow: 'POST', kind: 'deployment-create' as const })
@@ -514,6 +523,49 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
             target: {
               action: 'backup',
               backupType: input.backupType,
+              environment: input.environment,
+            },
+          })
+          const idempotencyKey = idempotencyKeySchema.parse(headers.get('idempotency-key'))
+          auditAuthorization(
+            configuration,
+            actor,
+            'infrastructure-operation:create',
+            request.method,
+            url.pathname,
+          )
+          const result = createInfrastructureOperation(
+            configuration.statePath,
+            operationRequest,
+            actor,
+            idempotencyKey,
+          )
+          sendJson(response, { body: result, status: result.created ? 202 : 200 })
+          return
+        }
+        case 'backup-offsite-retry': {
+          requireCapability(actor, 'infrastructure-operation:create')
+          const input = z
+            .object({
+              environment: z.enum(['local', 'test', 'production']),
+              reason: z.string().trim().min(1).max(1_000),
+            })
+            .strict()
+            .parse(parseJsonBody(body, headers.get('content-type')))
+          if (readControlState(configuration.statePath).environment !== input.environment) {
+            throw new HttpError(400, 'Backup environment does not match control state')
+          }
+          const backup = getRecoveryBackup(configuration.statePath, route.backupId)
+          if (!backup) throw new HttpError(404, 'Backup record was not found')
+          if (backup.primaryReplicaStatus !== 'fresh') {
+            throw new HttpError(409, 'Off-site retry requires a fresh primary replica')
+          }
+          const operationRequest = infrastructureOperationRequestSchema.parse({
+            operationType: 'recovery',
+            reason: input.reason,
+            target: {
+              action: 'offsite-retry',
+              backupId: backup.backupId,
               environment: input.environment,
             },
           })

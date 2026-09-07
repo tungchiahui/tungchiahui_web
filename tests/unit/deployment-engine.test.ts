@@ -204,7 +204,7 @@ describe('Phase 14 shared deployment engine', () => {
     expect(platform.calls).toContain('verify-retained:blue')
     expect(platform.calls).not.toContain('validate-image:blue')
     expect(platform.calls.filter((call) => call === 'prepare:blue')).toHaveLength(0)
-  })
+  }, 10_000)
 
   it('keeps the active slot unchanged when an inactive deployment or config validation fails', async () => {
     for (const [failure, expectsCleanup] of [

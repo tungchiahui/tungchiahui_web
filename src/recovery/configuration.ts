@@ -20,6 +20,7 @@ const recoveryEnvironmentSchema = z.object({
   BACKUP_PGBACKREST_CONFIG_PATH: z.string().startsWith('/'),
   BACKUP_PGBACKREST_STANZA: z.string().regex(/^[a-z][a-z0-9-]{0,62}$/),
   BACKUP_POSTGRES_DATA_PATH: z.string().startsWith('/'),
+  BACKUP_REPLICATION_CONCURRENCY: z.coerce.number().int().min(1).max(32).default(8),
   BACKUP_WORK_DIRECTORY: z.string().startsWith('/'),
   BACKUP_S3_ACCESS_KEY_ID: z.string().min(1),
   BACKUP_S3_BUCKET: z.string().min(3),
@@ -47,6 +48,7 @@ export type RecoveryConfiguration = Readonly<{
   postgresDataPath: string
   offsite: S3ConnectionConfiguration
   primary: S3ConnectionConfiguration
+  replicationConcurrency: number
   stanza: string
   workDirectory: string
 }>
@@ -102,6 +104,7 @@ export function parseRecoveryConfiguration(
     pgBackRestConfigPath: data.BACKUP_PGBACKREST_CONFIG_PATH,
     postgresDataPath: data.BACKUP_POSTGRES_DATA_PATH,
     primary,
+    replicationConcurrency: data.BACKUP_REPLICATION_CONCURRENCY,
     stanza: data.BACKUP_PGBACKREST_STANZA,
     workDirectory: data.BACKUP_WORK_DIRECTORY,
   })

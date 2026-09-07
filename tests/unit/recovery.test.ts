@@ -25,6 +25,7 @@ import {
   repositoryReplicaFileKeys,
   verifyLocalRepository,
 } from '../../src/recovery/repository-replication'
+import { enqueueScheduledBackup, scheduledBackupRequest } from '../../src/recovery/schedule'
 
 const temporaryDirectories: string[] = []
 const actor: ActorIdentity = {
@@ -172,6 +173,26 @@ describe('Phase 13 recovery boundary', () => {
         primaryReplicaStatus: 'fresh',
         valid: true,
       },
+    ])
+  })
+
+  it('schedules weekly full and daily differential backups idempotently at the control boundary', () => {
+    expect(scheduledBackupRequest(new Date('2026-09-06T19:05:00.000Z'))).toMatchObject({
+      idempotencyKey: 'scheduled-backup:production:2026-09-07',
+      request: { target: { backupType: 'diff' } },
+    })
+    expect(scheduledBackupRequest(new Date('2026-09-12T19:05:00.000Z'))).toMatchObject({
+      idempotencyKey: 'scheduled-backup:production:2026-09-13',
+      request: { target: { backupType: 'full' } },
+    })
+
+    const path = join(temporaryDirectory(), 'scheduled-control.db')
+    initializeControlState(path, 'production')
+    const now = new Date('2026-09-06T19:05:00.000Z')
+    expect(enqueueScheduledBackup(path, now).created).toBe(true)
+    expect(enqueueScheduledBackup(path, now).created).toBe(false)
+    expect(listControlAuditEvents(path).map((event) => event.actorId)).toEqual([
+      'service:production-backup-scheduler',
     ])
   })
 

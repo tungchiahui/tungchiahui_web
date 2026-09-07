@@ -102,11 +102,12 @@ ASSET_S3_*
 S3_CONTRACT_*
 BACKUP_S3_*
 BACKUP_OFFSITE_S3_*
+BACKUP_REPLICATION_CONCURRENCY
 ```
 
 `S3_CONTRACT_*` 是 Operator 验收专用的 Provider-neutral 配置，可指向任意明确授权的 S3-compatible 非生产 Target；其中没有 Provider 类型或 Label，也不允许按实现名称选择分支。External Contract 只通过显式 `./site storage contract s3 --confirm S3-NON-PRODUCTION` 读取这些值，普通 Local/Test 和 Production Application Runtime 不读取它们，也不得把这组变量部署给 Production Application、`content-worker`、`control-api` 或 `deploy-agent`。当前 Production 选用 AList，因此 Phase 11 Verification Report 另外记录 AList 非生产实例的兼容证据，但该部署事实不进入通用 Storage Adapter。
 
-Application 使用只读 Adapter；Contract Identity 只允许操作指定 Test Bucket，并只清理随机唯一 Prefix 下自己创建的 Object。ADR 0018 使用 `BACKUP_S3_*` AList Primary 与 `BACKUP_OFFSITE_S3_*` R2 Off-site 两组 Recovery 配置，并为 pgBackRest Repository Cipher 与 Control-state age Key 使用单独 Secret。Production 的 `BACKUP_S3_*` 与 `ASSET_S3_*` 指向同一 AList Bucket/Pair，Recovery Engine 只写固定 `backups/`，Public Asset Gateway 对该 Prefix 和历史 Recovery Prefix 返回 404；R2 Access Key/Bucket 必须独立。Runtime Validation 拒绝 AList/R2 Credential 复用与 Production HTTP Endpoint。只有 `deploy-agent` 注入完整 Backup 配置，Public App、`control-api` 和 `content-worker` 不获得 R2 或 Recovery Engine 配置；Public App 仅获得 AList Asset 配置且代码接口只读。
+Application 使用只读 Adapter；Contract Identity 只允许操作指定 Test Bucket，并只清理随机唯一 Prefix 下自己创建的 Object。ADR 0018 使用 `BACKUP_S3_*` AList Primary 与 `BACKUP_OFFSITE_S3_*` R2 Off-site 两组 Recovery 配置，并为 pgBackRest Repository Cipher 与 Control-state age Key 使用单独 Secret。Production 的 `BACKUP_S3_*` 与 `ASSET_S3_*` 指向同一 AList Bucket/Pair，Recovery Engine 只写固定 `backups/`，Public Asset Gateway 对该 Prefix 和历史 Recovery Prefix 返回 404；R2 Access Key/Bucket 必须独立。Runtime Validation 拒绝 AList/R2 Credential 复用与 Production HTTP Endpoint。`BACKUP_REPLICATION_CONCURRENCY` 是 1–32 的非 Secret 有界并发配置，默认 8。只有 `deploy-agent` 注入完整 Backup 配置，Public App、`control-api` 和 `content-worker` 不获得 R2 或 Recovery Engine 配置；Public App 仅获得 AList Asset 配置且代码接口只读。
 
 ## 新服务器
 

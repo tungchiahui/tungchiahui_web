@@ -6,12 +6,15 @@ import { parseRecoveryConfiguration } from '../../src/recovery/configuration'
 import {
   executeDatabaseBackup,
   executeDatabaseRestore,
+  executeOffsiteReplicaRetry,
   restoreLatestControlStateFromReplica,
 } from '../../src/recovery/engine'
 
 const configuration = parseRecoveryConfiguration(process.env)
 initializeControlState(configuration.controlStatePath, configuration.mode)
-const action = z.enum(['backup', 'restore', 'control-state-restore']).parse(process.argv[2])
+const action = z
+  .enum(['backup', 'restore', 'control-state-restore', 'offsite-retry'])
+  .parse(process.argv[2])
 
 async function main() {
   let result: unknown
@@ -48,6 +51,12 @@ async function main() {
       result = await restoreLatestControlStateFromReplica(configuration, input.targetPath)
       break
     }
+    case 'offsite-retry':
+      result = await executeOffsiteReplicaRetry(
+        configuration,
+        z.string().min(1).parse(process.argv[3]),
+      )
+      break
   }
   console.log(JSON.stringify(result))
 }
