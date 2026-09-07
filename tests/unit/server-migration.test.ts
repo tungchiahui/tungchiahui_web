@@ -80,7 +80,7 @@ function fakePlatform(overrides: Partial<ServerMigrationPlatform> = {}): ServerM
     transferControlState: vi.fn(async () => ({
       auditDigest: 'b'.repeat(64),
       operationPhase: 'final-wal-confirmed',
-      schemaVersion: 6,
+      schemaVersion: 7,
     })),
     verifyPostSwitch: vi.fn(async () => ({
       downtimeMilliseconds: 125,

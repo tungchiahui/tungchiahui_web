@@ -187,6 +187,7 @@ const controlHealthSchema = z
         .object({
           ageSeconds: z.number().nonnegative(),
           offsiteReplicaStatus: z.string(),
+          primaryReplicaStatus: z.string(),
           valid: z.boolean(),
           walArchivePresent: z.boolean(),
         })
@@ -272,6 +273,7 @@ async function collect() {
     infrastructure?.backup === undefined ||
     infrastructure.backup.ageSeconds > configuration.OBSERVABILITY_BACKUP_MAX_AGE_SECONDS ||
     !infrastructure.backup.valid ||
+    infrastructure.backup.primaryReplicaStatus !== 'fresh' ||
     infrastructure.backup.offsiteReplicaStatus !== 'fresh' ||
     !infrastructure.backup.walArchivePresent ||
     restoreDrillAgeSeconds > configuration.OBSERVABILITY_RESTORE_DRILL_MAX_AGE_SECONDS

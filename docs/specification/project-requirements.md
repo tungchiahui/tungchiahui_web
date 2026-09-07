@@ -49,8 +49,9 @@ Provider-neutral Asset S3（当前 Production 使用 AList）保存：
 - Music
 - 选定的 Static Library/Asset
 
-Provider-neutral Backup S3（当前 Production 使用 Cloudflare R2）保存数据库与 Control-state 的
-加密异地 Backup Artifact。
+Provider-neutral Recovery S3 使用两个独立 Target 保存数据库与 Control-state 加密 Artifact：当前
+Production 以现有 AList Bucket 的 `backups/` Namespace 为 Primary、Cloudflare R2 整桶副本为
+Off-site Replica。两端均需完整读回验证，Restore 优先 Primary 并回退 Off-site。
 
 现有 CDN Endpoint 继续作为 Public Asset Delivery Path。
 

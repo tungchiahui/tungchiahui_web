@@ -1,6 +1,6 @@
 # ADR 0017：单一 Off-site S3 Backup Target
 
-- Status: Accepted
+- Status: Superseded by ADR 0018
 - Date: 2026-09-06
 - Supersedes: ADR 0003
 

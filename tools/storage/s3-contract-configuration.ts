@@ -16,6 +16,8 @@ const rawS3ContractSchema = z.object({
   ASSET_S3_BUCKET: z.string().optional(),
   BACKUP_S3_ACCESS_KEY_ID: z.string().optional(),
   BACKUP_S3_BUCKET: z.string().optional(),
+  BACKUP_OFFSITE_S3_ACCESS_KEY_ID: z.string().optional(),
+  BACKUP_OFFSITE_S3_BUCKET: z.string().optional(),
   S3_CONTRACT_ACCESS_KEY_ID: z.string().min(1),
   S3_CONTRACT_BUCKET: z.string().min(3),
   S3_CONTRACT_CDN_BASE_URL: z.url(),
@@ -52,11 +54,17 @@ export function parseS3ContractConfiguration(
   if (data.S3_CONTRACT_BUCKET === data.BACKUP_S3_BUCKET) {
     issues.push('S3_CONTRACT_BUCKET: must differ from the backup bucket')
   }
+  if (data.S3_CONTRACT_BUCKET === data.BACKUP_OFFSITE_S3_BUCKET) {
+    issues.push('S3_CONTRACT_BUCKET: must differ from the off-site backup bucket')
+  }
   if (data.S3_CONTRACT_ACCESS_KEY_ID === data.ASSET_S3_ACCESS_KEY_ID) {
     issues.push('S3_CONTRACT_ACCESS_KEY_ID: must differ from the application identity')
   }
   if (data.S3_CONTRACT_ACCESS_KEY_ID === data.BACKUP_S3_ACCESS_KEY_ID) {
     issues.push('S3_CONTRACT_ACCESS_KEY_ID: must differ from the backup identity')
+  }
+  if (data.S3_CONTRACT_ACCESS_KEY_ID === data.BACKUP_OFFSITE_S3_ACCESS_KEY_ID) {
+    issues.push('S3_CONTRACT_ACCESS_KEY_ID: must differ from the off-site backup identity')
   }
   if (issues.length > 0) throw new StorageConfigurationError(issues)
 

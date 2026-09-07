@@ -1,5 +1,6 @@
 import { z } from 'zod'
 
+import { RECOVERY_OBJECT_PREFIX } from '@/recovery/object-policy'
 import { parseAssetStorageConfiguration } from '@/storage/configuration'
 import { StorageObjectNotFoundError } from '@/storage/contracts'
 import { resolveAssetResponseCacheControl } from '@/storage/policy'
@@ -12,6 +13,13 @@ const keySchema = z
   .min(1)
   .max(20)
 
+const privateTopLevelPrefixes = new Set([
+  RECOVERY_OBJECT_PREFIX,
+  'asset-backups',
+  'control-state',
+  'database-backups',
+])
+
 export async function GET(
   _request: Request,
   { params }: Readonly<{ params: Promise<{ key: string[] }> }>,
@@ -21,6 +29,12 @@ export async function GET(
     return Response.json(
       { error: 'invalid_asset_key' },
       { headers: { 'cache-control': 'no-store' }, status: 400 },
+    )
+  }
+  if (privateTopLevelPrefixes.has(parsedKey.data[0] ?? '')) {
+    return Response.json(
+      { error: 'asset_not_found' },
+      { headers: { 'cache-control': 'no-store' }, status: 404 },
     )
   }
   const key = parsedKey.data.join('/')

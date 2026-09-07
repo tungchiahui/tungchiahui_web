@@ -262,6 +262,12 @@ function createEncryptedSecret() {
       'BACKUP_S3_ACCESS_KEY_ID=phase13-backup-only-access',
       'BACKUP_S3_SECRET_ACCESS_KEY=phase13-backup-only-secret',
       'BACKUP_S3_FORCE_PATH_STYLE=false',
+      'BACKUP_OFFSITE_S3_ENDPOINT=https://phase13-offsite.r2.cloudflarestorage.com',
+      'BACKUP_OFFSITE_S3_REGION=auto',
+      'BACKUP_OFFSITE_S3_BUCKET=phase13-secondary-offsite-backup',
+      'BACKUP_OFFSITE_S3_ACCESS_KEY_ID=phase13-offsite-backup-only-access',
+      'BACKUP_OFFSITE_S3_SECRET_ACCESS_KEY=phase13-offsite-backup-only-secret',
+      'BACKUP_OFFSITE_S3_FORCE_PATH_STYLE=false',
     ].join('\n'),
     content_worker_env: [
       `DATABASE_URL=postgresql://site_content_worker_login:${workerPassword}@pgbouncer:6432/tungchiahui`,

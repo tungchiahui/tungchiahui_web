@@ -8,6 +8,7 @@ import {
 } from '../src/translation/contracts'
 
 export type SiteCommand =
+  | Readonly<{ execute: boolean; kind: 'asset-backup'; secretFile: string }>
   | Readonly<{
       backupType: 'diff' | 'full' | 'incr'
       environment: 'local' | 'production' | 'test'
@@ -79,6 +80,41 @@ export function parseSiteCommand(arguments_: readonly string[]): SiteCommand {
     arguments_[2] === 'init'
   ) {
     return Object.freeze({ kind: 'production-secrets-init' })
+  }
+
+  if (arguments_[0] === 'storage' && arguments_[1] === 'backup' && arguments_[2] === 'assets') {
+    let execute = false
+    let confirmed = false
+    let secretFile = 'ops/production/secrets/production.sops.yaml'
+    let index = 3
+    while (index < arguments_.length) {
+      const argument = arguments_[index]
+      if (argument === '--execute') {
+        execute = true
+        index += 1
+        continue
+      }
+      if (argument === '--confirm') {
+        confirmed = arguments_[index + 1] === 'ASSET-BACKUP-PRESERVE-R2-ONLY'
+        index += 2
+        continue
+      }
+      if (argument === '--secret-file') {
+        secretFile = z
+          .string()
+          .min(1)
+          .parse(arguments_[index + 1])
+        index += 2
+        continue
+      }
+      throw new SiteUsageError(`Unknown asset backup argument: ${String(argument)}`)
+    }
+    if (execute && !confirmed) {
+      throw new SiteUsageError(
+        'Asset backup execution requires --confirm ASSET-BACKUP-PRESERVE-R2-ONLY',
+      )
+    }
+    return Object.freeze({ execute, kind: 'asset-backup', secretFile })
   }
 
   if (

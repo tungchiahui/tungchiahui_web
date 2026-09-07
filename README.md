@@ -170,8 +170,8 @@ GitHub Actions 的手动 `workflow_dispatch` 可以触发同一个 Translation J
 - Ansible
 - pgBackRest + WAL/PITR
 - Adobe S3Mock for local S3 emulation
-- AList S3 for production static assets
-- Provider-neutral off-site Backup S3 (currently Cloudflare R2)
+- AList S3 for production static assets and an independent Primary Backup Bucket
+- Provider-neutral off-site Backup S3 replica (currently Cloudflare R2)
 - SQLite as host-local control-plane recovery state only
 - Renovate for Dependency Update PR automation
 

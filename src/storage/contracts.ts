@@ -27,7 +27,6 @@ export const storageObjectKeySchema = z
 
 export const storageObjectPrefixSchema = z
   .string()
-  .min(1)
   .max(1_024)
   .refine((value) => !value.startsWith('/'), 'Object prefix must not start with a slash')
   .refine(
@@ -40,7 +39,7 @@ export const storageObjectPrefixSchema = z
   )
   .refine((value) => !containsControlCharacter(value), 'Object prefix contains control characters')
 
-export const storageObjectIdentifierSchema = storageObjectPrefixSchema
+export const storageObjectIdentifierSchema = storageObjectPrefixSchema.min(1)
 
 export const storageMetadataSchema = z.record(
   z.string().regex(/^[a-z0-9][a-z0-9-]*$/u),

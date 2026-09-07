@@ -12,6 +12,7 @@ import {
 } from '../control-plane/control-state'
 import type { S3ConnectionConfiguration } from '../storage/contracts'
 import { S3ObjectStorageAdapter } from '../storage/s3-adapter'
+import { recoveryObjectKey } from './object-policy'
 
 export const encryptedControlStateArtifactSchema = z
   .object({
@@ -21,7 +22,7 @@ export const encryptedControlStateArtifactSchema = z
     encryptedSha256: z.string().regex(/^[a-f0-9]{64}$/),
     environment: z.enum(['local', 'test', 'production']),
     objectKey: z.string().min(1),
-    schemaVersion: z.literal(6),
+    schemaVersion: z.literal(7),
     snapshotId: z.uuid(),
     version: z.literal(1),
   })
@@ -36,7 +37,7 @@ function serializeArtifact(artifact: EncryptedControlStateArtifact) {
 }
 
 function latestArtifactKey(environment: ControlStateEnvironment) {
-  return `control-state/${environment}/latest.json`
+  return recoveryObjectKey(`control-state/${environment}/latest.json`)
 }
 
 function runAge(arguments_: readonly string[]) {
@@ -71,7 +72,9 @@ export function createEncryptedControlStateArtifact(
       createdAt: now.toISOString(),
       encryptedSha256,
       environment: evidence.environment,
-      objectKey: `control-state/${evidence.environment}/${snapshotId}.sqlite.age`,
+      objectKey: recoveryObjectKey(
+        `control-state/${evidence.environment}/${snapshotId}.sqlite.age`,
+      ),
       schemaVersion: evidence.schemaVersion,
       snapshotId,
       version: 1,
@@ -130,7 +133,9 @@ export async function replicateControlStateArtifact(
     const manifestBody = serializeArtifact(validated)
     const manifestSha256 = createHash('sha256').update(manifestBody).digest('hex')
     for (const key of [
-      `control-state/${validated.environment}/manifests/${validated.snapshotId}.json`,
+      recoveryObjectKey(
+        `control-state/${validated.environment}/manifests/${validated.snapshotId}.json`,
+      ),
       latestArtifactKey(validated.environment),
     ]) {
       await storage.putObject({

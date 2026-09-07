@@ -50,9 +50,11 @@ AList Asset S3
 └─ attachments/media/libs
 
 Local encrypted pgBackRest repository + WAL
-          |
-          v
-Cloudflare R2 via provider-neutral BACKUP_S3_*
+          |\
+          | \-> AList Primary Backup via BACKUP_S3_*
+          |      |
+          |      v
+          \----> Cloudflare R2 Off-site via BACKUP_OFFSITE_S3_*
 ```
 
 ## 网络身份
@@ -142,8 +144,10 @@ Static/Binary Storage。
 
 ### Backup S3
 
-独立于 Asset Store 的加密 Off-site Backup Artifact；接口保持 S3-compatible，当前 Production
-Provider 为 Cloudflare R2。Backup/Restore 不依赖 AList。
+加密 Recovery Artifact 位于现有 AList Bucket 的固定 `backups/` Namespace，AList 是 Primary，
+Cloudflare R2 是整个 AList Bucket 的 Off-site Replica；两者接口均保持 S3-compatible，R2 使用
+独立 Credential。AList v3 的 S3 Credential 是实例级，因此 Asset/Backup 以固定 Prefix、应用
+只读接口和 Public Prefix Deny 隔离。Restore 优先 AList，并在 Primary 不可用或校验失败时回退 R2。
 
 ### Next.js Blue/Green Application
 
@@ -214,7 +218,7 @@ Blue/Green Upstream Selection 和 Path Ownership；外层代理不直接指向�
 zh-CN Markdown authority  -> GitHub
 Runtime content authority -> PostgreSQL materialized state
 Static assets authority   -> AList S3
-Production backup copy    -> local encrypted repository + off-site Backup S3 (currently R2)
+Production backup copy    -> local encrypted repository + AList Primary + R2 Off-site
 Application authority     -> Git repository + immutable image
 Infrastructure recovery   -> host-local control-state SQLite + immutable artifacts
 ```

@@ -25,15 +25,16 @@ PostgreSQL
  pgBackRest 2.59.1 encrypted local repository
     |
 SHA-256 manifest + full read-back verification
-    |
-off-site BACKUP_S3_* target (Production: Cloudflare R2)
+    |\
+    | \-> primary BACKUP_S3_* target (Production: AList)
+    \---> off-site BACKUP_OFFSITE_S3_* target (Production: Cloudflare R2)
 ```
 
-Phase 11 的真实 AList 证据验证了 PUT/GET/HEAD/List/Overwrite/Metadata 等应用对象语义，但也记录了 ETag 缺失和 Cache-Control 规范化；这些证据不足以证明 pgBackRest 直接 Repository 所需的全部一致性语义。因此 Recovery Flow 使用 Local Repository + Verified Sync，不把任意 S3 Provider 当作 pgBackRest 原生 Repository。每个同步 Generation 包含完整 Repository、文件/符号链接类型、逐对象 SHA-256 和 Manifest SHA-256；只有本地 pgBackRest/WAL 检查与 Off-site 完整读回校验都通过，Backup 才标记为有效。
+Phase 11 的真实 AList 证据验证了 PUT/GET/HEAD/List/Overwrite/Metadata 等应用对象语义，但也记录了 ETag 缺失和 Cache-Control 规范化；这些证据不足以证明 pgBackRest 直接 Repository 所需的全部一致性语义。因此 Recovery Flow 使用 Local Repository + Verified Sync，不把任意 S3 Provider 当作 pgBackRest 原生 Repository。每个同步 Generation 包含完整 Repository、文件/符号链接类型、逐对象 SHA-256 和 Manifest SHA-256；只有本地 pgBackRest/WAL 检查与 AList Primary、R2 Off-site 完整读回校验都通过，Backup 才标记为有效。
 
-ADR 0017 将 Production 收敛为两类 Identity：`ASSET_S3_*` 与 `BACKUP_S3_*`。Parser 拒绝两者复用 Bucket 或 Access Key，Production Backup Endpoint 必须是 HTTPS。Local Repository 不是唯一恢复副本；Restore 从完整读回验证的 Off-site Generation 重建 Repository。当前 `BACKUP_S3_*` 指向 R2，但 Adapter、CLI 与 Domain Type 不绑定 Provider。
+ADR 0018 定义两套远程存储连接：`ASSET_S3_*`/AList Primary `BACKUP_S3_*` 在 Production 指向同一 AList Bucket/Pair，Recovery Engine 只写固定 `backups/`；`BACKUP_OFFSITE_S3_*` 指向独立 R2。Parser 拒绝 AList/R2 Credential 复用和 Production HTTP Endpoint。Local Repository 不是唯一恢复副本；Restore 优先从完整读回验证的 AList Generation 重建，失败时回退同一 R2 Generation。Adapter、CLI 与 Domain Type 不绑定 Provider。
 
-Retention 基线由 `ops/production/pgbackrest.conf` 固定：保留 2 个 Full、4 个 Differential，以及对应 2 个 Full 范围内的 WAL；定时策略运行 Full/Differential/Incremental。每次 Backup 后执行 pgBackRest `check` + `verify`，并验证 Off-site 对象副本。
+Retention 基线由 `ops/production/pgbackrest.conf` 固定：保留 2 个 Full、4 个 Differential，以及对应 2 个 Full 范围内的 WAL；定时策略运行 Full/Differential/Incremental。每次 Backup 后执行 pgBackRest `check` + `verify`，并验证 Primary 与 Off-site 对象副本。
 
 ## Backup Command
 
@@ -51,7 +52,7 @@ Retention 基线由 `ops/production/pgbackrest.conf` 固定：保留 2 个 Full�
 - 记录 Backup Metadata
 - 报告 Replica Status
 
-`backup status` 从 host-local Control-state SQLite 读取 Backup ID/Type、WAL Max、Measured Bytes/Seconds、Manifest Hash 和 Off-site Replica Freshness，因此 Production PostgreSQL Down 时仍可查询。
+`backup status` 从 host-local Control-state SQLite 读取 Backup ID/Type、WAL Max、Measured Bytes/Seconds、Manifest Hash 和两端 Replica Freshness，因此 Production PostgreSQL Down 时仍可查询。
 
 ## Restore
 
@@ -129,6 +130,35 @@ destroy disposable environment
 ```
 
 只有成功完成 Recovery Test 的 Backup 才可信。
+
+## Asset Object Backup
+
+网站 Asset 与 PostgreSQL Recovery 共处 AList 的不同 Namespace。Production 从 AList 整桶逐对象
+读取并计算 SHA-256，向 R2 `BACKUP_OFFSITE_S3_*` 执行 Copy/Add/Update，因此普通 Asset 和
+`backups/` Recovery Artifact 都进入完整异地副本；该操作本身不连接 PostgreSQL。
+
+默认先执行只读 Hash Audit：
+
+```bash
+./site storage backup assets
+```
+
+Owner 单独批准写入后执行：
+
+```bash
+./site storage backup assets --execute --confirm ASSET-BACKUP-PRESERVE-R2-ONLY
+```
+
+命令在 Controller 内存中解密 Production SOPS 文档，逐对象计算 SHA-256，只复制缺失对象或覆盖
+同 Key 但内容变化的对象，并对每次写入做 R2 Read-back Hash Verification。成功后写入不可变的
+`asset-backups/manifests/<timestamp>-<sha256>.json` 和经读回验证的
+`asset-backups/latest.json`。
+
+该命令明确采用 `copy-add-update-preserve-target-only` 语义：AList 删除或暂时不可读的对象不会从
+R2 删除，R2-only 对象会保留并计入报告。任何孤儿清理都是独立 Destructive Operation，必须另行
+获得 Owner 对精确对象集合的批准；当前整桶 Backup 没有删除路径。`asset-backups/` 只属于 R2
+Mirror Manifest；若 AList Source 出现该 Prefix 则 Fail Closed，避免递归镜像自身 Manifest。
+`backups/` 是允许且必须复制的 Recovery Namespace。
 
 自动 Gate：
 
