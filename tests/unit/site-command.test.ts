@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { createBackupRequestBody } from '../../tools/recovery/control-client'
 import { assertToolchain, parseSiteCommand, SiteUsageError } from '../../tools/site-command'
 
 describe('site command boundary', () => {
@@ -186,5 +187,23 @@ describe('site command boundary', () => {
   it('pins the Node.js runtime', () => {
     expect(() => assertToolchain('24.19.0')).not.toThrow()
     expect(() => assertToolchain('22.23.1')).toThrow(SiteUsageError)
+  })
+
+  it('removes the internal command discriminator from backup API requests', () => {
+    const command = parseSiteCommand([
+      'backup',
+      '--environment',
+      'production',
+      '--type',
+      'full',
+      '--reason',
+      'phase 18 backup',
+    ])
+
+    expect(createBackupRequestBody(command)).toEqual({
+      backupType: 'full',
+      environment: 'production',
+      reason: 'phase 18 backup',
+    })
   })
 })
