@@ -1,8 +1,10 @@
+import { HttpPublicContentRevalidationHook } from '../../src/content/revalidation'
 import { runPostgresMigrations } from '../../src/database/migrate'
 import { seedDevelopmentDatabase } from '../../src/database/seed'
 import type { ComposeProject } from './compose'
 
 const localDatabaseCredentials = 'tungchiahui:local-only-postgres'
+const localRevalidationSecret = 'local-only-phase6-revalidation-secret'
 
 export function databaseUrl(compose: ComposeProject, service: 'postgres' | 'pgbouncer') {
   const port = compose.port(service, service === 'postgres' ? 5432 : 6432)
@@ -13,7 +15,12 @@ export async function runInfrastructureHooks(repositoryRoot: string, compose: Co
   const migrationResult = await runPostgresMigrations(databaseUrl(compose, 'postgres'), {
     repositoryRoot,
   })
-  await seedDevelopmentDatabase(databaseUrl(compose, 'pgbouncer'))
+  const seedResult = await seedDevelopmentDatabase(databaseUrl(compose, 'pgbouncer'))
+  const webPort = compose.port('web', 3000)
+  await new HttpPublicContentRevalidationHook(
+    `http://127.0.0.1:${webPort}/api/internal/revalidate`,
+    localRevalidationSecret,
+  ).revalidatePublicContent(seedResult)
 
   console.log(`Migration hook: ready (${migrationResult.migrationCount} versioned migrations)`)
   console.log('Seed hook: ready (deterministic Phase 3 development fixture)')

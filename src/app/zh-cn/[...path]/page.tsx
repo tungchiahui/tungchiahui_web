@@ -14,10 +14,9 @@ export async function generateMetadata({ params }: PageProperties): Promise<Meta
 }
 
 export default async function ZhCnPublicRoutePage({ params, searchParams }: PageProperties) {
-  const query = (await searchParams).q
   return renderPublicPage(
     (await params).path,
     { locale: 'zh-cn', prefixed: true },
-    typeof query === 'string' ? query : undefined,
+    await searchParams,
   )
 }

@@ -278,14 +278,15 @@ export class SearchIndexRepository {
                  pgroonga_score(tableoid, ctid))::double precision AS score
            FROM app.search_documents
           WHERE locale = $2::app.locale
+            AND ($3::app.content_type IS NULL OR content_type = $3::app.content_type)
             AND ARRAY[title, headings, body, metadata] &@
                 ($1::text, ARRAY[16, 8, 2, 4], 'search_documents_full_text_idx')::pgroonga_full_text_search_condition
           ORDER BY (lower(title) = lower($1::text)) DESC,
                    score DESC,
                    source_updated_at DESC NULLS LAST,
                    route_path ASC
-          LIMIT $3`,
-        [request.query, request.locale, request.limit],
+          LIMIT $4`,
+        [request.query, request.locale, request.contentType ?? null, request.limit],
       )
       rowInputs = result.rows
       await client.query('COMMIT')
@@ -321,6 +322,7 @@ export class SearchIndexRepository {
       JSON.stringify({
         durationMilliseconds: Math.round(performance.now() - startedAt),
         event: 'search_query_executed',
+        contentType: request.contentType ?? 'all',
         locale: request.locale,
         resultCount: results.length,
       }),

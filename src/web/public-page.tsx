@@ -4,22 +4,29 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getTranslations } from 'next-intl/server'
 import type { ReactNode } from 'react'
-
+import { z } from 'zod'
+import { ArticleReader } from '@/components/article-reader'
 import { BookmarkWorkspace } from '@/components/bookmark-workspace'
-import { PrintButton } from '@/components/print-button'
 import { SiteShell } from '@/components/site-shell'
+import { TrafficMetrics } from '@/components/traffic-metrics'
 import { techFootprintPayloadSchema, weightLossPayloadSchema } from '@/control-plane/contracts'
 import { localizeContentText } from '@/i18n/content'
 import type { AppLocale } from '@/i18n/locales'
 import { readCachedSearch } from '@/search/cache'
-import { searchQuerySchema } from '@/search/contracts'
+import { type SearchResult, searchQuerySchema } from '@/search/contracts'
 import {
   listCachedDocuments,
   readCachedDocument,
   readCachedOwnerDataset,
 } from '@/server/cached-content'
 import type { PublicDocument } from '@/server/public-content'
-
+import {
+  documentDate,
+  documentSummary,
+  groupWikiDocuments,
+  trafficPaths,
+  wikiDocumentKey,
+} from './content-compatibility'
 import { renderMarkdown } from './markdown'
 import {
   type PublicRouteContext,
@@ -36,7 +43,17 @@ function formatDate(date: Date | null) {
 function CardLink({
   context,
   document,
-}: Readonly<{ context: PublicRouteContext; document: PublicDocument }>) {
+  searchMatch,
+  showSummary = false,
+  trafficLabels,
+}: Readonly<{
+  context: PublicRouteContext
+  document: PublicDocument
+  searchMatch?: Readonly<{ label: string; snippet: string }> | undefined
+  showSummary?: boolean
+  trafficLabels?: TrafficLabels
+}>) {
+  const summary = searchMatch?.snippet ?? (showSummary ? documentSummary(document) : undefined)
   return (
     <li>
       <Link
@@ -46,10 +63,23 @@ function CardLink({
         <h3 className="font-semibold text-lg">
           {localizeContentText(document.title, context.locale)}
         </h3>
-        {document.sourceUpdatedAt ? (
-          <time className="mt-2 block text-muted-foreground text-sm">
-            {formatDate(document.sourceUpdatedAt)}
-          </time>
+        {searchMatch ? (
+          <span className="mt-2 block font-medium text-primary text-xs uppercase">
+            {searchMatch.label}
+          </span>
+        ) : null}
+        {documentDate(document) ? (
+          <time className="mt-2 block text-muted-foreground text-sm">{documentDate(document)}</time>
+        ) : null}
+        {summary ? (
+          <p className="mt-3 line-clamp-3 text-muted-foreground text-sm">
+            {localizeContentText(summary, context.locale)}
+          </p>
+        ) : null}
+        {trafficLabels ? (
+          <span className="mt-3 block">
+            <TrafficMetrics labels={trafficLabels} paths={trafficPaths(document.routePath)} />
+          </span>
         ) : null}
       </Link>
     </li>
@@ -104,40 +134,130 @@ async function HomePage({ context }: Readonly<{ context: PublicRouteContext }>) 
   )
 }
 
-function wikiGroup(document: PublicDocument) {
-  return document.sourcePath.split('/')[2] ?? document.sourcePath
-}
-
 async function ContentList({
   context,
   contentType,
-}: Readonly<{ contentType: 'blog' | 'wiki'; context: PublicRouteContext }>) {
+  queryInput,
+}: Readonly<{
+  contentType: 'blog' | 'wiki'
+  context: PublicRouteContext
+  queryInput: string | undefined
+}>) {
   const t = await getTranslations({ locale: context.locale, namespace: 'Web' })
-  const documents = await listCachedDocuments(contentType, context.locale)
+  const allDocuments = await listCachedDocuments(contentType, context.locale)
+  const parsedQuery = z.string().trim().max(200).safeParse(queryInput)
+  const query = parsedQuery.success && parsedQuery.data ? parsedQuery.data : undefined
+  const searchResults = query
+    ? await readCachedSearch({ contentType, limit: 50, locale: context.locale, query })
+    : undefined
+  const documents = searchResults
+    ? searchResults.flatMap((result) => {
+        const document = allDocuments.find(
+          (candidate) => `/${context.locale}${candidate.routePath}` === result.route,
+        )
+        return document ? [document] : []
+      })
+    : allDocuments
   const title = contentType === 'blog' ? t('blogTitle') : t('wikiTitle')
   const description = contentType === 'blog' ? t('blogDescription') : t('wikiDescription')
+  const trafficLabels = makeTrafficLabels(t)
+  const matchedContextLabels = {
+    body: t('searchMatchBody'),
+    heading: t('searchMatchHeading'),
+    metadata: t('searchMatchMetadata'),
+    title: t('searchMatchTitle'),
+  } as const
+  const searchByRoute = new Map<string, SearchResult>(
+    searchResults?.map((result) => [result.route, result]) ?? [],
+  )
+  const searchMatch = (document: PublicDocument) => {
+    const result = searchByRoute.get(`/${context.locale}${document.routePath}`)
+    return result
+      ? { label: matchedContextLabels[result.matchedContext], snippet: result.snippet }
+      : undefined
+  }
 
   if (contentType === 'wiki') {
-    const groups = Map.groupBy(documents, wikiGroup)
+    const groups = groupWikiDocuments(documents)
     return (
       <section>
         <h1 className="font-bold text-4xl">{title}</h1>
         <p className="mt-3 text-muted-foreground">{description}</p>
-        <div className="mt-9 grid gap-8">
-          {[...groups].map(([group, entries]) => (
-            <section className="rounded-2xl border p-5" key={group}>
-              <h2 className="mb-4 font-semibold text-xl">
-                {entries[0]
-                  ? localizeContentText(entries[0].title, context.locale)
-                  : localizeContentText(group, context.locale)}
-              </h2>
-              <ol className="grid gap-2">
-                {entries.map((document) => (
-                  <CardLink context={context} document={document} key={document.id} />
+        <ContentSearch
+          action={withLocalePrefix('/wiki', context)}
+          defaultValue={query}
+          label={t('filterWiki')}
+          submitLabel={t('searchSubmit')}
+        />
+        <div className="mt-9 grid gap-5">
+          {groups.map((group) => (
+            <details
+              className="rounded-2xl border bg-card p-5"
+              key={group.key}
+              open={Boolean(query)}
+            >
+              <summary className="cursor-pointer font-semibold text-xl">
+                {localizeContentText(group.title, context.locale)}
+                <span className="ml-2 font-normal text-muted-foreground text-sm">
+                  {t('chapterCount', { count: group.chapters.length })}
+                </span>
+              </summary>
+              <ol className="mt-5 grid gap-2">
+                {group.index ? (
+                  <li>
+                    <Link
+                      className="font-medium hover:text-primary"
+                      href={withLocalePrefix(group.index.routePath, context)}
+                    >
+                      {t('wikiOverview')}
+                    </Link>
+                    {searchMatch(group.index) ? (
+                      <p className="mt-1 text-muted-foreground text-sm">
+                        <span className="font-medium text-primary text-xs uppercase">
+                          {searchMatch(group.index)?.label}
+                        </span>{' '}
+                        · {searchMatch(group.index)?.snippet}
+                      </p>
+                    ) : null}
+                  </li>
+                ) : null}
+                {group.chapters.map((entry) => (
+                  <li
+                    key={entry.document.id}
+                    style={{ paddingInlineStart: `${entry.chapterDepth * 0.75}rem` }}
+                  >
+                    <Link
+                      className="hover:text-primary"
+                      href={withLocalePrefix(entry.document.routePath, context)}
+                    >
+                      {entry.chapter ? `${entry.chapter} ` : ''}
+                      {localizeContentText(entry.document.title, context.locale)}
+                    </Link>
+                    {searchMatch(entry.document) ? (
+                      <p className="mt-1 text-muted-foreground text-sm">
+                        <span className="font-medium text-primary text-xs uppercase">
+                          {searchMatch(entry.document)?.label}
+                        </span>{' '}
+                        · {searchMatch(entry.document)?.snippet}
+                      </p>
+                    ) : null}
+                  </li>
                 ))}
               </ol>
-            </section>
+              <div className="mt-4 border-t pt-3">
+                <TrafficMetrics
+                  labels={trafficLabels}
+                  paths={group.chapters
+                    .map((entry) => entry.document)
+                    .concat(group.index ? [group.index] : [])
+                    .flatMap((entry) => trafficPaths(entry.routePath))}
+                />
+              </div>
+            </details>
           ))}
+          {groups.length === 0 ? (
+            <p className="rounded-xl border p-5 text-muted-foreground">{t('searchEmpty')}</p>
+          ) : null}
         </div>
       </section>
     )
@@ -147,24 +267,114 @@ async function ContentList({
     <section>
       <h1 className="font-bold text-4xl">{title}</h1>
       <p className="mt-3 text-muted-foreground">{description}</p>
+      <ContentSearch
+        action={withLocalePrefix('/blog', context)}
+        defaultValue={query}
+        label={t('filterBlog')}
+        submitLabel={t('searchSubmit')}
+      />
       <ul className="mt-9 grid gap-4 sm:grid-cols-2">
         {documents.map((document) => (
-          <CardLink context={context} document={document} key={document.id} />
+          <CardLink
+            context={context}
+            document={document}
+            key={document.id}
+            searchMatch={searchMatch(document)}
+            showSummary
+            trafficLabels={trafficLabels}
+          />
         ))}
       </ul>
+      {documents.length === 0 ? (
+        <p className="mt-9 rounded-xl border p-5 text-muted-foreground">{t('searchEmpty')}</p>
+      ) : null}
     </section>
+  )
+}
+
+type TrafficLabels = Readonly<{
+  averageTime: string
+  bounceRate: string
+  pageviews: string
+  unavailable: string
+  visits: string
+}>
+
+function makeTrafficLabels(
+  t: (
+    key:
+      | 'trafficAverageTime'
+      | 'trafficBounceRate'
+      | 'trafficPageviews'
+      | 'trafficUnavailable'
+      | 'trafficVisits',
+  ) => string,
+) {
+  return {
+    averageTime: t('trafficAverageTime'),
+    bounceRate: t('trafficBounceRate'),
+    pageviews: t('trafficPageviews'),
+    unavailable: t('trafficUnavailable'),
+    visits: t('trafficVisits'),
+  } satisfies TrafficLabels
+}
+
+function ContentSearch({
+  action,
+  defaultValue,
+  label,
+  submitLabel,
+}: Readonly<{
+  action: string
+  defaultValue: string | undefined
+  label: string
+  submitLabel: string
+}>) {
+  return (
+    <search>
+      <form action={action} className="mt-7 flex max-w-xl gap-3" method="get">
+        <input
+          aria-label={label}
+          className="min-w-0 flex-1 rounded-xl border bg-background px-4 py-3"
+          defaultValue={defaultValue}
+          maxLength={200}
+          name="q"
+          placeholder={label}
+          type="search"
+        />
+        <button
+          aria-label={submitLabel}
+          className="grid size-12 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground"
+          type="submit"
+        >
+          <SearchIcon aria-hidden size={18} />
+        </button>
+      </form>
+    </search>
   )
 }
 
 async function SearchPage({
   context,
   queryInput,
-}: Readonly<{ context: PublicRouteContext; queryInput: string | undefined }>) {
+  typeInput,
+}: Readonly<{
+  context: PublicRouteContext
+  queryInput: string | undefined
+  typeInput: string | undefined
+}>) {
   const t = await getTranslations({ locale: context.locale, namespace: 'Web' })
   const parsedQuery = searchQuerySchema.safeParse(queryInput)
   const query = parsedQuery.success ? parsedQuery.data : undefined
+  const parsedType = z.enum(['blog', 'wiki']).safeParse(typeInput)
+  const contentType = parsedType.success ? parsedType.data : undefined
   const results = query
-    ? await readCachedSearch({ limit: 20, locale: context.locale, query })
+    ? await readCachedSearch({
+        ...(contentType ? { contentType } : {}),
+        limit: 20,
+        locale: context.locale,
+        query,
+      })
     : undefined
   const matchedContextLabels = {
     body: t('searchMatchBody'),
@@ -180,7 +390,7 @@ async function SearchPage({
       <search>
         <form
           action={withLocalePrefix('/search', context)}
-          className="mt-8 flex max-w-3xl gap-3"
+          className="mt-8 flex max-w-3xl flex-wrap gap-3"
           method="get"
         >
           <input
@@ -193,6 +403,16 @@ async function SearchPage({
             required
             type="search"
           />
+          <select
+            aria-label={t('searchType')}
+            className="rounded-xl border bg-background px-4 py-3"
+            defaultValue={contentType ?? ''}
+            name="type"
+          >
+            <option value="">{t('searchTypeAll')}</option>
+            <option value="blog">{t('blog')}</option>
+            <option value="wiki">{t('wiki')}</option>
+          </select>
           <button
             className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 font-medium text-primary-foreground"
             type="submit"
@@ -244,9 +464,16 @@ async function ArticlePage({
   const document = await readCachedDocument(path, context.locale)
   if (!document) notFound()
   const all = await listCachedDocuments(document.contentType, context.locale)
-  const navigation =
+  const currentWikiGroup =
     document.contentType === 'wiki'
-      ? all.filter((candidate) => wikiGroup(candidate) === wikiGroup(document))
+      ? groupWikiDocuments(all).find((group) => group.key === wikiDocumentKey(document))
+      : undefined
+  const navigation =
+    document.contentType === 'wiki' && currentWikiGroup
+      ? [
+          ...(currentWikiGroup.index ? [currentWikiGroup.index] : []),
+          ...currentWikiGroup.chapters.map((entry) => entry.document),
+        ]
       : all
   const index = navigation.findIndex((candidate) => candidate.id === document.id)
   const previous = index > 0 ? navigation[index - 1] : undefined
@@ -257,9 +484,27 @@ async function ArticlePage({
   )
   const localizedTitle = localizeContentText(document.title, context.locale)
   const presentationState = document.contentLocaleState
+  const trafficLabels = makeTrafficLabels(t)
+
+  const wikiNavigation =
+    document.contentType === 'wiki'
+      ? navigation.map((candidate, navigationIndex) => {
+          const numbered = currentWikiGroup?.chapters.find(
+            (entry) => entry.document.id === candidate.id,
+          )
+          return {
+            ...(numbered?.chapter ? { chapter: numbered.chapter } : {}),
+            current: candidate.id === document.id,
+            depth: numbered?.chapterDepth ?? 0,
+            href: withLocalePrefix(candidate.routePath, context),
+            title: localizeContentText(candidate.title, context.locale),
+            navigationIndex,
+          }
+        })
+      : []
 
   return (
-    <article className="mx-auto max-w-4xl">
+    <article className="mx-auto max-w-[90rem]" data-article-type={document.contentType}>
       <header className="border-b pb-8">
         <p className="font-medium text-primary text-sm uppercase">{t(document.contentType)}</p>
         <h1 className="mt-3 font-bold text-4xl tracking-tight sm:text-5xl">{localizedTitle}</h1>
@@ -282,23 +527,25 @@ async function ArticlePage({
                 : t('contentStateFallback')}
           </p>
         )}
+        <TrafficMetrics
+          labels={trafficLabels}
+          paths={trafficPaths(document.routePath)}
+          variant="detail"
+        />
       </header>
-      {rendered.headings.length > 1 ? (
-        <nav aria-label={t('tableOfContents')} className="my-8 rounded-xl border bg-card p-5">
-          <h2 className="font-semibold">{t('tableOfContents')}</h2>
-          <ol className="mt-3 grid gap-1 text-sm">
-            {rendered.headings.map((heading) => (
-              <li className={heading.depth > 2 ? 'pl-4' : undefined} key={heading.id}>
-                <a className="hover:text-primary" href={`#${heading.id}`}>
-                  {heading.text}
-                </a>
-              </li>
-            ))}
-          </ol>
-        </nav>
-      ) : null}
-      {/* biome-ignore lint/security/noDangerouslySetInnerHtml: unified drops raw HTML, rehype-sanitize validates the tree, and Shiki only adds generated markup. */}
-      <div className="prose-site mt-9" dangerouslySetInnerHTML={{ __html: rendered.html }} />
+      <ArticleReader
+        documentNavigation={wikiNavigation}
+        headings={rendered.headings}
+        html={rendered.html}
+        labels={{
+          close: t('close'),
+          codeCopied: t('codeCopied'),
+          copyCode: t('copyCode'),
+          documentNavigation: t('documentNavigation'),
+          imagePreview: t('imagePreview'),
+          tableOfContents: t('tableOfContents'),
+        }}
+      />
       <nav className="mt-12 grid gap-3 border-t pt-6 sm:grid-cols-2">
         {previous ? (
           <Link
@@ -362,7 +609,6 @@ async function SpecialPage({
     | 'mylogoDescription'
     | 'mylogoTitle'
     | 'noRecords'
-    | 'printCv'
     | 'progress'
     | 'qqMusic'
     | 'removeBookmark'
@@ -415,12 +661,7 @@ async function SpecialPage({
         </>
       )
     case 'cv':
-      return (
-        <>
-          <SpecialHeader description={s('cvDescription')} title={s('cvTitle')} />
-          <PrintButton label={s('printCv')} />
-        </>
-      )
+      return <SpecialHeader description={s('cvDescription')} title={s('cvTitle')} />
     case 'friend':
       return (
         <>
@@ -584,14 +825,19 @@ async function SpecialPage({
 export async function renderPublicPage(
   segments: readonly string[],
   context: PublicRouteContext,
-  searchQuery?: string,
+  searchParameters: Readonly<Record<string, string | string[] | undefined>> = {},
 ) {
   const path = publicPath(segments)
+  const query = typeof searchParameters.q === 'string' ? searchParameters.q : undefined
+  const type = typeof searchParameters.type === 'string' ? searchParameters.type : undefined
   let page: ReactNode
   if (path === '/') page = <HomePage context={context} />
-  else if (path === '/blog') page = <ContentList contentType="blog" context={context} />
-  else if (path === '/wiki') page = <ContentList contentType="wiki" context={context} />
-  else if (path === '/search') page = <SearchPage context={context} queryInput={searchQuery} />
+  else if (path === '/blog')
+    page = <ContentList contentType="blog" context={context} queryInput={query} />
+  else if (path === '/wiki')
+    page = <ContentList contentType="wiki" context={context} queryInput={query} />
+  else if (path === '/search')
+    page = <SearchPage context={context} queryInput={query} typeInput={type} />
   else if (path.startsWith('/blog/') || path.startsWith('/wiki/'))
     page = <ArticlePage context={context} path={path} />
   else {

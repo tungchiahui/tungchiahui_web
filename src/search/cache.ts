@@ -18,7 +18,13 @@ export async function readCachedSearch(input: unknown) {
   const request = searchRequestSchema.parse(input)
   const cached = await unstable_cache(
     () => getSearchRepository().search(request),
-    ['public-search', request.locale, request.query, String(request.limit)],
+    [
+      'public-search',
+      request.locale,
+      request.contentType ?? 'all',
+      request.query,
+      String(request.limit),
+    ],
     { revalidate: false, tags: [searchLocaleCacheTag(request.locale)] },
   )()
   return Object.freeze(cached.map((result) => Object.freeze(searchResultSchema.parse(result))))

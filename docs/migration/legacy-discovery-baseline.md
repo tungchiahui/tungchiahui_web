@@ -121,7 +121,7 @@ Owner 已确认以下 Route 和界面全部保留。`/more` 继续作为入口 H
 
 | Surface | Legacy behavior | 分类 | 目标 Phase |
 | --- | --- | --- | --- |
-| Global Header | Home/Blog/Wiki/About/More Navigation、Search Box、Theme Toggle | MUST KEEP behavior; MAY REDESIGN layout | 6、7、10 |
+| Global Header | Home/Blog/Wiki/About/More Navigation、Search、Theme Toggle | MUST KEEP behavior; MAY REDESIGN layout；Owner 于 2026-09-07 明确 Search 为独立放大镜，并把 Theme 细化为跟随系统/深色/浅色三态 | 6、7、10、18 |
 | Global Footer | Site Navigation、Language Switch、Social/Contact、ICP备案/公安备案 | MUST KEEP required/legal identity; MAY REDESIGN layout | 6、7、16 |
 | Theme | System-preference + persisted Light/Dark Mode | SHOULD KEEP | 6 |
 | Loading Feedback | Page/reader aware delayed loading overlay | SHOULD KEEP outcome | 6 |
@@ -129,9 +129,11 @@ Owner 已确认以下 Route 和界面全部保留。`/more` 继续作为入口 H
 | Blog list | Date sort、Locale filter、Traffic aggregation | MUST KEEP，包括公开 Traffic display | 6、7、16 |
 | Blog article | Markdown、TOC、heading anchors、reading progress/time、previous/next、image zoom、code copy、traffic stats | MUST KEEP reading contract; MAY REDESIGN controls | 6、7、16 |
 | Wiki list | Document grouping、chapter order/numbering、traffic aggregation | MUST KEEP hierarchy and ordering | 5、6、7 |
-| Wiki article | Document drawer、TOC、previous/next、reading progress、heading anchors、image zoom、code copy、print/PDF style、traffic stats | MUST KEEP reading/navigation/print contract; MAY REDESIGN controls | 6、7、16 |
+| Wiki article | Document drawer、TOC、previous/next、reading progress、heading anchors、image zoom、code copy、traffic stats | MUST KEEP reading/navigation/traffic contract; print/PDF control explicitly removed by Owner on 2026-09-07 | 6、7、16、18 |
 | Markdown link | `/docs/*` remains a normal anchor; external links open safely; internal links use app navigation | MUST KEEP outcome | 6 |
 | Markdown image | Responsive lazy/async image rendering | MUST KEEP outcome | 6、11 |
+| Blog/Wiki reader interactions | Wiki document hierarchy, numbered TOC/anchor, reading progress, code copy, image zoom and previous/next | MUST KEEP outcome；Owner removed Wiki print/PDF and refined preview/mobile-dismissal behavior on 2026-09-07 | Phase 18 blocking repair PASS locally；`phase-18-blog-wiki-compatibility.md` |
+| Blog taxonomy/pagination | No category/tag taxonomy and no Blog pagination in current Legacy implementation/corpus | Not a Legacy compatibility requirement | Phase 18 targeted read-only evidence；do not invent empty facets |
 | Search | Blog/Wiki/static-page indexing、type filter、scoring、highlight/excerpt、query-string sync | MUST KEEP user outcome; legacy client corpus/index MUST REMOVE | 10 |
 | Language Switch | Preserve logical document by `i18nKey`; fall back to section when variant absent; persist choice | MUST KEEP for approved Locales | Phase 7 server-rendered same-logical-route switch PASS；Phase 18 final audit |
 

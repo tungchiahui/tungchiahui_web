@@ -116,6 +116,10 @@ describe('Phase 16 observability and security policy', () => {
   it('provides HSTS, CSP, MIME, referrer, permissions and frame policy', () => {
     expect(browserSecurityHeaders['strict-transport-security']).toContain('max-age=31536000')
     expect(browserSecurityHeaders['content-security-policy']).toContain("object-src 'none'")
+    expect(browserSecurityHeaders['content-security-policy']).toContain(
+      'https://umami.tungchiahui.cn',
+    )
+    expect(browserSecurityHeaders['content-security-policy']).not.toContain("'unsafe-eval'")
     expect(browserSecurityHeaders['x-content-type-options']).toBe('nosniff')
     expect(browserSecurityHeaders['referrer-policy']).toBe('strict-origin-when-cross-origin')
     expect(browserSecurityHeaders['permissions-policy']).toContain('camera=()')
