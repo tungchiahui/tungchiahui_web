@@ -107,6 +107,7 @@ export function hasFreshRecoverableBackup(
   return backups.some(
     (backup) =>
       backup.valid &&
+      backup.primaryReplicaStatus === 'fresh' &&
       backup.offsiteReplicaStatus === 'fresh' &&
       now.getTime() - new Date(backup.completedAt).getTime() <= maximumAge * 1_000,
   )

@@ -291,8 +291,9 @@ Application Deployment Workflow 和本地 `./site deploy [git-sha-or-release]` �
 
 ### Backup S3
 
-保存独立于 Asset Store 的加密异地 Backup Copy。接口保持 Provider-neutral S3-compatible；当前
-Production Provider 为 Cloudflare R2。
+保存与 Asset 同处 AList Bucket、但位于固定 `backups/` Namespace 的加密 Recovery Copy。接口
+保持 Provider-neutral S3-compatible；当前 Production 使用 AList 作为 Primary、Cloudflare R2
+作为整桶 Off-site Replica。Backup 必须双端完整读回验证，Restore 优先 Primary 并回退 Off-site。
 
 ## 9. 开发
 

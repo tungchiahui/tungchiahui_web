@@ -1672,7 +1672,7 @@ Deployment Engine 已在 Production-like 环境证明安全，才能让 CI 只�
 | --- | --- | --- |
 | ADR 0001 | 新 Next.js V2 Repository；旧 Nuxt 只读参考 | Phase 0、1、18 |
 | ADR 0002 | PostgreSQL Runtime Content Store | Phase 3、5、8、10、13 |
-| ADR 0003 | Superseded：原 AList Asset/Backup + R2 双远程目标 | ADR 0017 |
+| ADR 0003 | Superseded：原 AList Asset/Backup + R2 双远程目标 | ADR 0017、0018 |
 | ADR 0004 | Full Blue-Green、Immutable Image、Rollback | Phase 14、18 |
 | ADR 0005 | TypeScript/TSX Application/Automation Source | Phase 1，并由每阶段 Gate 持续验证 |
 | ADR 0006 | GitHub zh-CN Canonical Content | Phase 0、5、8、18 |
@@ -1686,9 +1686,10 @@ Deployment Engine 已在 Production-like 环境证明安全，才能让 CI 只�
 | ADR 0014 | Control API 独立于 Next.js Slot | Phase 4、12、14、16 |
 | ADR 0015 | PostgreSQL-independent SQLite Recovery State | Phase 4、12–14、17 |
 | ADR 0016 | Shared-host Loopback Ingress | Phase 18 |
-| ADR 0017 | Provider-neutral Asset S3 + 单一 Off-site Backup S3 | Phase 13、18 |
+| ADR 0017 | Superseded：单一 Off-site Backup S3 | ADR 0018 |
+| ADR 0018 | AList Primary Backup + R2 Off-site Replica；Asset Preserve-delete Copy | Phase 13、18 |
 
-Coverage Audit 结论：当前 16 份 Accepted ADR 均至少映射到一个实施 Phase 和一个明确 Verification/Exit Gate；ADR 0003 已由 ADR 0017 Supersede。ADR 0016 是 Phase 18 根据真实生产共享主机 Inventory 接受的入口边界，ADR 0017 记录 Owner 确认的单一 R2 Backup Target，并映射到 Phase 18 Recovery/Cutover Gate。
+Coverage Audit 结论：当前 17 份 Accepted ADR 均至少映射到一个实施 Phase 和一个明确 Verification/Exit Gate；ADR 0003 先由 ADR 0017、最终由 ADR 0018 Supersede。ADR 0016 是 Phase 18 根据真实生产共享主机 Inventory 接受的入口边界；ADR 0018 记录 Owner 最终确认的 AList Primary + R2 Off-site Recovery 与 Asset Preserve-delete Backup，并映射到 Phase 18 Recovery/Cutover Gate。
 
 ## Dependency Cycle Audit
 

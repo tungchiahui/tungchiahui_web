@@ -14,6 +14,7 @@ import { dirname, join, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
 import type { S3ConnectionConfiguration } from '../storage/contracts'
 import { S3ObjectStorageAdapter } from '../storage/s3-adapter'
+import { recoveryObjectKey } from './object-policy'
 
 const manifestEntrySchema = z.object({
   bytes: z.number().int().nonnegative(),
@@ -109,7 +110,7 @@ export function createRepositoryManifest(
 }
 
 function replicaPrefix(manifest: RepositoryManifest) {
-  return `database-backups/${manifest.generation}`
+  return recoveryObjectKey(`database-backups/${manifest.generation}`)
 }
 
 export async function readRepositoryManifestFromReplica(
@@ -122,7 +123,9 @@ export async function readRepositoryManifestFromReplica(
     .parse(generation)
   const storage = new S3ObjectStorageAdapter(configuration)
   try {
-    const object = await storage.getObject(`database-backups/${parsedGeneration}/manifest.json`)
+    const object = await storage.getObject(
+      recoveryObjectKey(`database-backups/${parsedGeneration}/manifest.json`),
+    )
     return Object.freeze(
       repositoryManifestSchema.parse(JSON.parse(await new Response(object.body).text()) as unknown),
     )

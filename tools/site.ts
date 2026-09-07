@@ -18,6 +18,7 @@ import {
   parseSiteCommand,
   SiteUsageError,
 } from './site-command'
+import { runProductionAssetBackup } from './storage/run-asset-backup'
 import { runExternalS3ContractFromEnvironment } from './storage/run-s3-contract'
 import {
   cancelTranslationJob,
@@ -71,13 +72,21 @@ Translation:
 
 Storage:
   storage contract s3 --confirm S3-NON-PRODUCTION
-            Run the generic contract against the configured non-production S3-compatible target`
+            Run the generic contract against the configured non-production S3-compatible target
+  storage backup assets [--execute --confirm ASSET-BACKUP-PRESERVE-R2-ONLY]
+            Hash-verify AList assets into R2 while preserving every R2-only object`
 
 async function main() {
   assertToolchain(process.versions.node)
   const command = parseSiteCommand(process.argv.slice(2))
 
   switch (command.kind) {
+    case 'asset-backup':
+      await runProductionAssetBackup({
+        execute: command.execute,
+        secretFile: command.secretFile,
+      })
+      return 0
     case 'backup-create': {
       console.log(JSON.stringify(await createBackup(command), null, 2))
       return 0

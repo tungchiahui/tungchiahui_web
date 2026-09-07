@@ -1,8 +1,8 @@
 # Website V2 Current Implementation State
 
 > Status: Phase 0–17 completed
-> Current Phase: Phase 18 in progress — Owner authorized; production cutover not yet executed
-> Handoff audit date: 2026-08-27
+> Current Phase: Phase 18 in progress — V2 public cutover active; recovery/stabilization gates pending
+> Handoff audit date: 2026-09-07
 
 本文件是新 Claude Code/Codex 会话的简洁交接入口。它索引当前实际状态和容易遗漏的实施事实，不替代 `AGENTS.md`、Accepted ADR、架构规范或 `implementation-plan.md`。
 
@@ -32,15 +32,16 @@
 | 10 — PostgreSQL + PGroonga Search | `feat(search): complete phase 10 pgroonga search` | Phase 10 Search 与 Verification | PASS；relevance/locale/migration/reindex/cache/client-corpus gates |
 | 11 — S3-compatible Asset Contract | `test(storage): complete phase 11 s3 contract` | Generic S3 Adapter、Policy、S3Mock/AList Contract 与 Verification | PASS；8-case AList `TEST` Bucket/CDN evidence and cleanup complete |
 | 12 — Production Foundation | `feat(infra): complete phase 12 production foundation` | Ansible、Hardened Compose、SOPS/age、OpenResty、DB Login Boundary 与 Verification | PASS；idempotent provision、IPv4/IPv6、Next/PostgreSQL-down control route、privilege separation |
-| 13 — Tested Recovery | `feat(recovery): complete phase 13 tested recovery` | pgBackRest、WAL/PITR、Off-site 副本、Control-state、PG-independent/Break-glass Recovery 与 Verification | PASS；disposable restore/PITR、Off-site S3、PG-down、SQLite continuity gates；ADR 0017 后收敛为单一远程目标 |
+| 13 — Tested Recovery | `feat(recovery): complete phase 13 tested recovery` | pgBackRest、WAL/PITR、Remote 副本、Control-state、PG-independent/Break-glass Recovery 与 Verification | PASS；disposable restore/PITR、S3、PG-down、SQLite continuity gates；Phase 18 ADR 0018 恢复双副本 Policy |
 | 14 — Shared Blue-Green Deployment | `feat(deploy): complete phase 14 blue-green engine` | Shared Engine、SQLite V5、Migration/Smoke、Atomic OpenResty、Rollback 与 Verification | PASS；Production-like blue-green/failure/crash/PG-down/no-rebuild rollback gates |
 | 15 — GitHub OIDC Deployment Automation | `feat(ci): complete phase 15 oidc deployment automation` | Quality/Deploy/Content/Translation Workflows、OIDC Policy、Registry Digest Pull 与 Verification | PASS；workflow boundary、claims、supply-chain、concurrency、Production-like shared-engine gates |
 | 16 — Observability、Security、Production Readiness | `feat(ops): complete phase 16 production readiness` | Structured Telemetry、Read-only Observability Agent、Security/Rotation/Runbook、Gap 与 Verification Report | PASS；alert lifecycle、failure diagnosis、load、secret/SBOM/Critical scan、full regression gates |
 | 17 — Planned PostgreSQL / Server Migration Readiness | `feat(ops): complete phase 17 migration readiness` | Shared Migration Engine、Same-major Physical Streaming、Control-state Transfer、AAAA-only Cutover、Runbook 与 Verification | PASS；idempotent target provision、final WAL、controlled promotion、no-data-loss、safe abort/non-writing rollback gates |
 
 `implementation-plan.md` 中 Phase 0–17 的 Checklist 与 Overall Progress 已完成。Owner 已在
-2026-09-06 明确授权 Phase 18；当前只执行 Phase 18，尚未进行 Production Provision、Traffic
-Cutover 或 DNS/EdgeOne 变更。
+2026-09-06 明确授权 Phase 18；当前只执行 Phase 18。Production Provision、初始业务 Migration、
+Owner 执行的 1Panel/EdgeOne Public Cutover 与最终 Canonical Content Sync 已完成；Fresh Backup、
+Restore Drill、完整 Compatibility/Public Smoke 与 Stabilization/Rollback-window Gate 尚未完成。
 
 ## 3. Legacy durable baseline
 
@@ -78,9 +79,9 @@ Cutover 或 DNS/EdgeOne 变更。
 - Phase 12 新增 digest/Git-SHA-pinned Production Image、Next Standalone Runtime、Ansible Inventory/Role/Playbook、Hardened Compose、SOPS + age Secret Injection 和 dual-stack OpenResty。Production-like Gate 在临时 Host Root 上两次 Provision，第二次 `changed=0`；实际容器证明 Non-root、Readonly Root、Drop-all Capability、Socket/Network Separation 和无 Secret Layer。
 - OpenResty 在 Active Slot 选择前将 `/api/ops/*` 直接送入独立 `control-api` 并强制 `no-store`；IPv4/IPv6 使用同一配置，两个 Next Slot 全停或 PostgreSQL 停止时仍返回控制面的预期认证响应。Inventory 只保存 Owner 已有的 `Debian` SSH Alias，内部只使用 Docker Service DNS。
 - Production 数据库使用不同 `*_login` 身份，经 Hardened One-shot Bootstrap 绑定到 `site_app`、`site_control_api`、`site_content_worker`、`site_migrator` NOLOGIN Group Role；Runtime Service 不共享 PostgreSQL Bootstrap Identity。
-- Control-state SQLite 已 Additive 升级到 Version 6：Version 5 保留 Backup/Deployment 状态，Version 6 新增 Provider-neutral `offsite_replica_status`；旧双副本 Column 暂留用于回滚兼容。一致 Snapshot 执行 WAL Checkpoint + `VACUUM INTO`，记录 Integrity/Schema/Environment/Active-Previous SHA/Audit Digest，经 age 加密后复制到 Off-site Backup S3，并可验证/原子恢复。
+- Control-state SQLite 已 Additive 升级到 Version 7：Version 5 保留 Backup/Deployment 状态，Version 6 新增 Provider-neutral `offsite_replica_status`；Version 7 会把升级前仅实际写入 R2 的历史记录标记为 Primary `pending` 且 `valid=false`，防止它们被新双副本策略误判。既有 `primary_replica_status` 与 `offsite_replica_status` 现由 ADR 0018 共同记录双副本状态。一致 Snapshot 执行 WAL Checkpoint + `VACUUM INTO`，记录 Integrity/Schema/Environment/Active-Previous SHA/Audit Digest，经 age 加密后复制到 AList Primary 与 R2 Off-site，并可验证/原子恢复。
 - pgBackRest 2.59.1 固定在 PostgreSQL/Recovery Image；Production Policy 为 encrypted Local Repository、Full/Differential/Incremental、WAL/PITR、2 Full/4 Differential/2 Full-range WAL Retention。Phase 11 Evidence 不足以证明 Direct AList Repository，因此 Phase 13 采用逐文件/符号链接 SHA-256 Manifest 的 Local Repository + Verified Sync。
-- ADR 0017 Supersede ADR 0003 的双远程备份目标：Owner 明确 Production 只使用一组 Asset Store 与一组 Backup Store。`ASSET_S3_*` 当前指向 AList；唯一 `BACKUP_S3_*` Off-site Target 当前指向 R2，必须使用不同 Bucket/Access Key。只有本地 pgBackRest/WAL 检查与 R2 完整读回校验均通过才把 Backup 标记 `valid=true`；Restore 从 R2 重建 Repository，不依赖本地副本仍存在。
+- ADR 0018 是当前 Recovery 权威决策：`ASSET_S3_*` 与 `BACKUP_S3_*` 指向同一 AList Bucket/Pair，Recovery Artifact 固定在根目录 `backups/`；`BACKUP_OFFSITE_S3_*` 指向 R2 整桶副本。只有本地 pgBackRest/WAL 与双端完整读回均通过才把 Backup 标记 `valid=true`；Restore 优先 AList 并在失败时回退 R2。
 - `./site backup --environment ... --type ... --reason ...`、`backup status` 与 `restore <id-or-time> --environment ... --confirm ... --reason ...` 使用独立 Control API/SQLite；PostgreSQL Down 时仍可 Create/Query/Claim。Control API Down 时显式 stable-inventory SSH Break-glass 仍写入同一 SQLite/Audit 并由同一 Agent/Lease/Engine 执行。
 - Phase 14 在既有 `deploy-agent` 内加入独立过滤的 Deploy/Rollback Claim 与唯一 Shared Engine；Recovery/Restore Claim 保持原边界。Engine 只接受完整 Git SHA + 固定 Digest，逐次校验实际流量 Release 必须匹配 Durable Current 或完整 Pending Intent，拒绝重复部署 Active Release，并执行 Inactive Lifecycle、least-privilege Migration、完整 Pre/Post Smoke、OpenResty Validate/Atomic Rename/HUP 与 no-rebuild Rollback。
 - `./site deploy/rollback/status` 和 `/api/ops/deployments|rollbacks|status` 复用同一 SQLite Operation、Capability、Idempotency 与 Engine。Deploy/Rollback 并发互斥但不消耗 Recovery Queue；PostgreSQL Down 时仍可创建/查询/Claim，并在 Migration Dependency 明确失败且保持 Active Slot。
@@ -161,10 +162,26 @@ Cutover 或 DNS/EdgeOne 变更。
 - 真实目标为 Debian 13 共享主机 `10.0.0.4`（只用于 Bootstrap，不得进入 Durable Config），已有 1Panel OpenResty 使用 host network，并监听 `80/443/8443/18080`；Docker/Compose 可用。
 - ADR 0016 已接受：外层 1Panel 负责公网 TLS/HTTP，V2 只发布 `http://127.0.0.1:3100`，并在内部 V2 OpenResty 保留 Blue/Green 与 `/api/ops/*` 路由；1Panel 不得直连 Slot/Control API。
 - Production Ansible Inventory 复用 Owner 已有的稳定 SSH Alias `Debian`，并通过现有的 `tungchiahui` sudo 身份执行可审计 Provisioning；Runtime Service 仍使用 Compose 中彼此隔离的非 root 身份。
+- 2026-09-07 已在真实 Debian Origin 完成隔离基础 Provision：首次完整收敛后相同参数重跑 `changed=0`、`failed=0`。9 个长期服务均为 `healthy`，所有容器 `Memory=0`、`NanoCpus=0`，唯一 Host Listener 为 `127.0.0.1:3100`；内部 OpenResty 与 `/api/health` 返回 `200`。未执行 Content Sync、Outer 1Panel Proxy 或 Traffic Cutover。
+- Owner 单独授权的初始 Production Database Migration 已应用全部 7 个版本化 Expand Migration，输出 `database_migrations_completed`、`migrationCount=7`；初始空库无需 Fresh Recoverable Backup。该步骤未进行 Content Sync 或流量切换。
+- 初次 Migration 后 `/api/ready` 暴露 PgBouncer SCRAM 双跳认证缺陷：Secret 文档中的 URL、明文密码与 PgBouncer Verifier 一致，但旧 Bootstrap 让 PostgreSQL从同一明文生成了不同 Salt 的 Verifier。PR #4 / main `c04741990cf823450273a288d3dd72a9e111e9f5` 已改为在 Bootstrap 前验证身份集合与密码/Verifier，并把 PgBouncer 的同一 Verifier 精确安装到 PostgreSQL；Production-like Gate 新增真实 PgBouncer→PostgreSQL 登录，完整 GitHub Quality Gate 与四镜像发布通过。
+- Owner 单独授权后，真实 Origin 已用 `c04741990cf823450273a288d3dd72a9e111e9f5` 四镜像执行 versioned schema-2 Role Reconciliation；首次修复运行 `changed=6`、`failed=0`，相同参数重跑 `changed=0`、`failed=0`。`/api/health`、`/api/ready`、`/api/version` 均返回 `200`，Readiness 报告 PostgreSQL `ready`，Web Slot 为 `blue` 且 SHA 精确匹配；Host 仍只监听 `127.0.0.1:3100`。
+- Owner 随后在 1Panel 将 `www.tungchiahui.cn` 反向代理到 `127.0.0.1:3100`，并自行把 DNS/EdgeOne 切到 V2；EdgeOne 以公网标准 443 服务、Origin 使用既有 8443/18080。该 Public Cutover 发生在 Content/Backup Gate 完成前，Owner 明确选择暂不回退旧站；旧 Nuxt Repository/Deployment 仍不得删除或修改，Rollback Window 尚未关闭。
+- 首次 Production Content Sync 暴露 `content-worker` 仅连接 `internal: true` Application Network、无法读取 GitHub。PR #5 / main `a10eace92310f3fc23deb26858c4eeb76821f8dc` 为它增加唯一专用 `content-egress`，保持其他 Service 无外部出口；完整 PR/Main Quality Gate 与四镜像发布通过。真实 Provision 首次 `changed=4`、`failed=0`，复跑 `changed=0`、`failed=0`；Public/Origin Version 均为该 SHA，Host 仍只监听 `127.0.0.1:3100`，Production Network Inspection 确认该 Egress Network 只有 `content-worker`。
+- 2026-09-07 最终 Legacy Content Refresh 再次只读确认 `/my-blog` 本地/远端 `main` 仍为 `feee48b1685e7cab8fed84941bff9e58fc32491c`；其 5 Blog + 233 Wiki 与 `tungchiahui_content@db3aad287eabf84b16b44c33957d57c02ae60e9f` 的 238 个 tracked Canonical Markdown、Git Tree `a31783bb3ff565a226b5566128b41a2509e1fdfa` 完全相同，因此 Canonical Repository Sync 是幂等 no-op、没有空 Commit/Push。旧仓库未修改，未跟踪 `_i18n` 不属于 Canonical Blog/Wiki。
+- Content Worker 的 GitHub Token 原为空；当前 238 文件的 Tree + Blob API 读取超过匿名每小时 60 次配额。Owner 提供的 Repository-scoped read-only Credential 已只存入 SOPS 密文并安装到 `content-worker_env`；本地验证返回 GitHub Tree `200` 与 authenticated limit，生产 Secret Provision 首次 `changed=3`、`failed=0`，复跑 `changed=0`、`failed=0`。不得把 Credential 值写入文档、日志或提交说明。
+- Production Content Sync Job `70c8366e-4aab-4232-807c-59b515465c27` 已从精确 Commit `db3aad287eabf84b16b44c33957d57c02ae60e9f` 一次完成：`filesSeen=238`、`filesChanged=238`、`filesDeleted=0`。数据库为 238 Active/0 Deleted、5 Blog/233 Wiki、单一 Source Commit；Source-hash Mismatch、重复 Source Path 与重复 Route 均为 0。四 Locale Search Projection 各 238；en-US 有 17,566 Pending/Fallback Block，Translation Job/Provider Request/Cost 均为 0。代表 Blog 四 Locale、Wiki、ROS2 Asset 与中文 Search Public Smoke 返回 `200`，`ROS2_Control` 返回 5 条。
+- 首次真实 `./site backup` 暴露 CLI 把内部 `kind` Discriminator 原样发送给 Strict Control API；HTTP 400 发生在 Operation 创建前，R2 未写入。PR #6 / main `7e3d529f4f5bfec4ab358acf7e1aa1e30fbb482e` 现由 Recovery Control Client Runtime-validate 并 Strip 为精确 `backupType/environment/reason` Body，完整 PR Quality Gate 通过；该修复只在 Operator Client，不需重启 Production Service。
+- Owner 授权的 Fresh Production Full Backup Operation `d08a0e91-9972-440e-aca1-a2a0e535a529` 已以 `recovery-verified` 完成。Backup `20260907-004052F` 为 `valid=true`、Off-site R2 `fresh`、Manifest SHA-256 `382585ce68b4d918767f53471ee01c2ac3cc9cadeb8b628bf5a1284b6f73aabd`、Repository 52,193,008 bytes、实测 676.565 秒，WAL Max `000000010000000000000028`。Control-state Schema 6 Snapshot `b4bc569c-a5ef-4199-b072-a543da702ed5` 已 age 加密上传并从 `control-state/production/latest.json` 读回验证；完成后 Public Readiness 仍为 PostgreSQL `ready`。
+- 生产对象盘点确认 AList Asset Bucket 有 3,680 Object / 449,294,509 bytes，R2 中旧 AList 副本初始有 3,687 Object / 449,229,575 bytes；初始为 3,676 个 Key 同名同大小、AList-only 4、R2-only 11、同 Key Size Mismatch 0。Owner 单独授权后，`./site storage backup assets` 已逐对象做双端 SHA-256：3,676 个内容一致、4 个 R2 缺失对象已补齐并逐一回读验证、0 个内容变化、0 个 AList 不可读，11 个 R2-only 历史对象全部保留；版本化 Manifest 为 `asset-backups/manifests/2026-09-07T01-23-15.639Z-3fdba4017ca75f9f896e7dc3517adcf61a0a21ad4e05df4144b30414662bc222.json`。Asset Backup 不连接 PostgreSQL，不读取/覆盖 V2 的 `database-backups/` 或 `control-state/` 内容，并采用 Copy/Add/Update、永不传播 AList Delete 的语义；任何 R2 孤儿清理需单独 Owner 授权。
+- Owner 另行明确授权删除 AList Asset Bucket 中空的 `TEST/` Directory Marker；删除前后对精确 Prefix 的 List 均为 0 个对象，Marker 的精确 S3 Delete 已成功。该操作未触碰 R2，符合 Asset Delete 不传播的 Policy。
+- 首次 Provision 的 Docker Hub Pull 暴露真实网络前置条件：OpenClash 首条 `SRC-IP-CIDR,10.0.0.0/24,DIRECT` 使 Origin 的 Registry TLS 直连超时。Owner 已将 DNS Redirect 切到 Firewall Redirect，并以 LAN White List 仅让 `10.0.0.4` 进入 Clash Rule Engine；Registry `/v2/` 随后返回预期 `401`，两个固定第三方 Image Digest 均可解析。临时 Mirror 方案未提交/部署，一次性传输 Archive 已从 Controller 与 Origin 删除。
 - 主机磁盘约 69 GiB、当前仅约 19 GiB 可用；Docker Image 约 33.46 GB，其中约 18.58 GB 标记可回收。未确认回滚依赖前不得执行 Prune，Production Preflight 仍需形成容量结论。
 - 主机现有 1Panel PostgreSQL 把 `5432` 发布到所有 IPv4/IPv6 Interface；V2 PostgreSQL 不发布 Host Port，不得修改或复用该现有数据库。现有暴露风险需由 Owner 独立处理，不能混入 V2 Cutover。
 - Phase 18 首次重新运行 Fail-closed Image Scan 时发现 `age 1.3.1` 所含 `golang.org/x/crypto v0.45.0` 的新 Critical Finding；已按官方 2026-08-29 Stable Release 升级到 `age 1.3.2`，Linux amd64 Archive SHA-256 固定为 `cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10`。必须以重跑 Trivy 结果作为关闭证据，不得加入 Ignore。
-- Owner 在 Phase 18 明确生产对象存储职责只有两组：AList Asset S3 与 R2 Backup S3。ADR 0017 因此 Supersede ADR 0003；恢复引擎、Secret Schema、Observability 与 Gate 已改为单一 Provider-neutral Off-site `BACKUP_S3_*`，不再接受 `BACKUP_R2_*`。
+- Owner 曾在 Phase 18 初次 Secret 配置时把生产对象存储简化为 AList Asset 与 R2 Backup，ADR 0017 因此形成单一 Off-site `BACKUP_S3_*`；该中间决策已由后续明确澄清的 ADR 0018 Supersede，保留本条仅用于解释首份 R2-only Backup 的历史状态。
+- 首次真实 R2-only Backup 后，Owner 最终澄清 Recovery 拓扑：现有 AList Bucket 是 Primary，数据库/WAL/Control-state 写入其根目录固定 `backups/`，R2 是包含普通 Asset 与该 Recovery Namespace 的完整 Off-site 副本。ADR 0018 Supersede ADR 0017；`BACKUP_S3_*` 改为复用现有 AList 连接，新增 `BACKUP_OFFSITE_S3_*` 指向 R2。Backup 只有双端完整读回均 Fresh 才 Valid，Restore 优先 AList 并回退 R2；整桶 Copy/Add/Update 会把 `backups/` 一并校验到 R2，且不传播 AList Delete。AList 官方 S3 Contract 只有实例级 Access Key/Secret，这是 ADR 记录的 Provider Limitation；固定 Prefix、应用只读接口、Public Prefix Deny、Artifact Encryption 与独立 R2 Credential 是补偿控制。既有 R2 Backup 保留但不满足新双端 Gate；部署新 Recovery Runtime 前只需在 SOPS 中把 AList 现有连接复制到 `BACKUP_S3_*`、把当前 R2 值移到新 Off-site Key，无需新建 AList Bucket。
+- ADR 0018 的本地完整回归已通过：145 项 Unit、Production-foundation/Idempotency/Security/Load、Full/Diff/Incr + WAL/PITR Recovery、Control-state age Snapshot、PostgreSQL-down Restore、10 项 Public E2E 与 7 项 PostgreSQL Migration 全部通过。恢复演练会先删除测试 AList Primary Generation 与 Control-state Artifact，再证明 R2 Off-site 自动回退可恢复；Control-state Version 7 Unit Test 证明旧 R2-only 记录升级后会被标记为 Primary `pending`、`valid=false`。
 - 初次 Production Provision 需要 Web、Service、Recovery 与 PostgreSQL 四个同 SHA Immutable Image；Phase 18 已补齐受 Quality Gate 约束的 GitHub Build Job，使其以独立 GHCR Repository 发布完整 Image Set，Web Digest 仍是 Shared Blue/Green Engine 的唯一 Release Digest。
 - Phase 18 真实首发命令审计发现 Deployment Article Smoke 仍硬编码为仅 Disposable Seed 存在的 `/blog/phase-3-seed`。Production Compose 现要求由 Ansible 显式注入 Article/Asset/Search Smoke Policy，默认文章改为最终 Legacy Audit 已覆盖的 `/blog/2026-09-02-wm-lun-wen-luo-lie`；Disposable Gate 继续显式使用 Seed Route，避免未切流 Candidate 因虚假 Production 前提失败。
 - 初次 Push 前 `PRODUCTION_DEPLOYMENT_ENABLED` Repository Actions Variable 必须保持缺失/非 `true`；Quality 成功后只发布候选 Image Set。只有 Production Environment Protection、Origin Provision 与 Pre-cutover Gate 全部成立后才显式启用 Deploy Job，防止 Bootstrap 前产生伪部署。
@@ -175,8 +192,11 @@ Cutover 或 DNS/EdgeOne 变更。
 - 若 Phase 18 不需要实际 Server Replacement，不绑定或触发 Migration Platform；若需要，必须先获得真实 Target/Primary/DDNS 的单独授权并复核 `server-migration.md` Abort/Rollback Gate。
 - 不得把 Phase 16 Load、Phase 13 Restore 或 Phase 17 Disposable Migration Timing 伪装为 Production SLA/RPO/RTO。
 
-Phase 18 正在执行。尚未 Provision 真实主机、发布 Production Image、同步真实 Content、修改
-1Panel/EdgeOne/DNS、执行真实 Backup/Restore 或切换 Public Traffic；不得提前勾选 Phase 18 Gate。
+Phase 18 正在执行。真实主机隔离基础、Production 业务 Migration、PgBouncer SCRAM 校准、
+专用 Content Egress、最终 Canonical Content Sync 与 Owner 执行的 1Panel/EdgeOne Public Cutover 已完成，
+并通过幂等/监听/健康/Ready/版本/内容计数/Hash/Locale/Search/无付费翻译验证。Fresh Backup/WAL/R2、
+真实 Restore Drill、完整 Compatibility/Public Smoke、Stabilization Evidence 与 Rollback-window Closure
+仍未完成；不得提前勾选 Phase 18 Gate。
 
 ## 8. 回查旧 myblog 的规则
 

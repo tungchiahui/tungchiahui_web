@@ -17,7 +17,7 @@
 - WAL Archival
 - PITR Capability
 - Off-host Backup Copy
-- 独立于 Asset Store 的 Off-site Backup S3（当前使用 R2）
+- AList `backups/` Primary Recovery Namespace 与完整 R2 Off-site Replica
 - Reproducible Server Provisioning
 - Independent `control-api` outside Next.js Blue/Green Slots
 - PostgreSQL-independent SQLite Control-plane Recovery State
@@ -41,7 +41,8 @@
 - Secure Response Header
 - Client Bundle 不包含 Secret
 - 显式 Trust-boundary Validation
-- Runtime/Migration/Backup Credential 分离
+- Runtime/Migration/Backup Credential 尽量分离；AList v3 实例级 S3 Pair 例外按 ADR 0018 以固定
+  Prefix、只读应用 Adapter、Public Prefix Deny、Artifact Encryption 和独立 R2 Credential 补偿
 - Multi-stage/Minimal/Non-root Production Container
 - Read-only Root Filesystem where practical, with explicit Writable Volume/tmpfs
 - Docker/Host Privilege restricted to `deploy-agent`

@@ -137,7 +137,7 @@ describe('Phase 16 observability and security policy', () => {
         needsAttentionCount: 0,
         oldestIncompleteAgeSeconds: 0,
       },
-      schemaVersion: 6,
+      schemaVersion: 7,
     })
   })
 })

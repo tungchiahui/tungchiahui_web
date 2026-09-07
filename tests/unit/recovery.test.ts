@@ -54,12 +54,18 @@ function recoveryEnvironment() {
     BACKUP_PGBACKREST_CONFIG_PATH: '/etc/pgbackrest/pgbackrest.conf',
     BACKUP_PGBACKREST_STANZA: 'tungchiahui',
     BACKUP_POSTGRES_DATA_PATH: '/var/lib/postgresql/18/docker',
-    BACKUP_S3_ACCESS_KEY_ID: 'r2-backup-only-key',
-    BACKUP_S3_BUCKET: 'r2-offsite-backup',
-    BACKUP_S3_ENDPOINT: 'https://account.r2.cloudflarestorage.com',
-    BACKUP_S3_FORCE_PATH_STYLE: 'false',
-    BACKUP_S3_REGION: 'auto',
-    BACKUP_S3_SECRET_ACCESS_KEY: 'r2-backup-secret',
+    BACKUP_S3_ACCESS_KEY_ID: 'asset-only-key',
+    BACKUP_S3_BUCKET: 'asset-bucket',
+    BACKUP_S3_ENDPOINT: 'https://alist.example.test',
+    BACKUP_S3_FORCE_PATH_STYLE: 'true',
+    BACKUP_S3_REGION: 'us-east-1',
+    BACKUP_S3_SECRET_ACCESS_KEY: 'alist-backup-secret',
+    BACKUP_OFFSITE_S3_ACCESS_KEY_ID: 'r2-backup-only-key',
+    BACKUP_OFFSITE_S3_BUCKET: 'r2-offsite-backup',
+    BACKUP_OFFSITE_S3_ENDPOINT: 'https://account.r2.cloudflarestorage.com',
+    BACKUP_OFFSITE_S3_FORCE_PATH_STYLE: 'false',
+    BACKUP_OFFSITE_S3_REGION: 'auto',
+    BACKUP_OFFSITE_S3_SECRET_ACCESS_KEY: 'r2-backup-secret',
     BACKUP_WORK_DIRECTORY: '/var/lib/tungchiahui-backup-work',
     CONTROL_STATE_PATH: '/control-state/control.db',
     SITE_RUNTIME_MODE: 'production',
@@ -67,15 +73,17 @@ function recoveryEnvironment() {
 }
 
 describe('Phase 13 recovery boundary', () => {
-  it('requires an off-site backup identity independent from the asset identity', () => {
+  it('allows the existing AList bucket while requiring an independent off-site identity', () => {
     const configuration = parseRecoveryConfiguration(recoveryEnvironment())
-    expect(configuration.backup.bucket).toBe('r2-offsite-backup')
+    expect(configuration.primary.bucket).toBe('asset-bucket')
+    expect(configuration.offsite.bucket).toBe('r2-offsite-backup')
+    expect(configuration.primary.accessKeyId).toBe('asset-only-key')
     expect(() =>
       parseRecoveryConfiguration({
         ...recoveryEnvironment(),
-        BACKUP_S3_ACCESS_KEY_ID: 'asset-only-key',
+        BACKUP_OFFSITE_S3_ACCESS_KEY_ID: 'asset-only-key',
       }),
-    ).toThrow('backup credentials must differ')
+    ).toThrow('Primary and off-site backup credentials must differ')
   })
 
   it('checkpoints, snapshots, validates, and restores SQLite audit continuity', () => {
@@ -100,7 +108,7 @@ describe('Phase 13 recovery boundary', () => {
       auditEventMaxId: 1,
       environment: 'test',
       integrity: 'ok',
-      schemaVersion: 6,
+      schemaVersion: 7,
     })
     expect(inspectControlStateSnapshot(snapshot)).toEqual(evidence)
     expect(restoreControlStateSnapshot(snapshot, restored, 'test')).toEqual(evidence)
@@ -150,6 +158,7 @@ describe('Phase 13 recovery boundary', () => {
       measuredBytes: 1_024,
       measuredSeconds: 10,
       offsiteReplicaStatus: 'fresh',
+      primaryReplicaStatus: 'fresh',
       repositoryGeneration: '20260825-120000F-generation',
       stanza: 'tungchiahui',
       valid: true,
@@ -159,6 +168,7 @@ describe('Phase 13 recovery boundary', () => {
       {
         backupId: '20260825-120000F',
         offsiteReplicaStatus: 'fresh',
+        primaryReplicaStatus: 'fresh',
         valid: true,
       },
     ])

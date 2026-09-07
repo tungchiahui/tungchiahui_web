@@ -104,11 +104,15 @@ export function validateProductionSecretDocument(input: unknown) {
     'BACKUP_S3_ACCESS_KEY_ID',
     'BACKUP_S3_SECRET_ACCESS_KEY',
     'BACKUP_S3_FORCE_PATH_STYLE',
+    'BACKUP_OFFSITE_S3_ENDPOINT',
+    'BACKUP_OFFSITE_S3_REGION',
+    'BACKUP_OFFSITE_S3_BUCKET',
+    'BACKUP_OFFSITE_S3_ACCESS_KEY_ID',
+    'BACKUP_OFFSITE_S3_SECRET_ACCESS_KEY',
+    'BACKUP_OFFSITE_S3_FORCE_PATH_STYLE',
   ])
   if ([...backupKeys].some((key) => key.startsWith('BACKUP_R2_'))) {
-    throw new Error(
-      'backup_env contains obsolete BACKUP_R2_* keys; use the single BACKUP_S3_* target',
-    )
+    throw new Error('backup_env contains obsolete BACKUP_R2_* keys; use BACKUP_OFFSITE_S3_*')
   }
   requireEnvironmentKeys('web_env', document.web_env, [
     'DATABASE_URL',
@@ -240,12 +244,18 @@ export function initializeProductionSecrets() {
     backup_env: [
       `PGBACKREST_REPO1_CIPHER_PASS=${repositoryCipher}`,
       `BACKUP_AGE_RECIPIENT=${backupRecipient}`,
-      'BACKUP_S3_ENDPOINT=REPLACE_WITH_HTTPS_PRIMARY_S3_ENDPOINT',
-      'BACKUP_S3_REGION=auto',
-      'BACKUP_S3_BUCKET=REPLACE_WITH_BACKUP_BUCKET',
-      'BACKUP_S3_ACCESS_KEY_ID=REPLACE_WITH_BACKUP_ACCESS_KEY',
-      'BACKUP_S3_SECRET_ACCESS_KEY=REPLACE_WITH_BACKUP_SECRET_KEY',
-      'BACKUP_S3_FORCE_PATH_STYLE=false',
+      'BACKUP_S3_ENDPOINT=REPLACE_WITH_SAME_HTTPS_ALIST_ENDPOINT_AS_ASSET_S3',
+      'BACKUP_S3_REGION=us-east-1',
+      'BACKUP_S3_BUCKET=REPLACE_WITH_SAME_ALIST_BUCKET_AS_ASSET_S3',
+      'BACKUP_S3_ACCESS_KEY_ID=REPLACE_WITH_SAME_ALIST_ACCESS_KEY_AS_ASSET_S3',
+      'BACKUP_S3_SECRET_ACCESS_KEY=REPLACE_WITH_SAME_ALIST_SECRET_KEY_AS_ASSET_S3',
+      'BACKUP_S3_FORCE_PATH_STYLE=true',
+      'BACKUP_OFFSITE_S3_ENDPOINT=REPLACE_WITH_HTTPS_OFFSITE_S3_ENDPOINT',
+      'BACKUP_OFFSITE_S3_REGION=auto',
+      'BACKUP_OFFSITE_S3_BUCKET=REPLACE_WITH_OFFSITE_BACKUP_BUCKET',
+      'BACKUP_OFFSITE_S3_ACCESS_KEY_ID=REPLACE_WITH_OFFSITE_BACKUP_ACCESS_KEY',
+      'BACKUP_OFFSITE_S3_SECRET_ACCESS_KEY=REPLACE_WITH_OFFSITE_BACKUP_SECRET_KEY',
+      'BACKUP_OFFSITE_S3_FORCE_PATH_STYLE=false',
     ].join('\n'),
     content_worker_env: [
       `DATABASE_URL=postgresql://site_content_worker_login:${workerPassword}@pgbouncer:6432/tungchiahui`,

@@ -3,6 +3,8 @@ import { chmodSync, chownSync, existsSync, mkdirSync, writeFileSync } from 'node
 import { join } from 'node:path'
 
 import { z } from 'zod'
+import { parseS3ConnectionConfiguration } from '../../src/storage/contracts'
+import { S3ObjectStorageAdapter } from '../../src/storage/s3-adapter'
 
 const input = z
   .object({
@@ -165,12 +167,24 @@ function recoveryEnvironment(backupPort: number) {
     'BACKUP_S3_REGION',
     'us-east-1',
     'BACKUP_S3_BUCKET',
-    'phase13-offsite',
+    'phase13-primary',
     'BACKUP_S3_ACCESS_KEY_ID',
     'backup-only-access',
     'BACKUP_S3_SECRET_ACCESS_KEY',
     'backup-only-secret',
     'BACKUP_S3_FORCE_PATH_STYLE',
+    'true',
+    'BACKUP_OFFSITE_S3_ENDPOINT',
+    `http://127.0.0.1:${String(backupPort)}`,
+    'BACKUP_OFFSITE_S3_REGION',
+    'us-east-1',
+    'BACKUP_OFFSITE_S3_BUCKET',
+    'phase13-offsite',
+    'BACKUP_OFFSITE_S3_ACCESS_KEY_ID',
+    'offsite-backup-only-access',
+    'BACKUP_OFFSITE_S3_SECRET_ACCESS_KEY',
+    'offsite-backup-only-secret',
+    'BACKUP_OFFSITE_S3_FORCE_PATH_STYLE',
     'true',
   ].flatMap((value, index, values) =>
     index % 2 === 0 ? ['--env', `${value}=${values[index + 1]}`] : [],
@@ -221,174 +235,202 @@ function runRecovery(
   return JSON.parse(lines.at(-1) ?? '{}') as unknown
 }
 
-execute('age-keygen', ['--output', ageIdentityPath])
-chmodSync(ageIdentityPath, 0o640)
-chownSync(ageIdentityPath, 70, 10050)
-
-docker([
-  'build',
-  '--file',
-  'ops/production/images/postgres.Dockerfile',
-  '--tag',
-  postgresImage,
-  '.',
-])
-docker([
-  'build',
-  '--file',
-  'ops/production/images/recovery.Dockerfile',
-  '--tag',
-  recoveryImage,
-  '.',
-])
-
-let backupPort = 0
-try {
-  backupPort = startS3(backupName, 'phase13-offsite')
-  docker([
-    'run',
-    '--detach',
-    '--name',
-    postgresName,
-    '--env',
-    'POSTGRES_DB=tungchiahui',
-    '--env',
-    'POSTGRES_USER=tungchiahui',
-    '--env',
-    'POSTGRES_PASSWORD=phase13-disposable-password',
-    '--env',
-    `PGBACKREST_REPO1_CIPHER_PASS=${cipher}`,
-    '--mount',
-    `type=bind,source=${pgDataRoot},target=/var/lib/postgresql`,
-    '--mount',
-    `type=bind,source=${repositoryPath},target=/var/lib/pgbackrest`,
-    '--mount',
-    `type=bind,source=${socketPath},target=/run/postgresql`,
-    '--mount',
-    `type=bind,source=${pgBackRestConfig},target=/etc/pgbackrest/pgbackrest.conf,readonly`,
-    postgresImage,
-    'postgres',
-    '-c',
-    'archive_mode=on',
-    '-c',
-    'archive_command=pgbackrest --config=/etc/pgbackrest/pgbackrest.conf --stanza=tungchiahui archive-push %p',
-    '-c',
-    'archive_timeout=1',
-  ])
-  waitForPostgres()
-  docker([
-    'exec',
-    postgresName,
-    'pgbackrest',
-    '--config=/etc/pgbackrest/pgbackrest.conf',
-    '--stanza=tungchiahui',
-    'stanza-create',
-  ])
-  docker([
-    'exec',
-    postgresName,
-    'pgbackrest',
-    '--config=/etc/pgbackrest/pgbackrest.conf',
-    '--stanza=tungchiahui',
-    'check',
-  ])
-  psql(
-    "CREATE SCHEMA app; CREATE TABLE app.schema_marker(version integer PRIMARY KEY); INSERT INTO app.schema_marker VALUES (6); CREATE TABLE app.recovery_fixture(value text PRIMARY KEY); INSERT INTO app.recovery_fixture VALUES ('base');",
-  )
-  const full = backupResultSchema.parse(runRecovery(backupPort, 'backup', 'full'))
-  psql("INSERT INTO app.recovery_fixture VALUES ('before-target')")
-  const targetTime = psql(
-    'SELECT to_char(clock_timestamp() AT TIME ZONE \'UTC\', \'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"\');',
-  )
-  psql('SELECT pg_switch_wal()')
-  psql('SELECT pg_sleep(1.2)')
-  psql("INSERT INTO app.recovery_fixture VALUES ('after-target'); SELECT pg_switch_wal();")
-  const differential = backupResultSchema.parse(runRecovery(backupPort, 'backup', 'diff'))
-  psql("INSERT INTO app.recovery_fixture VALUES ('incremental-later'); SELECT pg_switch_wal();")
-  const incremental = backupResultSchema.parse(runRecovery(backupPort, 'backup', 'incr'))
-  docker(['stop', '--time', '30', postgresName])
-  const targetDataPath = join(pgDataRoot, '18', 'docker')
-  writeFileSync(join(targetDataPath, '.tungchiahui-disposable-recovery-target'), 'test')
-  const rejectedPartialRestore = z
-    .object({ status: z.number().int().positive() })
-    .passthrough()
-    .parse(
-      runRecovery(
-        backupPort,
-        'restore',
-        JSON.stringify({
-          confirmation: 'RESTORE-TEST',
-          environment: 'test',
-          selector: { targetTime: '2000-01-01T00:00:00.000Z' },
-        }),
-        true,
-      ),
-    )
-  expect(rejectedPartialRestore.status > 0, 'Invalid PITR target unexpectedly restored')
-  expect(
-    !existsSync(join(targetDataPath, 'PG_VERSION')),
-    'Failed partial restore unexpectedly left a bootable PostgreSQL target',
-  )
-  writeFileSync(join(targetDataPath, '.tungchiahui-disposable-recovery-target'), 'test')
-  const restoreStartedAt = performance.now()
-  runRecovery(
-    backupPort,
-    'restore',
-    JSON.stringify({
-      confirmation: 'RESTORE-TEST',
-      environment: 'test',
-      selector: { targetTime },
+async function removePrimaryReplica(backupPort: number) {
+  const storage = new S3ObjectStorageAdapter(
+    parseS3ConnectionConfiguration({
+      accessKeyId: 'backup-only-access',
+      bucket: 'phase13-primary',
+      endpoint: `http://127.0.0.1:${String(backupPort)}`,
+      forcePathStyle: true,
+      region: 'us-east-1',
+      secretAccessKey: 'backup-only-secret',
     }),
   )
-  docker(['start', postgresName])
-  waitForPostgres()
-  const restoreSeconds = (performance.now() - restoreStartedAt) / 1_000
-  expect(
-    psql('SHOW server_version_num').startsWith('18'),
-    'Restored PostgreSQL major version is not 18',
-  )
-  expect(
-    psql('SELECT version FROM app.schema_marker') === '6',
-    'Migration/version marker was not restored',
-  )
-  const values = psql('SELECT value FROM app.recovery_fixture ORDER BY value').split('\n')
-  expect(values.includes('base'), 'Representative application row is missing after PITR')
-  expect(values.includes('before-target'), 'Pre-target row is missing after PITR')
-  expect(!values.includes('after-target'), 'Post-target row survived PITR')
-  expect(!values.includes('incremental-later'), 'Later incremental row survived PITR')
-
-  const controlState = incremental.controlState
-  const restoredControl = z.record(z.string(), z.unknown()).parse(
-    runRecovery(
-      backupPort,
-      'control-state-restore',
-      JSON.stringify({
-        targetPath: '/control-state/restored-control.db',
-      }),
-    ),
-  )
-  expect(
-    restoredControl.auditDigest === controlState.artifact.auditDigest,
-    'Control-state audit continuity was not preserved',
-  )
-  expect(full.backup.valid, 'Full backup was not marked valid')
-
-  console.log(
-    JSON.stringify({
-      backupPolicy: ['full', 'diff', 'incr'],
-      backupMeasurements: [full.backup, differential.backup, incremental.backup],
-      controlState: 'encrypted-snapshot-restored',
-      pitrTarget: targetTime,
-      partialRestoreRetry: 'pass',
-      postgresDownRestore: 'pass',
-      offsiteReplica: 'fresh-and-restore-readable',
-      representativeApplicationRead: 'pass',
-      restoreSeconds,
-      status: 'pass',
-    }),
-  )
-} finally {
-  for (const name of [postgresName, backupName]) {
-    docker(['rm', '--force', name], true)
+  try {
+    const keys = await storage.listObjects('')
+    for (const key of keys) await storage.deleteObject(key)
+    expect((await storage.listObjects('')).length === 0, 'Primary replica deletion failed')
+  } finally {
+    storage.destroy()
   }
 }
+
+async function main() {
+  execute('age-keygen', ['--output', ageIdentityPath])
+  chmodSync(ageIdentityPath, 0o640)
+  chownSync(ageIdentityPath, 70, 10050)
+
+  docker([
+    'build',
+    '--file',
+    'ops/production/images/postgres.Dockerfile',
+    '--tag',
+    postgresImage,
+    '.',
+  ])
+  docker([
+    'build',
+    '--file',
+    'ops/production/images/recovery.Dockerfile',
+    '--tag',
+    recoveryImage,
+    '.',
+  ])
+
+  let backupPort = 0
+  try {
+    backupPort = startS3(backupName, 'phase13-primary,phase13-offsite')
+    docker([
+      'run',
+      '--detach',
+      '--name',
+      postgresName,
+      '--env',
+      'POSTGRES_DB=tungchiahui',
+      '--env',
+      'POSTGRES_USER=tungchiahui',
+      '--env',
+      'POSTGRES_PASSWORD=phase13-disposable-password',
+      '--env',
+      `PGBACKREST_REPO1_CIPHER_PASS=${cipher}`,
+      '--mount',
+      `type=bind,source=${pgDataRoot},target=/var/lib/postgresql`,
+      '--mount',
+      `type=bind,source=${repositoryPath},target=/var/lib/pgbackrest`,
+      '--mount',
+      `type=bind,source=${socketPath},target=/run/postgresql`,
+      '--mount',
+      `type=bind,source=${pgBackRestConfig},target=/etc/pgbackrest/pgbackrest.conf,readonly`,
+      postgresImage,
+      'postgres',
+      '-c',
+      'archive_mode=on',
+      '-c',
+      'archive_command=pgbackrest --config=/etc/pgbackrest/pgbackrest.conf --stanza=tungchiahui archive-push %p',
+      '-c',
+      'archive_timeout=1',
+    ])
+    waitForPostgres()
+    docker([
+      'exec',
+      postgresName,
+      'pgbackrest',
+      '--config=/etc/pgbackrest/pgbackrest.conf',
+      '--stanza=tungchiahui',
+      'stanza-create',
+    ])
+    docker([
+      'exec',
+      postgresName,
+      'pgbackrest',
+      '--config=/etc/pgbackrest/pgbackrest.conf',
+      '--stanza=tungchiahui',
+      'check',
+    ])
+    psql(
+      "CREATE SCHEMA app; CREATE TABLE app.schema_marker(version integer PRIMARY KEY); INSERT INTO app.schema_marker VALUES (6); CREATE TABLE app.recovery_fixture(value text PRIMARY KEY); INSERT INTO app.recovery_fixture VALUES ('base');",
+    )
+    const full = backupResultSchema.parse(runRecovery(backupPort, 'backup', 'full'))
+    psql("INSERT INTO app.recovery_fixture VALUES ('before-target')")
+    const targetTime = psql(
+      'SELECT to_char(clock_timestamp() AT TIME ZONE \'UTC\', \'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"\');',
+    )
+    psql('SELECT pg_switch_wal()')
+    psql('SELECT pg_sleep(1.2)')
+    psql("INSERT INTO app.recovery_fixture VALUES ('after-target'); SELECT pg_switch_wal();")
+    const differential = backupResultSchema.parse(runRecovery(backupPort, 'backup', 'diff'))
+    psql("INSERT INTO app.recovery_fixture VALUES ('incremental-later'); SELECT pg_switch_wal();")
+    const incremental = backupResultSchema.parse(runRecovery(backupPort, 'backup', 'incr'))
+    docker(['stop', '--time', '30', postgresName])
+    await removePrimaryReplica(backupPort)
+    const targetDataPath = join(pgDataRoot, '18', 'docker')
+    writeFileSync(join(targetDataPath, '.tungchiahui-disposable-recovery-target'), 'test')
+    const rejectedPartialRestore = z
+      .object({ status: z.number().int().positive() })
+      .passthrough()
+      .parse(
+        runRecovery(
+          backupPort,
+          'restore',
+          JSON.stringify({
+            confirmation: 'RESTORE-TEST',
+            environment: 'test',
+            selector: { targetTime: '2000-01-01T00:00:00.000Z' },
+          }),
+          true,
+        ),
+      )
+    expect(rejectedPartialRestore.status > 0, 'Invalid PITR target unexpectedly restored')
+    expect(
+      !existsSync(join(targetDataPath, 'PG_VERSION')),
+      'Failed partial restore unexpectedly left a bootable PostgreSQL target',
+    )
+    writeFileSync(join(targetDataPath, '.tungchiahui-disposable-recovery-target'), 'test')
+    const restoreStartedAt = performance.now()
+    runRecovery(
+      backupPort,
+      'restore',
+      JSON.stringify({
+        confirmation: 'RESTORE-TEST',
+        environment: 'test',
+        selector: { targetTime },
+      }),
+    )
+    docker(['start', postgresName])
+    waitForPostgres()
+    const restoreSeconds = (performance.now() - restoreStartedAt) / 1_000
+    expect(
+      psql('SHOW server_version_num').startsWith('18'),
+      'Restored PostgreSQL major version is not 18',
+    )
+    expect(
+      psql('SELECT version FROM app.schema_marker') === '6',
+      'Migration/version marker was not restored',
+    )
+    const values = psql('SELECT value FROM app.recovery_fixture ORDER BY value').split('\n')
+    expect(values.includes('base'), 'Representative application row is missing after PITR')
+    expect(values.includes('before-target'), 'Pre-target row is missing after PITR')
+    expect(!values.includes('after-target'), 'Post-target row survived PITR')
+    expect(!values.includes('incremental-later'), 'Later incremental row survived PITR')
+
+    const controlState = incremental.controlState
+    const restoredControl = z.record(z.string(), z.unknown()).parse(
+      runRecovery(
+        backupPort,
+        'control-state-restore',
+        JSON.stringify({
+          targetPath: '/control-state/restored-control.db',
+        }),
+      ),
+    )
+    expect(
+      restoredControl.auditDigest === controlState.artifact.auditDigest,
+      'Control-state audit continuity was not preserved',
+    )
+    expect(full.backup.valid, 'Full backup was not marked valid')
+
+    console.log(
+      JSON.stringify({
+        backupPolicy: ['full', 'diff', 'incr'],
+        backupMeasurements: [full.backup, differential.backup, incremental.backup],
+        controlState: 'encrypted-snapshot-restored',
+        pitrTarget: targetTime,
+        partialRestoreRetry: 'pass',
+        postgresDownRestore: 'pass',
+        replicas: 'primary-and-offsite-fresh-with-offsite-fallback-restore',
+        representativeApplicationRead: 'pass',
+        restoreSeconds,
+        status: 'pass',
+      }),
+    )
+  } finally {
+    for (const name of [postgresName, backupName]) {
+      docker(['rm', '--force', name], true)
+    }
+  }
+}
+
+void main().catch((error: unknown) => {
+  console.error(error instanceof Error ? error.message : 'Unknown recovery test failure')
+  process.exitCode = 1
+})

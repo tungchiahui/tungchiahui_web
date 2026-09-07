@@ -19,6 +19,7 @@ import {
   heartbeatInfrastructureOperation,
   initializeControlState,
   listControlAuditEvents,
+  listRecoveryBackups,
   readControlState,
   reconcileInfrastructureOperations,
   startInfrastructureOperation,
@@ -73,11 +74,11 @@ describe('control-state SQLite engine', () => {
       incompleteOperations: 0,
       initializedAt: '2026-08-23T00:00:00.000Z',
       journalMode: 'wal',
-      schemaVersion: 6,
+      schemaVersion: 7,
       synchronous: 2,
     })
     checkpointControlState(path)
-    expect(readControlState(path).schemaVersion).toBe(6)
+    expect(readControlState(path).schemaVersion).toBe(7)
   })
 
   it('refuses to reuse state from another environment', () => {
@@ -93,7 +94,39 @@ describe('control-state SQLite engine', () => {
     const summary = initializeControlState(path, 'production')
 
     expect(summary.environment).toBe('production')
-    expect(summary.schemaVersion).toBe(6)
+    expect(summary.schemaVersion).toBe(7)
+  })
+
+  it('invalidates pre-dual-replica backup records during the Version 7 migration', () => {
+    const path = statePath()
+    initializeControlState(path, 'test')
+    const legacy = new DatabaseSync(path)
+    legacy.exec(`
+      DELETE FROM control_schema_migrations WHERE version = 7;
+      INSERT INTO recovery_backup_records (
+        backup_id, backup_type, stanza, repository_generation, manifest_sha256,
+        wal_archive_max, primary_replica_status, r2_replica_status,
+        offsite_replica_status, valid, measured_seconds, measured_bytes,
+        created_at, completed_at
+      ) VALUES (
+        'legacy-r2-only', 'full', 'tungchiahui', 'generation-1',
+        '${'a'.repeat(64)}', '000000010000000000000001', 'fresh', 'fresh',
+        'fresh', 1, 1, 1024,
+        '2026-09-07T00:00:00.000Z', '2026-09-07T00:00:01.000Z'
+      );
+    `)
+    legacy.close()
+
+    initializeControlState(path, 'test')
+
+    expect(listRecoveryBackups(path)).toMatchObject([
+      {
+        backupId: 'legacy-r2-only',
+        offsiteReplicaStatus: 'fresh',
+        primaryReplicaStatus: 'pending',
+        valid: false,
+      },
+    ])
   })
 
   it('does not relabel an existing pre-Version-3 state database as production', () => {

@@ -224,6 +224,6 @@ Break-glass 仅替换请求到达路径，不替换 Recovery Engine：它必须�
 ./site backup status
 ```
 
-只有同时满足以下证据才把 Backup 视为有效：pgBackRest `check`/`verify` 成功、WAL Max 已记录、`BACKUP_S3_*` Off-site Replica 为 `fresh`、Manifest/逐对象 SHA-256 读回一致。任一检查失败会保留失败记录但 `valid=false`，不得用于自动 Restore 选择。
+只有同时满足以下证据才把 Backup 视为有效：pgBackRest `check`/`verify` 成功、WAL Max 已记录、AList Primary `BACKUP_S3_*` 与 R2 Off-site `BACKUP_OFFSITE_S3_*` 均为 `fresh`、两端 Manifest/逐对象 SHA-256 读回一致。任一检查失败会保留失败记录但 `valid=false`，不得用于自动 Restore 选择。
 
 Production Restore Drill 必须另行获得明确授权；自动 `test:recovery` 只操作 Disposable Target。Control-state 恢复前必须验证 age Ciphertext Hash、SQLite Integrity/Foreign Key、Schema Version、Environment 和 Audit Digest。

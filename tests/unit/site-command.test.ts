@@ -112,6 +112,25 @@ describe('site command boundary', () => {
     expect(
       parseSiteCommand(['storage', 'contract', 's3', '--confirm', 'S3-NON-PRODUCTION']),
     ).toEqual({ kind: 'storage-contract-s3' })
+    expect(parseSiteCommand(['storage', 'backup', 'assets'])).toEqual({
+      execute: false,
+      kind: 'asset-backup',
+      secretFile: 'ops/production/secrets/production.sops.yaml',
+    })
+    expect(
+      parseSiteCommand([
+        'storage',
+        'backup',
+        'assets',
+        '--execute',
+        '--confirm',
+        'ASSET-BACKUP-PRESERVE-R2-ONLY',
+      ]),
+    ).toEqual({
+      execute: true,
+      kind: 'asset-backup',
+      secretFile: 'ops/production/secrets/production.sops.yaml',
+    })
     expect(parseSiteCommand(['translate', 'pending', '--dry-run'])).toEqual({
       action: 'create',
       kind: 'translate',
@@ -150,6 +169,9 @@ describe('site command boundary', () => {
     expect(() => parseSiteCommand(['translate', 'pending', '--execute'])).toThrow()
     expect(() => parseSiteCommand(['translate', 'all', '--dry-run', '--force'])).toThrow()
     expect(() => parseSiteCommand(['storage', 'contract', 's3'])).toThrow(SiteUsageError)
+    expect(() => parseSiteCommand(['storage', 'backup', 'assets', '--execute'])).toThrow(
+      SiteUsageError,
+    )
     expect(() => parseSiteCommand(['migrate-server', '127.0.0.1'])).toThrow(SiteUsageError)
     expect(() => parseSiteCommand(['backup', '--environment', 'production'])).toThrow(
       SiteUsageError,

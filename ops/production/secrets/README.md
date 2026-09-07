@@ -23,8 +23,10 @@ sops ops/production/secrets/production.sops.yaml
 ./site production secrets validate
 ```
 
-The second command is only for replacing the provider-neutral asset S3, single off-site backup S3
-and GHCR placeholders. Production currently maps these to AList and Cloudflare R2 respectively.
+The second command is only for replacing the provider-neutral AList S3, R2 off-site S3 and GHCR
+placeholders. In production, copy the existing `ASSET_S3_*` AList connection values into
+`BACKUP_S3_*`; the recovery engine writes only under `backups/`. Move the existing R2 values to
+`BACKUP_OFFSITE_S3_*`. R2 must use a separate bucket and credentials.
 Never pass secret values through Ansible extra
 variables or Docker build arguments. The final command decrypts
 only in controller process memory and fails closed if the document shape is wrong or any

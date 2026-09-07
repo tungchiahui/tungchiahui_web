@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import { GET as getAsset } from '@/app/api/assets/[...key]/route'
 import { parseAssetStorageConfiguration } from '@/storage/configuration'
 import {
   encodeObjectKeyForUrl,
   storageObjectIdentifierSchema,
   storageObjectKeySchema,
+  storageObjectPrefixSchema,
 } from '@/storage/contracts'
 import {
   assetCachePolicy,
@@ -32,6 +34,16 @@ function s3ContractInput() {
 }
 
 describe('Phase 11 storage boundary', () => {
+  it('hides recovery namespaces from the public asset gateway', async () => {
+    for (const prefix of ['backups', 'asset-backups', 'control-state', 'database-backups']) {
+      const response = await getAsset(new Request(`https://example.test/api/assets/${prefix}/x`), {
+        params: Promise.resolve({ key: [prefix, 'x'] }),
+      })
+      expect(response.status).toBe(404)
+      expect(response.headers.get('cache-control')).toBe('no-store')
+    }
+  })
+
   it('defines deterministic asset keys and cache policies without canonical Markdown storage', () => {
     expect(buildAssetObjectKey('images', 'a'.repeat(64), '示例.webp')).toBe(
       `images/${'a'.repeat(64)}/示例.webp`,
@@ -66,6 +78,8 @@ describe('Phase 11 storage boundary', () => {
     expect(storageObjectIdentifierSchema.parse('contract/unique-prefix/')).toBe(
       'contract/unique-prefix/',
     )
+    expect(storageObjectPrefixSchema.parse('')).toBe('')
+    expect(() => storageObjectIdentifierSchema.parse('')).toThrow()
   })
 
   it('requires HTTPS for production asset storage but permits the isolated local service', () => {
