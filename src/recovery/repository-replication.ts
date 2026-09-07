@@ -113,6 +113,14 @@ function replicaPrefix(manifest: RepositoryManifest) {
   return recoveryObjectKey(`database-backups/${manifest.generation}`)
 }
 
+export function repositoryReplicaFileKeys(keys: readonly string[], repositoryPrefix: string) {
+  return Object.freeze(
+    Array.from(new Set(keys))
+      .filter((key) => key !== repositoryPrefix)
+      .sort(),
+  )
+}
+
 export async function readRepositoryManifestFromReplica(
   generation: string,
   configuration: S3ConnectionConfiguration,
@@ -182,8 +190,15 @@ export async function verifyRepositoryReplica(
     if (repositoryManifestSha256(remoteManifest) !== repositoryManifestSha256(manifest)) {
       throw new Error('Backup replica manifest hash does not match the local repository')
     }
-    const keys = await storage.listObjects(`${prefix}/repository/`)
-    if (keys.length !== manifest.entries.length) {
+    const repositoryPrefix = `${prefix}/repository/`
+    const keys = repositoryReplicaFileKeys(
+      await storage.listObjects(repositoryPrefix),
+      repositoryPrefix,
+    )
+    const expectedKeys = new Set(
+      manifest.entries.map((entry) => `${repositoryPrefix}${entry.path}`),
+    )
+    if (keys.length !== manifest.entries.length || keys.some((key) => !expectedKeys.has(key))) {
       throw new Error('Backup replica file count does not match the repository manifest')
     }
     for (const entry of manifest.entries) {

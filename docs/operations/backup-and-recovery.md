@@ -34,6 +34,8 @@ Phase 11 的真实 AList 证据验证了 PUT/GET/HEAD/List/Overwrite/Metadata �
 
 ADR 0018 定义两套远程存储连接：`ASSET_S3_*`/AList Primary `BACKUP_S3_*` 在 Production 指向同一 AList Bucket/Pair，Recovery Engine 只写固定 `backups/`；`BACKUP_OFFSITE_S3_*` 指向独立 R2。Parser 拒绝 AList/R2 Credential 复用和 Production HTTP Endpoint。Local Repository 不是唯一恢复副本；Restore 优先从完整读回验证的 AList Generation 重建，失败时回退同一 R2 Generation。Adapter、CLI 与 Domain Type 不绑定 Provider。
 
+AList v3 的 `ListObjectsV2` 可能为查询的 Repository Prefix 返回重复的同名虚拟目录标记。Replica Verification 只去重并忽略精确等于 `.../repository/` 的该 Prefix Marker；随后仍要求远端 Key Set 与 Manifest 文件集合精确相等，并逐对象读回验证 SHA-256。任何嵌套目录标记、未知对象、缺失对象或内容差异仍会 Fail Closed，不能以 Provider 兼容为由跳过。
+
 Retention 基线由 `ops/production/pgbackrest.conf` 固定：保留 2 个 Full、4 个 Differential，以及对应 2 个 Full 范围内的 WAL；定时策略运行 Full/Differential/Incremental。每次 Backup 后执行 pgBackRest `check` + `verify`，并验证 Primary 与 Off-site 对象副本。
 
 ## Backup Command
