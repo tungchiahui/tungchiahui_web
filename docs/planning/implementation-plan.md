@@ -1605,6 +1605,16 @@ Owner 于 2026-09-07 验收时明确移除 Wiki/CV 打印控件，并批准指�
 同轮反馈把 Header Search 固定为独立放大镜控件，并要求三态 Theme、Blog/Wiki 正文检索、图片预览任意点关闭、
 移动菜单 Backdrop 关闭及居中且选章即关闭的阅读导航；这些行为已进入 Fixture 与 Public E2E，但仍等待 Owner 视觉验收。
 
+`/more` 与独立特殊页面、Start、Stats、Tech/Weight 和全局音乐播放器的阻断修复记录在
+`docs/migration/phase-18-special-pages-music-compatibility.md`。修复恢复了 Phase 0 标记的用户结果，并保持
+Umami Token、Owner Dataset 写入和音源 Provider 的受验证边界。Owner 后续反馈已将 More/About/Footer 统一为
+V2 蓝色视觉体系；Footer 恢复 13 个联系方式并仅通过自建主/全球 CDN 加载 Font Awesome；全局播放器增加
+完整歌单与四行同步歌词并缩短迷你态；Start 通过受验证、缓存的服务端 API 轮换 Bing 最近 8 图且一轮内不重复。
+Canonical/公共数据继续进入 PostgreSQL，资源进入 S3/CDN；Theme、播放器收起态和未登录 Start 私人设置保留为
+设备本地状态，短期 Blob 只用于显式 JSON 导出，不构成持久化。Repository Check、166 项 Unit、
+Production-foundation/Recovery、11 项 Public E2E 与 7 项 PostgreSQL Migration Gate 均已通过。
+Owner 本地验收仍是阻断项，不能据此勾选 Phase 18。
+
 - [ ] 全部 Repository Merge Gate 和 Acceptance Criteria 通过。
 - [x] Final Legacy URL/Pinyin/Feature Matrix 无未接受 Regression。
 - [x] Fresh Restore Drill 与 Rollback Rehearsal 通过。

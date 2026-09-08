@@ -109,13 +109,13 @@ Owner 已确认以下 Route 和界面全部保留。`/more` 继续作为入口 H
 | About `/about` | 个人方向、站点说明、服务入口与联系方式 | MUST KEEP | 6、7、18 | O-002 RESOLVED |
 | CV `/cv` | 在线简历、联系方式、PDF/Print 相关入口 | MUST KEEP | 6、7、11、18 | O-002 RESOLVED |
 | Friend `/friend` | 友情链接与外部社区入口 | MUST KEEP | 6、7、11、18 | O-002 RESOLVED |
-| More `/more` | 特殊页面、Analytics、Storage/Chat 等入口 Hub | MUST KEEP | 6、7、18 | O-002 RESOLVED |
+| More `/more` | 特殊页面、Analytics、Storage/Chat 等入口 Hub | MUST KEEP | 6、7、18 | Phase 18 local repair；Owner acceptance pending |
 | My Logo `/mylogo` | Logo 含义和视觉身份说明 | MUST KEEP | 6、7、11、18 | O-002 RESOLVED |
-| Music `/music` + Global Mini Player | QQ Music Playlist、APlayer、CDN Audio Mapping、跨页面播放/错误恢复 | MUST KEEP outcome；允许重做播放器实现 | 6、7、11、18 | O-003 RESOLVED |
-| Start `/start` | 搜索引擎、Suggestion、Bookmark CRUD/Import/Export、History、Layout/Background localStorage | MUST KEEP outcome；允许重做实现 | 6、7、11、18 | O-003 RESOLVED |
-| Stats `/stats` + page stats | Public Analytics Dashboard；Blog/Wiki/List 聚合 Locale/Legacy Path Traffic | MUST KEEP public outcome；需重新做安全边界 | 6、7、10、16、18 | O-003 RESOLVED |
-| Tech Footprint `/tech-footprint` | Public Roadmap；Owner Edit；Import/Export；持久化 | MUST KEEP；V2 使用 PostgreSQL，不移植 EdgeOne Blob | 3、4、6、7、16、18 | O-004 RESOLVED |
-| Weight Loss `/weight-loss` | Public/Personal Progress；Chart；Import/Export；持久化 | MUST KEEP；V2 使用 PostgreSQL，不移植 EdgeOne Blob | 3、4、6、7、16、18 | O-004 RESOLVED |
+| Music `/music` + Global Mini Player | QQ Music Playlist、APlayer、CDN Audio Mapping、跨页面播放/错误恢复 | MUST KEEP outcome；允许重做播放器实现 | 6、7、11、18 | Phase 18 local repair；Owner acceptance pending |
+| Start `/start` | 搜索引擎、Suggestion、Bookmark CRUD/Import/Export、History、Layout/Background localStorage | MUST KEEP outcome；允许重做实现 | 6、7、11、18 | Phase 18 local repair；Owner acceptance pending |
+| Stats `/stats` + page stats | Public Analytics Dashboard；Blog/Wiki/List 聚合 Locale/Legacy Path Traffic | MUST KEEP public outcome；需重新做安全边界 | 6、7、10、16、18 | Phase 18 local repair；Owner acceptance pending |
+| Tech Footprint `/tech-footprint` | Public Roadmap；Owner Edit；Import/Export；持久化 | MUST KEEP；V2 使用 PostgreSQL，不移植 EdgeOne Blob | 3、4、6、7、16、18 | Phase 18 local repair；Owner acceptance pending |
+| Weight Loss `/weight-loss` | Public/Personal Progress；Chart；Import/Export；持久化 | MUST KEEP；V2 使用 PostgreSQL，不移植 EdgeOne Blob | 3、4、6、7、16、18 | Phase 18 local repair；Owner acceptance pending |
 
 ## 4. Core Page、Component 与 Interaction Inventory
 
