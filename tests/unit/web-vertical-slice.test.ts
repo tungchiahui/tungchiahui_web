@@ -100,16 +100,16 @@ const identifier = '保持'
     ])
     expect(rendered.html).toContain('ROS2_Control')
     expect(rendered.html).toContain('shiki')
+    expect(rendered.html).toContain('--shiki-light')
+    expect(rendered.html).toContain('--shiki-dark')
     expect(rendered.html).toContain('rel="noopener noreferrer"')
     expect(rendered.html).toContain('data-attachment="true"')
     expect(rendered.html).toContain('data-asset-origin="local"')
     expect(rendered.html).toContain('<div class="table-scroll"><table>')
     expect(rendered.html).toContain(
-      '<h1 id="中文标题"><a class="heading-number" href="#中文标题">1.</a>',
+      '<h1 data-heading-anchor id="中文标题" tabindex="0"><span class="heading-number">1.</span>',
     )
-    expect(rendered.html).toContain(
-      '<a aria-hidden="true" class="heading-permalink" href="#code" tabindex="-1">#</a>',
-    )
+    expect(rendered.html).toContain('<h2 data-heading-anchor id="code" tabindex="0">')
     expect(rendered.html).not.toContain('<script')
   }, 20_000)
 

@@ -1,4 +1,16 @@
-import { Search as SearchIcon } from 'lucide-react'
+import {
+  ArrowRight,
+  BookOpen,
+  Bot,
+  CheckCircle2,
+  Cpu,
+  Globe2,
+  Monitor,
+  Newspaper,
+  NotebookPen,
+  Search as SearchIcon,
+  Smartphone,
+} from 'lucide-react'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -67,7 +79,7 @@ function CardLink({
   return (
     <li>
       <Link
-        className="block rounded-xl border bg-card p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-primary"
+        className="content-card block rounded-xl border bg-card p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-primary"
         href={withLocalePrefix(document.routePath, context)}
       >
         <h3 className="font-semibold text-lg">
@@ -102,30 +114,123 @@ async function HomePage({ context }: Readonly<{ context: PublicRouteContext }>) 
     listCachedDocuments('blog', context.locale),
     listCachedDocuments('wiki', context.locale),
   ])
+  const actions = [
+    { href: '/blog', icon: Newspaper, label: t('homepageActionBlog') },
+    { href: '/wiki', icon: BookOpen, label: t('homepageActionWiki') },
+    { href: '/more', icon: ArrowRight, label: t('homepageActionMore') },
+  ] as const
+  const tags = [
+    t('homepageTagTechnology'),
+    t('homepageTagProjects'),
+    t('homepageTagLearning'),
+    t('homepageTagLife'),
+  ]
+  const focusAreas = [
+    {
+      icon: Cpu,
+      summary: t('homepageFocusEmbeddedSummary'),
+      title: t('homepageFocusEmbeddedTitle'),
+    },
+    {
+      icon: Bot,
+      summary: t('homepageFocusRoboticsSummary'),
+      title: t('homepageFocusRoboticsTitle'),
+    },
+    {
+      icon: Monitor,
+      summary: t('homepageFocusToolsSummary'),
+      title: t('homepageFocusToolsTitle'),
+    },
+    {
+      icon: Globe2,
+      summary: t('homepageFocusWebSummary'),
+      title: t('homepageFocusWebTitle'),
+    },
+    {
+      icon: Smartphone,
+      summary: t('homepageFocusMobileSummary'),
+      title: t('homepageFocusMobileTitle'),
+    },
+    {
+      icon: NotebookPen,
+      summary: t('homepageFocusNotesSummary'),
+      title: t('homepageFocusNotesTitle'),
+    },
+  ] as const
   return (
-    <>
-      <section className="grid min-h-[24rem] content-center rounded-3xl border bg-card p-8 shadow-sm sm:p-14">
-        <p className="font-medium text-primary text-sm tracking-[0.2em] uppercase">
-          {t('homepageEyebrow')}
-        </p>
-        <h1 className="mt-5 max-w-3xl font-bold text-4xl tracking-tight sm:text-6xl">
-          {t('homepageTitle')}
-        </h1>
-        <p className="mt-6 max-w-2xl text-lg text-muted-foreground">{t('homepageDescription')}</p>
+    <div className="home-page">
+      <section className="home-hero">
+        <div>
+          <p className="home-kicker">{t('homepageEyebrow')}</p>
+          <h1>{t('homepageTitle')}</h1>
+          <p className="home-summary">{t('homepageDescription')}</p>
+          <div className="home-actions">
+            {actions.map(({ href, icon: Icon, label }) => (
+              <Link href={withLocalePrefix(href, context)} key={href}>
+                <Icon aria-hidden size={17} />
+                <span>{label}</span>
+              </Link>
+            ))}
+          </div>
+          <ul className="home-tags">
+            {tags.map((tag) => (
+              <li key={tag}>
+                <CheckCircle2 aria-hidden size={14} />
+                {tag}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div aria-hidden className="home-orbit">
+          <span>
+            <Bot size={18} />
+          </span>
+          <span>
+            <Cpu size={18} />
+          </span>
+          <span>
+            <BookOpen size={18} />
+          </span>
+          <span>
+            <Globe2 size={18} />
+          </span>
+          <strong>
+            <NotebookPen size={32} />
+          </strong>
+        </div>
       </section>
-      <div className="mt-12 grid gap-10 lg:grid-cols-2">
+      <section className="home-focus" aria-labelledby="home-focus-title">
+        <header>
+          <p>{t('homepageFocusEyebrow')}</p>
+          <h2 id="home-focus-title">{t('homepageFocusTitle')}</h2>
+          <span>{t('homepageFocusDescription')}</span>
+        </header>
+        <div>
+          {focusAreas.map(({ icon: Icon, summary, title }) => (
+            <article key={title}>
+              <span aria-hidden>
+                <Icon size={21} />
+              </span>
+              <h3>{title}</h3>
+              <p>{summary}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+      <div className="home-latest-grid">
         {[
-          { documents: blogs.slice(0, 3), href: '/blog', title: t('latestBlog') },
-          { documents: wikis.slice(0, 3), href: '/wiki', title: t('latestWiki') },
+          { documents: blogs.slice(0, 5), href: '/blog', icon: Newspaper, title: t('latestBlog') },
+          { documents: wikis.slice(0, 5), href: '/wiki', icon: BookOpen, title: t('latestWiki') },
         ].map((section) => (
-          <section key={section.href}>
-            <div className="mb-4 flex items-end justify-between gap-4">
-              <h2 className="font-semibold text-2xl">{section.title}</h2>
-              <Link
-                className="text-primary text-sm hover:underline"
-                href={withLocalePrefix(section.href, context)}
-              >
+          <section className="home-latest-panel" key={section.href}>
+            <div className="home-panel-heading">
+              <h2>
+                <section.icon aria-hidden size={20} />
+                {section.title}
+              </h2>
+              <Link href={withLocalePrefix(section.href, context)}>
                 {t('viewAll')}
+                <ArrowRight aria-hidden size={15} />
               </Link>
             </div>
             {section.documents.length ? (
@@ -140,7 +245,7 @@ async function HomePage({ context }: Readonly<{ context: PublicRouteContext }>) 
           </section>
         ))}
       </div>
-    </>
+    </div>
   )
 }
 
@@ -190,9 +295,12 @@ async function ContentList({
   if (contentType === 'wiki') {
     const groups = groupWikiDocuments(documents)
     return (
-      <section>
-        <h1 className="font-bold text-4xl">{title}</h1>
-        <p className="mt-3 text-muted-foreground">{description}</p>
+      <section className="content-index content-index-wiki">
+        <header className="content-index-hero">
+          <p>{t('wiki')}</p>
+          <h1>{title}</h1>
+          <span>{description}</span>
+        </header>
         <ContentSearch
           action={withLocalePrefix('/wiki', context)}
           defaultValue={query}
@@ -202,7 +310,7 @@ async function ContentList({
         <div className="mt-9 grid gap-5">
           {groups.map((group) => (
             <details
-              className="rounded-2xl border bg-card p-5"
+              className="wiki-group rounded-2xl border bg-card p-5"
               key={group.key}
               open={Boolean(query)}
             >
@@ -274,9 +382,12 @@ async function ContentList({
   }
 
   return (
-    <section>
-      <h1 className="font-bold text-4xl">{title}</h1>
-      <p className="mt-3 text-muted-foreground">{description}</p>
+    <section className="content-index content-index-blog">
+      <header className="content-index-hero">
+        <p>{t('blog')}</p>
+        <h1>{title}</h1>
+        <span>{description}</span>
+      </header>
       <ContentSearch
         action={withLocalePrefix('/blog', context)}
         defaultValue={query}
@@ -515,7 +626,7 @@ async function ArticlePage({
 
   return (
     <article className="mx-auto max-w-[90rem]" data-article-type={document.contentType}>
-      <header className="border-b pb-8">
+      <header className="article-hero">
         <p className="font-medium text-primary text-sm uppercase">{t(document.contentType)}</p>
         <h1 className="mt-3 font-bold text-4xl tracking-tight sm:text-5xl">{localizedTitle}</h1>
         <div className="mt-4 flex flex-wrap gap-4 text-muted-foreground text-sm">

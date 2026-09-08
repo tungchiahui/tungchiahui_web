@@ -151,7 +151,7 @@ describe('Phase 18 Blog/Wiki compatibility', () => {
           { depth: 2, id: 'second', level: 0, number: '2', text: 'Second' },
         ]}
         html={
-          '<h2 id="first">First</h2><pre><code>const safe = true</code></pre><img alt="Fixture image" src="/images/fixture.png">'
+          '<h2 data-heading-anchor id="first" tabindex="0">First</h2><pre><code>const safe = true</code></pre><img alt="Fixture image" src="/images/fixture.png">'
         }
         labels={{
           close: 'Close',
@@ -165,6 +165,8 @@ describe('Phase 18 Blog/Wiki compatibility', () => {
     )
     await userEvent.click(await screen.findByRole('button', { name: 'Copy code' }))
     expect(writeText).toHaveBeenCalledWith('const safe = true')
+    await userEvent.click(screen.getByRole('heading', { name: 'First' }))
+    expect(window.location.hash).toBe('#first')
     await userEvent.click(screen.getByRole('img', { name: 'Fixture image' }))
     expect(screen.getByRole('dialog', { name: 'Image preview' })).toBeVisible()
     await userEvent.click(
