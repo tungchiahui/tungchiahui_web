@@ -24,6 +24,13 @@ type ReaderLabels = Readonly<{
   tableOfContents: string
 }>
 
+function getCodeLanguage(pre: HTMLPreElement) {
+  const languageClass = Array.from(pre.querySelector('code')?.classList ?? []).find((className) =>
+    className.startsWith('language-'),
+  )
+  return languageClass ? languageClass.slice('language-'.length).toUpperCase() : 'CODE'
+}
+
 function Toc({
   headings,
   label,
@@ -138,7 +145,12 @@ export function ArticleReader({
       const wrapper = document.createElement('div')
       wrapper.className = 'code-block'
       pre.before(wrapper)
-      wrapper.append(pre)
+      const toolbar = document.createElement('div')
+      toolbar.className = 'code-toolbar'
+      const language = document.createElement('span')
+      language.className = 'code-language'
+      language.textContent = getCodeLanguage(pre)
+      language.dataset.codeLanguage = language.textContent
       const button = document.createElement('button')
       button.type = 'button'
       button.className = 'code-copy-button'
@@ -163,7 +175,8 @@ export function ArticleReader({
         }, 1_500)
       }
       button.addEventListener('click', copy)
-      wrapper.prepend(button)
+      toolbar.append(language, button)
+      wrapper.append(toolbar, pre)
       cleanup.push(() => {
         button.removeEventListener('click', copy)
         wrapper.replaceWith(pre)
@@ -271,7 +284,7 @@ export function ArticleReader({
     <>
       <div aria-hidden="true" className="reading-progress" data-reading-progress />
       {(documentNavigation.length > 0 || hasToc) && (
-        <div className="article-mobile-tools lg:hidden">
+        <div className="article-mobile-tools xl:hidden">
           {documentNavigation.length > 0 ? (
             <button
               aria-label={labels.documentNavigation}
@@ -296,7 +309,7 @@ export function ArticleReader({
       )}
       <div className="article-reader-grid">
         {documentNavigation.length > 0 ? (
-          <aside className="article-reader-sidebar hidden lg:block">
+          <aside className="article-reader-sidebar hidden xl:block">
             <DocumentNavigation items={documentNavigation} label={labels.documentNavigation} />
           </aside>
         ) : null}
@@ -307,7 +320,7 @@ export function ArticleReader({
           dangerouslySetInnerHTML={{ __html: html }}
         />
         {hasToc ? (
-          <aside className="article-reader-toc hidden lg:block">
+          <aside className="article-reader-toc hidden xl:block">
             <Toc headings={headings} label={labels.tableOfContents} />
           </aside>
         ) : null}

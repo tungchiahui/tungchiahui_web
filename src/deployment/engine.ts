@@ -61,7 +61,6 @@ export type DeploymentEngineOptions = Readonly<{
   journalPath: string
   leaseSeconds: number
   migrationPolicyPath: string
-  stabilizationSeconds: number
 }>
 
 const phaseOrder = [
@@ -211,15 +210,6 @@ export async function executeDeploymentOperation(
     phase = phaseIndex(nextPhase)
   }
 
-  if (
-    operation.operationType === 'deploy' &&
-    !targetAlreadyCurrent &&
-    runtime.stabilizationUntil !== null &&
-    runtime.stabilizationUntil > now.toISOString()
-  ) {
-    throw new Error('Previous release is still inside its stabilization window')
-  }
-
   let cutoverCommitted =
     phase >= phaseIndex('cutover-committed') ||
     (targetAlreadyCurrent && phase >= phaseIndex('traffic-switched'))
@@ -285,12 +275,7 @@ export async function executeDeploymentOperation(
 
     if (phase < phaseIndex('cutover-committed')) {
       if (!targetAlreadyCurrent) {
-        runtime = commitDeploymentCutover(
-          options.controlStatePath,
-          operation.id,
-          lease,
-          options.stabilizationSeconds,
-        )
+        runtime = commitDeploymentCutover(options.controlStatePath, operation.id, lease)
         cutoverCommitted = true
       }
       advance('cutover-committed', {
@@ -310,7 +295,7 @@ export async function executeDeploymentOperation(
         recordDeploymentCutoverIntent(options.controlStatePath, operation.id, lease, rollbackTarget)
         await platform.validateCutover(rollbackTarget.slot)
         await platform.switchTraffic(rollbackTarget.slot)
-        commitDeploymentCutover(options.controlStatePath, operation.id, lease, 0)
+        commitDeploymentCutover(options.controlStatePath, operation.id, lease)
         await platform.cleanupFailedCandidate(target)
         discardDeploymentRollbackTarget(options.controlStatePath, operation.id, lease, target)
         updateInfrastructureOperationPhase(

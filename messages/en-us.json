@@ -94,6 +94,8 @@
     "filterBlog": "Search blog titles and content",
     "filterWiki": "Search wiki titles and content",
     "chapterCount": "{count} chapters",
+    "wikiExpand": "Expand",
+    "wikiCollapse": "Collapse",
     "wikiOverview": "Document overview",
     "updatedAt": "Updated {date}",
     "readingTime": "About {minutes} min read",
@@ -102,7 +104,7 @@
     "contentStateMixed": "Existing English translations were reused. {count} current source blocks remain in Simplified Chinese, without triggering paid translation.",
     "tableOfContents": "On this page",
     "documentNavigation": "Document chapters",
-    "copyCode": "Copy code",
+    "copyCode": "Copy",
     "codeCopied": "Copied",
     "imagePreview": "Image preview",
     "close": "Close",
@@ -238,6 +240,7 @@
       "status": { "todo": "Not started", "doing": "In progress", "done": "Completed" }
     },
     "start": {
+      "backHome": "Back to home",
       "simple": "Simple",
       "detailed": "Detailed",
       "switchBackground": "Change background",

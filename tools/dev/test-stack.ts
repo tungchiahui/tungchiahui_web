@@ -112,7 +112,7 @@ async function readStatus(base: URL, nonce: string) {
   return controlStatusSchema.parse(JSON.parse(responseBody) as unknown)
 }
 
-async function fetchAfterServiceRestart(url: URL) {
+async function fetchUntilReady(url: URL) {
   let lastError = 'unknown error'
   for (let attempt = 1; attempt <= 30; attempt += 1) {
     try {
@@ -260,10 +260,7 @@ async function verifyOpenRestyAndFailureBoundaries(
   openRestyUrl: URL,
   siteBaseUrl: URL,
 ) {
-  const ordinary = await fetch(openRestyUrl, {
-    headers: { connection: 'close' },
-    signal: AbortSignal.timeout(5_000),
-  })
+  const ordinary = await fetchUntilReady(openRestyUrl)
   if (!ordinary.ok) {
     throw new Error(`OpenResty ordinary route returned HTTP ${ordinary.status}`)
   }
@@ -284,7 +281,7 @@ async function verifyOpenRestyAndFailureBoundaries(
   compose.start('web')
   const restartedSiteBaseUrl = new URL(siteBaseUrl)
   restartedSiteBaseUrl.port = String(compose.port('web', 3000))
-  const restartedWeb = await fetchAfterServiceRestart(restartedSiteBaseUrl)
+  const restartedWeb = await fetchUntilReady(restartedSiteBaseUrl)
   if (!restartedWeb.ok) {
     throw new Error(`Restarted Next.js returned HTTP ${restartedWeb.status}`)
   }

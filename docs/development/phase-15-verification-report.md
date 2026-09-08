@@ -54,7 +54,9 @@ These settings cannot be replaced by repository YAML; Phase 18 must verify them 
 
 ## Recovery validation plan
 
-Registry and workflow automation add no database state. If registry access fails, rotate only the deploy-agent pull identity and retry the same SHA+digest operation after resolving the failed terminal record according to the existing audited retry policy. Never retag or substitute a digest. Keep the previous slot throughout the stabilization window and use `./site rollback` for application rollback. If deployment/recovery state changes in a later phase, rerun both `test:infra` and `test:recovery` before activation.
+Registry and workflow automation add no database state. If registry access fails, rotate only the deploy-agent pull identity and retry the same SHA+digest operation after resolving the failed terminal record according to the existing audited retry policy. Never retag or substitute a digest. Use `./site rollback` for the immediately previous application release. If deployment/recovery state changes in a later phase, rerun both `test:infra` and `test:recovery` before activation.
+
+> Historical note: ADR 0020 later removed the fixed deployment-stabilization time block; it did not change the workflow authorization or supply-chain requirements verified here.
 
 ## Explicit non-actions
 

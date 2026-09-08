@@ -1248,7 +1248,7 @@ Production-like Infrastructure 已存在，但在可恢复性经过真实 Drill 
 ### Task Checklist
 
 - [x] 实现只接受 Git SHA/固定 Digest 的 Immutable Image Identity，拒绝 `latest`。
-- [x] 实现 Active/Inactive Detection、Target Slot、Previous Rollback Target 和 Stabilization Window。
+- [x] 实现 Active/Inactive Detection、Target Slot 和 Previous Rollback Target；Phase 18 经 ADR 0020 移除固定时长发布拦截。
 - [x] 在 SQLite 持久化 Operation Phase、Current/Last SHA、Digest、Lock/Lease、Actor 和 Audit。
 - [x] 实现统一 Deployment Engine，供 `control-api`、`./site deploy` 和后续 GitHub Actions 调用。
 - [x] 实现 `deploy-agent` 的受控 Docker/Compose、Migration、OpenResty Validate/Reload Capability。
@@ -1280,7 +1280,7 @@ Production-like Infrastructure 已存在，但在可恢复性经过真实 Drill 
 
 - [x] 手工 `./site deploy <sha>` 与 `rollback` 使用同一可审计 State Machine。
 - [x] Cutover 前后 Smoke、Failure/Abort/Rollback 行为 Deterministic。
-- [x] Previous Slot 在 Rollback Window 内完整保留。
+- [x] 每次成功切流后保留立即上一版本；ADR 0020 允许下一次发布覆盖倒数第二版本所在 Slot。
 
 ### Exit Gate
 
@@ -1605,13 +1605,17 @@ Owner 于 2026-09-07 验收时明确移除 Wiki/CV 打印控件，并批准指�
 同轮反馈把 Header Search 固定为独立放大镜控件，并要求三态 Theme、Blog/Wiki 正文检索、图片预览任意点关闭、
 移动菜单 Backdrop 关闭及居中且选章即关闭的阅读导航；这些行为已进入 Fixture 与 Public E2E，但仍等待 Owner 视觉验收。
 
+Owner 于 2026-09-08 认定个人站点不需要固定 24 小时发布禁令，并批准 ADR 0020。部署引擎不再用
+`stabilization_until` 阻止连续发布；并发互斥、不可变镜像、Migration/Backup、Pre/Post Smoke、审计和立即上一版本
+Rollback 均保持。Phase 18 的线上观察证据仍是关闭旧 Nuxt Rollback Window 的验收条件，但不阻止日常 V2 发布。
+
 `/more` 与独立特殊页面、Start、Stats、Tech/Weight 和全局音乐播放器的阻断修复记录在
 `docs/migration/phase-18-special-pages-music-compatibility.md`。修复恢复了 Phase 0 标记的用户结果，并保持
 Umami Token、Owner Dataset 写入和音源 Provider 的受验证边界。Owner 后续反馈已将 More/About/Footer 统一为
 V2 蓝色视觉体系；Footer 恢复 13 个联系方式并仅通过自建主/全球 CDN 加载 Font Awesome；全局播放器增加
 完整歌单与四行同步歌词并缩短迷你态；Start 通过受验证、缓存的服务端 API 轮换 Bing 最近 8 图且一轮内不重复。
 Canonical/公共数据继续进入 PostgreSQL，资源进入 S3/CDN；Theme、播放器收起态和未登录 Start 私人设置保留为
-设备本地状态，短期 Blob 只用于显式 JSON 导出，不构成持久化。Repository Check、166 项 Unit、
+设备本地状态，短期 Blob 只用于显式 JSON 导出，不构成持久化。Repository Check、168 项 Unit、
 Production-foundation/Recovery、11 项 Public E2E 与 7 项 PostgreSQL Migration Gate 均已通过。
 Owner 本地验收仍是阻断项，不能据此勾选 Phase 18。
 
@@ -1621,8 +1625,14 @@ Owner 于 2026-09-08 的后续视觉验收要求已纳入同一阻断修复：Ho
 Umami Share API 可用，文章统计不可用由 OpenResty 对 `/api/traffic` POST 的 405 误拦造成，修复只精确放行该接口；
 Footer 图标缺失由重复 CSP 的交集阻断造成，生产入口改为隐藏上游 CSP 并输出唯一审核策略。旧 Nuxt 的 Homepage、
 代码框与 Font Awesome 路径仅做了对应文件的定点只读核对，未修改旧仓库。移动播放器与左下阅读浮球在窄屏拥有独立
-点击区。上述增量已通过 Repository Check、166 项 Unit、Production-foundation/Recovery、11 项 Public E2E、S3Mock/
+点击区。上述增量已通过 Repository Check、168 项 Unit、Production-foundation/Recovery、11 项 Public E2E、S3Mock/
 Application Integration 与 7 项 PostgreSQL Migration Gate；Owner 验收仍是阻断项。
+Owner 随后以旧站截图确认代码框应恢复低调深色正文、独立语言栏和右侧紧凑复制按钮。定点只读核对旧 Blog/Wiki
+组件后，V2 保留其语言识别、复制状态和局部横向滚动结果，并继续使用当前 React/Shiki/Tailwind 架构；该增量仍需
+随当前 Phase 18 PR 通过门禁与 Owner 视觉验收。
+同日后续验收把 Wiki/Blog 正文中栏加宽并将桌面章节/目录推向外缘；Wiki 列表恢复顶层文档卡与可展开章节，首页只占用
+五个顶层 Wiki 文档槽位；Header 与独立全屏 Start 恢复 Legacy favicon。Canonical Markdown Fence 语言清单已对照真实内容
+建立 Shiki 覆盖与历史别名 Fixture，未知语言仍安全回落为纯文本。以上保持 V2 蓝色视觉，不复制 Legacy Nuxt 架构。
 生产浏览器复核还确认 Umami Share 端发送 `frame-ancestors 'self'`，不能被跨域 iframe 合法嵌入；Stats 因此以固定
 外链入口替代报错空框，站内服务端聚合数据不受影响。
 

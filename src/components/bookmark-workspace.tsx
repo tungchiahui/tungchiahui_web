@@ -12,6 +12,7 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react'
+import Link from 'next/link'
 import { useLocale, useTranslations } from 'next-intl'
 import {
   type CSSProperties,
@@ -161,7 +162,7 @@ const keys = {
   view: 'start-page-view-mode',
 } as const
 
-export function BookmarkWorkspace() {
+export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) {
   const t = useTranslations('Web.start')
   const locale = useLocale()
   const [sections, setSections] = useState<readonly BookmarkSection[]>(defaultSections)
@@ -360,17 +361,23 @@ export function BookmarkWorkspace() {
       <div className="start-overlay" />
       <div className="start-content">
         <header className="start-toolbar">
-          <div className="start-view-toggle">
-            <button aria-pressed={!detailed} onClick={() => switchView(false)} type="button">
-              <List size={15} /> {t('simple')}
-            </button>
-            <button aria-pressed={detailed} onClick={() => switchView(true)} type="button">
-              <LayoutGrid size={15} /> {t('detailed')}
+          <Link aria-label={t('backHome')} className="start-home-mark" href={homeHref}>
+            {/* biome-ignore lint/performance/noImgElement: the exact Legacy ICO is intentionally reused for the Start home control. */}
+            <img alt="" height="28" src="/favicon.ico" width="28" />
+          </Link>
+          <div className="start-toolbar-actions">
+            <div className="start-view-toggle">
+              <button aria-pressed={!detailed} onClick={() => switchView(false)} type="button">
+                <List size={15} /> {t('simple')}
+              </button>
+              <button aria-pressed={detailed} onClick={() => switchView(true)} type="button">
+                <LayoutGrid size={15} /> {t('detailed')}
+              </button>
+            </div>
+            <button aria-label={t('switchBackground')} onClick={cycleBackground} type="button">
+              <ImageIcon size={17} />
             </button>
           </div>
-          <button aria-label={t('switchBackground')} onClick={cycleBackground} type="button">
-            <ImageIcon size={17} />
-          </button>
         </header>
         <section className="start-clock">
           <strong>
@@ -540,8 +547,8 @@ export function BookmarkWorkspace() {
         <p className="start-wallpaper-credit">
           {t('wallpaperSource', {
             title: backgrounds[backgroundIndex]?.title ?? fallbackBackground.title,
-          })}
-          <span>{backgrounds[backgroundIndex]?.copyright ?? fallbackBackground.copyright}</span>
+          })}{' '}
+          {backgrounds[backgroundIndex]?.copyright ?? fallbackBackground.copyright}
         </p>
       </div>
     </div>

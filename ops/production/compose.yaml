@@ -281,7 +281,6 @@ services:
       DEPLOYMENT_POLLING_ENABLED: "true"
       DEPLOYMENT_PUBLIC_ENTRY_URL: http://openresty:8082
       DEPLOYMENT_SEARCH_QUERY: ${TUNGCHIAHUI_DEPLOYMENT_SEARCH_QUERY:?representative search query is required}
-      DEPLOYMENT_STABILIZATION_SECONDS: ${TUNGCHIAHUI_DEPLOYMENT_STABILIZATION_SECONDS:?stabilization policy is required}
       DEPLOY_AGENT_HOST: 0.0.0.0
       DEPLOY_AGENT_PORT: "8081"
       DOCKER_SOCKET_PATH: /run/deploy-capability/docker.sock

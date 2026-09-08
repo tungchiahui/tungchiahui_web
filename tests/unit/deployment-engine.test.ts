@@ -128,7 +128,6 @@ function options(path: string) {
     journalPath: resolve('drizzle/meta/_journal.json'),
     leaseSeconds: 300,
     migrationPolicyPath: resolve('drizzle/migration-policy.json'),
-    stabilizationSeconds: 0,
   }
 }
 
@@ -255,14 +254,17 @@ describe('Phase 14 shared deployment engine', () => {
     })
   })
 
-  it('preserves the previous slot while the stabilization window is active', async () => {
+  it('allows consecutive deployments while retaining the immediately previous release', async () => {
     const path = statePath()
     const platform = new FakePlatform()
     const deployment = startOperation(path, 'deploy')
-    await executeDeploymentOperation(deployment.operation, deployment.lease, [], platform, {
-      ...options(path),
-      stabilizationSeconds: 300,
-    })
+    await executeDeploymentOperation(
+      deployment.operation,
+      deployment.lease,
+      [],
+      platform,
+      options(path),
+    )
     finishInfrastructureOperation(path, deployment.operation.id, deployment.lease, {
       phase: 'deployment-verified',
       status: 'completed',
@@ -274,15 +276,17 @@ describe('Phase 14 shared deployment engine', () => {
       slot: 'blue',
     })
     platform.calls.splice(0)
-    await expect(
-      executeDeploymentOperation(next.operation, next.lease, [], platform, options(path)),
-    ).rejects.toThrow('stabilization window')
-    expect(platform.calls).toEqual(['inspect-active'])
+    await executeDeploymentOperation(next.operation, next.lease, [], platform, options(path))
+    expect(platform.calls).toContain('prepare:blue')
+    expect(platform.calls).toContain('switch:blue')
     expect(readDeploymentState(path)).toMatchObject({
-      activeSlot: 'green',
-      lastDigest: blue.digest,
-      lastSha: blue.sha,
-      previousSlot: 'blue',
+      activeSlot: 'blue',
+      currentDigest: `sha256:${'d'.repeat(64)}`,
+      currentSha: 'd'.repeat(40),
+      lastDigest: green.digest,
+      lastSha: green.sha,
+      previousSlot: 'green',
+      stabilizationUntil: null,
     })
   })
 
@@ -453,7 +457,7 @@ describe('Phase 14 shared deployment engine', () => {
     )
     platform.trafficSlot = 'green'
     platform.activeRelease = green
-    commitDeploymentCutover(path, deployment.operation.id, deployment.lease, 300)
+    commitDeploymentCutover(path, deployment.operation.id, deployment.lease)
 
     const resumedAt = new Date(Date.now() + 301_000)
     expect(reconcileInfrastructureOperations(path, resumedAt)).toBe(1)
