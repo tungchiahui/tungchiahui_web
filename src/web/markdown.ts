@@ -110,7 +110,7 @@ function enhanceHtml(html: string) {
     (match, depthText: string, id: string, contents: string) => {
       const number = headingNumbers.get(id)
       if (!number) return match
-      return `<h${depthText} id="${id}"><a class="heading-number" href="#${id}">${number}.</a><span>${contents}</span><a aria-hidden="true" class="heading-permalink" href="#${id}" tabindex="-1">#</a></h${depthText}>`
+      return `<h${depthText} data-heading-anchor id="${id}" tabindex="0"><span class="heading-number">${number}.</span><span>${contents}</span></h${depthText}>`
     },
   )
   return { headings: numberedHeadings, html: enhanced }

@@ -1615,6 +1615,15 @@ Canonical/公共数据继续进入 PostgreSQL，资源进入 S3/CDN；Theme、�
 Production-foundation/Recovery、11 项 Public E2E 与 7 项 PostgreSQL Migration Gate 均已通过。
 Owner 本地验收仍是阻断项，不能据此勾选 Phase 18。
 
+Owner 于 2026-09-08 的后续视觉验收要求已纳入同一阻断修复：Homepage 恢复旧站的三入口、四标签、六关注方向与
+各五条最新内容，但统一使用 V2 蓝色视觉；Blog/Wiki 列表、文章 Hero、Shiki 亮暗代码框和复制工具栏得到视觉整理；
+正文层级编号使用主题蓝且整段标题成为鼠标/键盘锚点；移动文章页播放器不再被阅读浮球强制抬高。真实生产审计确认
+Umami Share API 可用，文章统计不可用由 OpenResty 对 `/api/traffic` POST 的 405 误拦造成，修复只精确放行该接口；
+Footer 图标缺失由重复 CSP 的交集阻断造成，生产入口改为隐藏上游 CSP 并输出唯一审核策略。旧 Nuxt 的 Homepage、
+代码框与 Font Awesome 路径仅做了对应文件的定点只读核对，未修改旧仓库。移动播放器与左下阅读浮球在窄屏拥有独立
+点击区。上述增量已通过 Repository Check、166 项 Unit、Production-foundation/Recovery、11 项 Public E2E、S3Mock/
+Application Integration 与 7 项 PostgreSQL Migration Gate；Owner 验收仍是阻断项。
+
 - [ ] 全部 Repository Merge Gate 和 Acceptance Criteria 通过。
 - [x] Final Legacy URL/Pinyin/Feature Matrix 无未接受 Regression。
 - [x] Fresh Restore Drill 与 Rollback Rehearsal 通过。

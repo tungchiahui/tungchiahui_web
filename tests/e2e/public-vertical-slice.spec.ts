@@ -26,6 +26,9 @@ test('renders homepage and PostgreSQL-backed Blog/Wiki surfaces in both zh-CN ro
 }) => {
   await page.goto('/')
   await expect(page.getByRole('heading', { name: '你好，我是 TungChiaHui。' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '本站内容方向' })).toBeVisible()
+  await expect(page.getByRole('link', { name: '浏览博客文章' })).toHaveAttribute('href', '/blog')
+  await expect(page.locator('.home-focus article')).toHaveCount(6)
   await expect(page.getByRole('link', { name: 'VSCode 任务栏启动 Codex 插件打不开' })).toBeVisible()
 
   await page.goto('/zh-cn')
@@ -145,11 +148,9 @@ test('renders safe runtime Markdown, Shiki, anchors, links, images and Unicode',
   await expect(page.locator('h2#代码示例')).toBeVisible()
   await expect(page.locator('h1#c-与-unicode-渲染 > .heading-number')).toHaveText('1.')
   await expect(page.locator('h2#代码示例 > .heading-number')).toHaveText('1.1.')
-  await expect(page.locator('h2#代码示例 > .heading-number')).toHaveAttribute('href', '#代码示例')
-  await expect(page.locator('h2#代码示例 > .heading-permalink')).toHaveAttribute(
-    'href',
-    '#代码示例',
-  )
+  await expect(page.locator('h2#代码示例')).toHaveAttribute('data-heading-anchor', '')
+  await page.locator('h2#代码示例').click()
+  await expect(page).toHaveURL(/#%E4%BB%A3%E7%A0%81%E7%A4%BA%E4%BE%8B$/)
   await expect(page.getByRole('link', { name: 'ROS2 文档' })).toHaveAttribute(
     'href',
     '/docs/ros2/core/index.html',
@@ -172,6 +173,14 @@ test('renders safe runtime Markdown, Shiki, anchors, links, images and Unicode',
 test('keeps mobile primary navigation and Wiki document/TOC drawers usable', async ({ page }) => {
   await page.setViewportSize({ height: 844, width: 390 })
   await page.goto('/wiki/2023-10-05-cplusplus-jiao-xue/0200-c-kai-fa-huan-jing-da-jian-yu-ce-shi')
+  const playerBox = await page.getByTestId('music-player').boundingBox()
+  expect(playerBox).not.toBeNull()
+  if (playerBox) expect(844 - (playerBox.y + playerBox.height)).toBeLessThanOrEqual(24)
+  const readerToolsBox = await page.locator('.article-mobile-tools').boundingBox()
+  expect(readerToolsBox).not.toBeNull()
+  if (playerBox && readerToolsBox) {
+    expect(readerToolsBox.x + readerToolsBox.width).toBeLessThanOrEqual(playerBox.x + 1)
+  }
   await page.getByRole('button', { name: '菜单' }).click()
   await expect(page.getByRole('navigation', { name: '主导航' })).toBeVisible()
   await page.locator('[data-mobile-menu-backdrop]').click({ position: { x: 10, y: 400 } })

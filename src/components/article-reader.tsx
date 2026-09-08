@@ -110,6 +110,30 @@ export function ArticleReader({
     const content = contentRef.current
     if (!content) return
     const cleanup: Array<() => void> = []
+    const activateHeading = (heading: HTMLElement) => {
+      const nextHash = `#${encodeURIComponent(heading.id)}`
+      window.history.pushState(null, '', nextHash)
+      heading.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+    }
+    const onHeadingClick = (event: MouseEvent) => {
+      const target = event.target
+      if (!(target instanceof Element) || target.closest('a, button')) return
+      const heading = target.closest<HTMLElement>('[data-heading-anchor]')
+      if (heading && content.contains(heading)) activateHeading(heading)
+    }
+    const onHeadingKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return
+      const target = event.target
+      if (!(target instanceof HTMLElement) || !target.matches('[data-heading-anchor]')) return
+      event.preventDefault()
+      activateHeading(target)
+    }
+    content.addEventListener('click', onHeadingClick)
+    content.addEventListener('keydown', onHeadingKeyDown)
+    cleanup.push(() => {
+      content.removeEventListener('click', onHeadingClick)
+      content.removeEventListener('keydown', onHeadingKeyDown)
+    })
     for (const pre of content.querySelectorAll('pre')) {
       const wrapper = document.createElement('div')
       wrapper.className = 'code-block'

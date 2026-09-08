@@ -149,6 +149,8 @@ describe('Phase 12 production foundation policy', () => {
     )?.[1]
     expect(browserCsp).toBe(browserSecurityHeaders['content-security-policy'])
     expect(openRestySource).toContain('proxy_hide_header Content-Security-Policy;')
+    expect(openRestySource).toContain('location = /api/traffic')
+    expect(openRestySource).toContain('if ($request_method != POST) { return 405; }')
     expect(openRestySource).toContain('location ^~ /api/internal/')
     expect(inventorySource).toContain('ansible_host: Debian')
     expect(inventorySource).toContain('ansible_user: tungchiahui')
