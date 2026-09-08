@@ -40,7 +40,9 @@ import {
   documentDate,
   documentSummary,
   groupWikiDocuments,
+  latestWikiDocumentGroups,
   trafficPaths,
+  type WikiDocumentGroup,
   wikiDocumentKey,
 } from './content-compatibility'
 import { renderMarkdown } from './markdown'
@@ -80,6 +82,7 @@ function CardLink({
     <li>
       <Link
         className="content-card block rounded-xl border bg-card p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-primary"
+        data-content-card={document.contentType}
         href={withLocalePrefix(document.routePath, context)}
       >
         <h3 className="font-semibold text-lg">
@@ -108,12 +111,95 @@ function CardLink({
   )
 }
 
+type ContentSearchMatch = Readonly<{ label: string; snippet: string }>
+
+function WikiDocumentCard({
+  context,
+  defaultOpen = false,
+  group,
+  labels,
+  searchMatch,
+  trafficLabels,
+  variant = 'index',
+}: Readonly<{
+  context: PublicRouteContext
+  defaultOpen?: boolean
+  group: WikiDocumentGroup
+  labels: Readonly<{ chapterCount: string; collapse: string; expand: string; overview: string }>
+  searchMatch?: ((document: PublicDocument) => ContentSearchMatch | undefined) | undefined
+  trafficLabels: TrafficLabels
+  variant?: 'home' | 'index'
+}>) {
+  const documents = [
+    ...(group.index ? [group.index] : []),
+    ...group.chapters.map((entry) => entry.document),
+  ]
+  const primary = group.index ?? group.chapters[0]?.document
+  const date = primary ? documentDate(primary) : undefined
+  return (
+    <details className="wiki-document-card" data-wiki-document={variant} open={defaultOpen}>
+      <summary>
+        <span className="wiki-document-summary">
+          <strong>{localizeContentText(group.title, context.locale)}</strong>
+          <span className="wiki-document-meta">
+            {date ? <time>{date}</time> : null}
+            <span>{labels.chapterCount}</span>
+            <TrafficMetrics
+              labels={trafficLabels}
+              paths={documents.flatMap((document) => trafficPaths(document.routePath))}
+            />
+          </span>
+        </span>
+        <span className="wiki-document-toggle" aria-hidden="true">
+          <span className="wiki-toggle-expand">{labels.expand}</span>
+          <span className="wiki-toggle-collapse">{labels.collapse}</span>
+        </span>
+      </summary>
+      <ol className="wiki-document-chapters">
+        {group.index ? (
+          <li>
+            <Link href={withLocalePrefix(group.index.routePath, context)}>
+              <span className="wiki-chapter-number">⌂</span>
+              <span>{labels.overview}</span>
+            </Link>
+            {searchMatch?.(group.index) ? (
+              <p>
+                <strong>{searchMatch(group.index)?.label}</strong> ·{' '}
+                {searchMatch(group.index)?.snippet}
+              </p>
+            ) : null}
+          </li>
+        ) : null}
+        {group.chapters.map((entry) => (
+          <li
+            key={entry.document.id}
+            style={{ paddingInlineStart: `${entry.chapterDepth * 0.9}rem` }}
+          >
+            <Link href={withLocalePrefix(entry.document.routePath, context)}>
+              <span className="wiki-chapter-number">{entry.chapter}</span>
+              <span>{localizeContentText(entry.document.title, context.locale)}</span>
+            </Link>
+            {searchMatch?.(entry.document) ? (
+              <p>
+                <strong>{searchMatch(entry.document)?.label}</strong> ·{' '}
+                {searchMatch(entry.document)?.snippet}
+              </p>
+            ) : null}
+          </li>
+        ))}
+      </ol>
+    </details>
+  )
+}
+
 async function HomePage({ context }: Readonly<{ context: PublicRouteContext }>) {
   const t = await getTranslations({ locale: context.locale, namespace: 'Web' })
   const [blogs, wikis] = await Promise.all([
     listCachedDocuments('blog', context.locale),
     listCachedDocuments('wiki', context.locale),
   ])
+  const wikiGroups = latestWikiDocumentGroups(wikis)
+  const trafficLabels = makeTrafficLabels(t)
   const actions = [
     { href: '/blog', icon: Newspaper, label: t('homepageActionBlog') },
     { href: '/wiki', icon: BookOpen, label: t('homepageActionWiki') },
@@ -218,32 +304,60 @@ async function HomePage({ context }: Readonly<{ context: PublicRouteContext }>) 
         </div>
       </section>
       <div className="home-latest-grid">
-        {[
-          { documents: blogs.slice(0, 5), href: '/blog', icon: Newspaper, title: t('latestBlog') },
-          { documents: wikis.slice(0, 5), href: '/wiki', icon: BookOpen, title: t('latestWiki') },
-        ].map((section) => (
-          <section className="home-latest-panel" key={section.href}>
-            <div className="home-panel-heading">
-              <h2>
-                <section.icon aria-hidden size={20} />
-                {section.title}
-              </h2>
-              <Link href={withLocalePrefix(section.href, context)}>
-                {t('viewAll')}
-                <ArrowRight aria-hidden size={15} />
-              </Link>
+        <section className="home-latest-panel">
+          <div className="home-panel-heading">
+            <h2>
+              <Newspaper aria-hidden size={20} />
+              {t('latestBlog')}
+            </h2>
+            <Link href={withLocalePrefix('/blog', context)}>
+              {t('viewAll')}
+              <ArrowRight aria-hidden size={15} />
+            </Link>
+          </div>
+          {blogs.length ? (
+            <ul className="grid gap-3">
+              {blogs.slice(0, 5).map((document) => (
+                <CardLink context={context} document={document} key={document.id} />
+              ))}
+            </ul>
+          ) : (
+            <p className="rounded-xl border p-5 text-muted-foreground">{t('emptyContent')}</p>
+          )}
+        </section>
+        <section className="home-latest-panel">
+          <div className="home-panel-heading">
+            <h2>
+              <BookOpen aria-hidden size={20} />
+              {t('latestWiki')}
+            </h2>
+            <Link href={withLocalePrefix('/wiki', context)}>
+              {t('viewAll')}
+              <ArrowRight aria-hidden size={15} />
+            </Link>
+          </div>
+          {wikiGroups.length ? (
+            <div className="grid gap-3">
+              {wikiGroups.map((group) => (
+                <WikiDocumentCard
+                  context={context}
+                  group={group}
+                  key={group.key}
+                  labels={{
+                    chapterCount: t('chapterCount', { count: group.chapters.length }),
+                    collapse: t('wikiCollapse'),
+                    expand: t('wikiExpand'),
+                    overview: t('wikiOverview'),
+                  }}
+                  trafficLabels={trafficLabels}
+                  variant="home"
+                />
+              ))}
             </div>
-            {section.documents.length ? (
-              <ul className="grid gap-3">
-                {section.documents.map((document) => (
-                  <CardLink context={context} document={document} key={document.id} />
-                ))}
-              </ul>
-            ) : (
-              <p className="rounded-xl border p-5 text-muted-foreground">{t('emptyContent')}</p>
-            )}
-          </section>
-        ))}
+          ) : (
+            <p className="rounded-xl border p-5 text-muted-foreground">{t('emptyContent')}</p>
+          )}
+        </section>
       </div>
     </div>
   )
@@ -293,13 +407,23 @@ async function ContentList({
   }
 
   if (contentType === 'wiki') {
-    const groups = groupWikiDocuments(documents)
+    const matchedGroupKeys = new Set(documents.map(wikiDocumentKey))
+    const groups = groupWikiDocuments(
+      query
+        ? allDocuments.filter((document) => matchedGroupKeys.has(wikiDocumentKey(document)))
+        : documents,
+    )
     return (
       <section className="content-index content-index-wiki">
         <header className="content-index-hero">
-          <p>{t('wiki')}</p>
-          <h1>{title}</h1>
-          <span>{description}</span>
+          <span aria-hidden className="content-index-icon">
+            <BookOpen size={26} />
+          </span>
+          <span className="content-index-hero-copy">
+            <p>{t('wiki')}</p>
+            <h1>{title}</h1>
+            <span>{description}</span>
+          </span>
         </header>
         <ContentSearch
           action={withLocalePrefix('/wiki', context)}
@@ -307,71 +431,22 @@ async function ContentList({
           label={t('filterWiki')}
           submitLabel={t('searchSubmit')}
         />
-        <div className="mt-9 grid gap-5">
+        <div className="wiki-document-list">
           {groups.map((group) => (
-            <details
-              className="wiki-group rounded-2xl border bg-card p-5"
+            <WikiDocumentCard
+              context={context}
+              defaultOpen={Boolean(query)}
+              group={group}
               key={group.key}
-              open={Boolean(query)}
-            >
-              <summary className="cursor-pointer font-semibold text-xl">
-                {localizeContentText(group.title, context.locale)}
-                <span className="ml-2 font-normal text-muted-foreground text-sm">
-                  {t('chapterCount', { count: group.chapters.length })}
-                </span>
-              </summary>
-              <ol className="mt-5 grid gap-2">
-                {group.index ? (
-                  <li>
-                    <Link
-                      className="font-medium hover:text-primary"
-                      href={withLocalePrefix(group.index.routePath, context)}
-                    >
-                      {t('wikiOverview')}
-                    </Link>
-                    {searchMatch(group.index) ? (
-                      <p className="mt-1 text-muted-foreground text-sm">
-                        <span className="font-medium text-primary text-xs uppercase">
-                          {searchMatch(group.index)?.label}
-                        </span>{' '}
-                        · {searchMatch(group.index)?.snippet}
-                      </p>
-                    ) : null}
-                  </li>
-                ) : null}
-                {group.chapters.map((entry) => (
-                  <li
-                    key={entry.document.id}
-                    style={{ paddingInlineStart: `${entry.chapterDepth * 0.75}rem` }}
-                  >
-                    <Link
-                      className="hover:text-primary"
-                      href={withLocalePrefix(entry.document.routePath, context)}
-                    >
-                      {entry.chapter ? `${entry.chapter} ` : ''}
-                      {localizeContentText(entry.document.title, context.locale)}
-                    </Link>
-                    {searchMatch(entry.document) ? (
-                      <p className="mt-1 text-muted-foreground text-sm">
-                        <span className="font-medium text-primary text-xs uppercase">
-                          {searchMatch(entry.document)?.label}
-                        </span>{' '}
-                        · {searchMatch(entry.document)?.snippet}
-                      </p>
-                    ) : null}
-                  </li>
-                ))}
-              </ol>
-              <div className="mt-4 border-t pt-3">
-                <TrafficMetrics
-                  labels={trafficLabels}
-                  paths={group.chapters
-                    .map((entry) => entry.document)
-                    .concat(group.index ? [group.index] : [])
-                    .flatMap((entry) => trafficPaths(entry.routePath))}
-                />
-              </div>
-            </details>
+              labels={{
+                chapterCount: t('chapterCount', { count: group.chapters.length }),
+                collapse: t('wikiCollapse'),
+                expand: t('wikiExpand'),
+                overview: t('wikiOverview'),
+              }}
+              searchMatch={searchMatch}
+              trafficLabels={trafficLabels}
+            />
           ))}
           {groups.length === 0 ? (
             <p className="rounded-xl border p-5 text-muted-foreground">{t('searchEmpty')}</p>
@@ -384,9 +459,14 @@ async function ContentList({
   return (
     <section className="content-index content-index-blog">
       <header className="content-index-hero">
-        <p>{t('blog')}</p>
-        <h1>{title}</h1>
-        <span>{description}</span>
+        <span aria-hidden className="content-index-icon">
+          <Newspaper size={26} />
+        </span>
+        <span className="content-index-hero-copy">
+          <p>{t('blog')}</p>
+          <h1>{title}</h1>
+          <span>{description}</span>
+        </span>
       </header>
       <ContentSearch
         action={withLocalePrefix('/blog', context)}
@@ -394,7 +474,7 @@ async function ContentList({
         label={t('filterBlog')}
         submitLabel={t('searchSubmit')}
       />
-      <ul className="mt-9 grid gap-4 sm:grid-cols-2">
+      <ul className="mt-9 grid gap-4">
         {documents.map((document) => (
           <CardLink
             context={context}
@@ -625,7 +705,7 @@ async function ArticlePage({
       : []
 
   return (
-    <article className="mx-auto max-w-[90rem]" data-article-type={document.contentType}>
+    <article className="mx-auto max-w-[100rem]" data-article-type={document.contentType}>
       <header className="article-hero">
         <p className="font-medium text-primary text-sm uppercase">{t(document.contentType)}</p>
         <h1 className="mt-3 font-bold text-4xl tracking-tight sm:text-5xl">{localizedTitle}</h1>
@@ -711,7 +791,7 @@ async function SpecialPage({
     case 'music':
       return <MusicPage />
     case 'start':
-      return <BookmarkWorkspace />
+      return <BookmarkWorkspace homeHref={withLocalePrefix('/', context)} />
     case 'stats': {
       return <StatsDashboard />
     }
@@ -757,6 +837,7 @@ export async function renderPublicPage(
     if (!special.success) notFound()
     page = <SpecialPage context={context} slug={special.data} />
   }
+  if (path === '/start') return page
   return (
     <SiteShell context={context} logicalPath={path}>
       {page}

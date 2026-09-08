@@ -137,7 +137,22 @@ export async function renderMarkdown(
     .use(remarkRehype)
     .use(rehypeSanitize)
     .use(rehypeShiki, {
+      addLanguageClass: true,
       defaultColor: false,
+      fallbackLanguage: 'text',
+      langAlias: {
+        Bash: 'bash',
+        Dockerfile: 'dockerfile',
+        JSON: 'json',
+        Plain: 'text',
+        PowerShell: 'powershell',
+        Python: 'python',
+        SQL: 'sql',
+        TypeScript: 'typescript',
+        YAML: 'yaml',
+        test: 'text',
+        ymal: 'yaml',
+      },
       themes: { dark: 'github-dark', light: 'github-light' },
     })
     .use(rehypeStringify)

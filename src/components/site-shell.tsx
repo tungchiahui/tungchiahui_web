@@ -64,10 +64,13 @@ export async function SiteShell({
       <header className="sticky top-0 z-20 border-b bg-background/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center gap-5 px-5 py-3">
           <Link
-            className="mr-auto font-bold text-xl tracking-tight"
+            aria-label={t('siteName')}
+            className="site-brand-mark mr-auto"
             href={withLocalePrefix('/', context)}
+            title={t('siteName')}
           >
-            {t('siteName')}
+            {/* biome-ignore lint/performance/noImgElement: the exact Legacy ICO is also the browser favicon and is intentionally reused as the site mark. */}
+            <img alt="" height="34" src="/favicon.ico" width="34" />
           </Link>
           <nav aria-label={t('navigationLabel')} className="hidden items-center gap-4 sm:flex">
             {links.map((link) => (
@@ -109,7 +112,7 @@ export async function SiteShell({
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-5 py-10" id="main-content">
+      <main className="mx-auto w-full max-w-[112rem] px-5 py-10" id="main-content">
         {children}
       </main>
       <footer className="site-footer">

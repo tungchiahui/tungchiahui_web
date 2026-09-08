@@ -100,6 +100,7 @@ const identifier = '保持'
     ])
     expect(rendered.html).toContain('ROS2_Control')
     expect(rendered.html).toContain('shiki')
+    expect(rendered.html).toContain('class="language-ts"')
     expect(rendered.html).toContain('--shiki-light')
     expect(rendered.html).toContain('--shiki-dark')
     expect(rendered.html).toContain('rel="noopener noreferrer"')
@@ -111,6 +112,42 @@ const identifier = '保持'
     )
     expect(rendered.html).toContain('<h2 data-heading-anchor id="code" tabindex="0">')
     expect(rendered.html).not.toContain('<script')
+  }, 20_000)
+
+  it('highlights the fenced languages used by the canonical Markdown corpus', async () => {
+    const languages = [
+      'bash',
+      'c',
+      'cmake',
+      'cpp',
+      'dart',
+      'diff',
+      'dockerfile',
+      'gitignore',
+      'html',
+      'ini',
+      'javascript',
+      'json',
+      'jsonc',
+      'lua',
+      'makefile',
+      'markdown',
+      'powershell',
+      'python',
+      'sql',
+      'text',
+      'typescript',
+      'xml',
+      'yaml',
+    ] as const
+    const rendered = await renderMarkdown(
+      languages.map((language) => `\`\`\`${language}\nexample\n\`\`\``).join('\n\n'),
+    )
+    for (const language of languages) {
+      const highlightedLanguage = language === 'gitignore' ? 'text' : language
+      expect(rendered.html).toContain(`class="language-${highlightedLanguage}"`)
+    }
+    expect(rendered.html.match(/class="shiki/g)).toHaveLength(languages.length)
   }, 20_000)
 
   it('converts only Markdown prose and protects frontmatter, code, URLs and identifiers', async () => {

@@ -177,9 +177,10 @@ describe('Phase 18 More and music compatibility', () => {
     localStorage.clear()
     render(
       <NextIntlClientProvider locale="zh-cn" messages={zhCn}>
-        <BookmarkWorkspace />
+        <BookmarkWorkspace homeHref="/" />
       </NextIntlClientProvider>,
     )
+    expect(screen.getByRole('link', { name: '返回首页' })).toHaveAttribute('href', '/')
     await userEvent.click(screen.getByRole('button', { name: '完整' }))
     expect(screen.getByRole('heading', { name: '常用入口' })).toBeVisible()
     expect(screen.getByRole('link', { name: /GitHub/ })).toBeVisible()

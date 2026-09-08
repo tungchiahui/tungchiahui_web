@@ -94,6 +94,8 @@
     "filterBlog": "搜索博客标题和内容",
     "filterWiki": "搜索 Wiki 标题和内容",
     "chapterCount": "{count} 章",
+    "wikiExpand": "展开",
+    "wikiCollapse": "收起",
     "wikiOverview": "文档首页",
     "updatedAt": "更新于 {date}",
     "readingTime": "约 {minutes} 分钟阅读",
@@ -102,7 +104,7 @@
     "contentStateMixed": "本文已复用现有英文翻译；仍有 {count} 个内容块显示最新简体中文原文，且不会触发付费翻译。",
     "tableOfContents": "本文目录",
     "documentNavigation": "文档章节",
-    "copyCode": "复制代码",
+    "copyCode": "复制",
     "codeCopied": "已复制",
     "imagePreview": "图片预览",
     "close": "关闭",
@@ -238,6 +240,7 @@
       "status": { "todo": "待开始", "doing": "进行中", "done": "已完成" }
     },
     "start": {
+      "backHome": "返回首页",
       "simple": "简洁",
       "detailed": "完整",
       "switchBackground": "切换背景",

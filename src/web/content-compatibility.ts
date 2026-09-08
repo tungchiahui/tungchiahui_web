@@ -122,6 +122,14 @@ export function groupWikiDocuments(
   )
 }
 
+export function latestWikiDocumentGroups(
+  documents: readonly PublicDocument[],
+  limit = 5,
+): readonly WikiDocumentGroup[] {
+  const validatedLimit = z.number().int().min(1).max(50).parse(limit)
+  return Object.freeze(groupWikiDocuments(documents).slice(0, validatedLimit))
+}
+
 export function documentDate(document: PublicDocument) {
   const frontmatterDate = document.rawFrontmatter.date
   if (typeof frontmatterDate === 'string' && /^\d{4}-\d{2}-\d{2}$/u.test(frontmatterDate)) {

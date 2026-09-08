@@ -29,7 +29,16 @@ test('renders homepage and PostgreSQL-backed Blog/Wiki surfaces in both zh-CN ro
   await expect(page.getByRole('heading', { name: '本站内容方向' })).toBeVisible()
   await expect(page.getByRole('link', { name: '浏览博客文章' })).toHaveAttribute('href', '/blog')
   await expect(page.locator('.home-focus article')).toHaveCount(6)
+  const homepageWikiDocuments = page.locator('[data-wiki-document="home"]')
+  await expect(homepageWikiDocuments).toHaveCount(3)
+  await expect(homepageWikiDocuments.nth(0)).toContainText('Docker 教程')
+  await expect(homepageWikiDocuments.nth(1)).toContainText('Boost Aiso')
+  await expect(homepageWikiDocuments.nth(2)).toContainText('C++ 开发环境搭建与测试')
   await expect(page.getByRole('link', { name: 'VSCode 任务栏启动 Codex 插件打不开' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'TungChiaHui' }).locator('img')).toHaveAttribute(
+    'src',
+    '/favicon.ico',
+  )
 
   await page.goto('/zh-cn')
   await expect(page.getByRole('heading', { name: '你好，我是 TungChiaHui。' })).toBeVisible()
@@ -123,6 +132,7 @@ test('preserves exact Legacy article, Pinyin and approved alias routes', async (
 test('renders safe runtime Markdown, Shiki, anchors, links, images and Unicode', async ({
   page,
 }) => {
+  await page.setViewportSize({ height: 900, width: 1600 })
   await page.route('**/api/traffic', (route) =>
     route.fulfill({
       body: JSON.stringify({
@@ -142,8 +152,9 @@ test('renders safe runtime Markdown, Shiki, anchors, links, images and Unicode',
   expect(response?.status()).toBe(200)
   await expect(page.locator('code').filter({ hasText: 'ROS2_Control' })).toBeVisible()
   await expect(page.locator('pre.shiki')).toContainText('int main() { return 0; }')
-  await expect(page.getByRole('button', { name: '复制代码' })).toBeVisible()
-  await page.getByRole('button', { name: '复制代码' }).click()
+  await expect(page.locator('.code-language').first()).toHaveText('CPP')
+  await expect(page.getByRole('button', { name: '复制' })).toBeVisible()
+  await page.getByRole('button', { name: '复制' }).click()
   await expect(page.getByRole('button', { name: '已复制' })).toBeVisible()
   await expect(page.locator('h2#代码示例')).toBeVisible()
   await expect(page.locator('h1#c-与-unicode-渲染 > .heading-number')).toHaveText('1.')
@@ -164,6 +175,8 @@ test('renders safe runtime Markdown, Shiki, anchors, links, images and Unicode',
   await expect(page.getByRole('dialog', { name: '图片预览' })).toBeHidden()
   await expect(page.locator('[data-wiki-document-navigation]').first()).toBeVisible()
   await expect(page.locator('[data-reading-progress]')).toBeAttached()
+  const articleWidth = await page.locator('.prose-site').evaluate((element) => element.clientWidth)
+  expect(articleWidth).toBeGreaterThan(850)
   await expect(page.locator('[data-traffic-metrics]')).toContainText('浏览量12')
   const assetResponse = await page.request.get('/api/assets/fixtures/phase-6.svg')
   expect(assetResponse.status()).toBe(200)
@@ -347,6 +360,12 @@ test('keeps special pages, local Start interaction and public datasets available
 
   await page.goto('/start')
   await expect(page.getByText(/Bing 每日图片 · Bing 测试壁纸/)).toBeVisible()
+  await expect(page.getByRole('link', { name: '返回首页' })).toHaveAttribute('href', '/')
+  await expect(page.locator('body > div > header')).toHaveCount(0)
+  const startSize = await page.locator('.start-workspace').boundingBox()
+  const viewport = page.viewportSize()
+  expect(startSize?.height).toBeGreaterThanOrEqual(viewport?.height ?? 0)
+  expect(startSize?.width).toBeGreaterThanOrEqual(viewport?.width ?? 0)
   await page.getByRole('button', { name: '完整' }).click()
   await page.getByRole('button', { name: '编辑书签' }).click()
   await page.getByPlaceholder('名称').first().fill('Example')

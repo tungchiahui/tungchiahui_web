@@ -94,6 +94,8 @@
     "filterBlog": "搜尋網誌標題和內容",
     "filterWiki": "搜尋 Wiki 標題和內容",
     "chapterCount": "{count} 章",
+    "wikiExpand": "展開",
+    "wikiCollapse": "收起",
     "wikiOverview": "文件首頁",
     "updatedAt": "更新於 {date}",
     "readingTime": "約 {minutes} 分鐘閱讀",
@@ -102,7 +104,7 @@
     "contentStateMixed": "本文已重用現有英文翻譯；仍有 {count} 個內容區塊顯示最新簡體中文原文，且不會觸發付費翻譯。",
     "tableOfContents": "本文目錄",
     "documentNavigation": "文件章節",
-    "copyCode": "複製程式碼",
+    "copyCode": "複製",
     "codeCopied": "已複製",
     "imagePreview": "圖片預覽",
     "close": "關閉",
@@ -238,6 +240,7 @@
       "status": { "todo": "待開始", "doing": "進行中", "done": "已完成" }
     },
     "start": {
+      "backHome": "返回首頁",
       "simple": "簡潔",
       "detailed": "完整",
       "switchBackground": "切換背景",

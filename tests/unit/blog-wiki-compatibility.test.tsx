@@ -11,6 +11,7 @@ import {
   documentDate,
   documentSummary,
   groupWikiDocuments,
+  latestWikiDocumentGroups,
   trafficPaths,
 } from '@/web/content-compatibility'
 
@@ -68,6 +69,37 @@ describe('Phase 18 Blog/Wiki compatibility', () => {
       ['Child', '1.1', 1],
       ['Second', '2', 0],
     ])
+  })
+
+  it('keeps the homepage Wiki feed to five top-level documents rather than chapters', () => {
+    const documents = Array.from({ length: 7 }, (_, index) => {
+      const day = String(index + 1).padStart(2, '0')
+      const root = `content/wiki/2024-01-${day}-Handbook-${index + 1}`
+      const sourceUpdatedAt = new Date(`2024-01-${day}T00:00:00.000Z`)
+      return [
+        fixture({
+          sourcePath: `${root}/index.md`,
+          sourceUpdatedAt,
+          title: `Handbook ${index + 1}`,
+        }),
+        fixture({
+          sourcePath: `${root}/0100-Chapter.md`,
+          sourceUpdatedAt,
+          title: `Chapter ${index + 1}`,
+        }),
+      ]
+    }).flat()
+
+    const groups = latestWikiDocumentGroups(documents)
+    expect(groups).toHaveLength(5)
+    expect(groups.map((group) => group.title)).toEqual([
+      'Handbook 7',
+      'Handbook 6',
+      'Handbook 5',
+      'Handbook 4',
+      'Handbook 3',
+    ])
+    expect(groups.every((group) => group.chapters.length === 1)).toBe(true)
   })
 
   it('aggregates canonical, locale-prefixed and approved Legacy aliases', () => {
@@ -151,7 +183,7 @@ describe('Phase 18 Blog/Wiki compatibility', () => {
           { depth: 2, id: 'second', level: 0, number: '2', text: 'Second' },
         ]}
         html={
-          '<h2 data-heading-anchor id="first" tabindex="0">First</h2><pre><code>const safe = true</code></pre><img alt="Fixture image" src="/images/fixture.png">'
+          '<h2 data-heading-anchor id="first" tabindex="0">First</h2><pre><code class="language-cpp">const safe = true</code></pre><img alt="Fixture image" src="/images/fixture.png">'
         }
         labels={{
           close: 'Close',
@@ -163,6 +195,7 @@ describe('Phase 18 Blog/Wiki compatibility', () => {
         }}
       />,
     )
+    expect(await screen.findByText('CPP')).toHaveAttribute('data-code-language', 'CPP')
     await userEvent.click(await screen.findByRole('button', { name: 'Copy code' }))
     expect(writeText).toHaveBeenCalledWith('const safe = true')
     await userEvent.click(screen.getByRole('heading', { name: 'First' }))
