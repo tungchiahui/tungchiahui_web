@@ -33,7 +33,7 @@ Browser storage is intentionally limited to device-local UI/private state that c
 
 ## Security and architecture boundary
 
-No client-side content search index, provider-specific persistence, plaintext secret, new Next.js privileged operation route, production write or Legacy repository modification was introduced. The public analytics iframe is restricted to `https://umami.tungchiahui.cn`; development-only React `unsafe-eval` remains excluded from production CSP. Start suggestions and Bing wallpapers use bounded server routes and runtime validation rather than injecting remote scripts or trusting arbitrary remote URLs.
+No client-side content search index, provider-specific persistence, plaintext secret, new Next.js privileged operation route, production write or Legacy repository modification was introduced. The public analytics iframe is restricted to `https://umami.tungchiahui.cn`; development-only React `unsafe-eval` remains excluded from production CSP. The application and production OpenResty browser CSP are asserted equal so the edge cannot silently narrow the approved Umami and self-hosted CDN sources. Start suggestions and Bing wallpapers use bounded server routes and runtime validation rather than injecting remote scripts or trusting arbitrary remote URLs.
 
 The player intentionally uses the native audio element rather than carrying APlayer's JavaScript/CSS runtime forward. Phase 0 allows implementation redesign; the observable playlist, controls, persistence and recovery outcomes are the compatibility contract. Music assets retain their approved self-hosted CDN mapping and failover. Font Awesome is retained for the footer through the owner's self-hosted CDN rather than a new public CDN.
 

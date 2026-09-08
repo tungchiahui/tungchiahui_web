@@ -6,6 +6,7 @@ import { parse } from 'yaml'
 import { z } from 'zod'
 
 import { parseControlApiConfiguration } from '../../src/control-plane/configuration'
+import { browserSecurityHeaders } from '../../src/observability/security'
 
 const composeSource = readFileSync(resolve('ops/production/compose.yaml'), 'utf8')
 const openRestySource = readFileSync(resolve('ops/production/openresty.conf'), 'utf8')
@@ -143,6 +144,10 @@ describe('Phase 12 production foundation policy', () => {
     expect(openRestySource).toContain('limit_req zone=control_origin')
     expect(openRestySource).toContain('Strict-Transport-Security')
     expect(openRestySource).toContain('Content-Security-Policy')
+    const browserCsp = openRestySource.match(
+      /add_header Content-Security-Policy "([^"]+)" always;/,
+    )?.[1]
+    expect(browserCsp).toBe(browserSecurityHeaders['content-security-policy'])
     expect(openRestySource).toContain('location ^~ /api/internal/')
     expect(inventorySource).toContain('ansible_host: Debian')
     expect(inventorySource).toContain('ansible_user: tungchiahui')
