@@ -5,6 +5,9 @@ import { getLocale, getMessages, getTranslations } from 'next-intl/server'
 import type { ReactNode } from 'react'
 
 import { publicUmamiConfig } from '@/analytics/umami-config'
+import { CdnFontAwesome } from '@/components/cdn-font-awesome'
+import { GlobalMusicPlayer } from '@/components/global-music-player'
+import { MusicPlayerProvider } from '@/components/music-player-provider'
 
 import './globals.css'
 
@@ -24,7 +27,13 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   return (
     <html lang={locale} suppressHydrationWarning>
       <body>
-        <NextIntlClientProvider messages={messages}>{children}</NextIntlClientProvider>
+        <CdnFontAwesome />
+        <NextIntlClientProvider messages={messages}>
+          <MusicPlayerProvider>
+            {children}
+            <GlobalMusicPlayer />
+          </MusicPlayerProvider>
+        </NextIntlClientProvider>
         {process.env.NODE_ENV === 'production' ? (
           <Script
             data-domains={publicUmamiConfig.allowedDomains}

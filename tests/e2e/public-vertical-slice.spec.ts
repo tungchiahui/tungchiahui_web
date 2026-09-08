@@ -282,6 +282,34 @@ test('searches PostgreSQL + PGroonga by locale without shipping the corpus to th
 test('keeps special pages, local Start interaction and public datasets available', async ({
   page,
 }) => {
+  await page.route('**/api/music/playlist', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: 'fixture-song',
+          title: '测试歌曲',
+          artist: '测试歌手',
+          cover: '',
+          lyricSource: '[00:00]测试歌词',
+          url: 'https://cdn.tungchiahui.cn/music/fixture.mp3',
+          selfHosted: true,
+        },
+      ]),
+    })
+  })
+  await page.route('**/api/start/backgrounds', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          copyright: '测试摄影师',
+          title: 'Bing 测试壁纸',
+          url: 'https://www.bing.com/th?id=OHR.Test_ZH-CN_1920x1080.jpg&pid=hp',
+        },
+      ]),
+    })
+  })
   for (const route of [
     '/about',
     '/cv',
@@ -294,18 +322,42 @@ test('keeps special pages, local Start interaction and public datasets available
     '/tech-footprint',
     '/weight-loss',
   ]) {
-    const response = await page.goto(route)
-    expect(response?.status(), route).toBe(200)
+    const response = await page.request.get(route)
+    expect(response.status(), route).toBe(200)
   }
 
   await page.goto('/start')
-  await page.getByPlaceholder('名称').fill('Example')
-  await page.getByPlaceholder('网址').fill('https://example.com/')
-  await page.getByRole('button', { name: '添加书签' }).click()
+  await expect(page.getByText(/Bing 每日图片 · Bing 测试壁纸/)).toBeVisible()
+  await page.getByRole('button', { name: '完整' }).click()
+  await page.getByRole('button', { name: '编辑书签' }).click()
+  await page.getByPlaceholder('名称').first().fill('Example')
+  await page.getByPlaceholder('网址', { exact: true }).first().fill('https://example.com/')
+  await page.getByRole('button', { name: '添加书签' }).first().click()
   await expect(page.getByRole('link', { name: 'Example' })).toBeVisible()
 
   await page.goto('/tech-footprint')
-  await expect(page.getByText('y1a/cpp-linux/cpp')).toBeVisible()
+  await expect(
+    page.locator('.tech-task').getByText('Phase 4 validated record', { exact: true }),
+  ).toBeVisible()
+
+  await page.goto('/more')
+  await expect(page.getByRole('link', { name: /Umami 数据共享页/ })).toHaveAttribute(
+    'href',
+    'https://umami.tungchiahui.cn/share/rCG6EZoHmlCmNnWn',
+  )
+  await expect(page.getByText('https://global.cdn.tungchiahui.cn')).toBeVisible()
+
+  await page.goto('/music')
+  await expect(page.getByRole('heading', { name: '测试歌曲' })).toBeVisible()
+  await expect(page.getByText('测试歌词').first()).toBeVisible()
+  const floatingPlayer = page.getByTestId('music-player')
+  await floatingPlayer.getByRole('button', { name: '播放列表' }).click()
+  await expect(floatingPlayer.getByRole('list')).toContainText('测试歌曲')
+  await page.getByRole('button', { name: '收起音乐播放器' }).click()
+  await expect(page.getByTestId('music-mini-player')).toBeVisible()
+  await page.reload()
+  await expect(page.getByTestId('music-mini-player')).toBeVisible()
+  await expect(page.locator('footer').getByRole('link', { name: 'GitHub' })).toBeVisible()
 })
 
 test('returns observable health, readiness, version and not-found semantics', async ({

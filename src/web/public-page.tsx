@@ -1,4 +1,4 @@
-import { ExternalLink, Search as SearchIcon } from 'lucide-react'
+import { Search as SearchIcon } from 'lucide-react'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -7,7 +7,11 @@ import type { ReactNode } from 'react'
 import { z } from 'zod'
 import { ArticleReader } from '@/components/article-reader'
 import { BookmarkWorkspace } from '@/components/bookmark-workspace'
+import { MoreDirectory } from '@/components/more-directory'
+import { MusicPage } from '@/components/music-page'
+import { TechFootprintPage, WeightLossPage } from '@/components/owner-dataset-pages'
 import { SiteShell } from '@/components/site-shell'
+import { StatsDashboard } from '@/components/stats-dashboard'
 import { TrafficMetrics } from '@/components/traffic-metrics'
 import { techFootprintPayloadSchema, weightLossPayloadSchema } from '@/control-plane/contracts'
 import { localizeContentText } from '@/i18n/content'
@@ -35,6 +39,12 @@ import {
   specialPageSlugSchema,
   withLocalePrefix,
 } from './routes'
+import {
+  AboutInformationPage,
+  CvInformationPage,
+  FriendInformationPage,
+  LogoInformationPage,
+} from './special-information-pages'
 
 function formatDate(date: Date | null) {
   return date?.toISOString().slice(0, 10)
@@ -572,252 +582,43 @@ async function ArticlePage({
   )
 }
 
-function SpecialHeader({ description, title }: Readonly<{ description: string; title: string }>) {
-  return (
-    <header>
-      <h1 className="font-bold text-4xl">{title}</h1>
-      <p className="mt-4 max-w-3xl text-lg text-muted-foreground">{description}</p>
-    </header>
-  )
-}
-
 async function SpecialPage({
   context,
   slug,
 }: Readonly<{ context: PublicRouteContext; slug: SpecialPageSlug }>) {
-  const t = await getTranslations({ locale: context.locale, namespace: 'Web' })
-  type SpecialMessageKey =
-    | 'aboutDescription'
-    | 'aboutTitle'
-    | 'addBookmark'
-    | 'blogCount'
-    | 'bookmarkName'
-    | 'bookmarkStorageNote'
-    | 'bookmarkUrl'
-    | 'contact'
-    | 'cvDescription'
-    | 'cvTitle'
-    | 'exportBookmarks'
-    | 'friendDescription'
-    | 'friendTitle'
-    | 'github'
-    | 'importBookmarks'
-    | 'moreDescription'
-    | 'moreTitle'
-    | 'musicDescription'
-    | 'musicTitle'
-    | 'mylogoDescription'
-    | 'mylogoTitle'
-    | 'noRecords'
-    | 'progress'
-    | 'qqMusic'
-    | 'removeBookmark'
-    | 'resourceBoundary'
-    | 'revision'
-    | 'searchAction'
-    | 'searchPlaceholder'
-    | 'startDescription'
-    | 'startTitle'
-    | 'statsDescription'
-    | 'statsTitle'
-    | 'techDescription'
-    | 'techTitle'
-    | 'weight'
-    | 'weightDescription'
-    | 'weightTitle'
-    | 'waist'
-    | 'wikiCount'
-  const s = (key: SpecialMessageKey, values?: Record<string, string | number>) =>
-    t(`special.${key}`, values)
-  const routes = [
-    'about',
-    'cv',
-    'friend',
-    'mylogo',
-    'music',
-    'start',
-    'stats',
-    'tech-footprint',
-    'weight-loss',
-  ] as const
-  const titleKeys: Record<(typeof routes)[number], SpecialMessageKey> = {
-    about: 'aboutTitle',
-    cv: 'cvTitle',
-    friend: 'friendTitle',
-    music: 'musicTitle',
-    mylogo: 'mylogoTitle',
-    start: 'startTitle',
-    stats: 'statsTitle',
-    'tech-footprint': 'techTitle',
-    'weight-loss': 'weightTitle',
-  }
-
   switch (slug) {
     case 'about':
-      return (
-        <>
-          <SpecialHeader description={s('aboutDescription')} title={s('aboutTitle')} />
-          <p className="mt-8 rounded-xl border bg-card p-5">{s('contact')}</p>
-        </>
-      )
+      return <AboutInformationPage context={context} />
     case 'cv':
-      return <SpecialHeader description={s('cvDescription')} title={s('cvTitle')} />
+      return <CvInformationPage context={context} />
     case 'friend':
-      return (
-        <>
-          <SpecialHeader description={s('friendDescription')} title={s('friendTitle')} />
-          <div className="mt-8 flex gap-3">
-            <a
-              className="rounded-xl border p-4 text-primary"
-              href="https://github.com/tungchiahui"
-              rel="noreferrer"
-              target="_blank"
-            >
-              {s('github')} <ExternalLink className="inline" size={14} />
-            </a>
-          </div>
-        </>
-      )
+      return <FriendInformationPage locale={context.locale} />
     case 'more':
-      return (
-        <>
-          <SpecialHeader description={s('moreDescription')} title={s('moreTitle')} />
-          <ul className="mt-8 grid gap-3 sm:grid-cols-2">
-            {routes
-              .filter((route) => route !== 'about')
-              .map((route) => (
-                <li key={route}>
-                  <Link
-                    className="block rounded-xl border bg-card p-5 hover:border-primary"
-                    href={withLocalePrefix(`/${route}`, context)}
-                  >
-                    {s(titleKeys[route])}
-                  </Link>
-                </li>
-              ))}
-          </ul>
-        </>
-      )
+      return <MoreDirectory />
     case 'mylogo':
-      return (
-        <>
-          <SpecialHeader description={s('mylogoDescription')} title={s('mylogoTitle')} />
-          <div className="mt-10 grid size-40 place-items-center rounded-[2.5rem] bg-primary font-black text-2xl text-primary-foreground">
-            {t('siteName')}
-          </div>
-        </>
-      )
+      return <LogoInformationPage context={context} />
     case 'music':
-      return (
-        <>
-          <SpecialHeader description={s('musicDescription')} title={s('musicTitle')} />
-          <a
-            className="mt-8 inline-flex items-center gap-2 rounded-xl border p-4 text-primary"
-            href="https://y.qq.com/"
-            rel="noreferrer"
-            target="_blank"
-          >
-            {s('qqMusic')} <ExternalLink size={15} />
-          </a>
-          <p className="mt-4 text-muted-foreground text-sm">{s('resourceBoundary')}</p>
-        </>
-      )
+      return <MusicPage />
     case 'start':
-      return (
-        <>
-          <SpecialHeader description={s('startDescription')} title={s('startTitle')} />
-          <BookmarkWorkspace
-            labels={{
-              add: s('addBookmark'),
-              export: s('exportBookmarks'),
-              import: s('importBookmarks'),
-              name: s('bookmarkName'),
-              remove: s('removeBookmark'),
-              search: s('searchAction'),
-              searchPlaceholder: s('searchPlaceholder'),
-              storageNote: s('bookmarkStorageNote'),
-              url: s('bookmarkUrl'),
-            }}
-          />
-        </>
-      )
+      return <BookmarkWorkspace />
     case 'stats': {
-      const [blogs, wikis] = await Promise.all([
-        listCachedDocuments('blog', context.locale),
-        listCachedDocuments('wiki', context.locale),
-      ])
-      return (
-        <>
-          <SpecialHeader description={s('statsDescription')} title={s('statsTitle')} />
-          <dl className="mt-8 grid gap-4 sm:grid-cols-2">
-            <div className="rounded-xl border bg-card p-6">
-              <dt>{t('blog')}</dt>
-              <dd className="mt-2 font-bold text-3xl">{s('blogCount', { count: blogs.length })}</dd>
-            </div>
-            <div className="rounded-xl border bg-card p-6">
-              <dt>{t('wiki')}</dt>
-              <dd className="mt-2 font-bold text-3xl">{s('wikiCount', { count: wikis.length })}</dd>
-            </div>
-          </dl>
-        </>
-      )
+      return <StatsDashboard />
     }
     case 'tech-footprint': {
       const dataset = await readCachedOwnerDataset('tech_footprint')
       const parsed = techFootprintPayloadSchema.safeParse(dataset?.payload)
-      const records = parsed.success ? Object.entries(parsed.data.records) : []
       return (
-        <>
-          <SpecialHeader description={s('techDescription')} title={s('techTitle')} />
-          {dataset ? (
-            <p className="mt-4 text-sm text-muted-foreground">
-              {s('revision', { revision: dataset.revision })}
-            </p>
-          ) : null}
-          <ul className="mt-8 grid gap-3">
-            {records.length ? (
-              records.map(([name, record]) => (
-                <li className="rounded-xl border bg-card p-5" key={name}>
-                  <h2 className="font-semibold">{name}</h2>
-                  <p className="mt-2">{s('progress', { progress: record.progress })}</p>
-                  <p className="mt-2 text-muted-foreground">{record.note}</p>
-                </li>
-              ))
-            ) : (
-              <li>{s('noRecords')}</li>
-            )}
-          </ul>
-        </>
+        <TechFootprintPage
+          records={parsed.success ? parsed.data.records : {}}
+          revision={dataset?.revision ?? null}
+        />
       )
     }
     case 'weight-loss': {
       const dataset = await readCachedOwnerDataset('weight_loss')
       const parsed = weightLossPayloadSchema.safeParse(dataset?.payload)
       const records = parsed.success ? parsed.data.records : []
-      return (
-        <>
-          <SpecialHeader description={s('weightDescription')} title={s('weightTitle')} />
-          {dataset ? (
-            <p className="mt-4 text-sm text-muted-foreground">
-              {s('revision', { revision: dataset.revision })}
-            </p>
-          ) : null}
-          <ol className="mt-8 grid gap-3">
-            {records.length ? (
-              records.map((record) => (
-                <li className="rounded-xl border bg-card p-5" key={record.date}>
-                  <time className="font-semibold">{record.date}</time>
-                  <p className="mt-2">{s('weight', { value: record.weight || '-' })}</p>
-                  <p>{s('waist', { value: record.waist || '-' })}</p>
-                  <p className="mt-2 text-muted-foreground">{record.note}</p>
-                </li>
-              ))
-            ) : (
-              <li>{s('noRecords')}</li>
-            )}
-          </ol>
-        </>
-      )
+      return <WeightLossPage records={records} revision={dataset?.revision ?? null} />
     }
   }
 }
