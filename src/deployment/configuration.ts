@@ -41,7 +41,6 @@ export const deploymentConfigurationSchema = z
     DEPLOYMENT_REGISTRY_TOKEN: optionalNonempty(z.string().min(16).max(10_000)),
     DEPLOYMENT_REGISTRY_USERNAME: optionalNonempty(z.string().min(1).max(200)),
     DEPLOYMENT_SEARCH_QUERY: z.string().trim().min(1).max(200),
-    DEPLOYMENT_STABILIZATION_SECONDS: z.coerce.number().int().nonnegative().max(86_400),
   })
   .strict()
   .superRefine((configuration, context) => {
@@ -79,6 +78,5 @@ export function parseDeploymentConfiguration(environment: NodeJS.ProcessEnv) {
     DEPLOYMENT_REGISTRY_TOKEN: environment.DEPLOYMENT_REGISTRY_TOKEN,
     DEPLOYMENT_REGISTRY_USERNAME: environment.DEPLOYMENT_REGISTRY_USERNAME,
     DEPLOYMENT_SEARCH_QUERY: environment.DEPLOYMENT_SEARCH_QUERY,
-    DEPLOYMENT_STABILIZATION_SECONDS: environment.DEPLOYMENT_STABILIZATION_SECONDS,
   })
 }

@@ -41,7 +41,9 @@ An interrupted operation keeps its last durable phase when its lease expires. Re
 
 ## Recovery validation plan
 
-Before a Production deployment containing a migration marked as requiring backup, require a valid dual-replica record inside the explicitly configured freshness limit. Keep the previous slot for the configured stabilization interval and do not run Contract migration while it is a rollback target. If deployment/control-state behavior changes, rerun both the Production-like deployment gate and the disposable recovery drill. If a Version 5 control-state migration itself must be rolled back, restore a verified matching Version 4 snapshot before starting the older control-plane binary.
+Before a Production deployment containing a migration marked as requiring backup, require a valid dual-replica record inside the explicitly configured freshness limit. Do not run Contract migration while an adjacent release remains a rollback target. If deployment/control-state behavior changes, rerun both the Production-like deployment gate and the disposable recovery drill. If a Version 5 control-state migration itself must be rolled back, restore a verified matching Version 4 snapshot before starting the older control-plane binary.
+
+> Historical note: ADR 0020 later removed the fixed deployment-stabilization time block. The immutable-image, migration, smoke, audit and immediately-previous rollback guarantees verified here remain in force.
 
 ## Explicit non-actions
 

@@ -27,6 +27,8 @@
 
 正常 Application Release 由 Web Application Repository 的 `main` Workflow 在 CI Gates 通过后自动发起。这里的命令用于人工触发、重试或指定版本，并调用同一个 Deployment Engine。
 
+连续发布没有固定等待时间。每次成功切流后，刚才的 Active Release 成为新的 Previous Rollback Target；准备下一候选版本会覆盖倒数第二个版本所在的 Inactive Slot。不得以连续发布为由跳过并发互斥、Migration、备份、镜像身份或 Smoke Gate。
+
 ## Rollback
 
 ```bash
@@ -35,7 +37,7 @@
 
 当新 Application 有问题且 Database 仍保持 Backward-compatible 时使用。
 
-Rollback 只切到 Version 5 Control State 中保留的 Previous SHA/Digest，不 Rebuild Image。Stabilization Window 内不得手工删除或覆盖 Previous Container。若 PostgreSQL Incident 令 Application Smoke 失败，先以 `./site status` 确认 Traffic/SQLite State，再按 Database Incident 流程处理；不要把 Control-state Failure 与 Application Dependency Failure 混为一体。
+Rollback 只切到 Version 5 Control State 中保留的 Previous SHA/Digest，不 Rebuild Image。若 PostgreSQL Incident 令 Application Smoke 失败，先以 `./site status` 确认 Traffic/SQLite State，再按 Database Incident 流程处理；不要把 Control-state Failure 与 Application Dependency Failure 混为一体。
 
 ## 手工安全规则
 

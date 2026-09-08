@@ -38,3 +38,6 @@ ADR 是不可变的历史记录。
 - `0015-postgresql-independent-control-plane-recovery-state.md`
 - `0016-shared-host-loopback-ingress.md`
 - `0017-single-offsite-s3-backup-target.md`
+- `0018-alist-primary-r2-offsite-backup.md`
+- `0019-primary-first-daily-recovery-mirror.md`
+- `0020-no-time-based-deployment-block.md`

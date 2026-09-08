@@ -1248,7 +1248,7 @@ Production-like Infrastructure 已存在，但在可恢复性经过真实 Drill 
 ### Task Checklist
 
 - [x] 实现只接受 Git SHA/固定 Digest 的 Immutable Image Identity，拒绝 `latest`。
-- [x] 实现 Active/Inactive Detection、Target Slot、Previous Rollback Target 和 Stabilization Window。
+- [x] 实现 Active/Inactive Detection、Target Slot 和 Previous Rollback Target；Phase 18 经 ADR 0020 移除固定时长发布拦截。
 - [x] 在 SQLite 持久化 Operation Phase、Current/Last SHA、Digest、Lock/Lease、Actor 和 Audit。
 - [x] 实现统一 Deployment Engine，供 `control-api`、`./site deploy` 和后续 GitHub Actions 调用。
 - [x] 实现 `deploy-agent` 的受控 Docker/Compose、Migration、OpenResty Validate/Reload Capability。
@@ -1280,7 +1280,7 @@ Production-like Infrastructure 已存在，但在可恢复性经过真实 Drill 
 
 - [x] 手工 `./site deploy <sha>` 与 `rollback` 使用同一可审计 State Machine。
 - [x] Cutover 前后 Smoke、Failure/Abort/Rollback 行为 Deterministic。
-- [x] Previous Slot 在 Rollback Window 内完整保留。
+- [x] 每次成功切流后保留立即上一版本；ADR 0020 允许下一次发布覆盖倒数第二版本所在 Slot。
 
 ### Exit Gate
 
@@ -1604,6 +1604,10 @@ Owner 于 2026-09-07 验收时明确移除 Wiki/CV 打印控件，并批准指�
 生产 Tracker 必须限定正式域名，Share Token/原始数据继续保持服务端边界，公开页面仅展示路径聚合值。
 同轮反馈把 Header Search 固定为独立放大镜控件，并要求三态 Theme、Blog/Wiki 正文检索、图片预览任意点关闭、
 移动菜单 Backdrop 关闭及居中且选章即关闭的阅读导航；这些行为已进入 Fixture 与 Public E2E，但仍等待 Owner 视觉验收。
+
+Owner 于 2026-09-08 认定个人站点不需要固定 24 小时发布禁令，并批准 ADR 0020。部署引擎不再用
+`stabilization_until` 阻止连续发布；并发互斥、不可变镜像、Migration/Backup、Pre/Post Smoke、审计和立即上一版本
+Rollback 均保持。Phase 18 的线上观察证据仍是关闭旧 Nuxt Rollback Window 的验收条件，但不阻止日常 V2 发布。
 
 `/more` 与独立特殊页面、Start、Stats、Tech/Weight 和全局音乐播放器的阻断修复记录在
 `docs/migration/phase-18-special-pages-music-compatibility.md`。修复恢复了 Phase 0 标记的用户结果，并保持
