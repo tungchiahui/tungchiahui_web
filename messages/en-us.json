@@ -272,7 +272,7 @@
       "refresh": "Refresh data",
       "refreshing": "Refreshing",
       "loading": "Loading public analytics…",
-      "unavailable": "Analytics are temporarily unavailable. The public Umami dashboard below may still be available.",
+      "unavailable": "Analytics are temporarily unavailable. You can still open the public Umami dashboard.",
       "overview": "Traffic overview",
       "visitors": "Visitors",
       "visits": "Visits",
@@ -292,6 +292,8 @@
       "direct": "Direct",
       "empty": "No data",
       "publicDashboard": "Public Umami dashboard",
+      "publicDashboardDescription": "Open the complete public analytics interface provided by Umami.",
+      "openPublicDashboard": "Open in Umami",
       "section": {
         "path": "Top pages",
         "referrer": "Referrers",

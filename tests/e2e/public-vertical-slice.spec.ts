@@ -335,6 +335,16 @@ test('keeps special pages, local Start interaction and public datasets available
     expect(response.status(), route).toBe(200)
   }
 
+  await page.route('**/api/stats', (route) =>
+    route.fulfill({ body: JSON.stringify({ error: 'fixture_unavailable' }), status: 503 }),
+  )
+  await page.goto('/stats')
+  await expect(page.getByRole('link', { name: '在 Umami 中打开' })).toHaveAttribute(
+    'href',
+    'https://umami.tungchiahui.cn/share/rCG6EZoHmlCmNnWn',
+  )
+  await expect(page.locator('iframe')).toHaveCount(0)
+
   await page.goto('/start')
   await expect(page.getByText(/Bing 每日图片 · Bing 测试壁纸/)).toBeVisible()
   await page.getByRole('button', { name: '完整' }).click()

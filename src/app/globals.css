@@ -985,17 +985,27 @@
   white-space: nowrap;
 }
 .stats-frame-wrap {
-  min-height: 44rem;
-  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: clamp(1rem, 3vw, 1.5rem);
   border: 1px solid var(--border);
   border-radius: 1rem;
-  background: var(--card);
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--primary) 10%, var(--card)),
+    var(--card)
+  );
 }
-.stats-frame {
-  display: block;
-  width: 100%;
-  min-height: 56rem;
-  border: 0;
+.stats-frame-wrap h2 {
+  font-size: 1rem;
+  font-weight: 750;
+}
+.stats-frame-wrap p {
+  margin-top: 0.25rem;
+  color: var(--muted-foreground);
+  font-size: 0.84rem;
 }
 
 @media (max-width: 45rem) {
@@ -1010,6 +1020,10 @@
   }
   .stats-panel li small {
     grid-column: 2;
+  }
+  .stats-frame-wrap {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 

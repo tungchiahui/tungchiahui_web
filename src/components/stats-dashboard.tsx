@@ -1,6 +1,6 @@
 'use client'
 
-import { BarChart3, RefreshCw } from 'lucide-react'
+import { BarChart3, ExternalLink, RefreshCw } from 'lucide-react'
 import { useLocale, useTranslations } from 'next-intl'
 import { useCallback, useEffect, useState } from 'react'
 
@@ -119,13 +119,14 @@ export function StatsDashboard() {
       ) : null}
 
       <section aria-label={t('publicDashboard')} className="stats-frame-wrap">
-        <iframe
-          className="stats-frame"
-          loading="lazy"
-          referrerPolicy="no-referrer-when-downgrade"
-          src={publicShareUrl}
-          title={t('publicDashboard')}
-        />
+        <div>
+          <h2>{t('publicDashboard')}</h2>
+          <p>{t('publicDashboardDescription')}</p>
+        </div>
+        <a className="legacy-secondary-link" href={publicShareUrl} rel="noreferrer" target="_blank">
+          {t('openPublicDashboard')}
+          <ExternalLink aria-hidden="true" size={16} />
+        </a>
       </section>
     </div>
   )

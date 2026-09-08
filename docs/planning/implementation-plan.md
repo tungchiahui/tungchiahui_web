@@ -1623,6 +1623,8 @@ Footer 图标缺失由重复 CSP 的交集阻断造成，生产入口改为隐�
 代码框与 Font Awesome 路径仅做了对应文件的定点只读核对，未修改旧仓库。移动播放器与左下阅读浮球在窄屏拥有独立
 点击区。上述增量已通过 Repository Check、166 项 Unit、Production-foundation/Recovery、11 项 Public E2E、S3Mock/
 Application Integration 与 7 项 PostgreSQL Migration Gate；Owner 验收仍是阻断项。
+生产浏览器复核还确认 Umami Share 端发送 `frame-ancestors 'self'`，不能被跨域 iframe 合法嵌入；Stats 因此以固定
+外链入口替代报错空框，站内服务端聚合数据不受影响。
 
 - [ ] 全部 Repository Merge Gate 和 Acceptance Criteria 通过。
 - [x] Final Legacy URL/Pinyin/Feature Matrix 无未接受 Regression。

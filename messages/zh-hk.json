@@ -272,7 +272,7 @@
       "refresh": "重新整理數據",
       "refreshing": "正在重新整理",
       "loading": "正在讀取公開統計…",
-      "unavailable": "統計服務暫時不可用，可以繼續查看下方 Umami 公開面板。",
+      "unavailable": "統計服務暫時不可用，可以前往 Umami 公開面板查看。",
       "overview": "訪問概覽",
       "visitors": "訪客數",
       "visits": "訪問次數",
@@ -292,6 +292,8 @@
       "direct": "直接訪問",
       "empty": "暫無數據",
       "publicDashboard": "Umami 公開數據面板",
+      "publicDashboardDescription": "查看 Umami 提供的完整公開分析介面。",
+      "openPublicDashboard": "在 Umami 中開啟",
       "section": {
         "path": "熱門頁面",
         "referrer": "訪問來源",
