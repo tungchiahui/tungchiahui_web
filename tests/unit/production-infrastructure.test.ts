@@ -154,6 +154,8 @@ describe('Phase 12 production foundation policy', () => {
     expect(openRestySource).toContain('location ^~ /api/internal/')
     expect(inventorySource).toContain('ansible_host: Debian')
     expect(inventorySource).toContain('ansible_user: tungchiahui')
+    expect(inventorySource).toContain('tungchiahui_content_polling_enabled: "true"')
+    expect(inventorySource).toContain('tungchiahui_search_polling_enabled: "true"')
     expect(inventorySource).not.toMatch(/ansible_host:\s*(?:\d{1,3}\.){3}\d{1,3}/)
     expect(composeSource).not.toContain('S3_CONTRACT_')
     expect(composeSource).toContain(

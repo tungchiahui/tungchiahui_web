@@ -500,7 +500,7 @@ export function readControlObservabilitySnapshot(path: string, now = new Date())
             `SELECT
                count(*) FILTER (WHERE status IN ('queued', 'claimed', 'running', 'needs-attention')) AS incomplete_count,
                count(*) FILTER (WHERE status = 'needs-attention') AS needs_attention_count,
-               count(*) FILTER (WHERE status = 'failed' AND finished_at >= datetime(?, '-24 hours')) AS failed_24h_count,
+               count(*) FILTER (WHERE status = 'failed' AND julianday(finished_at) >= julianday(?) - 1) AS failed_24h_count,
                count(*) FILTER (WHERE status IN ('claimed', 'running') AND lease_expires_at <= ?) AS expired_lease_count,
                COALESCE(max(0, (julianday(?) - julianday(min(created_at) FILTER (WHERE status IN ('queued', 'claimed', 'running', 'needs-attention')))) * 86400), 0) AS oldest_incomplete_age_seconds
              FROM infrastructure_operations`,
