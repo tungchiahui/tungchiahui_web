@@ -1,0 +1,1698 @@
+{
+  "id": "08b9503b-7937-4a83-8057-c91dd47086a8",
+  "prevId": "6b6c81fb-36a7-42a0-b90a-e28cbf281d29",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "app.content_aliases": {
+      "name": "content_aliases",
+      "schema": "app",
+      "columns": {
+        "alias_path": {
+          "name": "alias_path",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "document_id": {
+          "name": "document_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "approval_reference": {
+          "name": "approval_reference",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "content_aliases_document_idx": {
+          "name": "content_aliases_document_idx",
+          "columns": [
+            {
+              "expression": "document_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "content_aliases_document_id_documents_id_fk": {
+          "name": "content_aliases_document_id_documents_id_fk",
+          "tableFrom": "content_aliases",
+          "tableTo": "documents",
+          "schemaTo": "app",
+          "columnsFrom": ["document_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "content_aliases_content_route": {
+          "name": "content_aliases_content_route",
+          "value": "\"app\".\"content_aliases\".\"alias_path\" LIKE '/wiki/%' OR \"app\".\"content_aliases\".\"alias_path\" LIKE '/blog/%'"
+        },
+        "content_aliases_approval_not_empty": {
+          "name": "content_aliases_approval_not_empty",
+          "value": "length(\"app\".\"content_aliases\".\"approval_reference\") > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "app.document_translation_segments": {
+      "name": "document_translation_segments",
+      "schema": "app",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "document_id": {
+          "name": "document_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "locale": {
+          "name": "locale",
+          "type": "locale",
+          "typeSchema": "app",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "segment_id": {
+          "name": "segment_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "previous_segment_id": {
+          "name": "previous_segment_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ordinal": {
+          "name": "ordinal",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_start": {
+          "name": "source_start",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_end": {
+          "name": "source_end",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "document_translation_segments_ordinal_unique": {
+          "name": "document_translation_segments_ordinal_unique",
+          "columns": [
+            {
+              "expression": "document_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "locale",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "ordinal",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "document_translation_segments_segment_idx": {
+          "name": "document_translation_segments_segment_idx",
+          "columns": [
+            {
+              "expression": "segment_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "document_translation_segments_previous_idx": {
+          "name": "document_translation_segments_previous_idx",
+          "columns": [
+            {
+              "expression": "previous_segment_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "document_translation_segments_document_id_documents_id_fk": {
+          "name": "document_translation_segments_document_id_documents_id_fk",
+          "tableFrom": "document_translation_segments",
+          "tableTo": "documents",
+          "schemaTo": "app",
+          "columnsFrom": ["document_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "document_translation_segments_segment_id_translation_segments_id_fk": {
+          "name": "document_translation_segments_segment_id_translation_segments_id_fk",
+          "tableFrom": "document_translation_segments",
+          "tableTo": "translation_segments",
+          "schemaTo": "app",
+          "columnsFrom": ["segment_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "document_translation_segments_previous_segment_id_translation_segments_id_fk": {
+          "name": "document_translation_segments_previous_segment_id_translation_segments_id_fk",
+          "tableFrom": "document_translation_segments",
+          "tableTo": "translation_segments",
+          "schemaTo": "app",
+          "columnsFrom": ["previous_segment_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "document_translation_segments_english_only": {
+          "name": "document_translation_segments_english_only",
+          "value": "\"app\".\"document_translation_segments\".\"locale\" = 'en-us'"
+        },
+        "document_translation_segments_ordinal_nonnegative": {
+          "name": "document_translation_segments_ordinal_nonnegative",
+          "value": "\"app\".\"document_translation_segments\".\"ordinal\" >= 0"
+        },
+        "document_translation_segments_start_nonnegative": {
+          "name": "document_translation_segments_start_nonnegative",
+          "value": "\"app\".\"document_translation_segments\".\"source_start\" >= 0"
+        },
+        "document_translation_segments_range_valid": {
+          "name": "document_translation_segments_range_valid",
+          "value": "\"app\".\"document_translation_segments\".\"source_end\" > \"app\".\"document_translation_segments\".\"source_start\""
+        },
+        "document_translation_segments_previous_distinct": {
+          "name": "document_translation_segments_previous_distinct",
+          "value": "\"app\".\"document_translation_segments\".\"previous_segment_id\" IS NULL OR \"app\".\"document_translation_segments\".\"previous_segment_id\" <> \"app\".\"document_translation_segments\".\"segment_id\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "app.document_translations": {
+      "name": "document_translations",
+      "schema": "app",
+      "columns": {
+        "document_id": {
+          "name": "document_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "locale": {
+          "name": "locale",
+          "type": "locale",
+          "typeSchema": "app",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "translated_markdown": {
+          "name": "translated_markdown",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "translation_hash": {
+          "name": "translation_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "translation_version": {
+          "name": "translation_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_hash": {
+          "name": "source_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pending_segment_count": {
+          "name": "pending_segment_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "translated_segment_count": {
+          "name": "translated_segment_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "fallback_segment_count": {
+          "name": "fallback_segment_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "translation_memory_hits": {
+          "name": "translation_memory_hits",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "generated_at": {
+          "name": "generated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "document_translations_document_id_documents_id_fk": {
+          "name": "document_translations_document_id_documents_id_fk",
+          "tableFrom": "document_translations",
+          "tableTo": "documents",
+          "schemaTo": "app",
+          "columnsFrom": ["document_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "document_translations_document_id_locale_pk": {
+          "name": "document_translations_document_id_locale_pk",
+          "columns": ["document_id", "locale"]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "document_translations_noncanonical_locale": {
+          "name": "document_translations_noncanonical_locale",
+          "value": "\"app\".\"document_translations\".\"locale\" <> 'zh-cn'"
+        },
+        "document_translations_hash_sha256": {
+          "name": "document_translations_hash_sha256",
+          "value": "\"app\".\"document_translations\".\"translation_hash\" ~ '^[a-f0-9]{64}$'"
+        },
+        "document_translations_version_positive": {
+          "name": "document_translations_version_positive",
+          "value": "\"app\".\"document_translations\".\"translation_version\" > 0"
+        },
+        "document_translations_source_hash_sha256": {
+          "name": "document_translations_source_hash_sha256",
+          "value": "\"app\".\"document_translations\".\"source_hash\" IS NULL OR \"app\".\"document_translations\".\"source_hash\" ~ '^[a-f0-9]{64}$'"
+        },
+        "document_translations_pending_nonnegative": {
+          "name": "document_translations_pending_nonnegative",
+          "value": "\"app\".\"document_translations\".\"pending_segment_count\" >= 0"
+        },
+        "document_translations_translated_nonnegative": {
+          "name": "document_translations_translated_nonnegative",
+          "value": "\"app\".\"document_translations\".\"translated_segment_count\" >= 0"
+        },
+        "document_translations_fallback_nonnegative": {
+          "name": "document_translations_fallback_nonnegative",
+          "value": "\"app\".\"document_translations\".\"fallback_segment_count\" >= 0"
+        },
+        "document_translations_hits_nonnegative": {
+          "name": "document_translations_hits_nonnegative",
+          "value": "\"app\".\"document_translations\".\"translation_memory_hits\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "app.ingestion_runs": {
+      "name": "ingestion_runs",
+      "schema": "app",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "operational_job_id": {
+          "name": "operational_job_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_commit": {
+          "name": "source_commit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "ingestion_run_status",
+          "typeSchema": "app",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "files_seen": {
+          "name": "files_seen",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "files_changed": {
+          "name": "files_changed",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "files_deleted": {
+          "name": "files_deleted",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "error_summary": {
+          "name": "error_summary",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "ingestion_runs_operational_job_unique": {
+          "name": "ingestion_runs_operational_job_unique",
+          "columns": [
+            {
+              "expression": "operational_job_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ingestion_runs_source_commit_idx": {
+          "name": "ingestion_runs_source_commit_idx",
+          "columns": [
+            {
+              "expression": "source_commit",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ingestion_runs_operational_job_id_operational_jobs_id_fk": {
+          "name": "ingestion_runs_operational_job_id_operational_jobs_id_fk",
+          "tableFrom": "ingestion_runs",
+          "tableTo": "operational_jobs",
+          "schemaTo": "app",
+          "columnsFrom": ["operational_job_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ingestion_runs_source_commit_hash": {
+          "name": "ingestion_runs_source_commit_hash",
+          "value": "\"app\".\"ingestion_runs\".\"source_commit\" ~ '^(?:[a-f0-9]{40}|[a-f0-9]{64})$'"
+        },
+        "ingestion_runs_files_seen_nonnegative": {
+          "name": "ingestion_runs_files_seen_nonnegative",
+          "value": "\"app\".\"ingestion_runs\".\"files_seen\" >= 0"
+        },
+        "ingestion_runs_files_changed_nonnegative": {
+          "name": "ingestion_runs_files_changed_nonnegative",
+          "value": "\"app\".\"ingestion_runs\".\"files_changed\" >= 0"
+        },
+        "ingestion_runs_files_deleted_nonnegative": {
+          "name": "ingestion_runs_files_deleted_nonnegative",
+          "value": "\"app\".\"ingestion_runs\".\"files_deleted\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "app.search_documents": {
+      "name": "search_documents",
+      "schema": "app",
+      "columns": {
+        "document_id": {
+          "name": "document_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "locale": {
+          "name": "locale",
+          "type": "locale",
+          "typeSchema": "app",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content_type": {
+          "name": "content_type",
+          "type": "content_type",
+          "typeSchema": "app",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "route_path": {
+          "name": "route_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "headings": {
+          "name": "headings",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_hash": {
+          "name": "source_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "projection_hash": {
+          "name": "projection_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_updated_at": {
+          "name": "source_updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "search_documents_locale_type_idx": {
+          "name": "search_documents_locale_type_idx",
+          "columns": [
+            {
+              "expression": "locale",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "content_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "search_documents_full_text_idx": {
+          "name": "search_documents_full_text_idx",
+          "columns": [
+            {
+              "expression": "title",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "headings",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "body",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "metadata",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "pgroonga",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "search_documents_document_id_documents_id_fk": {
+          "name": "search_documents_document_id_documents_id_fk",
+          "tableFrom": "search_documents",
+          "tableTo": "documents",
+          "schemaTo": "app",
+          "columnsFrom": ["document_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "search_documents_document_id_locale_pk": {
+          "name": "search_documents_document_id_locale_pk",
+          "columns": ["document_id", "locale"]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "search_documents_route_path_absolute": {
+          "name": "search_documents_route_path_absolute",
+          "value": "\"app\".\"search_documents\".\"route_path\" LIKE '/%'"
+        },
+        "search_documents_title_not_empty": {
+          "name": "search_documents_title_not_empty",
+          "value": "length(\"app\".\"search_documents\".\"title\") > 0"
+        },
+        "search_documents_source_hash_sha256": {
+          "name": "search_documents_source_hash_sha256",
+          "value": "\"app\".\"search_documents\".\"source_hash\" ~ '^[a-f0-9]{64}$'"
+        },
+        "search_documents_projection_hash_sha256": {
+          "name": "search_documents_projection_hash_sha256",
+          "value": "\"app\".\"search_documents\".\"projection_hash\" ~ '^[a-f0-9]{64}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "app.translation_jobs": {
+      "name": "translation_jobs",
+      "schema": "app",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "translation_job_status",
+          "typeSchema": "app",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'queued'"
+        },
+        "execution_mode": {
+          "name": "execution_mode",
+          "type": "translation_execution_mode",
+          "typeSchema": "app",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'dry-run'"
+        },
+        "scope": {
+          "name": "scope",
+          "type": "translation_scope",
+          "typeSchema": "app",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "document_id": {
+          "name": "document_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "requested_by": {
+          "name": "requested_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "force": {
+          "name": "force",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "budget_usd": {
+          "name": "budget_usd",
+          "type": "numeric(12, 6)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "estimated_input_tokens": {
+          "name": "estimated_input_tokens",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "estimated_output_tokens": {
+          "name": "estimated_output_tokens",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "estimated_cost_usd": {
+          "name": "estimated_cost_usd",
+          "type": "numeric(12, 6)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "actual_input_tokens": {
+          "name": "actual_input_tokens",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "actual_output_tokens": {
+          "name": "actual_output_tokens",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "actual_cost_usd": {
+          "name": "actual_cost_usd",
+          "type": "numeric(12, 6)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "provider_request_count": {
+          "name": "provider_request_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "completed_segment_count": {
+          "name": "completed_segment_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "remaining_segment_count": {
+          "name": "remaining_segment_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "cancel_requested_at": {
+          "name": "cancel_requested_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error_summary": {
+          "name": "error_summary",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "translation_jobs_id_operational_jobs_id_fk": {
+          "name": "translation_jobs_id_operational_jobs_id_fk",
+          "tableFrom": "translation_jobs",
+          "tableTo": "operational_jobs",
+          "schemaTo": "app",
+          "columnsFrom": ["id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "translation_jobs_document_id_documents_id_fk": {
+          "name": "translation_jobs_document_id_documents_id_fk",
+          "tableFrom": "translation_jobs",
+          "tableTo": "documents",
+          "schemaTo": "app",
+          "columnsFrom": ["document_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "translation_jobs_requested_by_not_empty": {
+          "name": "translation_jobs_requested_by_not_empty",
+          "value": "length(\"app\".\"translation_jobs\".\"requested_by\") > 0"
+        },
+        "translation_jobs_budget_nonnegative": {
+          "name": "translation_jobs_budget_nonnegative",
+          "value": "\"app\".\"translation_jobs\".\"budget_usd\" >= 0"
+        },
+        "translation_jobs_estimated_input_nonnegative": {
+          "name": "translation_jobs_estimated_input_nonnegative",
+          "value": "\"app\".\"translation_jobs\".\"estimated_input_tokens\" >= 0"
+        },
+        "translation_jobs_estimated_output_nonnegative": {
+          "name": "translation_jobs_estimated_output_nonnegative",
+          "value": "\"app\".\"translation_jobs\".\"estimated_output_tokens\" >= 0"
+        },
+        "translation_jobs_estimated_cost_nonnegative": {
+          "name": "translation_jobs_estimated_cost_nonnegative",
+          "value": "\"app\".\"translation_jobs\".\"estimated_cost_usd\" >= 0"
+        },
+        "translation_jobs_actual_input_nonnegative": {
+          "name": "translation_jobs_actual_input_nonnegative",
+          "value": "\"app\".\"translation_jobs\".\"actual_input_tokens\" >= 0"
+        },
+        "translation_jobs_actual_output_nonnegative": {
+          "name": "translation_jobs_actual_output_nonnegative",
+          "value": "\"app\".\"translation_jobs\".\"actual_output_tokens\" >= 0"
+        },
+        "translation_jobs_actual_cost_nonnegative": {
+          "name": "translation_jobs_actual_cost_nonnegative",
+          "value": "\"app\".\"translation_jobs\".\"actual_cost_usd\" >= 0"
+        },
+        "translation_jobs_provider_requests_nonnegative": {
+          "name": "translation_jobs_provider_requests_nonnegative",
+          "value": "\"app\".\"translation_jobs\".\"provider_request_count\" >= 0"
+        },
+        "translation_jobs_completed_segments_nonnegative": {
+          "name": "translation_jobs_completed_segments_nonnegative",
+          "value": "\"app\".\"translation_jobs\".\"completed_segment_count\" >= 0"
+        },
+        "translation_jobs_remaining_segments_nonnegative": {
+          "name": "translation_jobs_remaining_segments_nonnegative",
+          "value": "\"app\".\"translation_jobs\".\"remaining_segment_count\" >= 0"
+        },
+        "translation_jobs_article_scope_document": {
+          "name": "translation_jobs_article_scope_document",
+          "value": "(\"app\".\"translation_jobs\".\"scope\" = 'article' AND \"app\".\"translation_jobs\".\"document_id\" IS NOT NULL) OR (\"app\".\"translation_jobs\".\"scope\" <> 'article' AND \"app\".\"translation_jobs\".\"document_id\" IS NULL)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "app.translation_segments": {
+      "name": "translation_segments",
+      "schema": "app",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "source_hash": {
+          "name": "source_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_text": {
+          "name": "source_text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_ast_type": {
+          "name": "source_ast_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "locale": {
+          "name": "locale",
+          "type": "locale",
+          "typeSchema": "app",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "translated_text": {
+          "name": "translated_text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_translatable": {
+          "name": "is_translatable",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "normalization_version": {
+          "name": "normalization_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "context_fingerprint": {
+          "name": "context_fingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "translation_segment_status",
+          "typeSchema": "app",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "model": {
+          "name": "model",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "input_tokens": {
+          "name": "input_tokens",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "output_tokens": {
+          "name": "output_tokens",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "cost_usd": {
+          "name": "cost_usd",
+          "type": "numeric(12, 6)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "translation_segments_memory_unique": {
+          "name": "translation_segments_memory_unique",
+          "columns": [
+            {
+              "expression": "source_hash",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "locale",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "context_fingerprint",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "translation_segments_pending_idx": {
+          "name": "translation_segments_pending_idx",
+          "columns": [
+            {
+              "expression": "locale",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "translation_segments_noncanonical_locale": {
+          "name": "translation_segments_noncanonical_locale",
+          "value": "\"app\".\"translation_segments\".\"locale\" <> 'zh-cn'"
+        },
+        "translation_segments_source_hash_sha256": {
+          "name": "translation_segments_source_hash_sha256",
+          "value": "\"app\".\"translation_segments\".\"source_hash\" ~ '^[a-f0-9]{64}$'"
+        },
+        "translation_segments_context_not_empty": {
+          "name": "translation_segments_context_not_empty",
+          "value": "length(\"app\".\"translation_segments\".\"context_fingerprint\") > 0"
+        },
+        "translation_segments_normalization_version_positive": {
+          "name": "translation_segments_normalization_version_positive",
+          "value": "\"app\".\"translation_segments\".\"normalization_version\" > 0"
+        },
+        "translation_segments_input_tokens_nonnegative": {
+          "name": "translation_segments_input_tokens_nonnegative",
+          "value": "\"app\".\"translation_segments\".\"input_tokens\" >= 0"
+        },
+        "translation_segments_output_tokens_nonnegative": {
+          "name": "translation_segments_output_tokens_nonnegative",
+          "value": "\"app\".\"translation_segments\".\"output_tokens\" >= 0"
+        },
+        "translation_segments_cost_nonnegative": {
+          "name": "translation_segments_cost_nonnegative",
+          "value": "\"app\".\"translation_segments\".\"cost_usd\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "app.documents": {
+      "name": "documents",
+      "schema": "app",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "content_type": {
+          "name": "content_type",
+          "type": "content_type",
+          "typeSchema": "app",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_path": {
+          "name": "source_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_commit": {
+          "name": "source_commit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "raw_frontmatter": {
+          "name": "raw_frontmatter",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "raw_markdown": {
+          "name": "raw_markdown",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_hash": {
+          "name": "source_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "route_path": {
+          "name": "route_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "source_updated_at": {
+          "name": "source_updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ingested_at": {
+          "name": "ingested_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "is_deleted": {
+          "name": "is_deleted",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "documents_source_path_unique": {
+          "name": "documents_source_path_unique",
+          "columns": [
+            {
+              "expression": "source_path",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "documents_route_path_unique": {
+          "name": "documents_route_path_unique",
+          "columns": [
+            {
+              "expression": "route_path",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "documents_content_type_idx": {
+          "name": "documents_content_type_idx",
+          "columns": [
+            {
+              "expression": "content_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "documents_source_path_not_empty": {
+          "name": "documents_source_path_not_empty",
+          "value": "length(\"app\".\"documents\".\"source_path\") > 0"
+        },
+        "documents_route_path_absolute": {
+          "name": "documents_route_path_absolute",
+          "value": "\"app\".\"documents\".\"route_path\" LIKE '/%'"
+        },
+        "documents_source_hash_sha256": {
+          "name": "documents_source_hash_sha256",
+          "value": "\"app\".\"documents\".\"source_hash\" ~ '^[a-f0-9]{64}$'"
+        },
+        "documents_source_commit_hash": {
+          "name": "documents_source_commit_hash",
+          "value": "\"app\".\"documents\".\"source_commit\" ~ '^(?:[a-f0-9]{40}|[a-f0-9]{64})$'"
+        },
+        "documents_frontmatter_object": {
+          "name": "documents_frontmatter_object",
+          "value": "jsonb_typeof(\"app\".\"documents\".\"raw_frontmatter\") = 'object'"
+        },
+        "documents_delete_timestamp_consistent": {
+          "name": "documents_delete_timestamp_consistent",
+          "value": "(\"app\".\"documents\".\"is_deleted\" AND \"app\".\"documents\".\"deleted_at\" IS NOT NULL) OR (NOT \"app\".\"documents\".\"is_deleted\" AND \"app\".\"documents\".\"deleted_at\" IS NULL)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "app.operational_jobs": {
+      "name": "operational_jobs",
+      "schema": "app",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "job_type": {
+          "name": "job_type",
+          "type": "application_job_type",
+          "typeSchema": "app",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "application_job_status",
+          "typeSchema": "app",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'queued'"
+        },
+        "requested_by": {
+          "name": "requested_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "progress": {
+          "name": "progress",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "attempt_count": {
+          "name": "attempt_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "max_attempts": {
+          "name": "max_attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 3
+        },
+        "available_at": {
+          "name": "available_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "claimed_at": {
+          "name": "claimed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "claimed_by": {
+          "name": "claimed_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "claim_expires_at": {
+          "name": "claim_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error_summary": {
+          "name": "error_summary",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "operational_jobs_idempotency_key_unique": {
+          "name": "operational_jobs_idempotency_key_unique",
+          "columns": [
+            {
+              "expression": "idempotency_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "operational_jobs_claim_idx": {
+          "name": "operational_jobs_claim_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "available_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "operational_jobs_requested_by_not_empty": {
+          "name": "operational_jobs_requested_by_not_empty",
+          "value": "length(\"app\".\"operational_jobs\".\"requested_by\") > 0"
+        },
+        "operational_jobs_payload_object": {
+          "name": "operational_jobs_payload_object",
+          "value": "jsonb_typeof(\"app\".\"operational_jobs\".\"payload\") = 'object'"
+        },
+        "operational_jobs_progress_object": {
+          "name": "operational_jobs_progress_object",
+          "value": "jsonb_typeof(\"app\".\"operational_jobs\".\"progress\") = 'object'"
+        },
+        "operational_jobs_attempt_nonnegative": {
+          "name": "operational_jobs_attempt_nonnegative",
+          "value": "\"app\".\"operational_jobs\".\"attempt_count\" >= 0"
+        },
+        "operational_jobs_max_attempts_positive": {
+          "name": "operational_jobs_max_attempts_positive",
+          "value": "\"app\".\"operational_jobs\".\"max_attempts\" > 0"
+        },
+        "operational_jobs_attempt_within_limit": {
+          "name": "operational_jobs_attempt_within_limit",
+          "value": "\"app\".\"operational_jobs\".\"attempt_count\" <= \"app\".\"operational_jobs\".\"max_attempts\""
+        },
+        "operational_jobs_claim_consistent": {
+          "name": "operational_jobs_claim_consistent",
+          "value": "(\"app\".\"operational_jobs\".\"status\" = 'running' AND \"app\".\"operational_jobs\".\"claimed_at\" IS NOT NULL AND \"app\".\"operational_jobs\".\"claimed_by\" IS NOT NULL AND \"app\".\"operational_jobs\".\"claim_expires_at\" IS NOT NULL) OR (\"app\".\"operational_jobs\".\"status\" <> 'running' AND \"app\".\"operational_jobs\".\"claimed_at\" IS NULL AND \"app\".\"operational_jobs\".\"claimed_by\" IS NULL AND \"app\".\"operational_jobs\".\"claim_expires_at\" IS NULL)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "app.owner_managed_datasets": {
+      "name": "owner_managed_datasets",
+      "schema": "app",
+      "columns": {
+        "dataset_key": {
+          "name": "dataset_key",
+          "type": "owner_dataset_key",
+          "typeSchema": "app",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revision": {
+          "name": "revision",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "owner_managed_datasets_payload_object": {
+          "name": "owner_managed_datasets_payload_object",
+          "value": "jsonb_typeof(\"app\".\"owner_managed_datasets\".\"payload\") = 'object'"
+        },
+        "owner_managed_datasets_revision_nonnegative": {
+          "name": "owner_managed_datasets_revision_nonnegative",
+          "value": "\"app\".\"owner_managed_datasets\".\"revision\" >= 0"
+        },
+        "owner_managed_datasets_updated_by_not_empty": {
+          "name": "owner_managed_datasets_updated_by_not_empty",
+          "value": "length(\"app\".\"owner_managed_datasets\".\"updated_by\") > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "owner_auth.sessions": {
+      "name": "sessions",
+      "schema": "owner_auth",
+      "columns": {
+        "token_hash": {
+          "name": "token_hash",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "credential_version": {
+          "name": "credential_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "owner_sessions_expiry_idx": {
+          "name": "owner_sessions_expiry_idx",
+          "columns": [
+            {
+              "expression": "expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "app.ingestion_run_status": {
+      "name": "ingestion_run_status",
+      "schema": "app",
+      "values": ["running", "completed", "failed"]
+    },
+    "app.locale": {
+      "name": "locale",
+      "schema": "app",
+      "values": ["zh-cn", "zh-hk", "zh-tw", "en-us"]
+    },
+    "app.translation_execution_mode": {
+      "name": "translation_execution_mode",
+      "schema": "app",
+      "values": ["dry-run", "execute"]
+    },
+    "app.translation_job_status": {
+      "name": "translation_job_status",
+      "schema": "app",
+      "values": ["queued", "running", "completed", "partial", "failed", "cancelled"]
+    },
+    "app.translation_scope": {
+      "name": "translation_scope",
+      "schema": "app",
+      "values": ["pending", "changed", "article", "all"]
+    },
+    "app.translation_segment_status": {
+      "name": "translation_segment_status",
+      "schema": "app",
+      "values": ["pending", "translated", "fallback", "stale", "failed", "reviewed"]
+    },
+    "app.application_job_status": {
+      "name": "application_job_status",
+      "schema": "app",
+      "values": ["queued", "running", "retry_wait", "completed", "failed", "cancelled"]
+    },
+    "app.application_job_type": {
+      "name": "application_job_type",
+      "schema": "app",
+      "values": ["content_sync", "translation", "search_reindex", "cache_revalidation"]
+    },
+    "app.content_type": {
+      "name": "content_type",
+      "schema": "app",
+      "values": ["blog", "wiki"]
+    },
+    "app.owner_dataset_key": {
+      "name": "owner_dataset_key",
+      "schema": "app",
+      "values": ["tech_footprint", "weight_loss"]
+    }
+  },
+  "schemas": {
+    "app": "app",
+    "owner_auth": "owner_auth"
+  },
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
