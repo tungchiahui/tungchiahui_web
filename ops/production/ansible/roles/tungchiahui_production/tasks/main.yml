@@ -378,6 +378,51 @@
     'Recreated' in tungchiahui_compose_up.stderr
   when: tungchiahui_manage_stack | bool
 
+- name: Apply reviewed database migrations for the scoped control API release
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-name
+      - "{{ tungchiahui_compose_project_name }}"
+      - --file
+      - "{{ tungchiahui_config_root }}/compose.yaml"
+      - --profile
+      - deployment
+      - run
+      - --rm
+      - --no-deps
+      - database-migrate
+  environment: "{{ tungchiahui_compose_environment }}"
+  changed_when: false
+  no_log: true
+  when:
+    - not (tungchiahui_manage_stack | bool)
+    - tungchiahui_reconcile_control_api | bool
+
+- name: Prepare the stopped migration runner for the scoped control API release
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-name
+      - "{{ tungchiahui_compose_project_name }}"
+      - --file
+      - "{{ tungchiahui_config_root }}/compose.yaml"
+      - --profile
+      - deployment
+      - create
+      - database-migrate
+  environment: "{{ tungchiahui_compose_environment }}"
+  register: tungchiahui_scoped_migration_runner
+  changed_when: >-
+    'Created' in tungchiahui_scoped_migration_runner.stderr or
+    'Recreated' in tungchiahui_scoped_migration_runner.stderr
+  no_log: true
+  when:
+    - not (tungchiahui_manage_stack | bool)
+    - tungchiahui_reconcile_control_api | bool
+
 - name: Reconcile only the independent control API
   ansible.builtin.command:
     argv:

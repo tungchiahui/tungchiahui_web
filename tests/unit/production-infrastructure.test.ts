@@ -138,6 +138,9 @@ describe('Phase 12 production foundation policy', () => {
     expect(composeSource).toMatch(/published: "\$\{TUNGCHIAHUI_ORIGIN_PORT:-3100\}"/)
     expect(openRestySource).toContain('server_name www.tungchiahui.cn ddns.tungchiahui.cn;')
     expect(openRestySource).toContain('location ^~ /api/ops/')
+    expect(openRestySource).toContain(
+      'if ($request_method !~ ^(GET|POST|PUT|DELETE)$) { return 405; }',
+    )
     expect(openRestySource).toContain('set $control_upstream control-api:8080;')
     expect(openRestySource).toContain('include /etc/tungchiahui/deployment/active-slot.conf;')
     expect(openRestySource).toContain('add_header Cache-Control "no-store" always;')
