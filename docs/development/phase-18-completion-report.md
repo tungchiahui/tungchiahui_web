@@ -20,10 +20,13 @@ OpenResty switch and post-cutover public smoke. No rebuild was used for the reta
 The host continues to publish only the internal V2 ingress on `127.0.0.1:3100`; 1Panel OpenResty and
 EdgeOne remain the Owner-managed external TLS and acceleration layers.
 
-`PRODUCTION_DEPLOYMENT_ENABLED` remains disabled as an accepted operator policy, so application
-releases require an explicit Owner-triggered invocation of the same shared deployment engine. The
-canonical Content Repository push workflow and Production polling are enabled: a Content push enters
-Content Sync automatically, but never builds a Next.js image or triggers Blue/Green deployment.
+At the acceptance checkpoint, `PRODUCTION_DEPLOYMENT_ENABLED` remained disabled and application
+releases required an explicit Owner-triggered invocation of the same shared deployment engine. Later
+on 2026-09-12, the Owner explicitly selected continuous automatic Production deployment after every
+successful `main` Quality Gate. The same shared engine, immutable-image verification, deployment
+mutex, pre/post-cutover smoke and automatic rollback protections remain mandatory. The canonical
+Content Repository push workflow is independent: a Content push enters Content Sync automatically,
+but never builds a Next.js image or triggers Blue/Green deployment.
 
 ## Compatibility and Content
 

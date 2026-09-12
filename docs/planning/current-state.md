@@ -233,9 +233,11 @@ Blog、Wiki、Start、More、Music、Stats、四 Locale、代表文章、Search�
 
 Owner 于 2026-09-12 明确接受最终 Compatibility/Operations Report 并批准关闭旧 Nuxt Rollback Window。
 关闭不删除旧仓库、旧数据、Backup、Image 或 V2 Previous Slot；旧 Nuxt 不再是正式 Production Rollback Target。
-`PRODUCTION_DEPLOYMENT_ENABLED` 继续保持关闭，因此应用发布由 Owner 显式触发同一 Shared Deployment Engine；
-这不会建立第二套部署实现。Canonical Content Repository 的 Push Workflow 与 Production Polling 已启用，Content Push
-会自动进入 Content Sync，但不会触发 Next.js Image Build 或 Blue/Green Deployment。
+Owner 于 2026-09-12 完成最终上线后明确启用 `PRODUCTION_DEPLOYMENT_ENABLED`：Web Repository 的 PR/Push
+进入 `main` 后，只有完整 Quality Gate 成功才自动构建精确 SHA 的四个不可变 Image，并通过同一 Shared Deployment
+Engine 执行 Blue/Green、Pre/Post Smoke 与受控 Cutover；失败保持当前槽位且不得绕过 Gate。Manual Deploy/Retry 继续
+调用同一实现。Canonical Content Repository 的 Push Workflow 与 Production Polling 已启用，Content Push 会自动进入
+Content Sync，但不会触发 Next.js Image Build 或 Blue/Green Deployment。
 完整最终证据见 `docs/development/phase-18-completion-report.md`。本阶段上下文已沉淀；Phase 18 是本计划最后阶段，
 不存在待自动开启的下一 Phase。
 
