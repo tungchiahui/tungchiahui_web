@@ -182,3 +182,7 @@ pnpm test:recovery
 ## RPO/RTO
 
 Phase 13 已收集一次 Disposable 小数据集 Measurement，用于证明可测量性和发现数量级，不作为 Production SLA。Production RPO/RTO 仍为未定义，直到 Production-like 数据量、网络、WAL 速率和多次演练形成足够样本；不得把 Disposable 数值外推为承诺。
+
+## Owner browser sessions after restore
+
+ADR 0020 personal-tracker data and `owner_auth.sessions` are included in PostgreSQL recovery. A PITR/restore may resurrect a session revoked after the chosen recovery point. Keep `OWNER_PASSWORD_HASH` absent during restore activation and rotate to a new verifier through encrypted `control_api_env` before enabling owner login. This invalidates restored sessions without resetting tracker data. Owner login is never a prerequisite for Operator/OIDC/SQLite recovery. Validate tracker row counts and representative progress/weight values, then verify old session rejection and new login/save/logout on an isolated restore target. Do not run this drill destructively against production.

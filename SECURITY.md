@@ -121,6 +121,15 @@ Deploy、Rollback、Restore 与 Recovery 的最小状态保存在 Production Pos
 
 Break-glass Recovery 只允许经过明确授权的 Operator 通过稳定 Host/Inventory Identity 调用同一底层 Recovery Engine，并记录 Actor、Reason、Target、Result 和 Timestamp。不得把 Break-glass 设计成匿名 Endpoint、永久 Root Token 或绕过审计的任意 Shell。
 
+## 站主浏览器登录
+
+ADR 0021 允许 `/api/ops/owner/*` 使用独立的单站主密码会话，仅能编辑技术路线与减脂数据。
+密码使用 scrypt 验证；随机会话 Token 只在 HttpOnly、SameSite=Strict、生产 Secure Cookie 中传递，
+PostgreSQL 的隔离 `owner_auth` Schema 只保存摘要与 12 小时有效期。写请求检查同源 Origin，登录限流。
+此 Cookie 不授予 Deploy、Restore、Translation 或其他 Operator Capability；既有签名/OIDC 认证不变。
+生产未配置 `OWNER_PASSWORD_HASH` 时不开放登录。密码轮换与恢复后撤销要求见
+`docs/operations/credential-rotation.md` 和 `docs/development/personal-trackers.md`。
+
 ## GitHub Actions 认证
 
 优先使用 GitHub Actions OIDC 并严格校验 Claims，而不是使用权限宽泛的长期 Bearer Secret。

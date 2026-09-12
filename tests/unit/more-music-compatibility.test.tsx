@@ -5,7 +5,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { publicOverviewSchema } from '@/analytics/public-overview'
 import { BookmarkWorkspace } from '@/components/bookmark-workspace'
 import { MoreDirectory } from '@/components/more-directory'
-import { TechFootprintPage, WeightLossPage } from '@/components/owner-dataset-pages'
+import { TechTracker } from '@/components/personal/tech-tracker'
+import { WeightTracker } from '@/components/personal/weight-tracker'
 import { CDN_AUDIO_BY_ID } from '@/music/catalog'
 import {
   extractSongId,
@@ -188,44 +189,56 @@ describe('Phase 18 More and music compatibility', () => {
 
     const { unmount } = render(
       <NextIntlClientProvider locale="zh-cn" messages={zhCn}>
-        <TechFootprintPage
-          records={{
-            'y1a/cpp-linux/cpp': {
-              note: '完成 RAII 练习',
-              progress: 50,
-              status: 'doing',
-              updatedAt: '2026-09-08T00:00:00.000Z',
+        <TechTracker
+          initial={{
+            revision: 2,
+            payload: {
+              version: 2,
+              records: {
+                'y1a/cpp-linux/cpp': {
+                  note: '完成 RAII 练习',
+                  progress: 50,
+                  status: 'doing',
+                  updatedAt: '2026-09-08T00:00:00.000Z',
+                },
+              },
             },
           }}
-          revision={2}
         />
       </NextIntlClientProvider>,
     )
-    expect(screen.getByText('Cpp')).toBeVisible()
-    expect(screen.getByText('完成 RAII 练习')).toBeVisible()
-    expect(screen.getByText('Owner 数据编辑器')).toBeVisible()
+    expect(
+      screen.getByRole('heading', { name: '掌握 RAII、智能指针、移动语义、常用 STL 与错误处理' }),
+    ).toBeVisible()
+    expect(screen.getByDisplayValue('完成 RAII 练习')).toBeDisabled()
+    expect(screen.getByRole('button', { name: '登录' })).toBeVisible()
     unmount()
 
     render(
       <NextIntlClientProvider locale="zh-cn" messages={zhCn}>
-        <WeightLossPage
-          records={[
-            {
-              bodyFat: '',
-              date: '2026-06-11',
-              muscleMass: '',
-              note: '起点',
-              targetMax: 98,
-              targetMin: 98,
-              waist: '',
-              weight: '98',
+        <WeightTracker
+          initial={{
+            revision: 1,
+            payload: {
+              version: 2,
+              records: [
+                {
+                  bodyFat: '',
+                  date: '2026-06-11',
+                  muscleMass: '',
+                  note: '起点',
+                  targetMax: 98,
+                  targetMin: 98,
+                  waist: '',
+                  weight: '98',
+                },
+              ],
             },
-          ]}
-          revision={1}
+          }}
         />
       </NextIntlClientProvider>,
     )
-    expect(screen.getByRole('img', { name: '体重趋势' })).toBeVisible()
-    expect(screen.getByRole('cell', { name: '起点' })).toBeVisible()
+    expect(screen.getByRole('img', { name: '目标与实际趋势' })).toBeVisible()
+    expect(screen.getByRole('textbox', { name: '备注' })).toHaveValue('起点')
   })
 })

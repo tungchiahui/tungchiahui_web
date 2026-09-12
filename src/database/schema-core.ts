@@ -22,6 +22,18 @@ import {
 } from '../domain/persistence'
 
 export const applicationSchema = pgSchema('app')
+// Browser sessions are outside app's public-reader/content-worker default grants.
+export const ownerAuthSchema = pgSchema('owner_auth')
+export const ownerSessions = ownerAuthSchema.table(
+  'sessions',
+  {
+    tokenHash: text('token_hash').primaryKey(),
+    credentialVersion: text('credential_version').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('owner_sessions_expiry_idx').on(table.expiresAt)],
+)
 export const contentTypeEnum = applicationSchema.enum('content_type', contentTypeValues)
 export const applicationJobTypeEnum = applicationSchema.enum(
   'application_job_type',

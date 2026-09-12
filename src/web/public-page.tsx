@@ -21,13 +21,15 @@ import { ArticleReader } from '@/components/article-reader'
 import { BookmarkWorkspace } from '@/components/bookmark-workspace'
 import { MoreDirectory } from '@/components/more-directory'
 import { MusicPage } from '@/components/music-page'
-import { TechFootprintPage, WeightLossPage } from '@/components/owner-dataset-pages'
+import { TechTracker } from '@/components/personal/tech-tracker'
+import { WeightTracker } from '@/components/personal/weight-tracker'
 import { SiteShell } from '@/components/site-shell'
 import { StatsDashboard } from '@/components/stats-dashboard'
 import { TrafficMetrics } from '@/components/traffic-metrics'
 import { techFootprintPayloadSchema, weightLossPayloadSchema } from '@/control-plane/contracts'
 import { localizeContentText } from '@/i18n/content'
 import type { AppLocale } from '@/i18n/locales'
+import { emptyTechPayload, emptyWeightPayload } from '@/personal/contracts'
 import { readCachedSearch } from '@/search/cache'
 import { type SearchResult, searchQuerySchema } from '@/search/contracts'
 import {
@@ -797,19 +799,25 @@ async function SpecialPage({
     }
     case 'tech-footprint': {
       const dataset = await readCachedOwnerDataset('tech_footprint')
-      const parsed = techFootprintPayloadSchema.safeParse(dataset?.payload)
       return (
-        <TechFootprintPage
-          records={parsed.success ? parsed.data.records : {}}
-          revision={dataset?.revision ?? null}
+        <TechTracker
+          initial={{
+            payload: dataset ? techFootprintPayloadSchema.parse(dataset.payload) : emptyTechPayload,
+            revision: dataset?.revision ?? 0,
+          }}
         />
       )
     }
     case 'weight-loss': {
       const dataset = await readCachedOwnerDataset('weight_loss')
-      const parsed = weightLossPayloadSchema.safeParse(dataset?.payload)
-      const records = parsed.success ? parsed.data.records : []
-      return <WeightLossPage records={records} revision={dataset?.revision ?? null} />
+      return (
+        <WeightTracker
+          initial={{
+            payload: dataset ? weightLossPayloadSchema.parse(dataset.payload) : emptyWeightPayload,
+            revision: dataset?.revision ?? 0,
+          }}
+        />
+      )
     }
   }
 }

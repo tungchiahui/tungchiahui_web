@@ -375,7 +375,7 @@ test('keeps special pages, local Start interaction and public datasets available
 
   await page.goto('/tech-footprint')
   await expect(
-    page.locator('.tech-task').getByText('Phase 4 validated record', { exact: true }),
+    page.getByRole('heading', { name: '掌握 RAII、智能指针、移动语义、常用 STL 与错误处理' }),
   ).toBeVisible()
 
   await page.goto('/more')

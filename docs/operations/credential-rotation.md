@@ -44,3 +44,7 @@
 - Alert：发送 Disposable Test Event 并验证 Firing/Resolved；Payload 不含 Token、Header 或 Connection String。
 
 Credential 泄露时按 `runbook.md#security-incident` 保留证据、撤销受影响值并检查 Audit。不要在 Chat、Commit、Issue、Log 或响应中粘贴明文。
+
+## Personal tracker owner credential
+
+`OWNER_PASSWORD_HASH` belongs only to independent `control-api` (ADR 0020). It authorizes browser edits to tech_footprint/weight_loss only; it cannot authorize operations or deployment. Generate a verifier with `tools/owner/hash-password.ts`, update SOPS `control_api_env`, and reconcile the service through the approved provisioning flow. Changing the verifier invalidates every previous owner session. Keep login disabled until after migration and service activation. Rotate after PostgreSQL restore/PITR before allowing browser editing. See `../development/personal-trackers.md`.

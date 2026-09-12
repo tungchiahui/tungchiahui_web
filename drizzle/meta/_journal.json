@@ -50,6 +50,13 @@
       "when": 1788693459612,
       "tag": "0006_phase18_content_aliases",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789225384076,
+      "tag": "0007_personal_trackers",
+      "breakpoints": true
     }
   ]
 }

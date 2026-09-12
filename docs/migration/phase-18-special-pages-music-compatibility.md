@@ -23,7 +23,7 @@ The pre-repair V2 preserved the route names but reduced most special routes to g
 | `/stats` | Restored real Umami summary cards, the ten top-metric panels, refresh, direct-access fallback labels and an external public-dashboard action. Umami sends `frame-ancestors 'self'`, so V2 does not render a knowingly broken cross-origin iframe. The share token remains server-only; the client receives a validated bounded aggregate/top response. |
 | Tech footprint | Restored the three-track architecture, PostgreSQL-backed public progress grouping, task status/progress/notes, aggregate metrics, milestones and export. |
 | Weight loss | Restored current/goal/progress metrics, scroll-bounded SVG trend chart, target/actual legend, weekly metric table and export. |
-| Owner-managed data | Tech/weight editing remains PostgreSQL-backed and revision-protected. The collapsed Owner editor imports the production Ed25519 private-key file locally, signs the existing same-origin `/api/ops/datasets/*` request in WebCrypto, and never uploads or persists the private key. The control API remains the only privileged write boundary and performs capability, replay, schema and compare-and-swap validation. |
+| Owner-managed data | Tech/weight editing remains PostgreSQL-backed and revision-protected. Historical implementation (superseded for browser UI by ADR 0021 and `docs/development/personal-trackers.md`): the collapsed Owner editor imports the production Ed25519 private-key file locally, signs the existing same-origin `/api/ops/datasets/*` request in WebCrypto, and never uploads or persists the private key. The control API remains the only privileged write boundary and performs capability, replay, schema and compare-and-swap validation. |
 | Global footer | Restored all 13 recorded Website/E-Mail/social contact entries, site navigation, locale links and filing badges. Font Awesome 7.1.0 is loaded only from `cdn.tungchiahui.cn`, with the Legacy two-retry sequence followed by the matching `global.cdn.tungchiahui.cn` path. Footer layout and controls use the V2 primary-blue visual system. |
 
 ## Persistence boundary
@@ -43,3 +43,11 @@ The player intentionally uses the native audio element rather than carrying APla
 The focused suite covers the exact 25-song mapping, reconnect/fallback timings, LRC multi-timestamp parsing and offset, More endpoints, independent page content, Bing archive validation, Start launchpad, Umami response validation and both public dataset views. The public E2E flow covers the expanded global playlist, Bing attribution and restored footer contact entry. Repository checks, all 168 unit tests, production-foundation/recovery gates, all 11 public E2E tests and all 7 PostgreSQL migrations pass. The production build and local Compose stack pass. Live local checks returned 159 playlist songs including all 25 self-hosted mappings, a validated eight-item Bing archive and a real validated Umami overview.
 
 Owner review is still required. This document does not complete Phase 18, authorize deployment, close the rollback window or authorize a later phase.
+
+## Subsequent personal-tracker restoration
+
+ADR 0021 replaces the limited tracker views and browser private-key/JSON editor with the complete
+roadmap, weekly weight form and a scoped owner session. The old editor components are removed.
+Signed Operator APIs remain available. New unsaved tracker drafts use explicit sessionStorage
+restore; no old Blob records are imported. See `../development/personal-trackers.md` for current
+behavior, activation and verification. Other special-page and music outcomes above are retained.

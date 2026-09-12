@@ -26,6 +26,7 @@ import {
   documents,
   operationalJobs,
   ownerManagedDatasets,
+  ownerSessions,
 } from './schema-core'
 
 export * from './schema-core'
@@ -320,6 +321,7 @@ export const contentAliases = applicationSchema.table(
 )
 
 export const persistenceSchema = {
+  ownerSessions,
   contentAliases,
   documentTranslationSegments,
   documentTranslations,
