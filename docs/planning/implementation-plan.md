@@ -1,7 +1,7 @@
 # Website V2 分阶段实施计划
 
-> Status: In progress — Phase 0–17 complete
-> Current Phase: Phase 18 in progress — V2 public cutover active; restore drill, alert-free stabilization and rollback-window closure pending
+> Status: Complete — Phase 0–18 complete
+> Current Phase: Website V2 Production Completion — Phase 18 accepted by Owner on 2026-09-12
 > Execution Model: Hard-gated, one Phase at a time
 > Scope: 从新的 Next.js V2 Repository 基线推进到替换旧 Nuxt Production Site
 
@@ -27,7 +27,7 @@
 - [x] Phase 15 — GitHub Actions OIDC 与 `main` 自动部署
 - [x] Phase 16 — Observability、Security 与 Production Readiness
 - [x] Phase 17 — Planned PostgreSQL / Server Migration Readiness
-- [ ] Phase 18 — Final Legacy Audit、Production Cutover 与 Rollback Window
+- [x] Phase 18 — Final Legacy Audit、Production Cutover 与 Rollback Window
 
 ## 使用方法与硬性执行协议
 
@@ -1578,16 +1578,16 @@ Deployment Engine 已在 Production-like 环境证明安全，才能让 CI 只�
 - [x] 冻结并刷新 Phase 0 Legacy Inventory，确认旧站自 Phase 0 后新增的 Route/Feature/Content。
 - [x] 执行最终 GitHub Canonical Content Sync，核对 Count、Hash、Delete/Move 和 Translation Pending/Fallback。
 - [x] 对 MUST KEEP/SHOULD KEEP、Visual Identity、Interaction、Search、Locale、Asset 和 Analytics-sensitive Route 做 Final Audit。
-- [ ] 运行完整 Quality Gate、Migration Gate、Storage Contract、Restore Drill、Security/Observability 和 Production Smoke Rehearsal。
-- [ ] 确认 Fresh Recoverable Backup、WAL/Off-site S3、Control-state Backup 和 Previous Nuxt Rollback Plan。
-- [ ] 由 Owner 明确批准 Cutover Window、Abort Criteria、Communication 和 Rollback Window。
+- [x] 运行完整 Quality Gate、Migration Gate、Storage Contract、Restore Drill、Security/Observability 和 Production Smoke Rehearsal。
+- [x] 确认 Fresh Recoverable Backup、WAL/Off-site S3、Control-state Backup 和 Previous Nuxt Rollback Plan。
+- [x] 由 Owner 明确批准 Cutover Window、Abort Criteria、Communication 和 Rollback Window。
 - [x] 通过 Shared Deployment Engine 部署 Git-SHA V2 Candidate 到 Inactive Slot。
 - [x] 执行 Pre-cutover Health/Ready/Version/Home/Article/Locale/Search/Asset Smoke。
 - [x] 原子切换 OpenResty/Origin Traffic 到 V2，并执行真实 Public Post-cutover Smoke。
-- [ ] 在 Stabilization Window 监控 Error、Latency、DB、Job、Backup、Translation Cost 和 User-visible Regression。
-- [ ] 如果任一 Critical Abort Criteria 触发，立即按已验证 Path 回滚，不 Rebuild。
-- [ ] Rollback Window 内保留旧 Nuxt Production Capability 为只读/可控状态，不修改旧仓库。
-- [ ] 只有在 Owner 接受 Stabilization Evidence 后，关闭旧站 Rollback Window 并记录最终状态。
+- [x] 在 Stabilization Window 监控 Error、Latency、DB、Job、Backup、Translation Cost 和 User-visible Regression。
+- [x] 如果任一 Critical Abort Criteria 触发，立即按已验证 Path 回滚，不 Rebuild；本次最终观察未触发 Critical Abort，未执行回滚。
+- [x] Rollback Window 内保留旧 Nuxt Production Capability 为只读/可控状态，不修改旧仓库。
+- [x] 只有在 Owner 接受 Stabilization Evidence 后，关闭旧站 Rollback Window 并记录最终状态。
 
 ### 本 Phase 明确不做什么
 
@@ -1599,11 +1599,12 @@ Deployment Engine 已在 Production-like 环境证明安全，才能让 CI 只�
 
 Blog/Wiki 阻断修复的深度审计、实现范围、非 Legacy 的分类/标签/分页结论与证据记录在
 `docs/migration/phase-18-blog-wiki-compatibility.md`。该修复只关闭本地核心兼容回归；Owner 验收、
-Stabilization/Alert/Rollback-window 和 Final Report Gate 仍保持未完成，不构成 Phase 18 完成或下一阶段授权。
+该修复检查点的 Stabilization/Alert/Rollback-window 和 Final Report Gate 当时仍未完成；最终状态以
+`docs/development/phase-18-completion-report.md` 和本节已勾选的 Exit Gate 为准。
 Owner 于 2026-09-07 验收时明确移除 Wiki/CV 打印控件，并批准指定 Umami Website/Share 配置；
 生产 Tracker 必须限定正式域名，Share Token/原始数据继续保持服务端边界，公开页面仅展示路径聚合值。
 同轮反馈把 Header Search 固定为独立放大镜控件，并要求三态 Theme、Blog/Wiki 正文检索、图片预览任意点关闭、
-移动菜单 Backdrop 关闭及居中且选章即关闭的阅读导航；这些行为已进入 Fixture 与 Public E2E，但仍等待 Owner 视觉验收。
+移动菜单 Backdrop 关闭及居中且选章即关闭的阅读导航；这些行为已进入 Fixture 与 Public E2E，并在最终 Owner 验收中关闭。
 
 Owner 于 2026-09-08 认定个人站点不需要固定 24 小时发布禁令，并批准 ADR 0020。部署引擎不再用
 `stabilization_until` 阻止连续发布；并发互斥、不可变镜像、Migration/Backup、Pre/Post Smoke、审计和立即上一版本
@@ -1617,7 +1618,7 @@ V2 蓝色视觉体系；Footer 恢复 13 个联系方式并仅通过自建主/�
 Canonical/公共数据继续进入 PostgreSQL，资源进入 S3/CDN；Theme、播放器收起态和未登录 Start 私人设置保留为
 设备本地状态，短期 Blob 只用于显式 JSON 导出，不构成持久化。Repository Check、168 项 Unit、
 Production-foundation/Recovery、11 项 Public E2E 与 7 项 PostgreSQL Migration Gate 均已通过。
-Owner 本地验收仍是阻断项，不能据此勾选 Phase 18。
+Owner 本地验收在该检查点仍是阻断项，最终已于 2026-09-12 接受。
 
 Owner 于 2026-09-08 的后续视觉验收要求已纳入同一阻断修复：Homepage 恢复旧站的三入口、四标签、六关注方向与
 各五条最新内容，但统一使用 V2 蓝色视觉；Blog/Wiki 列表、文章 Hero、Shiki 亮暗代码框和复制工具栏得到视觉整理；
@@ -1626,37 +1627,37 @@ Umami Share API 可用，文章统计不可用由 OpenResty 对 `/api/traffic` P
 Footer 图标缺失由重复 CSP 的交集阻断造成，生产入口改为隐藏上游 CSP 并输出唯一审核策略。旧 Nuxt 的 Homepage、
 代码框与 Font Awesome 路径仅做了对应文件的定点只读核对，未修改旧仓库。移动播放器与左下阅读浮球在窄屏拥有独立
 点击区。上述增量已通过 Repository Check、168 项 Unit、Production-foundation/Recovery、11 项 Public E2E、S3Mock/
-Application Integration 与 7 项 PostgreSQL Migration Gate；Owner 验收仍是阻断项。
+Application Integration 与 7 项 PostgreSQL Migration Gate；Owner 验收在该检查点仍是阻断项，最终已关闭。
 Owner 随后以旧站截图确认代码框应恢复低调深色正文、独立语言栏和右侧紧凑复制按钮。定点只读核对旧 Blog/Wiki
-组件后，V2 保留其语言识别、复制状态和局部横向滚动结果，并继续使用当前 React/Shiki/Tailwind 架构；该增量仍需
-随当前 Phase 18 PR 通过门禁与 Owner 视觉验收。
+组件后，V2 保留其语言识别、复制状态和局部横向滚动结果，并继续使用当前 React/Shiki/Tailwind 架构；该增量已随
+Phase 18 相关 PR 通过门禁与 Owner 视觉验收。
 同日后续验收把 Wiki/Blog 正文中栏加宽并将桌面章节/目录推向外缘；Wiki 列表恢复顶层文档卡与可展开章节，首页只占用
 五个顶层 Wiki 文档槽位；Header 与独立全屏 Start 恢复 Legacy favicon。Canonical Markdown Fence 语言清单已对照真实内容
 建立 Shiki 覆盖与历史别名 Fixture，未知语言仍安全回落为纯文本。以上保持 V2 蓝色视觉，不复制 Legacy Nuxt 架构。
 生产浏览器复核还确认 Umami Share 端发送 `frame-ancestors 'self'`，不能被跨域 iframe 合法嵌入；Stats 因此以固定
 外链入口替代报错空框，站内服务端聚合数据不受影响。
 
-- [ ] 全部 Repository Merge Gate 和 Acceptance Criteria 通过。
+- [x] 全部 Repository Merge Gate 和 Acceptance Criteria 通过。
 - [x] Final Legacy URL/Pinyin/Feature Matrix 无未接受 Regression。
 - [x] Fresh Restore Drill 与 Rollback Rehearsal 通过。
 - [x] Pre-cutover 和真实 Public Post-cutover Smoke 全部通过。
 - [x] Content Push 仍只 Sync；`main` Deploy、Manual Deploy 和 Rollback 仍共享 Engine。
-- [ ] Production Telemetry 在 Stabilization Window 无未解释 Critical Alert。
+- [x] Production Telemetry 在 Stabilization Window 无未解释 Critical Alert。
 
 ### Acceptance Criteria
 
-- [ ] V2 满足 `docs/specification/acceptance-criteria.md` 全部适用项。
-- [ ] 旧 URL、Pinyin、Locale、Content、Search、Asset 和重要 Feature 达到 Owner 接受的兼容水平。
-- [ ] Production Cutover 可观察、可恢复、可立即 Rollback，且无数据丢失。
-- [ ] Rollback Window 的关闭由 Owner 明确批准并留下证据。
+- [x] V2 满足 `docs/specification/acceptance-criteria.md` 全部适用项。
+- [x] 旧 URL、Pinyin、Locale、Content、Search、Asset 和重要 Feature 达到 Owner 接受的兼容水平。
+- [x] Production Cutover 可观察、可恢复、可立即 Rollback，且无数据丢失。
+- [x] Rollback Window 的关闭由 Owner 于 2026-09-12 明确批准并留下证据。
 
 ### Exit Gate
 
-- [ ] Owner 批准 Cutover，所有 Preflight/Backup/Restore/Smoke Gate 通过。
-- [ ] V2 已稳定承载 Production Traffic，Stabilization Window 完成。
-- [ ] Owner 接受 Final Compatibility/Operations Report 和 Rollback Window 关闭。
-- [ ] 创建聚焦 Commit，建议：`release(v2): complete phase 18 production cutover`。
-- [ ] Commit 后停止并提交最终 Website V2 Completion Report。
+- [x] Owner 批准 Cutover，所有 Preflight/Backup/Restore/Smoke Gate 通过。
+- [x] V2 已稳定承载 Production Traffic，Stabilization Window 完成。
+- [x] Owner 接受 Final Compatibility/Operations Report 和 Rollback Window 关闭。
+- [x] 创建聚焦 Commit：`release(v2): complete phase 18 production cutover`。
+- [x] Commit 后停止并提交最终 Website V2 Completion Report。
 
 ### 本阶段完成后形成的 Artifact / Capability
 
