@@ -559,6 +559,33 @@ function runProvision(identityPath: string) {
     /changed=0\b/.test(second.stdout),
     `Second provision was not idempotent:\n${second.stdout}`,
   )
+
+  const blueBefore = compose(['ps', '--quiet', 'web-blue']).stdout.trim()
+  const greenBefore = compose(['ps', '--quiet', 'web-green']).stdout.trim()
+  compose(['stop', 'control-api'])
+  const scopedCommand = [
+    ...command,
+    '--extra-vars',
+    JSON.stringify({
+      tungchiahui_manage_stack: false,
+      tungchiahui_reconcile_control_api: true,
+    }),
+  ]
+  const scoped = execute('ansible-playbook', scopedCommand, { environment })
+  expect(
+    /changed=[1-9][0-9]*/.test(scoped.stdout),
+    'Scoped control-api reconciliation did not start the stopped service',
+  )
+  expect(
+    compose(['ps', '--quiet', 'web-blue']).stdout.trim() === blueBefore &&
+      compose(['ps', '--quiet', 'web-green']).stdout.trim() === greenBefore,
+    'Scoped control-api reconciliation replaced a web slot',
+  )
+  const scopedRepeated = execute('ansible-playbook', scopedCommand, { environment })
+  expect(
+    /changed=0\b/.test(scopedRepeated.stdout),
+    `Repeated scoped control-api reconciliation was not idempotent:\n${scopedRepeated.stdout}`,
+  )
 }
 
 function runMigrationTargetProvision(identityPath: string) {

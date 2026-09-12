@@ -178,6 +178,13 @@ Credential Scope 与轮换顺序见 `credential-rotation.md`。保留被影响�
 
 ## Control-plane Connectivity
 
+When only reviewed `control-api` code or its encrypted runtime configuration changes, run the
+production Ansible role with `tungchiahui_manage_stack=false` and
+`tungchiahui_reconcile_control_api=true`. This scoped reconciliation installs the SOPS-derived
+runtime files, recreates and waits for only `control-api`, and must leave both Web Slot container
+IDs unchanged. Do not use full-stack reconciliation for a control-only activation because it can
+replace the inactive Web rollback target.
+
 正常 Remote Control Path：
 
 ```text

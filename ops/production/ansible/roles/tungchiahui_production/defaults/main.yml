@@ -15,6 +15,7 @@ tungchiahui_deployment_search_query: ROS2_Control
 tungchiahui_deployment_image_repository: ghcr.io/tungchiahui/tungchiahui_web
 tungchiahui_install_packages: true
 tungchiahui_manage_stack: true
+tungchiahui_reconcile_control_api: false
 tungchiahui_origin_bind_address: "127.0.0.1"
 tungchiahui_origin_port: "3100"
 tungchiahui_observability_backup_max_age_seconds: ""
