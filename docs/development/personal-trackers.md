@@ -86,7 +86,7 @@ to tracker editing. Stronger authentication and account management belong to a l
 
 Local `./site check` passed format/lint, source/workflow policy, Drizzle consistency, typecheck,
 Renovate validation, production build and source/client security scan. After integrating `main@08946f64`, all 178 unit tests passed.
-The disposable integration suite passed, including 11 browser E2E tests on the initial base and seven S3Mock contract
+The disposable integration suite passed, including 12 browser E2E tests after integrating current main and seven S3Mock contract
 cases. Eight migrations passed on empty/repeated/previous schemas, including owner-role isolation
 and real PostgreSQL session expiry, revocation, digest storage and verifier-rotation checks.
 The full disposable recovery suite passed full/differential/incremental, WAL/PITR, encrypted
@@ -94,5 +94,5 @@ control-state recovery, forced primary-to-offsite fallback and PostgreSQL-down r
 
 Local production-foundation attempts stopped at the Trivy vulnerability database download with
 registry/network `unexpected EOF`; no scan was bypassed and no vulnerability was ignored. The
-PR's hosted Quality Gate remains required before merge. Desktop and 390px mobile interfaces were
+PR's hosted Quality Gate remains required before merge. Desktop and 390px mobile interfaces with the current site shell/music player were
 visually checked. No production operations or legacy Blob access were performed.

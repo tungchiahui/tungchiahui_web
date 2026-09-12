@@ -1280,7 +1280,7 @@ Production-like Infrastructure 已存在，但在可恢复性经过真实 Drill 
 
 - [x] 手工 `./site deploy <sha>` 与 `rollback` 使用同一可审计 State Machine。
 - [x] Cutover 前后 Smoke、Failure/Abort/Rollback 行为 Deterministic。
-- [x] 每次成功切流后保留立即上一版本；ADR 0021 允许下一次发布覆盖倒数第二版本所在 Slot。
+- [x] 每次成功切流后保留立即上一版本；ADR 0020 允许下一次发布覆盖倒数第二版本所在 Slot。
 
 ### Exit Gate
 
