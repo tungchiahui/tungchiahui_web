@@ -6,6 +6,7 @@ import {
   parseOperatorKeys,
 } from './auth'
 import { capabilityValues } from './contracts'
+import { localOwnerPasswordHash, ownerPasswordHashSchema } from './owner-password'
 
 const configurationSchema = z.object({
   CONTROL_API_HOST: z.enum(['0.0.0.0', '127.0.0.1']),
@@ -16,6 +17,7 @@ const configurationSchema = z.object({
   CONTROL_GITHUB_OIDC_POLICY_JSON: z.string().min(2).optional(),
   CONTROL_OPERATOR_KEYS_JSON: z.string().min(2).optional(),
   DATABASE_URL: z.string().url().optional(),
+  OWNER_PASSWORD_HASH: ownerPasswordHashSchema.optional(),
   SITE_RUNTIME_MODE: z.enum(['local', 'test', 'production']),
 })
 
@@ -28,6 +30,9 @@ const localOperatorPublicJwk = Object.freeze({
 export function parseControlApiConfiguration(input: unknown) {
   const parsed = configurationSchema.parse(input)
   const production = parsed.SITE_RUNTIME_MODE === 'production'
+  if (production && parsed.OWNER_PASSWORD_HASH === localOwnerPasswordHash) {
+    throw new Error('Production must not use the development owner credential')
+  }
   if (
     production &&
     (parsed.CONTROL_GITHUB_OIDC_POLICY_JSON === undefined ||
@@ -86,6 +91,8 @@ export function parseControlApiConfiguration(input: unknown) {
 
   return Object.freeze({
     authentication,
+    ownerPasswordHash:
+      parsed.OWNER_PASSWORD_HASH ?? (production ? undefined : localOwnerPasswordHash),
     databaseUrl: parsed.DATABASE_URL,
     host: parsed.CONTROL_API_HOST,
     mode: parsed.SITE_RUNTIME_MODE,

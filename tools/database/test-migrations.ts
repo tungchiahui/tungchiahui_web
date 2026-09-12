@@ -5,7 +5,8 @@ import { basename, join, resolve } from 'node:path'
 import { sql } from 'drizzle-orm'
 import { Client } from 'pg'
 import { z } from 'zod'
-
+import { ownerDigest } from '../../src/control-plane/owner-password'
+import { OwnerSessionRepository } from '../../src/control-plane/owner-sessions'
 import { createDatabaseClient } from '../../src/database/client'
 import { runPostgresMigrations } from '../../src/database/migrate'
 import { documents } from '../../src/database/schema'
@@ -185,12 +186,62 @@ async function assertRoleBoundary(connectionString: string) {
     }
 
     await client.query('SET ROLE site_app')
+    await expectQueryFailure(client, 'SELECT * FROM owner_auth.sessions')
     await client.query('SELECT count(*) FROM app.documents')
     await expectQueryFailure(client, 'CREATE EXTENSION hstore')
     await expectQueryFailure(client, "SELECT pg_read_file('postgresql.conf', 0, 1)")
     await client.query('RESET ROLE')
+    await client.query('SET ROLE site_content_worker')
+    await expectQueryFailure(client, 'SELECT * FROM owner_auth.sessions')
+    await expectQueryFailure(
+      client,
+      "INSERT INTO owner_auth.sessions (token_hash, credential_version, expires_at) VALUES ('forged', 'forged', now())",
+    )
+    await client.query('RESET ROLE')
+    await client.query('SET ROLE site_control_api')
+    await client.query('SELECT count(*) FROM owner_auth.sessions')
+    await client.query('RESET ROLE')
   } finally {
     await client.end()
+  }
+}
+
+async function assertOwnerSessionLifecycle(connectionString: string) {
+  const repository = new OwnerSessionRepository(connectionString)
+  const admin = new Client({ connectionString })
+  await admin.connect()
+  try {
+    const credential = 'disposable-verifier-generation-one'
+    const token = await repository.create(credential)
+    if (!(await repository.valid(token, credential)))
+      throw new Error('Owner session was not persisted')
+    if (await repository.valid(token, 'rotated-verifier-generation-two'))
+      throw new Error('Password rotation did not invalidate the old session')
+    const stored = await admin.query<{ token_hash: string }>(
+      'SELECT token_hash FROM owner_auth.sessions',
+    )
+    if (
+      !stored.rows.some((row) => row.token_hash === ownerDigest(token)) ||
+      stored.rows.some((row) => row.token_hash === token)
+    )
+      throw new Error('Owner session must persist only a token digest')
+    await admin.query(
+      "UPDATE owner_auth.sessions SET expires_at = now() - interval '1 second' WHERE token_hash = $1",
+      [ownerDigest(token)],
+    )
+    if (await repository.valid(token, credential))
+      throw new Error('Expired owner session was accepted')
+    const next = await repository.create(credential)
+    await repository.revoke(next)
+    if (await repository.valid(next, credential))
+      throw new Error('Revoked owner session was accepted')
+    const remaining = await admin.query<{ count: string }>(
+      'SELECT count(*) FROM owner_auth.sessions',
+    )
+    if (remaining.rows[0]?.count !== '0') throw new Error('Expired sessions were not pruned')
+  } finally {
+    await repository.close()
+    await admin.end()
   }
 }
 
@@ -352,6 +403,7 @@ async function run() {
     await assertDatabaseConstraints(cleanUrl)
     await assertSearchMigration(cleanUrl)
     await assertRoleBoundary(cleanUrl)
+    await assertOwnerSessionLifecycle(cleanUrl)
 
     const admin = new Client({ connectionString: cleanUrl })
     await admin.connect()

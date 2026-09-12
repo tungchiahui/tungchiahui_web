@@ -28,9 +28,7 @@ export async function listCachedDocuments(contentType: 'blog' | 'wiki', locale: 
 }
 
 export function readCachedOwnerDataset(datasetKey: 'tech_footprint' | 'weight_loss') {
-  return unstable_cache(
-    () => getPublicContentRepository().readOwnerDataset(datasetKey),
-    ['public-owner-dataset', datasetKey],
-    { revalidate: false, tags: [`owner-dataset:${datasetKey}`] },
-  )()
+  // Personal trackers are small, mutable datasets. Request-time reads across both
+  // slots avoid a write committing while a stale indefinite cache remains visible.
+  return getPublicContentRepository().readOwnerDataset(datasetKey)
 }

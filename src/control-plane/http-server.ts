@@ -44,6 +44,8 @@ import {
   readControlState,
   readDeploymentState,
 } from './control-state'
+import { createOwnerHttpHandler } from './owner-http'
+import { OwnerSessionRepository } from './owner-sessions'
 import { FixedWindowRateLimiter } from './rate-limit'
 import {
   TranslationArticleNotFoundError,
@@ -280,6 +282,10 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
     ? new TranslationControlRepository(configuration.databaseUrl)
     : null
   const rateLimiter = new FixedWindowRateLimiter(configuration.rateLimitPerMinute)
+  const ownerSessions = configuration.databaseUrl
+    ? new OwnerSessionRepository(configuration.databaseUrl)
+    : null
+  const ownerHandler = createOwnerHttpHandler(configuration, ownerSessions, applicationJobs)
 
   const server = createServer(async (request, response) => {
     const url = new URL(request.url ?? '/', 'http://control-api')
@@ -346,6 +352,33 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
       return
     }
 
+    if (url.pathname.startsWith('/api/ops/owner/')) {
+      try {
+        const result = await ownerHandler(
+          url.pathname,
+          request.method ?? '',
+          requestHeaders(request),
+          await readRequestBody(request),
+        )
+        appendControlAuditEvent(configuration.statePath, {
+          actorId: 'owner-browser',
+          createdAt: new Date().toISOString(),
+          operationId: null,
+          eventType: 'owner_request_completed',
+          outcome: result.status < 400 ? 'accepted' : 'denied',
+          details: { method: request.method, path: url.pathname, status: result.status },
+        })
+        sendJson(response, result)
+      } catch (error: unknown) {
+        const mapped = errorResponse(error)
+        auditFailure(configuration, 'owner-browser', 'owner_request_failed', 'failed', {
+          path: url.pathname,
+          status: mapped.status,
+        })
+        sendJson(response, mapped)
+      }
+      return
+    }
     const route = routeShape(url.pathname)
     if (!route) {
       sendJson(response, { body: { error: 'not_found' }, status: 404 })
@@ -829,7 +862,11 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
 
   return Object.freeze({
     close: async () => {
-      await Promise.all([applicationJobs?.close(), translationJobs?.close()])
+      await Promise.all([
+        applicationJobs?.close(),
+        translationJobs?.close(),
+        ownerSessions?.close(),
+      ])
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()))
       })

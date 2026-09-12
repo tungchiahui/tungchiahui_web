@@ -4,13 +4,15 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getTranslations } from 'next-intl/server'
 import type { ReactNode } from 'react'
-
 import { BookmarkWorkspace } from '@/components/bookmark-workspace'
+import { TechTracker } from '@/components/personal/tech-tracker'
+import { WeightTracker } from '@/components/personal/weight-tracker'
 import { PrintButton } from '@/components/print-button'
 import { SiteShell } from '@/components/site-shell'
 import { techFootprintPayloadSchema, weightLossPayloadSchema } from '@/control-plane/contracts'
 import { localizeContentText } from '@/i18n/content'
 import type { AppLocale } from '@/i18n/locales'
+import { emptyTechPayload, emptyWeightPayload } from '@/personal/contracts'
 import { readCachedSearch } from '@/search/cache'
 import { searchQuerySchema } from '@/search/contracts'
 import {
@@ -523,59 +525,24 @@ async function SpecialPage({
     }
     case 'tech-footprint': {
       const dataset = await readCachedOwnerDataset('tech_footprint')
-      const parsed = techFootprintPayloadSchema.safeParse(dataset?.payload)
-      const records = parsed.success ? Object.entries(parsed.data.records) : []
       return (
-        <>
-          <SpecialHeader description={s('techDescription')} title={s('techTitle')} />
-          {dataset ? (
-            <p className="mt-4 text-sm text-muted-foreground">
-              {s('revision', { revision: dataset.revision })}
-            </p>
-          ) : null}
-          <ul className="mt-8 grid gap-3">
-            {records.length ? (
-              records.map(([name, record]) => (
-                <li className="rounded-xl border bg-card p-5" key={name}>
-                  <h2 className="font-semibold">{name}</h2>
-                  <p className="mt-2">{s('progress', { progress: record.progress })}</p>
-                  <p className="mt-2 text-muted-foreground">{record.note}</p>
-                </li>
-              ))
-            ) : (
-              <li>{s('noRecords')}</li>
-            )}
-          </ul>
-        </>
+        <TechTracker
+          initial={{
+            payload: dataset ? techFootprintPayloadSchema.parse(dataset.payload) : emptyTechPayload,
+            revision: dataset?.revision ?? 0,
+          }}
+        />
       )
     }
     case 'weight-loss': {
       const dataset = await readCachedOwnerDataset('weight_loss')
-      const parsed = weightLossPayloadSchema.safeParse(dataset?.payload)
-      const records = parsed.success ? parsed.data.records : []
       return (
-        <>
-          <SpecialHeader description={s('weightDescription')} title={s('weightTitle')} />
-          {dataset ? (
-            <p className="mt-4 text-sm text-muted-foreground">
-              {s('revision', { revision: dataset.revision })}
-            </p>
-          ) : null}
-          <ol className="mt-8 grid gap-3">
-            {records.length ? (
-              records.map((record) => (
-                <li className="rounded-xl border bg-card p-5" key={record.date}>
-                  <time className="font-semibold">{record.date}</time>
-                  <p className="mt-2">{s('weight', { value: record.weight || '-' })}</p>
-                  <p>{s('waist', { value: record.waist || '-' })}</p>
-                  <p className="mt-2 text-muted-foreground">{record.note}</p>
-                </li>
-              ))
-            ) : (
-              <li>{s('noRecords')}</li>
-            )}
-          </ol>
-        </>
+        <WeightTracker
+          initial={{
+            payload: dataset ? weightLossPayloadSchema.parse(dataset.payload) : emptyWeightPayload,
+            revision: dataset?.revision ?? 0,
+          }}
+        />
       )
     }
   }

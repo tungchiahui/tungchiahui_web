@@ -16,7 +16,7 @@ export const capabilityValues = [
   'translation:cancel',
 ] as const
 
-export const actorKindValues = ['operator', 'github-actions', 'service'] as const
+export const actorKindValues = ['operator', 'github-actions', 'service', 'owner'] as const
 export const infrastructureOperationTypeValues = [
   'deploy',
   'rollback',

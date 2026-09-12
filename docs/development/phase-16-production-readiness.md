@@ -37,3 +37,7 @@ Web Container 保持 Read-only Root，Next Runtime Cache 只写入明确的 `/ap
 本阶段没有 Database Migration。Observability Agent、Header/Rate Policy 和安全扫描均为可回滚的应用/配置变更；删除 Agent 不改变 Runtime Data。SQLite Version 5、PostgreSQL Schema 和 Phase 13/14 Shared Recovery/Deployment Engine 未改变。任何配置回滚都必须保留 Phase 15 OIDC/Registry Separation、Phase 13 PostgreSQL-independent Recovery 和 Previous Slot。
 
 没有执行 Production、Public Cutover、DNS/EdgeOne、AList/R2、GitHub Write/Settings、Paid AI、真实 Backup/Restore 或旧 Nuxt Repository 操作。
+
+## Subsequent owner-session update
+
+ADR 0020 (2026-09-12) supersedes the historical no-browser-cookie assumption for the two personal trackers only. Their independent control-api endpoints now enforce server sessions, exact Origin checks, scoped dataset writes and CAS. Operator/OIDC deployment and recovery authentication is unchanged. See `personal-trackers.md` for the new validation and activation contract.

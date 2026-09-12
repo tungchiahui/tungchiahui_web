@@ -10,6 +10,13 @@ const nextConfig: NextConfig = {
   output: 'standalone',
   poweredByHeader: false,
   reactStrictMode: true,
+  async rewrites() {
+    // The hermetic web development port proxies browser operations to the same
+    // independent service. Production routing belongs exclusively to OpenResty.
+    return process.env.SITE_RUNTIME_MODE === 'local' || process.env.SITE_RUNTIME_MODE === 'test'
+      ? [{ source: '/api/ops/:path*', destination: 'http://control-api:8080/api/ops/:path*' }]
+      : []
+  },
   async headers() {
     return [
       {

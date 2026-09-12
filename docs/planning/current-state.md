@@ -113,7 +113,7 @@ Restore Drill、完整 Compatibility/Public Smoke 与 Stabilization/Rollback-win
 | Search Refresh/Query | production-shaped PostgreSQL Projection、PGroonga Query、Durable Reindex 与精确 Cache Invalidation | completed in Phase 10 |
 | Generic S3/Public Asset Gateway | production-shaped generic Adapter plus S3Mock and AList `TEST` Bucket/CDN evidence | completed in Phase 11 |
 | GitHub polling default | idle content-worker polling; Phase 15 canonical reusable workflow explicitly creates exact-commit sync jobs | completed in Phase 15 |
-| Owner Dataset | validated PostgreSQL public read + Phase 4 authorized CAS write；Phase 16 Trust/Privacy Review 为 CONTROLLED | completed in Phase 16 |
+| Owner Dataset | Earlier phases implemented persistence and signed CAS only; complete tracker UI and browser owner sessions restored under ADR 0020 | See `docs/development/personal-trackers.md`; production owner login requires separate activation |
 | Observability Alert Sink/Production Asset Probe | production-shaped read-only agent、HTTPS-only optional sink 与固定 Representative Object Contract；真实 Webhook/Object 未启用 | Phase 18 authorized activation |
 | Shared Deploy/Recovery Agent | Phase 14 Engine + Phase 13 Recovery + Phase 15 OIDC/Registry automation binding；真实 GitHub/Production Trigger 与 Public Cutover 未启用 | Phase 18 authorized activation/cutover |
 | Server Migration Platform Binding | Phase 17 typed/audited Engine + complete disposable Adapter；真实 Target Inventory/SSH Secret/DDNS Provider/Primary 未绑定 | Phase 18 Owner-authorized activation only if migration is actually required |
@@ -128,7 +128,7 @@ Restore Drill、完整 Compatibility/Public Smoke 与 Stabilization/Rollback-win
 - Local Compose must quote the all-zero development SHA. Next dev explicitly allows only loopback `127.0.0.1` for the disposable browser origin.
 - Playwright uses one worker because the suite intentionally shares one mutable Disposable PostgreSQL/cache lifecycle, including a mid-run revalidation mutation。
 - `content-worker` side-effect replay depends on Hooks being idempotent. Translation/Search implementations preserve exact-input idempotency and must not turn Public requests into paid/provider calls.
-- PostgreSQL migrations are now seven. `0006_phase18_content_aliases` 是低风险 Additive/Relaxation Expand：把 Alias Namespace 从 Wiki-only 扩展到明确的 Blog-or-Wiki，不重写任何 Row，保持旧应用兼容。`0005_phase10_pgroonga_search` 继续新增可重建 `search_documents`、Locale/Type B-tree 与 Multi-column PGroonga Index；不得修改任何已应用 SQL/Metadata。
+- PostgreSQL migrations are now eight. `0007_personal_trackers` adds isolated owner sessions and missing empty tracker datasets; existing rows remain unchanged. `0006_phase18_content_aliases` 是低风险 Additive/Relaxation Expand：把 Alias Namespace 从 Wiki-only 扩展到明确的 Blog-or-Wiki，不重写任何 Row，保持旧应用兼容。`0005_phase10_pgroonga_search` 继续新增可重建 `search_documents`、Locale/Type B-tree 与 Multi-column PGroonga Index；不得修改任何已应用 SQL/Metadata。
 - Existing Runtime DB 在 Phase 7 应用代码发布后需要一次显式 Content Sync 才会回填区域物化；回填前 Server Renderer 使用相同确定性 Converter 作为只读 View。Public Request 绝不触发 Backfill。
 - Phase 8 Migration 不在 Migration-time 猜测/回填旧 English。现有 en-US Row 的 `source_hash` 为 NULL 时 Public DAL 忽略；应用 Phase 8 后必须显式 Content Sync 才会建立 Segment Mapping、Pending 和 Current Mixed Materialization。zh-CN 发布不等待该 Backfill，Public Request 也不写 DB。
 - Normalization Version 当前固定为 1。任何改变 Identity/Normalization 的实现必须显式提升版本、提供安全重放/迁移计划，并更新稳定身份与重复 Block Fixture。
@@ -203,3 +203,7 @@ Phase 18 正在执行。真实主机隔离基础、Production 业务 Migration�
 ## 8. 回查旧 myblog 的规则
 
 Phase 1–17 不重新全量扫描旧仓库。先使用 Phase 0 Inventory、Compatibility Matrix、Fixture、Risk Register 和现有规范。只有仓库内证据无法回答一个明确、具体的 Legacy 行为时，才定点只读检查并把后续必需事实沉淀回 V2。Phase 18 再按 Gate 从当时最新 Legacy HEAD 执行完整 Delta/Inventory 刷新。
+
+## 9. Personal tracker restoration — 2026-09-12
+
+Owner authorized restoring both `/tech-footprint` and `/weight-loss`, discarding all legacy Blob records, and minimal shared login with editing enabled immediately after authentication. ADR 0020 records the scoped browser-session contract; implementation/activation/acceptance details are in `docs/development/personal-trackers.md`. Technical catalog: 10 stages / 46 tasks / 231 subtasks; weight plan: 35 weekly slots / 18 milestones, with no legacy measurements. PostgreSQL migration 0007 only creates isolated owner sessions and missing empty datasets; existing records are not overwritten. Public reads bypass indefinite data caching. English roadmap/controls and weight copy are translated; Chinese regional copies use OpenCC. Production password setup, independent control service activation, merging and deployment remain unperformed and unauthorized in this task. This corrects the earlier Phase 16 row that overstated complete Owner Edit support.
