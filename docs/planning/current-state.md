@@ -1,8 +1,8 @@
 # Website V2 Current Implementation State
 
-> Status: Phase 0–17 completed
-> Current Phase: Phase 18 in progress — V2 public cutover active; recovery/stabilization gates pending
-> Handoff audit date: 2026-09-07
+> Status: Phase 0–18 completed
+> Current Phase: Website V2 Production Completion
+> Handoff audit date: 2026-09-12
 
 本文件是新 Claude Code/Codex 会话的简洁交接入口。它索引当前实际状态和容易遗漏的实施事实，不替代 `AGENTS.md`、Accepted ADR、架构规范或 `implementation-plan.md`。
 
@@ -37,11 +37,12 @@
 | 15 — GitHub OIDC Deployment Automation | `feat(ci): complete phase 15 oidc deployment automation` | Quality/Deploy/Content/Translation Workflows、OIDC Policy、Registry Digest Pull 与 Verification | PASS；workflow boundary、claims、supply-chain、concurrency、Production-like shared-engine gates |
 | 16 — Observability、Security、Production Readiness | `feat(ops): complete phase 16 production readiness` | Structured Telemetry、Read-only Observability Agent、Security/Rotation/Runbook、Gap 与 Verification Report | PASS；alert lifecycle、failure diagnosis、load、secret/SBOM/Critical scan、full regression gates |
 | 17 — Planned PostgreSQL / Server Migration Readiness | `feat(ops): complete phase 17 migration readiness` | Shared Migration Engine、Same-major Physical Streaming、Control-state Transfer、AAAA-only Cutover、Runbook 与 Verification | PASS；idempotent target provision、final WAL、controlled promotion、no-data-loss、safe abort/non-writing rollback gates |
+| 18 — Final Legacy Audit、Production Cutover 与 Rollback Window | `release(v2): complete phase 18 production cutover` | Final Legacy Delta、Compatibility Audit、Production Backup/Restore/Cutover/Stabilization、Completion Report | PASS；Owner 于 2026-09-12 接受最终报告并关闭旧 Nuxt Rollback Window |
 
-`implementation-plan.md` 中 Phase 0–17 的 Checklist 与 Overall Progress 已完成。Owner 已在
-2026-09-06 明确授权 Phase 18；当前只执行 Phase 18。Production Provision、初始业务 Migration、
-Owner 执行的 1Panel/EdgeOne Public Cutover 与最终 Canonical Content Sync 已完成；Fresh Backup、
-Restore Drill、完整 Compatibility/Public Smoke 与 Stabilization/Rollback-window Gate 尚未完成。
+`implementation-plan.md` 中 Phase 0–18 的 Checklist、Acceptance Criteria、Exit Gate 与 Overall Progress
+均已完成。Website V2 已在 Production 承载 `www.tungchiahui.cn`；旧 Nuxt Repository 始终保持只读，
+Owner 于 2026-09-12 接受最终 Compatibility/Operations Report 并关闭旧 Nuxt Rollback Window。V2 的
+立即上一版本绿色槽位继续作为正常 Blue/Green Rollback Target 保留。
 
 ## 3. Legacy durable baseline
 
@@ -55,7 +56,7 @@ Restore Drill、完整 Compatibility/Public Smoke 与 Stabilization/Rollback-win
 
 ## 4. 当前仓库实际能力
 
-- Next.js 16.3.2 App Router Public Surface：unprefixed + 四个批准 Locale Prefix 的 Home、Blog/Wiki List/Article、10 个 Special Page、Error/404、content-derived Locale Metadata。Server-rendered Switch 保持同一 Logical Route。
+- Next.js 16.3.3 App Router Public Surface：unprefixed + 四个批准 Locale Prefix 的 Home、Blog/Wiki List/Article、10 个 Special Page、Error/404、content-derived Locale Metadata。Server-rendered Switch 保持同一 Logical Route。
 - Server-only PostgreSQL DAL 使用 `site_app`，过滤 Soft-delete，按 Locale 读取 zh-HK/zh-TW `document_translations` 并隔离 Next Cache Key；DB 与 Cache 反序列化边界均执行 Zod Validation。Public Request 不读取 GitHub/File Corpus，也不写 DB。
 - Runtime Markdown 使用 unified/remark/GFM/rehype、Raw HTML Drop、Sanitizer、Shiki 与 validated link/image metadata；提供 TOC、Unicode Anchor、Reading Time、Previous/Next。区域转换只处理 mdast Text Source Range，保护 Frontmatter、Code Fence、Inline Code、URL、Identifier 与 Link/Image Destination。
 - Tailwind CSS 4、Base UI Primitive、blue/light-dark identity、responsive Header/Footer；Theme、Print 与 Start bookmark/search 是仅有的交互 Client Components。四个等形 next-intl Catalog 已分别交付 zh-CN Source、en-US Semantic UI 与 reviewed zh-HK/zh-TW UI；Phase 10 Search Form/Result 文案也已进入全部 Catalog。
@@ -152,15 +153,15 @@ Restore Drill、完整 Compatibility/Public Smoke 与 Stabilization/Rollback-win
 - Disposable Drill 已输出实际 Backup Bytes/Seconds 与 Restore-to-ready Seconds，但小数据集/S3Mock 不代表 Production。Production RPO/RTO 仍未定义，需明确授权的代表性多次演练后才能提出。
 - 真实 Translation Provider Contract Test 未运行：Owner 没有提供明确的非生产 Provider Target/Credential/付费授权。此为 Phase 9 Exit Gate 要求的安全分支，不是 S3 缺口；未来启用具体付费翻译 Provider 前必须补做。
 
-## 7. Phase 18 Activation State
+## 7. Phase 18 Completion State
 
 - Owner 已授权 Phase 18 Production Work。初始部署由 Owner 按逐步命令执行；后续 Owner 对精确列出的生产操作逐项授权 Agent 代为执行。聊天中出现过的明文 Credential 不得写入仓库、文档、日志或提交说明，也不得超出当次明确授权复用。
 - Start from the focused Phase 17 commit and a clean tracked worktree；`.env.local` remains Owner-owned、Gitignored and must never be staged.
 - Phase 18 Final Legacy Delta/Inventory Refresh 已纠正并固化在 `docs/migration/phase-18-legacy-delta.md`：Legacy `feee48b1685e7cab8fed84941bff9e58fc32491c` 相对 Phase 0 有 1 篇 Blog 新增、8 篇 Markdown 修改与 Blog Route Helper 变更；Page/Component/ROS2 Tree 未变化。当前 5 Blog + 233 Wiki 的 238 个 Frontmatter/Route 均有效，Current Legacy/V2 全量 Route 无 Collision/Mismatch。V2 采用当前含日期 Blog Canonical Route，并为 Phase 0 的四条已公开 Blog URL 建立精确兼容 Alias；旧仓库保持只读。
-- Blog/Wiki 深度兼容阻断修复已按 `docs/migration/phase-18-blog-wiki-compatibility.md` 在本地实现：恢复 Blog 日期/摘要、Wiki 顶层文档卡/层级编号/展开章节、首页最多五个顶层 Wiki 文档、桌面与移动文章导航、按正文最高标题归一且覆盖 CommonMark `h1`–`h6`、正文与 TOC 共享的层级编号、进度/代码复制/点击预览任意位置关闭的图片预览、基于现有 PostgreSQL/PGroonga Projection 的 Blog/Wiki 标题+标题层级+正文检索、独立 Header 放大镜、跟随系统/深色/浅色三态 Theme、可点 Backdrop 关闭的移动主导航、居中且选择后关闭的移动阅读导航、左下双悬浮阅读器控件，以及 Umami 共享数据服务端聚合与仅批准域名加载的生产追踪脚本。Owner 于 2026-09-07 明确删除低价值的 Wiki/CV 打印控件；无历史流量的本地路由不再展示四项零值。2026-09-08 增量把正文编号改为主题蓝并使整个标题支持鼠标/键盘锚点；随后按 Owner 提供的旧站截图定点只读核对 Legacy Blog/Wiki 组件，把代码框改为所有主题一致的深色正文、独立语言栏、自动语言标签和右侧紧凑复制按钮，同时保留 Shiki Token、局部横向滚动和移动端宽度约束。Canonical Fence Corpus 的 C/C++、CMake、Shell、Python、Web、JSON/YAML/XML、SQL、PowerShell、Dart、Lua、Dockerfile、文本/配置等主流语言与历史大小写/拼写别名已有 Shiki Fixture；未知值安全回落为纯文本。宽屏正文中栏扩大且两侧导航移向外缘；简体中文 Development Markdown Fixture 覆盖引用、列表/任务、宽表格、长代码、链接、图片和 `h1`–`h6`；宽表格/代码块限制在正文宽度内独立横向滚动，普通长文本/链接换行，窄屏 E2E 禁止页面级横向溢出。Header 与独立全屏 Start 使用从 Legacy 精确恢复的 favicon。定点旧仓库证据确认当前 Corpus/Legacy 列表没有分类、标签和分页，未虚构 Taxonomy。Owner 视觉验收和其余 Phase 18 Gate 仍未完成。
-- `/more` 与特殊页面/音乐阻断修复已按 `docs/migration/phase-18-special-pages-music-compatibility.md` 在本地实现：恢复完整 More Hub、About/CV/Friend/Logo 内容、三引擎 Start 工作台、真实 Umami Stats、Tech/Weight 公共数据视图与 Owner 签名写入入口，以及 159 首实时歌单、25 首自建 CDN 映射、同步歌词、可展开完整歌单的四行歌词全局播放器、19-rem 迷你播放器和原 Legacy 重连/全球 CDN 故障转移时序。Homepage 已恢复旧站三入口、四标签、六关注方向和各五条最新 Blog/Wiki 的信息架构，并统一为 V2 蓝色视觉；移动文章页不再把播放器强制抬高 5.5rem，窄屏宽度还会为左下阅读浮球留出独立点击区。特殊页面/More/Footer 已统一到 V2 蓝色视觉体系，Footer 恢复 13 个联系方式并只从自建主/全球 CDN 加载 Font Awesome；Start 使用服务端验证缓存的 Bing 最近 8 图并无重复轮换，失败时回落静态背景。生产审计确认 Umami API 返回真实聚合，文章统计失败是边缘层误拦 `/api/traffic` POST；修复精确放行该接口。Footer/Umami 资源阻断来自应用与边缘双 CSP 交集，OpenResty 现隐藏上游 CSP 并作为唯一审核策略来源。Canonical/公共数据位于 PostgreSQL，资源位于 S3/CDN；浏览器只保留主题、播放器收起态与未登录 Start 私人设置，Blob 仅用于即时导出。Owner 私钥只在浏览器本地导入和签名，不上传、不持久化；写入仍只经过独立 `control-api`。Repository Check、168 项 Unit、Production-foundation/Recovery、11 项 Public E2E、S3Mock/Application Integration 与 7 项 PostgreSQL Migration Gate 已通过，Local Stack 为 Healthy；Owner 本地验收仍待完成，不构成 Phase 18 完成。
+- Blog/Wiki 深度兼容阻断修复已按 `docs/migration/phase-18-blog-wiki-compatibility.md` 实现：恢复 Blog 日期/摘要、Wiki 顶层文档卡/层级编号/展开章节、首页最多五个顶层 Wiki 文档、桌面与移动文章导航、按正文最高标题归一且覆盖 CommonMark `h1`–`h6`、正文与 TOC 共享的层级编号、进度/代码复制/点击预览任意位置关闭的图片预览、基于现有 PostgreSQL/PGroonga Projection 的 Blog/Wiki 标题+标题层级+正文检索、独立 Header 放大镜、跟随系统/深色/浅色三态 Theme、可点 Backdrop 关闭的移动主导航、居中且选择后关闭的移动阅读导航、左下双悬浮阅读器控件，以及 Umami 共享数据服务端聚合与仅批准域名加载的生产追踪脚本。Owner 于 2026-09-07 明确删除低价值的 Wiki/CV 打印控件；无历史流量的本地路由不再展示四项零值。2026-09-08 增量把正文编号改为主题蓝并使整个标题支持鼠标/键盘锚点；随后按 Owner 提供的旧站截图定点只读核对 Legacy Blog/Wiki 组件，把代码框改为所有主题一致的深色正文、独立语言栏、自动语言标签和右侧紧凑复制按钮，同时保留 Shiki Token、局部横向滚动和移动端宽度约束。Canonical Fence Corpus 的 C/C++、CMake、Shell、Python、Web、JSON/YAML/XML、SQL、PowerShell、Dart、Lua、Dockerfile、文本/配置等主流语言与历史大小写/拼写别名已有 Shiki Fixture；未知值安全回落为纯文本。宽屏正文中栏扩大且两侧导航移向外缘；简体中文 Development Markdown Fixture 覆盖引用、列表/任务、宽表格、长代码、链接、图片和 `h1`–`h6`；宽表格/代码块限制在正文宽度内独立横向滚动，普通长文本/链接换行，窄屏 E2E 禁止页面级横向溢出。Header 与独立全屏 Start 使用从 Legacy 精确恢复的 favicon。定点旧仓库证据确认当前 Corpus/Legacy 列表没有分类、标签和分页，未虚构 Taxonomy。Owner 视觉验收和其余 Phase 18 Gate 已于最终验收关闭。
+- `/more` 与特殊页面/音乐阻断修复已按 `docs/migration/phase-18-special-pages-music-compatibility.md` 在本地实现：恢复完整 More Hub、About/CV/Friend/Logo 内容、三引擎 Start 工作台、真实 Umami Stats、Tech/Weight 公共数据视图与 Owner 签名写入入口，以及 159 首实时歌单、25 首自建 CDN 映射、同步歌词、可展开完整歌单的四行歌词全局播放器、19-rem 迷你播放器和原 Legacy 重连/全球 CDN 故障转移时序。Homepage 已恢复旧站三入口、四标签、六关注方向和各五条最新 Blog/Wiki 的信息架构，并统一为 V2 蓝色视觉；移动文章页不再把播放器强制抬高 5.5rem，窄屏宽度还会为左下阅读浮球留出独立点击区。特殊页面/More/Footer 已统一到 V2 蓝色视觉体系，Footer 恢复 13 个联系方式并只从自建主/全球 CDN 加载 Font Awesome；Start 使用服务端验证缓存的 Bing 最近 8 图并无重复轮换，失败时回落静态背景。生产审计确认 Umami API 返回真实聚合，文章统计失败是边缘层误拦 `/api/traffic` POST；修复精确放行该接口。Footer/Umami 资源阻断来自应用与边缘双 CSP 交集，OpenResty 现隐藏上游 CSP 并作为唯一审核策略来源。Canonical/公共数据位于 PostgreSQL，资源位于 S3/CDN；浏览器只保留主题、播放器收起态与未登录 Start 私人设置，Blob 仅用于即时导出。Owner 私钥只在浏览器本地导入和签名，不上传、不持久化；写入仍只经过独立 `control-api`。Repository Check、168 项 Unit、Production-foundation/Recovery、11 项 Public E2E、S3Mock/Application Integration 与 7 项 PostgreSQL Migration Gate 已通过，Local Stack 为 Healthy；Owner 本地验收在该检查点仍待完成，最终已于 2026-09-12 接受。
 - 2026-09-08 Production Browser 复核确认 Umami Share Origin 发送 `frame-ancestors 'self'`，跨域 iframe 必然被浏览器拒绝；Stats 改用固定外链入口，站内服务端聚合与公开指标面板继续保留。
-- Owner 于 2026-09-08 批准 ADR 0020，移除固定 24 小时 Deployment Stabilization Block。新 Cutover 清空兼容保留的 `stabilization_until`，连续发布仍以同一 Inactive Slot、完整 Pre/Post Smoke、并发互斥、审计和立即上一版本无重建回滚运行。变更已通过 168 项 Unit、Production-foundation Blue/Green/No-rebuild Rollback、双副本 Recovery、11 项 Public E2E、Application Integration、7 项 Migration、Build 与 Security Gate；Phase 18 的线上观察/旧 Nuxt Rollback-window 验收不受影响且仍未完成。
+- Owner 于 2026-09-08 批准 ADR 0020，移除固定 24 小时 Deployment Stabilization Block。新 Cutover 清空兼容保留的 `stabilization_until`，连续发布仍以同一 Inactive Slot、完整 Pre/Post Smoke、并发互斥、审计和立即上一版本无重建回滚运行。变更已通过 168 项 Unit、Production-foundation Blue/Green/No-rebuild Rollback、双副本 Recovery、11 项 Public E2E、Application Integration、7 项 Migration、Build 与 Security Gate；Phase 18 的线上观察和旧 Nuxt Rollback-window 验收已于 2026-09-12 关闭。
 - Legacy GitHub Remote 当前解析为公开的 `tungchiahui/tungchiahui.github.io`。Owner 已明确选择并批准创建独立公开 Canonical Repository `tungchiahui/tungchiahui_content`；其 `main` 激活提交 `db3aad287eabf84b16b44c33957d57c02ae60e9f` 保留过滤后的 126 个 `content/**` 历史提交与当前 238 篇 Markdown，并加入只调用 V2 reusable Content Sync 的 Push/Manual Caller。创建与 Workflow-only Push 均未触发 Production Sync，Legacy Repository 保持只读。
 - 为回答 Production Secret 传输边界而执行的定点 Legacy 配置检查确认：旧 Nuxt 以 Gitignored、`0600` 的单一明文 `.env` 注入 Compose，Backup/Instance Export 明确排除真实 `.env`、Token 与 Private Key，并要求另存加密 Secret。V2 保留进程所需的 env 注入形式，但由 Controller 上的 SOPS 密文在内存解密、经 SSH/Ansible 拆分安装到 `/etc/tungchiahui/secrets`；SOPS age Identity 不传服务器，Backup age Identity 仅按恢复职责单独安装。
 - 真实目标为 Debian 13 共享主机 `10.0.0.4`（只用于 Bootstrap，不得进入 Durable Config），已有 1Panel OpenResty 使用 host network，并监听 `80/443/8443/18080`；Docker/Compose 可用。
@@ -193,11 +194,11 @@ Restore Drill、完整 Compatibility/Public Smoke 与 Stabilization/Rollback-win
 - Fresh Production Full Backup Operation `d6ba900a-03c9-48a7-921b-30d745d94345` 已以 `recovery-verified` 完成。Backup `20260907-090610F` 为 `valid=true`，AList Primary 与 R2 Off-site 均 `fresh`，2,757 Files / 56,475,808 bytes，Manifest SHA-256 `862c80a9ef088267d8f0f38915e456c682b0d78cfafb893d6e9047b6890f9625`，WAL Max `000000010000000000000035`，整体 887.986 秒。AList Transfer/Verify/Total 分别为 195.395/266.930/462.326 秒；R2 Transfer/Verify/Total 分别为 328.273/91.285/419.558 秒。Operation 只有在双副本和最新 Control-state age Artifact 均复制验证后才完成；完成后 Incomplete Operation 为 0，Public Ready/Search/Headers/Version 继续通过。
 - `/etc/systemd/system/tungchiahui-backup.service` 与 `.timer` 已按版本化 Ansible Contract 安装并启用。Timer 为 `active (waiting)` / `enabled`，首次触发为 `2026-09-08 03:05:00 Asia/Hong_Kong`，启用时未补跑重复 Backup；`Persistent=true`、`AccuracySec=1min`、`RandomizedDelaySec=0`。Scheduler 的 Sunday Full / Monday-Saturday Differential 与每日稳定 Idempotency Key 已由 Unit/Production-foundation Test 覆盖。
 - Timer 启用后的真实 Observability Snapshot 显示 Public/Origin/Control/Worker/Deploy-agent/Web/PgBouncer 均 Healthy、IPv6 Address Count 1、Control-state Integrity `ok`、Disk Used 77.88%、Fresh Backup 双副本/WAL 均有效，但仍有 4 个 Active Alert：过去 24 小时内 2 个失败 Application Job 触发 `ApplicationJobStuck`，AList Prefix 修复前的 1 个失败 Infrastructure Operation 触发 `InfrastructureOperationStuck`，尚无真实 Production Restore Drill 触发 `RecoveryEvidenceStale`，配置的 `/api/assets/monitoring/health.svg` 返回 404 触发 `AssetStorageUnavailable`。这些都必须在 Stabilization/Exit Gate 前关闭并留下证据；不得把健康探针与 Backup 成功误报为 Alert-free Stabilization。
-- Owner 授权后，AList Asset Bucket 已写入精确 `monitoring/health.svg`，311 bytes、SHA-256 `388b1096e50df6dc3b408bce526472795ddb9054e82a68175a9f73f2f7f2825e`，并由现有 Preserve-delete Mirror 顺序复制到 R2：9,204 个 Source Object 中 Copy 1、Unchanged 9,203、Read/Write Failure 0，1,433 个 R2-only Object 保留，Manifest 为 `asset-backups/manifests/2026-09-07T10-00-22.451Z-4033388bd654e78fdfc38945781e07a97a42893dd92b4ce55123250fd7c54399.json`。Public HEAD 返回 200 而 GET 返回 502；生产日志定点定位为 Asset Route 在 Response Stream 被消费前于 `finally` 销毁 S3 Client，导致真实网络 Body `ECONNRESET`。`streamWithCleanup` 修复把 Client 生命周期绑定到完整消费、取消或错误，3 类生命周期 Unit Test 与完整本地 Gate 已通过；修复尚未部署，Production Alert 仍保持真实。
+- Owner 授权后，AList Asset Bucket 已写入精确 `monitoring/health.svg`，311 bytes、SHA-256 `388b1096e50df6dc3b408bce526472795ddb9054e82a68175a9f73f2f7f2825e`，并由现有 Preserve-delete Mirror 顺序复制到 R2：9,204 个 Source Object 中 Copy 1、Unchanged 9,203、Read/Write Failure 0，1,433 个 R2-only Object 保留，Manifest 为 `asset-backups/manifests/2026-09-07T10-00-22.451Z-4033388bd654e78fdfc38945781e07a97a42893dd92b4ce55123250fd7c54399.json`。Public HEAD 返回 200 而 GET 返回 502；生产日志定点定位为 Asset Route 在 Response Stream 被消费前于 `finally` 销毁 S3 Client，导致真实网络 Body `ECONNRESET`。`streamWithCleanup` 修复把 Client 生命周期绑定到完整消费、取消或错误，3 类生命周期 Unit Test 与完整本地 Gate 已通过；该检查点尚未部署，后续 PR #10 部署和最终 Smoke 已关闭告警。
 - Owner 授权的真实 Production Restore Drill 已从最新有效 Backup `20260907-090610F` 的 AList Primary Repository 恢复到 Host 上一次性、`network=none`、无端口且不挂载 Production Data 的 PostgreSQL 18.4。Control-state age Snapshot 恢复后 Integrity 为 `ok`，Schema 7、156 条 Audit Event、Active Green/Previous Blue 和 Current/Last SHA 一致；数据库恢复后 7 个 Migration、238 Active Document（5 Blog/233 Wiki）、四 Locale 各 238 个 Search Projection、0 个 Null Route/Hash/Markdown 均符合生产状态，`pg_amcheck --all --install-missing` 检查 866/866 Relations、5,967/5,967 Pages 通过。核心 PostgreSQL Checksum 在一次性副本排除 PGroonga 私有非 PostgreSQL Page 文件后扫描 1,320 Files / 7,613 Blocks、Bad Checksum 0；演练容器和 `/var/lib/tungchiahui/restore-drill.WRpdlH` 已删除，Production PostgreSQL 未停止、未写入且所有 Production Container 继续 Healthy。
 - Asset Stream 修复 PR #10 已在 PR Quality Gate 通过后合并为 main `0ff8aa4578068d29d2dd3d5651c2a20fa09ef8bb`；main Quality Gate 再次完整通过并发布四个同 SHA Immutable Image，Web Digest 为 `sha256:0cc65b5f6578a9b7b7fd8fb0eff3299e9f467542d0c8816f35a7ea213ed74a36`。Repository 未启用自动 Production Deployment，镜像发布没有隐式切流。
 - Owner 授权该 SHA 的 Blue/Green Deployment 后，旧 Shared Engine 曾在任何 Image Pull、Container Replacement 或 Cutover 前按固定 Stabilization Policy 拒绝请求；该历史失败记录继续保留在 Audit/Observability 中。Owner 于 2026-09-08 判断个人站点的固定 24 小时禁令收益不足并批准 ADR 0020：新引擎允许连续发布，同时保留并发互斥、完整 Gate、审计和立即上一版本回滚；Phase 18 的线上观察期只作为最终验收证据，不再阻止应用发布。
-- Restore Drill Timestamp 已登记为 `2026-09-07T10:35:00.000Z`。只对 `tungchiahui-production-observability-agent-1` 执行经过完整 Compose Render Validation 的 `--no-deps --force-recreate`，其余所有 Running Container ID 前后完全相同；新 Agent Healthy，`RecoveryEvidenceStale` 已消失。当前仍有 3 个真实 Alert：历史/现有 Failed Application Job、包含上述 Policy Rejection 的 Failed Infrastructure Operation，以及等待 Asset Stream 修复部署的 `AssetStorageUnavailable`。
+- Restore Drill Timestamp 已登记为 `2026-09-07T10:35:00.000Z`。只对 `tungchiahui-production-observability-agent-1` 执行经过完整 Compose Render Validation 的 `--no-deps --force-recreate`，其余所有 Running Container ID 前后完全相同；新 Agent Healthy，`RecoveryEvidenceStale` 已消失。该检查点仍有 3 个真实 Alert：历史/现有 Failed Application Job、包含上述 Policy Rejection 的 Failed Infrastructure Operation，以及等待 Asset Stream 修复部署的 `AssetStorageUnavailable`；后续部署、24 小时边界修复和最终验收已关闭全部未解释 Critical Alert。
 - 初次 Production Provision 需要 Web、Service、Recovery 与 PostgreSQL 四个同 SHA Immutable Image；Phase 18 已补齐受 Quality Gate 约束的 GitHub Build Job，使其以独立 GHCR Repository 发布完整 Image Set，Web Digest 仍是 Shared Blue/Green Engine 的唯一 Release Digest。
 - Phase 18 真实首发命令审计发现 Deployment Article Smoke 仍硬编码为仅 Disposable Seed 存在的 `/blog/phase-3-seed`。Production Compose 现要求由 Ansible 显式注入 Article/Asset/Search Smoke Policy，默认文章改为最终 Legacy Audit 已覆盖的 `/blog/2026-09-02-wm-lun-wen-luo-lie`；Disposable Gate 继续显式使用 Seed Route，避免未切流 Candidate 因虚假 Production 前提失败。
 - 初次 Push 前 `PRODUCTION_DEPLOYMENT_ENABLED` Repository Actions Variable 必须保持缺失/非 `true`；Quality 成功后只发布候选 Image Set。只有 Production Environment Protection、Origin Provision 与 Pre-cutover Gate 全部成立后才显式启用 Deploy Job，防止 Bootstrap 前产生伪部署。
@@ -208,12 +209,35 @@ Restore Drill、完整 Compatibility/Public Smoke 与 Stabilization/Rollback-win
 - 若 Phase 18 不需要实际 Server Replacement，不绑定或触发 Migration Platform；若需要，必须先获得真实 Target/Primary/DDNS 的单独授权并复核 `server-migration.md` Abort/Rollback Gate。
 - 不得把 Phase 16 Load、Phase 13 Restore 或 Phase 17 Disposable Migration Timing 伪装为 Production SLA/RPO/RTO。
 
-Phase 18 正在执行。真实主机隔离基础、Production 业务 Migration、PgBouncer SCRAM 校准、
-专用 Content Egress、最终 Canonical Content Sync、Owner 执行的 1Panel/EdgeOne Public Cutover、
-完整 Compatibility/Public Smoke、Fresh Backup/WAL/AList/R2/Control-state 双副本和每日 03:05 Timer
-均已完成并验证。真实 Production Restore Drill 已通过；监控 Asset Stream 修复尚待部署，24 小时失败记录告警、完整
-Stabilization Evidence、Owner 对 Final Report 的接受与 Rollback-window Closure 仍未完成；不得提前
-勾选 Phase 18 Exit Gate 或创建最终 Release Commit。
+Phase 18 已完成。最终 Production Web 为蓝槽 `98d1002f30d4a2191ebb4f9848d7661536a4ea8b`，
+Web Digest 为 `sha256:f2cb1c0bf59d82a4ea786f5c7e8c35f5645362b21f6ae0f7ea9d1488d262e993`，
+Deployment Operation `5548e323-09dd-42a0-8192-2c5da5931743` 达到 `deployment-verified`；绿色槽位
+`fff1af79c4a13b21ba3a2fdf9768554c117814e6` 保持 Healthy，继续提供 V2 无重建即时回滚。
+
+最终 Canonical Content Commit 为 `68b7cf36947cfe390503196e965a7edcb75a0ecf`：238 Active / 0 Deleted，
+5 Blog / 233 Wiki，四 Locale Search Projection 各 238；Translation Provider Request 与 Cost 均为 0。
+三个历史排队 Content Sync 已顺序处理，其中中间无效 Snapshot `f7f999fde2eea25552d76d6e48fd64b68a9b92bb`
+按契约失败，随后最新 Snapshot 成功，Backlog/Running/Expired Lease 均为 0。该记录仅触发有解释、自动过期的
+`ApplicationJobStuck` warning；最终 Observability Snapshot 的未解释 Critical Alert 为 0。
+
+每日 03:05 HKT Backup Timer 自 2026-09-07 起连续运行；最终验收时最新有效 Differential Backup
+`20260907-090610F_20260911-190514D` 的 AList Primary、R2 Off-site 与 WAL 均为 `fresh`。真实隔离 Restore Drill、
+PITR、Control-state Integrity/Audit Continuity、Blue/Green 与 No-rebuild Rollback Rehearsal 均通过。
+
+最终验收发现 2026-09-09 22:43 HKT Docker Daemon 重启后内部 Loopback OpenResty 未恢复，公网入口因此返回
+502。2026-09-12 恢复同一容器后，PR #19 / main `9fac07ea1e195db63a30becc02ecb740f3216106`
+把该唯一入口改为 `restart: always`；生产 Compose 已与该 Commit 同步，现有容器以零停机方式更新 Restart Policy，
+Container ID 与 StartedAt 均未变化。PR 与 `main` 两轮完整 Quality Gate、169 Unit、Production Foundation/
+Recovery/Blue-Green、Application Integration、11 E2E、7 Migration、Build 与 Security Gate 全部通过；公开 Home、
+Blog、Wiki、Start、More、Music、Stats、四 Locale、代表文章、Search、Asset、Health/Ready/Version 和安全头均通过。
+
+Owner 于 2026-09-12 明确接受最终 Compatibility/Operations Report 并批准关闭旧 Nuxt Rollback Window。
+关闭不删除旧仓库、旧数据、Backup、Image 或 V2 Previous Slot；旧 Nuxt 不再是正式 Production Rollback Target。
+`PRODUCTION_DEPLOYMENT_ENABLED` 继续保持关闭，因此应用发布由 Owner 显式触发同一 Shared Deployment Engine；
+这不会建立第二套部署实现。Canonical Content Repository 的 Push Workflow 与 Production Polling 已启用，Content Push
+会自动进入 Content Sync，但不会触发 Next.js Image Build 或 Blue/Green Deployment。
+完整最终证据见 `docs/development/phase-18-completion-report.md`。本阶段上下文已沉淀；Phase 18 是本计划最后阶段，
+不存在待自动开启的下一 Phase。
 
 ## 8. 回查旧 myblog 的规则
 
