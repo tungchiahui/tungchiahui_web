@@ -1,6 +1,7 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 
 import { describe, expect, it } from 'vitest'
 
@@ -116,6 +117,10 @@ describe('Phase 16 observability and security policy', () => {
   it('provides HSTS, CSP, MIME, referrer, permissions and frame policy', () => {
     expect(browserSecurityHeaders['strict-transport-security']).toContain('max-age=31536000')
     expect(browserSecurityHeaders['content-security-policy']).toContain("object-src 'none'")
+    expect(browserSecurityHeaders['content-security-policy']).toContain(
+      'https://umami.tungchiahui.cn',
+    )
+    expect(browserSecurityHeaders['content-security-policy']).not.toContain("'unsafe-eval'")
     expect(browserSecurityHeaders['x-content-type-options']).toBe('nosniff')
     expect(browserSecurityHeaders['referrer-policy']).toBe('strict-origin-when-cross-origin')
     expect(browserSecurityHeaders['permissions-policy']).toContain('camera=()')
@@ -139,5 +144,40 @@ describe('Phase 16 observability and security policy', () => {
       },
       schemaVersion: 7,
     })
+  })
+
+  it('expires infrastructure failures at the exact 24-hour boundary', () => {
+    const statePath = join(mkdtempSync(join(tmpdir(), 'phase16-control-state-')), 'control.db')
+    initializeControlState(statePath, 'test')
+    const database = new DatabaseSync(statePath)
+    const insertFailure = database.prepare(
+      `INSERT INTO infrastructure_operations
+         (id, operation_type, status, phase, target_json, idempotency_key, actor_id,
+          reason, requested_at, created_at, updated_at, finished_at)
+       VALUES (?, 'deploy', 'failed', 'deployment-failed', '{}', ?, 'operator:test',
+               'observability boundary fixture', ?, ?, ?, ?)`,
+    )
+    insertFailure.run(
+      '10000000-0000-4000-8000-000000000001',
+      'observability:expired-failure',
+      '2026-09-08T10:59:00.000Z',
+      '2026-09-08T10:59:00.000Z',
+      '2026-09-08T10:59:00.000Z',
+      '2026-09-08T10:59:00.000Z',
+    )
+    insertFailure.run(
+      '10000000-0000-4000-8000-000000000002',
+      'observability:recent-failure',
+      '2026-09-08T11:01:00.000Z',
+      '2026-09-08T11:01:00.000Z',
+      '2026-09-08T11:01:00.000Z',
+      '2026-09-08T11:01:00.000Z',
+    )
+    database.close()
+
+    expect(
+      readControlObservabilitySnapshot(statePath, new Date('2026-09-09T11:00:00.000Z')).operations
+        .failed24hCount,
+    ).toBe(1)
   })
 })

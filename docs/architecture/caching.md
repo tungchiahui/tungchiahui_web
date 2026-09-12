@@ -34,7 +34,7 @@ Content Ingestion 应尽量只使受影响的 Cache Key/Route 失效。
 | Article | Next.js Web | Canonical Route；`content:route:<route>` | 无任意 TTL | Change 的当前/旧 Route Tag 与 prefixed/unprefixed Path |
 | Blog/Wiki List | Next.js Web | Content Type；`content:list:<type>` | 无任意 TTL | 受影响 Content Type Tag 与 List Path |
 | Homepage | Next.js Web | `/`、`/zh-cn` Route Cache | 无任意 TTL | 每次非空 Content Change 精确 Revalidate 两条 Home Path |
-| Owner Dataset | Next.js Web | Dataset Key | 无 Data Cache；HTTP no-store | ADR 0020：每次请求读取 PostgreSQL，写后下一次公开读取即为最新版本 |
+| Owner Dataset | Next.js Web | Dataset Key | 无 Data Cache；HTTP no-store | ADR 0021：每次请求读取 PostgreSQL，写后下一次公开读取即为最新版本 |
 | Search Result | Next.js Web | Normalized Query + Locale + Limit；`search:locale:<locale>` | 无任意 TTL | Projection Transaction 成功后失效受影响 Locale Tag；Full Reindex 失效其请求 Locale |
 
 Content Worker 对严格 Zod Payload 执行 HMAC-SHA256 签名后调用 `/api/internal/revalidate`。Secret 只存在 Server/Worker Environment，不进入 Client Bundle。Endpoint 使 Article/List Tag 和 Home/List/Article 的 zh-CN prefixed/unprefixed Path 失效，并输出不含 Secret 的结构化事件。

@@ -7,6 +7,7 @@ const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts')
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ['127.0.0.1'],
+  devIndicators: { position: 'bottom-right' },
   output: 'standalone',
   poweredByHeader: false,
   reactStrictMode: true,

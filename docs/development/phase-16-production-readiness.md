@@ -40,4 +40,4 @@ Web Container 保持 Read-only Root，Next Runtime Cache 只写入明确的 `/ap
 
 ## Subsequent owner-session update
 
-ADR 0020 (2026-09-12) supersedes the historical no-browser-cookie assumption for the two personal trackers only. Their independent control-api endpoints now enforce server sessions, exact Origin checks, scoped dataset writes and CAS. Operator/OIDC deployment and recovery authentication is unchanged. See `personal-trackers.md` for the new validation and activation contract.
+ADR 0021 (2026-09-12) supersedes the historical no-browser-cookie assumption for the two personal trackers only. Their independent control-api endpoints now enforce server sessions, exact Origin checks, scoped dataset writes and CAS. Operator/OIDC deployment and recovery authentication is unchanged. See `personal-trackers.md` for the new validation and activation contract.

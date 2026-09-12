@@ -17,10 +17,5 @@ export async function generateMetadata({ params }: PageProperties): Promise<Meta
 
 export default async function PublicRoutePage({ params, searchParams }: PageProperties) {
   const route = parsePublicRoute((await params).path)
-  const query = (await searchParams).q
-  return renderPublicPage(
-    route.segments,
-    route.context,
-    typeof query === 'string' ? query : undefined,
-  )
+  return renderPublicPage(route.segments, route.context, await searchParams)
 }

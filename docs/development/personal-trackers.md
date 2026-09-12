@@ -85,8 +85,8 @@ to tracker editing. Stronger authentication and account management belong to a l
 ## Implementation verification (2026-09-12)
 
 Local `./site check` passed format/lint, source/workflow policy, Drizzle consistency, typecheck,
-Renovate validation, production build and source/client security scan. All 160 unit tests passed.
-The disposable integration suite passed, including 11 browser E2E tests and seven S3Mock contract
+Renovate validation, production build and source/client security scan. After integrating `main@08946f64`, all 178 unit tests passed.
+The disposable integration suite passed, including 11 browser E2E tests on the initial base and seven S3Mock contract
 cases. Eight migrations passed on empty/repeated/previous schemas, including owner-role isolation
 and real PostgreSQL session expiry, revocation, digest storage and verifier-rotation checks.
 The full disposable recovery suite passed full/differential/incremental, WAL/PITR, encrypted

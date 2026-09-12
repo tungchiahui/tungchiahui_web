@@ -1,4 +1,4 @@
-# ADR 0020: Narrow owner login for personal trackers
+# ADR 0021: Narrow owner login for personal trackers
 
 - Status: Accepted
 - Date: 2026-09-12

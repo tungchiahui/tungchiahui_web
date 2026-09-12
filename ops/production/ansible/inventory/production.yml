@@ -5,3 +5,5 @@ all:
         production_origin:
           ansible_host: Debian
           ansible_user: tungchiahui
+          tungchiahui_content_polling_enabled: "true"
+          tungchiahui_search_polling_enabled: "true"

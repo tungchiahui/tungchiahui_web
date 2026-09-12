@@ -78,7 +78,7 @@ title: Fixture
 
 # 中文标题
 
-Use \`ROS2_Control\` and [external](https://example.com/path).
+Use \`ROS2_Control\`, [external](http://example.com/path), and [attachment](/docs/file.pdf).
 
 ## Code
 
@@ -88,17 +88,66 @@ const identifier = '保持'
 
 ![fixture](/api/assets/fixtures/phase-6.svg)
 
+| Column A | Column B |
+| --- | --- |
+| Value A | Value B |
+
 <script>alert('unsafe')</script>`)
 
     expect(rendered.headings).toEqual([
-      { depth: 1, id: '中文标题', text: '中文标题' },
-      { depth: 2, id: 'code', text: 'Code' },
+      { depth: 1, id: '中文标题', level: 0, number: '1', text: '中文标题' },
+      { depth: 2, id: 'code', level: 1, number: '1.1', text: 'Code' },
     ])
     expect(rendered.html).toContain('ROS2_Control')
     expect(rendered.html).toContain('shiki')
+    expect(rendered.html).toContain('class="language-ts"')
+    expect(rendered.html).toContain('--shiki-light')
+    expect(rendered.html).toContain('--shiki-dark')
     expect(rendered.html).toContain('rel="noopener noreferrer"')
+    expect(rendered.html).toContain('data-attachment="true"')
     expect(rendered.html).toContain('data-asset-origin="local"')
+    expect(rendered.html).toContain('<div class="table-scroll"><table>')
+    expect(rendered.html).toContain(
+      '<h1 data-heading-anchor id="中文标题" tabindex="0"><span class="heading-number">1.</span>',
+    )
+    expect(rendered.html).toContain('<h2 data-heading-anchor id="code" tabindex="0">')
     expect(rendered.html).not.toContain('<script')
+  }, 20_000)
+
+  it('highlights the fenced languages used by the canonical Markdown corpus', async () => {
+    const languages = [
+      'bash',
+      'c',
+      'cmake',
+      'cpp',
+      'dart',
+      'diff',
+      'dockerfile',
+      'gitignore',
+      'html',
+      'ini',
+      'javascript',
+      'json',
+      'jsonc',
+      'lua',
+      'makefile',
+      'markdown',
+      'powershell',
+      'python',
+      'sql',
+      'text',
+      'typescript',
+      'xml',
+      'yaml',
+    ] as const
+    const rendered = await renderMarkdown(
+      languages.map((language) => `\`\`\`${language}\nexample\n\`\`\``).join('\n\n'),
+    )
+    for (const language of languages) {
+      const highlightedLanguage = language === 'gitignore' ? 'text' : language
+      expect(rendered.html).toContain(`class="language-${highlightedLanguage}"`)
+    }
+    expect(rendered.html.match(/class="shiki/g)).toHaveLength(languages.length)
   }, 20_000)
 
   it('converts only Markdown prose and protects frontmatter, code, URLs and identifiers', async () => {
@@ -121,6 +170,8 @@ const_identifier = '软件机器人'
     expect(rendered.headings).toContainEqual({
       depth: 1,
       id: '軟體機器人專案',
+      level: 0,
+      number: '1',
       text: '軟體機器人專案',
     })
     expect(rendered.html).toContain('專案連結')
@@ -130,4 +181,23 @@ const_identifier = '软件机器人'
     expect(rendered.html).toContain("'软件机器人'")
     expect(rendered.html).not.toContain('title: 軟體機器人')
   }, 20_000)
+
+  it('numbers every available Markdown heading depth relative to the highest present level', async () => {
+    const rendered = await renderMarkdown(`### Root
+
+#### Child
+
+###### Skipped level
+
+### Second root`)
+
+    expect(rendered.headings.map(({ depth, level, number }) => ({ depth, level, number }))).toEqual(
+      [
+        { depth: 3, level: 0, number: '1' },
+        { depth: 4, level: 1, number: '1.1' },
+        { depth: 6, level: 2, number: '1.1.1' },
+        { depth: 3, level: 0, number: '2' },
+      ],
+    )
+  })
 })

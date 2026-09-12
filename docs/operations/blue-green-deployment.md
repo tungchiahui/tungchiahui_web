@@ -86,11 +86,11 @@ Cutover 后，通过真实 Production Entry 重复关键 Public-path Check。
 
 Rollback 是 Traffic Switch，而不是 Rebuild。
 
-在新 Release 通过定义的 Stabilization Policy 前，Previous Slot 保持完整。
-
 Rollback Operation 与 Lock/Lease 保存在 Control-state SQLite，因此 Production PostgreSQL 不可用时仍能创建和恢复。Rollback 后必须执行能够运行的 Control-plane/OpenResty Check；Application Public Smoke 若因 Database Incident 失败，应明确报告 Dependency Failure，而不是丢失 Rollback State。
 
-当前实现的 Rollback Target 是 Version 5 SQLite 中的 Previous Slot + Last SHA/Digest。Engine 只验证保留 Container 与 Digest 并切流，不运行 Build、Candidate Prepare 或 Migration。在 Stabilization Deadline 前不得用另一 Release 覆盖该保留目标。
+当前实现的 Rollback Target 是 Version 5 SQLite 中的 Previous Slot + Last SHA/Digest。Engine 只验证保留 Container 与 Digest 并切流，不运行 Build、Candidate Prepare 或 Migration。
+
+ADR 0020 取消固定时长的连续发布禁令。新的候选版本可以立即覆盖 Inactive Slot；切流前失败时 Active Release 不变，成功切流后原 Active Release 成为新的 Previous Rollback Target。该策略不放宽并发互斥、Migration、备份、镜像身份或 Smoke Gate。Control-state 中旧 `stabilization_until` 列只为向后兼容保留，新切流将其清空。
 
 ## Control Plane Independence
 

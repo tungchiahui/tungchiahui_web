@@ -57,7 +57,7 @@ Local content-worker   Docker network only
 10. 启动 Next.js Dev Server 和按 Path 分流的 Local OpenResty
 11. 报告 Endpoint 和 Service Status
 
-Phase 3 已用真实 Drizzle Runner 和 Deterministic Seed 替换零 Migration Hook。每次 Start 直接连接 PostgreSQL 执行 Policy/Role/PGroonga/Migration Gate，再通过 transaction-mode PgBouncer 以 `site_content_worker` 权限 Seed 两个 Document、Translation/Job/Ingestion Fixture，以及空的 `tech_footprint`/`weight_loss` Development Dataset。重复 Start 不重复 Row，也不重置已有数据。
+Phase 3 已用真实 Drizzle Runner 和 Deterministic Seed 替换零 Migration Hook。每次 Start 直接连接 PostgreSQL 执行 Policy/Role/PGroonga/Migration Gate，再通过 transaction-mode PgBouncer 以 `site_content_worker` 权限 Seed 五个 Document、Translation/Job/Ingestion Fixture，以及空的 `tech_footprint`/`weight_loss` Development Dataset。Seed 会更新自身确定性记录、重建四个 Locale 的 Search Projection，并触发本地内容 Cache Revalidation；因此样式/正文 Search Fixture 可以随代码演进而不会被持久化开发 Volume 中的旧 Row 遮蔽。重复 Start 不重复 Row，也不重置非 Seed 数据。
 
 Phase 4 的 `control-api` 已是独立 TypeScript HTTP Service：Local Operator 使用签名 Fixture，Application Job/Owner Dataset 走 PostgreSQL，Infrastructure Operation/Replay/Audit 走 SQLite。Local OpenResty 把 `/api/ops/*` 直接送往该 Service，普通请求送往 Next.js。
 

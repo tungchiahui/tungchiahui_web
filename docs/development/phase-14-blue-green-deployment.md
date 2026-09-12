@@ -27,7 +27,7 @@ Control-state schema Version 5 additively records:
 - active and previous slot;
 - current and last Git SHA plus exact image digest;
 - pending slot/SHA/digest cutover intent;
-- cutover timestamp and stabilization deadline;
+- cutover timestamp and the legacy-compatible nullable stabilization field;
 - operation phase, lease owner/expiry, fencing token, actor, reason and append-only audit.
 
 The engine persists each completed phase before moving forward: preflight, candidate preparation, migration, pre-cutover smoke, cutover intent, observed traffic switch, committed cutover and post-cutover smoke. An expired running deployment preserves its exact phase, enters `needs-attention`, and is requeued by deployment reconciliation. A new fencing token resumes from durable evidence instead of replaying already-completed destructive phases.
@@ -38,7 +38,7 @@ The pending cutover intent makes the only ambiguous crash window recoverable. On
 
 Deployment targets only the inactive slot. The Docker adapter validates the requested local image digest, recreates only the inactive container from a validated hardened template, retains its non-root/read-only/capability/network settings, and starts it with the requested SHA and slot identity.
 
-The one-shot Production migration runner uses `site_migrator_login`, an advisory lock, checked-in Drizzle journal hashes and migration policy. It cannot bootstrap roles or extensions with an administrative identity. Contract migrations are rejected; declared fresh-backup requirements consume only a valid record whose Off-site replica is fresh and inside the explicitly configured freshness window. Production backup freshness and stabilization durations are required configuration, not hard-coded RPO/RTO claims.
+The one-shot Production migration runner uses `site_migrator_login`, an advisory lock, checked-in Drizzle journal hashes and migration policy. It cannot bootstrap roles or extensions with an administrative identity. Contract migrations are rejected; declared fresh-backup requirements consume only a valid record whose Off-site replica is fresh and inside the explicitly configured freshness window. Production backup freshness is required configuration, not a hard-coded RPO/RTO claim. ADR 0020 later removed the fixed deployment-stabilization duration and its time-based release block while retaining the remaining gates.
 
 Before cutover the candidate must pass health, readiness, exact version/slot, homepage, representative article, locale route, search page, locale-scoped non-empty search API and static asset checks. OpenResty validates the proposed dynamic upstream file before an atomic rename and HUP reload. The same public checks then run through the real OpenResty entry.
 

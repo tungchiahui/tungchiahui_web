@@ -218,7 +218,6 @@ async function executeClaimedDeployment() {
         journalPath: deployment.DEPLOYMENT_JOURNAL_PATH,
         leaseSeconds: 3_600,
         migrationPolicyPath: deployment.DEPLOYMENT_MIGRATION_POLICY_PATH,
-        stabilizationSeconds: deployment.DEPLOYMENT_STABILIZATION_SECONDS,
       },
     )
     finishInfrastructureOperation(configuration.CONTROL_STATE_PATH, claimed.id, lease, {

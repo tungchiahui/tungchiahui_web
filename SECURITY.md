@@ -123,7 +123,7 @@ Break-glass Recovery 只允许经过明确授权的 Operator 通过稳定 Host/I
 
 ## 站主浏览器登录
 
-ADR 0020 允许 `/api/ops/owner/*` 使用独立的单站主密码会话，仅能编辑技术路线与减脂数据。
+ADR 0021 允许 `/api/ops/owner/*` 使用独立的单站主密码会话，仅能编辑技术路线与减脂数据。
 密码使用 scrypt 验证；随机会话 Token 只在 HttpOnly、SameSite=Strict、生产 Secure Cookie 中传递，
 PostgreSQL 的隔离 `owner_auth` Schema 只保存摘要与 12 小时有效期。写请求检查同源 Origin，登录限流。
 此 Cookie 不授予 Deploy、Restore、Translation 或其他 Operator Capability；既有签名/OIDC 认证不变。

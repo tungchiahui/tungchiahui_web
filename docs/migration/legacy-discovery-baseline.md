@@ -109,19 +109,19 @@ Owner 已确认以下 Route 和界面全部保留。`/more` 继续作为入口 H
 | About `/about` | 个人方向、站点说明、服务入口与联系方式 | MUST KEEP | 6、7、18 | O-002 RESOLVED |
 | CV `/cv` | 在线简历、联系方式、PDF/Print 相关入口 | MUST KEEP | 6、7、11、18 | O-002 RESOLVED |
 | Friend `/friend` | 友情链接与外部社区入口 | MUST KEEP | 6、7、11、18 | O-002 RESOLVED |
-| More `/more` | 特殊页面、Analytics、Storage/Chat 等入口 Hub | MUST KEEP | 6、7、18 | O-002 RESOLVED |
+| More `/more` | 特殊页面、Analytics、Storage/Chat 等入口 Hub | MUST KEEP | 6、7、18 | Phase 18 local repair；Owner acceptance pending |
 | My Logo `/mylogo` | Logo 含义和视觉身份说明 | MUST KEEP | 6、7、11、18 | O-002 RESOLVED |
-| Music `/music` + Global Mini Player | QQ Music Playlist、APlayer、CDN Audio Mapping、跨页面播放/错误恢复 | MUST KEEP outcome；允许重做播放器实现 | 6、7、11、18 | O-003 RESOLVED |
-| Start `/start` | 搜索引擎、Suggestion、Bookmark CRUD/Import/Export、History、Layout/Background localStorage | MUST KEEP outcome；允许重做实现 | 6、7、11、18 | O-003 RESOLVED |
-| Stats `/stats` + page stats | Public Analytics Dashboard；Blog/Wiki/List 聚合 Locale/Legacy Path Traffic | MUST KEEP public outcome；需重新做安全边界 | 6、7、10、16、18 | O-003 RESOLVED |
-| Tech Footprint `/tech-footprint` | Public Roadmap；Owner Edit；Import/Export；持久化 | MUST KEEP；V2 使用 PostgreSQL，不移植 EdgeOne Blob | 3、4、6、7、16、18 | O-004 RESOLVED |
-| Weight Loss `/weight-loss` | Public/Personal Progress；Chart；Import/Export；持久化 | MUST KEEP；V2 使用 PostgreSQL，不移植 EdgeOne Blob | 3、4、6、7、16、18 | O-004 RESOLVED |
+| Music `/music` + Global Mini Player | QQ Music Playlist、APlayer、CDN Audio Mapping、跨页面播放/错误恢复 | MUST KEEP outcome；允许重做播放器实现 | 6、7、11、18 | Phase 18 local repair；Owner acceptance pending |
+| Start `/start` | 搜索引擎、Suggestion、Bookmark CRUD/Import/Export、History、Layout/Background localStorage | MUST KEEP outcome；允许重做实现 | 6、7、11、18 | Phase 18 local repair；Owner acceptance pending |
+| Stats `/stats` + page stats | Public Analytics Dashboard；Blog/Wiki/List 聚合 Locale/Legacy Path Traffic | MUST KEEP public outcome；需重新做安全边界 | 6、7、10、16、18 | Phase 18 local repair；Owner acceptance pending |
+| Tech Footprint `/tech-footprint` | Public Roadmap；Owner Edit；Import/Export；持久化 | MUST KEEP；V2 使用 PostgreSQL，不移植 EdgeOne Blob | 3、4、6、7、16、18 | Phase 18 local repair；Owner acceptance pending |
+| Weight Loss `/weight-loss` | Public/Personal Progress；Chart；Import/Export；持久化 | MUST KEEP；V2 使用 PostgreSQL，不移植 EdgeOne Blob | 3、4、6、7、16、18 | Phase 18 local repair；Owner acceptance pending |
 
 ## 4. Core Page、Component 与 Interaction Inventory
 
 | Surface | Legacy behavior | 分类 | 目标 Phase |
 | --- | --- | --- | --- |
-| Global Header | Home/Blog/Wiki/About/More Navigation、Search Box、Theme Toggle | MUST KEEP behavior; MAY REDESIGN layout | 6、7、10 |
+| Global Header | Home/Blog/Wiki/About/More Navigation、Search、Theme Toggle | MUST KEEP behavior; MAY REDESIGN layout；Owner 于 2026-09-07 明确 Search 为独立放大镜，并把 Theme 细化为跟随系统/深色/浅色三态 | 6、7、10、18 |
 | Global Footer | Site Navigation、Language Switch、Social/Contact、ICP备案/公安备案 | MUST KEEP required/legal identity; MAY REDESIGN layout | 6、7、16 |
 | Theme | System-preference + persisted Light/Dark Mode | SHOULD KEEP | 6 |
 | Loading Feedback | Page/reader aware delayed loading overlay | SHOULD KEEP outcome | 6 |
@@ -129,9 +129,11 @@ Owner 已确认以下 Route 和界面全部保留。`/more` 继续作为入口 H
 | Blog list | Date sort、Locale filter、Traffic aggregation | MUST KEEP，包括公开 Traffic display | 6、7、16 |
 | Blog article | Markdown、TOC、heading anchors、reading progress/time、previous/next、image zoom、code copy、traffic stats | MUST KEEP reading contract; MAY REDESIGN controls | 6、7、16 |
 | Wiki list | Document grouping、chapter order/numbering、traffic aggregation | MUST KEEP hierarchy and ordering | 5、6、7 |
-| Wiki article | Document drawer、TOC、previous/next、reading progress、heading anchors、image zoom、code copy、print/PDF style、traffic stats | MUST KEEP reading/navigation/print contract; MAY REDESIGN controls | 6、7、16 |
+| Wiki article | Document drawer、TOC、previous/next、reading progress、heading anchors、image zoom、code copy、traffic stats | MUST KEEP reading/navigation/traffic contract; print/PDF control explicitly removed by Owner on 2026-09-07 | 6、7、16、18 |
 | Markdown link | `/docs/*` remains a normal anchor; external links open safely; internal links use app navigation | MUST KEEP outcome | 6 |
 | Markdown image | Responsive lazy/async image rendering | MUST KEEP outcome | 6、11 |
+| Blog/Wiki reader interactions | Wiki document hierarchy, numbered TOC/anchor, reading progress, code copy, image zoom and previous/next | MUST KEEP outcome；Owner removed Wiki print/PDF and refined preview/mobile-dismissal behavior on 2026-09-07 | Phase 18 blocking repair PASS locally；`phase-18-blog-wiki-compatibility.md` |
+| Blog taxonomy/pagination | No category/tag taxonomy and no Blog pagination in current Legacy implementation/corpus | Not a Legacy compatibility requirement | Phase 18 targeted read-only evidence；do not invent empty facets |
 | Search | Blog/Wiki/static-page indexing、type filter、scoring、highlight/excerpt、query-string sync | MUST KEEP user outcome; legacy client corpus/index MUST REMOVE | 10 |
 | Language Switch | Preserve logical document by `i18nKey`; fall back to section when variant absent; persist choice | MUST KEEP for approved Locales | Phase 7 server-rendered same-logical-route switch PASS；Phase 18 final audit |
 

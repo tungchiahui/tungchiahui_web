@@ -1,27 +1,52 @@
-import { ExternalLink, Search as SearchIcon } from 'lucide-react'
+import {
+  ArrowRight,
+  BookOpen,
+  Bot,
+  CheckCircle2,
+  Cpu,
+  Globe2,
+  Monitor,
+  Newspaper,
+  NotebookPen,
+  Search as SearchIcon,
+  Smartphone,
+} from 'lucide-react'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getTranslations } from 'next-intl/server'
 import type { ReactNode } from 'react'
+import { z } from 'zod'
+import { ArticleReader } from '@/components/article-reader'
 import { BookmarkWorkspace } from '@/components/bookmark-workspace'
+import { MoreDirectory } from '@/components/more-directory'
+import { MusicPage } from '@/components/music-page'
 import { TechTracker } from '@/components/personal/tech-tracker'
 import { WeightTracker } from '@/components/personal/weight-tracker'
-import { PrintButton } from '@/components/print-button'
 import { SiteShell } from '@/components/site-shell'
+import { StatsDashboard } from '@/components/stats-dashboard'
+import { TrafficMetrics } from '@/components/traffic-metrics'
 import { techFootprintPayloadSchema, weightLossPayloadSchema } from '@/control-plane/contracts'
 import { localizeContentText } from '@/i18n/content'
 import type { AppLocale } from '@/i18n/locales'
 import { emptyTechPayload, emptyWeightPayload } from '@/personal/contracts'
 import { readCachedSearch } from '@/search/cache'
-import { searchQuerySchema } from '@/search/contracts'
+import { type SearchResult, searchQuerySchema } from '@/search/contracts'
 import {
   listCachedDocuments,
   readCachedDocument,
   readCachedOwnerDataset,
 } from '@/server/cached-content'
 import type { PublicDocument } from '@/server/public-content'
-
+import {
+  documentDate,
+  documentSummary,
+  groupWikiDocuments,
+  latestWikiDocumentGroups,
+  trafficPaths,
+  type WikiDocumentGroup,
+  wikiDocumentKey,
+} from './content-compatibility'
 import { renderMarkdown } from './markdown'
 import {
   type PublicRouteContext,
@@ -30,6 +55,12 @@ import {
   specialPageSlugSchema,
   withLocalePrefix,
 } from './routes'
+import {
+  AboutInformationPage,
+  CvInformationPage,
+  FriendInformationPage,
+  LogoInformationPage,
+} from './special-information-pages'
 
 function formatDate(date: Date | null) {
   return date?.toISOString().slice(0, 10)
@@ -38,23 +69,128 @@ function formatDate(date: Date | null) {
 function CardLink({
   context,
   document,
-}: Readonly<{ context: PublicRouteContext; document: PublicDocument }>) {
+  searchMatch,
+  showSummary = false,
+  trafficLabels,
+}: Readonly<{
+  context: PublicRouteContext
+  document: PublicDocument
+  searchMatch?: Readonly<{ label: string; snippet: string }> | undefined
+  showSummary?: boolean
+  trafficLabels?: TrafficLabels
+}>) {
+  const summary = searchMatch?.snippet ?? (showSummary ? documentSummary(document) : undefined)
   return (
     <li>
       <Link
-        className="block rounded-xl border bg-card p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-primary"
+        className="content-card block rounded-xl border bg-card p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-primary"
+        data-content-card={document.contentType}
         href={withLocalePrefix(document.routePath, context)}
       >
         <h3 className="font-semibold text-lg">
           {localizeContentText(document.title, context.locale)}
         </h3>
-        {document.sourceUpdatedAt ? (
-          <time className="mt-2 block text-muted-foreground text-sm">
-            {formatDate(document.sourceUpdatedAt)}
-          </time>
+        {searchMatch ? (
+          <span className="mt-2 block font-medium text-primary text-xs uppercase">
+            {searchMatch.label}
+          </span>
+        ) : null}
+        {documentDate(document) ? (
+          <time className="mt-2 block text-muted-foreground text-sm">{documentDate(document)}</time>
+        ) : null}
+        {summary ? (
+          <p className="mt-3 line-clamp-3 text-muted-foreground text-sm">
+            {localizeContentText(summary, context.locale)}
+          </p>
+        ) : null}
+        {trafficLabels ? (
+          <span className="mt-3 block">
+            <TrafficMetrics labels={trafficLabels} paths={trafficPaths(document.routePath)} />
+          </span>
         ) : null}
       </Link>
     </li>
+  )
+}
+
+type ContentSearchMatch = Readonly<{ label: string; snippet: string }>
+
+function WikiDocumentCard({
+  context,
+  defaultOpen = false,
+  group,
+  labels,
+  searchMatch,
+  trafficLabels,
+  variant = 'index',
+}: Readonly<{
+  context: PublicRouteContext
+  defaultOpen?: boolean
+  group: WikiDocumentGroup
+  labels: Readonly<{ chapterCount: string; collapse: string; expand: string; overview: string }>
+  searchMatch?: ((document: PublicDocument) => ContentSearchMatch | undefined) | undefined
+  trafficLabels: TrafficLabels
+  variant?: 'home' | 'index'
+}>) {
+  const documents = [
+    ...(group.index ? [group.index] : []),
+    ...group.chapters.map((entry) => entry.document),
+  ]
+  const primary = group.index ?? group.chapters[0]?.document
+  const date = primary ? documentDate(primary) : undefined
+  return (
+    <details className="wiki-document-card" data-wiki-document={variant} open={defaultOpen}>
+      <summary>
+        <span className="wiki-document-summary">
+          <strong>{localizeContentText(group.title, context.locale)}</strong>
+          <span className="wiki-document-meta">
+            {date ? <time>{date}</time> : null}
+            <span>{labels.chapterCount}</span>
+            <TrafficMetrics
+              labels={trafficLabels}
+              paths={documents.flatMap((document) => trafficPaths(document.routePath))}
+            />
+          </span>
+        </span>
+        <span className="wiki-document-toggle" aria-hidden="true">
+          <span className="wiki-toggle-expand">{labels.expand}</span>
+          <span className="wiki-toggle-collapse">{labels.collapse}</span>
+        </span>
+      </summary>
+      <ol className="wiki-document-chapters">
+        {group.index ? (
+          <li>
+            <Link href={withLocalePrefix(group.index.routePath, context)}>
+              <span className="wiki-chapter-number">⌂</span>
+              <span>{labels.overview}</span>
+            </Link>
+            {searchMatch?.(group.index) ? (
+              <p>
+                <strong>{searchMatch(group.index)?.label}</strong> ·{' '}
+                {searchMatch(group.index)?.snippet}
+              </p>
+            ) : null}
+          </li>
+        ) : null}
+        {group.chapters.map((entry) => (
+          <li
+            key={entry.document.id}
+            style={{ paddingInlineStart: `${entry.chapterDepth * 0.9}rem` }}
+          >
+            <Link href={withLocalePrefix(entry.document.routePath, context)}>
+              <span className="wiki-chapter-number">{entry.chapter}</span>
+              <span>{localizeContentText(entry.document.title, context.locale)}</span>
+            </Link>
+            {searchMatch?.(entry.document) ? (
+              <p>
+                <strong>{searchMatch(entry.document)?.label}</strong> ·{' '}
+                {searchMatch(entry.document)?.snippet}
+              </p>
+            ) : null}
+          </li>
+        ))}
+      </ol>
+    </details>
   )
 }
 
@@ -64,109 +200,384 @@ async function HomePage({ context }: Readonly<{ context: PublicRouteContext }>) 
     listCachedDocuments('blog', context.locale),
     listCachedDocuments('wiki', context.locale),
   ])
+  const wikiGroups = latestWikiDocumentGroups(wikis)
+  const trafficLabels = makeTrafficLabels(t)
+  const actions = [
+    { href: '/blog', icon: Newspaper, label: t('homepageActionBlog') },
+    { href: '/wiki', icon: BookOpen, label: t('homepageActionWiki') },
+    { href: '/more', icon: ArrowRight, label: t('homepageActionMore') },
+  ] as const
+  const tags = [
+    t('homepageTagTechnology'),
+    t('homepageTagProjects'),
+    t('homepageTagLearning'),
+    t('homepageTagLife'),
+  ]
+  const focusAreas = [
+    {
+      icon: Cpu,
+      summary: t('homepageFocusEmbeddedSummary'),
+      title: t('homepageFocusEmbeddedTitle'),
+    },
+    {
+      icon: Bot,
+      summary: t('homepageFocusRoboticsSummary'),
+      title: t('homepageFocusRoboticsTitle'),
+    },
+    {
+      icon: Monitor,
+      summary: t('homepageFocusToolsSummary'),
+      title: t('homepageFocusToolsTitle'),
+    },
+    {
+      icon: Globe2,
+      summary: t('homepageFocusWebSummary'),
+      title: t('homepageFocusWebTitle'),
+    },
+    {
+      icon: Smartphone,
+      summary: t('homepageFocusMobileSummary'),
+      title: t('homepageFocusMobileTitle'),
+    },
+    {
+      icon: NotebookPen,
+      summary: t('homepageFocusNotesSummary'),
+      title: t('homepageFocusNotesTitle'),
+    },
+  ] as const
   return (
-    <>
-      <section className="grid min-h-[24rem] content-center rounded-3xl border bg-card p-8 shadow-sm sm:p-14">
-        <p className="font-medium text-primary text-sm tracking-[0.2em] uppercase">
-          {t('homepageEyebrow')}
-        </p>
-        <h1 className="mt-5 max-w-3xl font-bold text-4xl tracking-tight sm:text-6xl">
-          {t('homepageTitle')}
-        </h1>
-        <p className="mt-6 max-w-2xl text-lg text-muted-foreground">{t('homepageDescription')}</p>
-      </section>
-      <div className="mt-12 grid gap-10 lg:grid-cols-2">
-        {[
-          { documents: blogs.slice(0, 3), href: '/blog', title: t('latestBlog') },
-          { documents: wikis.slice(0, 3), href: '/wiki', title: t('latestWiki') },
-        ].map((section) => (
-          <section key={section.href}>
-            <div className="mb-4 flex items-end justify-between gap-4">
-              <h2 className="font-semibold text-2xl">{section.title}</h2>
-              <Link
-                className="text-primary text-sm hover:underline"
-                href={withLocalePrefix(section.href, context)}
-              >
-                {t('viewAll')}
+    <div className="home-page">
+      <section className="home-hero">
+        <div>
+          <p className="home-kicker">{t('homepageEyebrow')}</p>
+          <h1>{t('homepageTitle')}</h1>
+          <p className="home-summary">{t('homepageDescription')}</p>
+          <div className="home-actions">
+            {actions.map(({ href, icon: Icon, label }) => (
+              <Link href={withLocalePrefix(href, context)} key={href}>
+                <Icon aria-hidden size={17} />
+                <span>{label}</span>
               </Link>
+            ))}
+          </div>
+          <ul className="home-tags">
+            {tags.map((tag) => (
+              <li key={tag}>
+                <CheckCircle2 aria-hidden size={14} />
+                {tag}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div aria-hidden className="home-orbit">
+          <span>
+            <Bot size={18} />
+          </span>
+          <span>
+            <Cpu size={18} />
+          </span>
+          <span>
+            <BookOpen size={18} />
+          </span>
+          <span>
+            <Globe2 size={18} />
+          </span>
+          <strong>
+            <NotebookPen size={32} />
+          </strong>
+        </div>
+      </section>
+      <section className="home-focus" aria-labelledby="home-focus-title">
+        <header>
+          <p>{t('homepageFocusEyebrow')}</p>
+          <h2 id="home-focus-title">{t('homepageFocusTitle')}</h2>
+          <span>{t('homepageFocusDescription')}</span>
+        </header>
+        <div>
+          {focusAreas.map(({ icon: Icon, summary, title }) => (
+            <article key={title}>
+              <span aria-hidden>
+                <Icon size={21} />
+              </span>
+              <h3>{title}</h3>
+              <p>{summary}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+      <div className="home-latest-grid">
+        <section className="home-latest-panel">
+          <div className="home-panel-heading">
+            <h2>
+              <Newspaper aria-hidden size={20} />
+              {t('latestBlog')}
+            </h2>
+            <Link href={withLocalePrefix('/blog', context)}>
+              {t('viewAll')}
+              <ArrowRight aria-hidden size={15} />
+            </Link>
+          </div>
+          {blogs.length ? (
+            <ul className="grid gap-3">
+              {blogs.slice(0, 5).map((document) => (
+                <CardLink context={context} document={document} key={document.id} />
+              ))}
+            </ul>
+          ) : (
+            <p className="rounded-xl border p-5 text-muted-foreground">{t('emptyContent')}</p>
+          )}
+        </section>
+        <section className="home-latest-panel">
+          <div className="home-panel-heading">
+            <h2>
+              <BookOpen aria-hidden size={20} />
+              {t('latestWiki')}
+            </h2>
+            <Link href={withLocalePrefix('/wiki', context)}>
+              {t('viewAll')}
+              <ArrowRight aria-hidden size={15} />
+            </Link>
+          </div>
+          {wikiGroups.length ? (
+            <div className="grid gap-3">
+              {wikiGroups.map((group) => (
+                <WikiDocumentCard
+                  context={context}
+                  group={group}
+                  key={group.key}
+                  labels={{
+                    chapterCount: t('chapterCount', { count: group.chapters.length }),
+                    collapse: t('wikiCollapse'),
+                    expand: t('wikiExpand'),
+                    overview: t('wikiOverview'),
+                  }}
+                  trafficLabels={trafficLabels}
+                  variant="home"
+                />
+              ))}
             </div>
-            {section.documents.length ? (
-              <ul className="grid gap-3">
-                {section.documents.map((document) => (
-                  <CardLink context={context} document={document} key={document.id} />
-                ))}
-              </ul>
-            ) : (
-              <p className="rounded-xl border p-5 text-muted-foreground">{t('emptyContent')}</p>
-            )}
-          </section>
-        ))}
+          ) : (
+            <p className="rounded-xl border p-5 text-muted-foreground">{t('emptyContent')}</p>
+          )}
+        </section>
       </div>
-    </>
+    </div>
   )
-}
-
-function wikiGroup(document: PublicDocument) {
-  return document.sourcePath.split('/')[2] ?? document.sourcePath
 }
 
 async function ContentList({
   context,
   contentType,
-}: Readonly<{ contentType: 'blog' | 'wiki'; context: PublicRouteContext }>) {
+  queryInput,
+}: Readonly<{
+  contentType: 'blog' | 'wiki'
+  context: PublicRouteContext
+  queryInput: string | undefined
+}>) {
   const t = await getTranslations({ locale: context.locale, namespace: 'Web' })
-  const documents = await listCachedDocuments(contentType, context.locale)
+  const allDocuments = await listCachedDocuments(contentType, context.locale)
+  const parsedQuery = z.string().trim().max(200).safeParse(queryInput)
+  const query = parsedQuery.success && parsedQuery.data ? parsedQuery.data : undefined
+  const searchResults = query
+    ? await readCachedSearch({ contentType, limit: 50, locale: context.locale, query })
+    : undefined
+  const documents = searchResults
+    ? searchResults.flatMap((result) => {
+        const document = allDocuments.find(
+          (candidate) => `/${context.locale}${candidate.routePath}` === result.route,
+        )
+        return document ? [document] : []
+      })
+    : allDocuments
   const title = contentType === 'blog' ? t('blogTitle') : t('wikiTitle')
   const description = contentType === 'blog' ? t('blogDescription') : t('wikiDescription')
+  const trafficLabels = makeTrafficLabels(t)
+  const matchedContextLabels = {
+    body: t('searchMatchBody'),
+    heading: t('searchMatchHeading'),
+    metadata: t('searchMatchMetadata'),
+    title: t('searchMatchTitle'),
+  } as const
+  const searchByRoute = new Map<string, SearchResult>(
+    searchResults?.map((result) => [result.route, result]) ?? [],
+  )
+  const searchMatch = (document: PublicDocument) => {
+    const result = searchByRoute.get(`/${context.locale}${document.routePath}`)
+    return result
+      ? { label: matchedContextLabels[result.matchedContext], snippet: result.snippet }
+      : undefined
+  }
 
   if (contentType === 'wiki') {
-    const groups = Map.groupBy(documents, wikiGroup)
+    const matchedGroupKeys = new Set(documents.map(wikiDocumentKey))
+    const groups = groupWikiDocuments(
+      query
+        ? allDocuments.filter((document) => matchedGroupKeys.has(wikiDocumentKey(document)))
+        : documents,
+    )
     return (
-      <section>
-        <h1 className="font-bold text-4xl">{title}</h1>
-        <p className="mt-3 text-muted-foreground">{description}</p>
-        <div className="mt-9 grid gap-8">
-          {[...groups].map(([group, entries]) => (
-            <section className="rounded-2xl border p-5" key={group}>
-              <h2 className="mb-4 font-semibold text-xl">
-                {entries[0]
-                  ? localizeContentText(entries[0].title, context.locale)
-                  : localizeContentText(group, context.locale)}
-              </h2>
-              <ol className="grid gap-2">
-                {entries.map((document) => (
-                  <CardLink context={context} document={document} key={document.id} />
-                ))}
-              </ol>
-            </section>
+      <section className="content-index content-index-wiki">
+        <header className="content-index-hero">
+          <span aria-hidden className="content-index-icon">
+            <BookOpen size={26} />
+          </span>
+          <span className="content-index-hero-copy">
+            <p>{t('wiki')}</p>
+            <h1>{title}</h1>
+            <span>{description}</span>
+          </span>
+        </header>
+        <ContentSearch
+          action={withLocalePrefix('/wiki', context)}
+          defaultValue={query}
+          label={t('filterWiki')}
+          submitLabel={t('searchSubmit')}
+        />
+        <div className="wiki-document-list">
+          {groups.map((group) => (
+            <WikiDocumentCard
+              context={context}
+              defaultOpen={Boolean(query)}
+              group={group}
+              key={group.key}
+              labels={{
+                chapterCount: t('chapterCount', { count: group.chapters.length }),
+                collapse: t('wikiCollapse'),
+                expand: t('wikiExpand'),
+                overview: t('wikiOverview'),
+              }}
+              searchMatch={searchMatch}
+              trafficLabels={trafficLabels}
+            />
           ))}
+          {groups.length === 0 ? (
+            <p className="rounded-xl border p-5 text-muted-foreground">{t('searchEmpty')}</p>
+          ) : null}
         </div>
       </section>
     )
   }
 
   return (
-    <section>
-      <h1 className="font-bold text-4xl">{title}</h1>
-      <p className="mt-3 text-muted-foreground">{description}</p>
-      <ul className="mt-9 grid gap-4 sm:grid-cols-2">
+    <section className="content-index content-index-blog">
+      <header className="content-index-hero">
+        <span aria-hidden className="content-index-icon">
+          <Newspaper size={26} />
+        </span>
+        <span className="content-index-hero-copy">
+          <p>{t('blog')}</p>
+          <h1>{title}</h1>
+          <span>{description}</span>
+        </span>
+      </header>
+      <ContentSearch
+        action={withLocalePrefix('/blog', context)}
+        defaultValue={query}
+        label={t('filterBlog')}
+        submitLabel={t('searchSubmit')}
+      />
+      <ul className="mt-9 grid gap-4">
         {documents.map((document) => (
-          <CardLink context={context} document={document} key={document.id} />
+          <CardLink
+            context={context}
+            document={document}
+            key={document.id}
+            searchMatch={searchMatch(document)}
+            showSummary
+            trafficLabels={trafficLabels}
+          />
         ))}
       </ul>
+      {documents.length === 0 ? (
+        <p className="mt-9 rounded-xl border p-5 text-muted-foreground">{t('searchEmpty')}</p>
+      ) : null}
     </section>
+  )
+}
+
+type TrafficLabels = Readonly<{
+  averageTime: string
+  bounceRate: string
+  pageviews: string
+  unavailable: string
+  visits: string
+}>
+
+function makeTrafficLabels(
+  t: (
+    key:
+      | 'trafficAverageTime'
+      | 'trafficBounceRate'
+      | 'trafficPageviews'
+      | 'trafficUnavailable'
+      | 'trafficVisits',
+  ) => string,
+) {
+  return {
+    averageTime: t('trafficAverageTime'),
+    bounceRate: t('trafficBounceRate'),
+    pageviews: t('trafficPageviews'),
+    unavailable: t('trafficUnavailable'),
+    visits: t('trafficVisits'),
+  } satisfies TrafficLabels
+}
+
+function ContentSearch({
+  action,
+  defaultValue,
+  label,
+  submitLabel,
+}: Readonly<{
+  action: string
+  defaultValue: string | undefined
+  label: string
+  submitLabel: string
+}>) {
+  return (
+    <search>
+      <form action={action} className="mt-7 flex max-w-xl gap-3" method="get">
+        <input
+          aria-label={label}
+          className="min-w-0 flex-1 rounded-xl border bg-background px-4 py-3"
+          defaultValue={defaultValue}
+          maxLength={200}
+          name="q"
+          placeholder={label}
+          type="search"
+        />
+        <button
+          aria-label={submitLabel}
+          className="grid size-12 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground"
+          type="submit"
+        >
+          <SearchIcon aria-hidden size={18} />
+        </button>
+      </form>
+    </search>
   )
 }
 
 async function SearchPage({
   context,
   queryInput,
-}: Readonly<{ context: PublicRouteContext; queryInput: string | undefined }>) {
+  typeInput,
+}: Readonly<{
+  context: PublicRouteContext
+  queryInput: string | undefined
+  typeInput: string | undefined
+}>) {
   const t = await getTranslations({ locale: context.locale, namespace: 'Web' })
   const parsedQuery = searchQuerySchema.safeParse(queryInput)
   const query = parsedQuery.success ? parsedQuery.data : undefined
+  const parsedType = z.enum(['blog', 'wiki']).safeParse(typeInput)
+  const contentType = parsedType.success ? parsedType.data : undefined
   const results = query
-    ? await readCachedSearch({ limit: 20, locale: context.locale, query })
+    ? await readCachedSearch({
+        ...(contentType ? { contentType } : {}),
+        limit: 20,
+        locale: context.locale,
+        query,
+      })
     : undefined
   const matchedContextLabels = {
     body: t('searchMatchBody'),
@@ -182,7 +593,7 @@ async function SearchPage({
       <search>
         <form
           action={withLocalePrefix('/search', context)}
-          className="mt-8 flex max-w-3xl gap-3"
+          className="mt-8 flex max-w-3xl flex-wrap gap-3"
           method="get"
         >
           <input
@@ -195,6 +606,16 @@ async function SearchPage({
             required
             type="search"
           />
+          <select
+            aria-label={t('searchType')}
+            className="rounded-xl border bg-background px-4 py-3"
+            defaultValue={contentType ?? ''}
+            name="type"
+          >
+            <option value="">{t('searchTypeAll')}</option>
+            <option value="blog">{t('blog')}</option>
+            <option value="wiki">{t('wiki')}</option>
+          </select>
           <button
             className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 font-medium text-primary-foreground"
             type="submit"
@@ -246,9 +667,16 @@ async function ArticlePage({
   const document = await readCachedDocument(path, context.locale)
   if (!document) notFound()
   const all = await listCachedDocuments(document.contentType, context.locale)
-  const navigation =
+  const currentWikiGroup =
     document.contentType === 'wiki'
-      ? all.filter((candidate) => wikiGroup(candidate) === wikiGroup(document))
+      ? groupWikiDocuments(all).find((group) => group.key === wikiDocumentKey(document))
+      : undefined
+  const navigation =
+    document.contentType === 'wiki' && currentWikiGroup
+      ? [
+          ...(currentWikiGroup.index ? [currentWikiGroup.index] : []),
+          ...currentWikiGroup.chapters.map((entry) => entry.document),
+        ]
       : all
   const index = navigation.findIndex((candidate) => candidate.id === document.id)
   const previous = index > 0 ? navigation[index - 1] : undefined
@@ -259,10 +687,28 @@ async function ArticlePage({
   )
   const localizedTitle = localizeContentText(document.title, context.locale)
   const presentationState = document.contentLocaleState
+  const trafficLabels = makeTrafficLabels(t)
+
+  const wikiNavigation =
+    document.contentType === 'wiki'
+      ? navigation.map((candidate, navigationIndex) => {
+          const numbered = currentWikiGroup?.chapters.find(
+            (entry) => entry.document.id === candidate.id,
+          )
+          return {
+            ...(numbered?.chapter ? { chapter: numbered.chapter } : {}),
+            current: candidate.id === document.id,
+            depth: numbered?.chapterDepth ?? 0,
+            href: withLocalePrefix(candidate.routePath, context),
+            title: localizeContentText(candidate.title, context.locale),
+            navigationIndex,
+          }
+        })
+      : []
 
   return (
-    <article className="mx-auto max-w-4xl">
-      <header className="border-b pb-8">
+    <article className="mx-auto max-w-[100rem]" data-article-type={document.contentType}>
+      <header className="article-hero">
         <p className="font-medium text-primary text-sm uppercase">{t(document.contentType)}</p>
         <h1 className="mt-3 font-bold text-4xl tracking-tight sm:text-5xl">{localizedTitle}</h1>
         <div className="mt-4 flex flex-wrap gap-4 text-muted-foreground text-sm">
@@ -284,23 +730,25 @@ async function ArticlePage({
                 : t('contentStateFallback')}
           </p>
         )}
+        <TrafficMetrics
+          labels={trafficLabels}
+          paths={trafficPaths(document.routePath)}
+          variant="detail"
+        />
       </header>
-      {rendered.headings.length > 1 ? (
-        <nav aria-label={t('tableOfContents')} className="my-8 rounded-xl border bg-card p-5">
-          <h2 className="font-semibold">{t('tableOfContents')}</h2>
-          <ol className="mt-3 grid gap-1 text-sm">
-            {rendered.headings.map((heading) => (
-              <li className={heading.depth > 2 ? 'pl-4' : undefined} key={heading.id}>
-                <a className="hover:text-primary" href={`#${heading.id}`}>
-                  {heading.text}
-                </a>
-              </li>
-            ))}
-          </ol>
-        </nav>
-      ) : null}
-      {/* biome-ignore lint/security/noDangerouslySetInnerHtml: unified drops raw HTML, rehype-sanitize validates the tree, and Shiki only adds generated markup. */}
-      <div className="prose-site mt-9" dangerouslySetInnerHTML={{ __html: rendered.html }} />
+      <ArticleReader
+        documentNavigation={wikiNavigation}
+        headings={rendered.headings}
+        html={rendered.html}
+        labels={{
+          close: t('close'),
+          codeCopied: t('codeCopied'),
+          copyCode: t('copyCode'),
+          documentNavigation: t('documentNavigation'),
+          imagePreview: t('imagePreview'),
+          tableOfContents: t('tableOfContents'),
+        }}
+      />
       <nav className="mt-12 grid gap-3 border-t pt-6 sm:grid-cols-2">
         {previous ? (
           <Link
@@ -327,201 +775,27 @@ async function ArticlePage({
   )
 }
 
-function SpecialHeader({ description, title }: Readonly<{ description: string; title: string }>) {
-  return (
-    <header>
-      <h1 className="font-bold text-4xl">{title}</h1>
-      <p className="mt-4 max-w-3xl text-lg text-muted-foreground">{description}</p>
-    </header>
-  )
-}
-
 async function SpecialPage({
   context,
   slug,
 }: Readonly<{ context: PublicRouteContext; slug: SpecialPageSlug }>) {
-  const t = await getTranslations({ locale: context.locale, namespace: 'Web' })
-  type SpecialMessageKey =
-    | 'aboutDescription'
-    | 'aboutTitle'
-    | 'addBookmark'
-    | 'blogCount'
-    | 'bookmarkName'
-    | 'bookmarkStorageNote'
-    | 'bookmarkUrl'
-    | 'contact'
-    | 'cvDescription'
-    | 'cvTitle'
-    | 'exportBookmarks'
-    | 'friendDescription'
-    | 'friendTitle'
-    | 'github'
-    | 'importBookmarks'
-    | 'moreDescription'
-    | 'moreTitle'
-    | 'musicDescription'
-    | 'musicTitle'
-    | 'mylogoDescription'
-    | 'mylogoTitle'
-    | 'noRecords'
-    | 'printCv'
-    | 'progress'
-    | 'qqMusic'
-    | 'removeBookmark'
-    | 'resourceBoundary'
-    | 'revision'
-    | 'searchAction'
-    | 'searchPlaceholder'
-    | 'startDescription'
-    | 'startTitle'
-    | 'statsDescription'
-    | 'statsTitle'
-    | 'techDescription'
-    | 'techTitle'
-    | 'weight'
-    | 'weightDescription'
-    | 'weightTitle'
-    | 'waist'
-    | 'wikiCount'
-  const s = (key: SpecialMessageKey, values?: Record<string, string | number>) =>
-    t(`special.${key}`, values)
-  const routes = [
-    'about',
-    'cv',
-    'friend',
-    'mylogo',
-    'music',
-    'start',
-    'stats',
-    'tech-footprint',
-    'weight-loss',
-  ] as const
-  const titleKeys: Record<(typeof routes)[number], SpecialMessageKey> = {
-    about: 'aboutTitle',
-    cv: 'cvTitle',
-    friend: 'friendTitle',
-    music: 'musicTitle',
-    mylogo: 'mylogoTitle',
-    start: 'startTitle',
-    stats: 'statsTitle',
-    'tech-footprint': 'techTitle',
-    'weight-loss': 'weightTitle',
-  }
-
   switch (slug) {
     case 'about':
-      return (
-        <>
-          <SpecialHeader description={s('aboutDescription')} title={s('aboutTitle')} />
-          <p className="mt-8 rounded-xl border bg-card p-5">{s('contact')}</p>
-        </>
-      )
+      return <AboutInformationPage context={context} />
     case 'cv':
-      return (
-        <>
-          <SpecialHeader description={s('cvDescription')} title={s('cvTitle')} />
-          <PrintButton label={s('printCv')} />
-        </>
-      )
+      return <CvInformationPage context={context} />
     case 'friend':
-      return (
-        <>
-          <SpecialHeader description={s('friendDescription')} title={s('friendTitle')} />
-          <div className="mt-8 flex gap-3">
-            <a
-              className="rounded-xl border p-4 text-primary"
-              href="https://github.com/tungchiahui"
-              rel="noreferrer"
-              target="_blank"
-            >
-              {s('github')} <ExternalLink className="inline" size={14} />
-            </a>
-          </div>
-        </>
-      )
+      return <FriendInformationPage locale={context.locale} />
     case 'more':
-      return (
-        <>
-          <SpecialHeader description={s('moreDescription')} title={s('moreTitle')} />
-          <ul className="mt-8 grid gap-3 sm:grid-cols-2">
-            {routes
-              .filter((route) => route !== 'about')
-              .map((route) => (
-                <li key={route}>
-                  <Link
-                    className="block rounded-xl border bg-card p-5 hover:border-primary"
-                    href={withLocalePrefix(`/${route}`, context)}
-                  >
-                    {s(titleKeys[route])}
-                  </Link>
-                </li>
-              ))}
-          </ul>
-        </>
-      )
+      return <MoreDirectory />
     case 'mylogo':
-      return (
-        <>
-          <SpecialHeader description={s('mylogoDescription')} title={s('mylogoTitle')} />
-          <div className="mt-10 grid size-40 place-items-center rounded-[2.5rem] bg-primary font-black text-2xl text-primary-foreground">
-            {t('siteName')}
-          </div>
-        </>
-      )
+      return <LogoInformationPage context={context} />
     case 'music':
-      return (
-        <>
-          <SpecialHeader description={s('musicDescription')} title={s('musicTitle')} />
-          <a
-            className="mt-8 inline-flex items-center gap-2 rounded-xl border p-4 text-primary"
-            href="https://y.qq.com/"
-            rel="noreferrer"
-            target="_blank"
-          >
-            {s('qqMusic')} <ExternalLink size={15} />
-          </a>
-          <p className="mt-4 text-muted-foreground text-sm">{s('resourceBoundary')}</p>
-        </>
-      )
+      return <MusicPage />
     case 'start':
-      return (
-        <>
-          <SpecialHeader description={s('startDescription')} title={s('startTitle')} />
-          <BookmarkWorkspace
-            labels={{
-              add: s('addBookmark'),
-              export: s('exportBookmarks'),
-              import: s('importBookmarks'),
-              name: s('bookmarkName'),
-              remove: s('removeBookmark'),
-              search: s('searchAction'),
-              searchPlaceholder: s('searchPlaceholder'),
-              storageNote: s('bookmarkStorageNote'),
-              url: s('bookmarkUrl'),
-            }}
-          />
-        </>
-      )
+      return <BookmarkWorkspace homeHref={withLocalePrefix('/', context)} />
     case 'stats': {
-      const [blogs, wikis] = await Promise.all([
-        listCachedDocuments('blog', context.locale),
-        listCachedDocuments('wiki', context.locale),
-      ])
-      return (
-        <>
-          <SpecialHeader description={s('statsDescription')} title={s('statsTitle')} />
-          <dl className="mt-8 grid gap-4 sm:grid-cols-2">
-            <div className="rounded-xl border bg-card p-6">
-              <dt>{t('blog')}</dt>
-              <dd className="mt-2 font-bold text-3xl">{s('blogCount', { count: blogs.length })}</dd>
-            </div>
-            <div className="rounded-xl border bg-card p-6">
-              <dt>{t('wiki')}</dt>
-              <dd className="mt-2 font-bold text-3xl">{s('wikiCount', { count: wikis.length })}</dd>
-            </div>
-          </dl>
-        </>
-      )
+      return <StatsDashboard />
     }
     case 'tech-footprint': {
       const dataset = await readCachedOwnerDataset('tech_footprint')
@@ -551,14 +825,19 @@ async function SpecialPage({
 export async function renderPublicPage(
   segments: readonly string[],
   context: PublicRouteContext,
-  searchQuery?: string,
+  searchParameters: Readonly<Record<string, string | string[] | undefined>> = {},
 ) {
   const path = publicPath(segments)
+  const query = typeof searchParameters.q === 'string' ? searchParameters.q : undefined
+  const type = typeof searchParameters.type === 'string' ? searchParameters.type : undefined
   let page: ReactNode
   if (path === '/') page = <HomePage context={context} />
-  else if (path === '/blog') page = <ContentList contentType="blog" context={context} />
-  else if (path === '/wiki') page = <ContentList contentType="wiki" context={context} />
-  else if (path === '/search') page = <SearchPage context={context} queryInput={searchQuery} />
+  else if (path === '/blog')
+    page = <ContentList contentType="blog" context={context} queryInput={query} />
+  else if (path === '/wiki')
+    page = <ContentList contentType="wiki" context={context} queryInput={query} />
+  else if (path === '/search')
+    page = <SearchPage context={context} queryInput={query} typeInput={type} />
   else if (path.startsWith('/blog/') || path.startsWith('/wiki/'))
     page = <ArticlePage context={context} path={path} />
   else {
@@ -566,6 +845,7 @@ export async function renderPublicPage(
     if (!special.success) notFound()
     page = <SpecialPage context={context} slug={special.data} />
   }
+  if (path === '/start') return page
   return (
     <SiteShell context={context} logicalPath={path}>
       {page}

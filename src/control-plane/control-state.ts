@@ -500,7 +500,7 @@ export function readControlObservabilitySnapshot(path: string, now = new Date())
             `SELECT
                count(*) FILTER (WHERE status IN ('queued', 'claimed', 'running', 'needs-attention')) AS incomplete_count,
                count(*) FILTER (WHERE status = 'needs-attention') AS needs_attention_count,
-               count(*) FILTER (WHERE status = 'failed' AND finished_at >= datetime(?, '-24 hours')) AS failed_24h_count,
+               count(*) FILTER (WHERE status = 'failed' AND julianday(finished_at) >= julianday(?) - 1) AS failed_24h_count,
                count(*) FILTER (WHERE status IN ('claimed', 'running') AND lease_expires_at <= ?) AS expired_lease_count,
                COALESCE(max(0, (julianday(?) - julianday(min(created_at) FILTER (WHERE status IN ('queued', 'claimed', 'running', 'needs-attention')))) * 86400), 0) AS oldest_incomplete_age_seconds
              FROM infrastructure_operations`,
@@ -1217,10 +1217,8 @@ export function commitDeploymentCutover(
   path: string,
   operationId: string,
   lease: LeaseIdentity,
-  stabilizationSeconds: number,
   now = new Date(),
 ) {
-  const stabilization = z.number().int().nonnegative().max(86_400).parse(stabilizationSeconds)
   const database = openControlState(path)
   try {
     return transaction(database, () => {
@@ -1240,7 +1238,6 @@ export function commitDeploymentCutover(
         throw new ControlStateConflictError('No complete deployment cutover intent exists')
       }
       const timestamp = now.toISOString()
-      const stabilizationUntil = new Date(now.getTime() + stabilization * 1_000).toISOString()
       database
         .prepare(
           `UPDATE control_runtime_state
@@ -1251,14 +1248,14 @@ export function commitDeploymentCutover(
                current_sha = pending_sha,
                current_digest = pending_digest,
                pending_slot = 'none', pending_sha = NULL, pending_digest = NULL,
-               cutover_at = ?, stabilization_until = ?, updated_at = ?
+               cutover_at = ?, stabilization_until = NULL, updated_at = ?
            WHERE singleton_id = 1`,
         )
-        .run(timestamp, stabilizationUntil, timestamp)
+        .run(timestamp, timestamp)
       appendAudit(database, {
         actorId: lease.leaseOwner,
         createdAt: timestamp,
-        details: { stabilizationUntil },
+        details: { rollbackTargetRetained: true },
         eventType: 'deployment_cutover_committed',
         operationId: operation.id,
         outcome: 'succeeded',

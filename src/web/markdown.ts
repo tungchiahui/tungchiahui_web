@@ -15,7 +15,13 @@ import type { AppLocale } from '@/i18n/locales'
 
 import { resolveMarkdownAsset } from './assets'
 
-export type MarkdownHeading = Readonly<{ depth: number; id: string; text: string }>
+export type MarkdownHeading = Readonly<{
+  depth: number
+  id: string
+  level: number
+  number: string
+  text: string
+}>
 export type RenderedMarkdown = Readonly<{
   headings: readonly MarkdownHeading[]
   html: string
@@ -43,8 +49,30 @@ function stripTags(value: string) {
     .replaceAll('&gt;', '>')
 }
 
+function numberHeadings(
+  headings: readonly Readonly<{ depth: number; id: string; text: string }>[],
+) {
+  let rootCount = 0
+  const stack: Array<{ childCount: number; depth: number; parts: number[] }> = []
+  return headings.map((heading): MarkdownHeading => {
+    while ((stack.at(-1)?.depth ?? 0) >= heading.depth) stack.pop()
+    const parent = stack.at(-1)
+    let parts: number[]
+    if (parent) {
+      parent.childCount += 1
+      parts = [...parent.parts, parent.childCount]
+    } else {
+      rootCount += 1
+      parts = [rootCount]
+    }
+    const level = parts.length - 1
+    stack.push({ childCount: 0, depth: heading.depth, parts })
+    return { ...heading, level, number: parts.join('.') }
+  })
+}
+
 function enhanceHtml(html: string) {
-  const headings: MarkdownHeading[] = []
+  const headings: Array<Readonly<{ depth: number; id: string; text: string }>> = []
   const usedIds = new Map<string, number>()
   let enhanced = html.replace(
     /<h([1-6])>([\s\S]*?)<\/h\1>/g,
@@ -56,8 +84,12 @@ function enhanceHtml(html: string) {
     },
   )
   enhanced = enhanced.replace(
-    /<a href="(https:\/\/[^"]+)"/g,
+    /<a href="(https?:\/\/[^"]+)"/g,
     '<a href="$1" rel="noopener noreferrer" target="_blank"',
+  )
+  enhanced = enhanced.replace(
+    /<a href="([^"]+\.(?:pdf|zip|tar|gz|docx?|xlsx?|pptx?))"/giu,
+    '<a href="$1" data-attachment="true"',
   )
   enhanced = enhanced.replace(
     /<img([^>]*?)src="([^"]+)"([^>]*)>/g,
@@ -67,7 +99,21 @@ function enhanceHtml(html: string) {
       return `<img${before}src="${asset.url}"${after} loading="lazy" decoding="async" data-asset-origin="${asset.origin}" data-cache-policy="${asset.cachePolicy}">`
     },
   )
-  return { headings: Object.freeze(headings), html: enhanced }
+  enhanced = enhanced.replace(
+    /<table>([\s\S]*?)<\/table>/g,
+    '<div class="table-scroll"><table>$1</table></div>',
+  )
+  const numberedHeadings = Object.freeze(numberHeadings(headings))
+  const headingNumbers = new Map(numberedHeadings.map((heading) => [heading.id, heading.number]))
+  enhanced = enhanced.replace(
+    /<h([1-6]) id="([^"]+)">([\s\S]*?)<\/h\1>/g,
+    (match, depthText: string, id: string, contents: string) => {
+      const number = headingNumbers.get(id)
+      if (!number) return match
+      return `<h${depthText} data-heading-anchor id="${id}" tabindex="0"><span class="heading-number">${number}.</span><span>${contents}</span></h${depthText}>`
+    },
+  )
+  return { headings: numberedHeadings, html: enhanced }
 }
 
 function remarkLocaleContent(locale: AppLocale) {
@@ -91,7 +137,22 @@ export async function renderMarkdown(
     .use(remarkRehype)
     .use(rehypeSanitize)
     .use(rehypeShiki, {
+      addLanguageClass: true,
       defaultColor: false,
+      fallbackLanguage: 'text',
+      langAlias: {
+        Bash: 'bash',
+        Dockerfile: 'dockerfile',
+        JSON: 'json',
+        Plain: 'text',
+        PowerShell: 'powershell',
+        Python: 'python',
+        SQL: 'sql',
+        TypeScript: 'typescript',
+        YAML: 'yaml',
+        test: 'text',
+        ymal: 'yaml',
+      },
       themes: { dark: 'github-dark', light: 'github-light' },
     })
     .use(rehypeStringify)
