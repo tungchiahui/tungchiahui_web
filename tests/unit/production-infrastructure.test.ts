@@ -36,6 +36,7 @@ const composeSchema = z.object({
       image: z.string(),
       networks: z.array(z.string()).optional(),
       read_only: z.boolean().optional(),
+      restart: z.enum(['always', 'no', 'on-failure', 'unless-stopped']).optional(),
       security_opt: z.array(z.string()).optional(),
       tmpfs: z.array(z.string()).optional(),
       user: z.string().optional(),
@@ -52,6 +53,7 @@ describe('Phase 12 production foundation policy', () => {
     expect(compose.services.postgres?.image).toContain('TUNGCHIAHUI_POSTGRES_IMAGE')
     expect(compose.services.pgbouncer?.image).toContain('@sha256:')
     expect(compose.services.openresty?.image).toContain('@sha256:')
+    expect(compose.services.openresty?.restart).toBe('always')
 
     for (const dockerfile of ['web.Dockerfile', 'services.Dockerfile']) {
       const source = readFileSync(resolve('ops/production/images', dockerfile), 'utf8')
