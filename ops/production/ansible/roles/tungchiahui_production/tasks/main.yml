@@ -13,6 +13,7 @@
       - tungchiahui_deployment_search_query | trim | length > 0
       - tungchiahui_control_rate_limit_per_minute | int > 0
       - tungchiahui_control_rate_limit_per_minute | int <= 10000
+      - tungchiahui_reconcile_control_api is boolean
       - tungchiahui_origin_bind_address in ['127.0.0.1', '::1']
       - tungchiahui_observability_backup_max_age_seconds | int > 0
       - tungchiahui_observability_disk_critical_percent | int >= 50
@@ -376,6 +377,30 @@
     'Started' in tungchiahui_compose_up.stderr or
     'Recreated' in tungchiahui_compose_up.stderr
   when: tungchiahui_manage_stack | bool
+
+- name: Reconcile only the independent control API
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-name
+      - "{{ tungchiahui_compose_project_name }}"
+      - --file
+      - "{{ tungchiahui_config_root }}/compose.yaml"
+      - up
+      - --detach
+      - --no-deps
+      - --wait
+      - control-api
+  environment: "{{ tungchiahui_compose_environment }}"
+  register: tungchiahui_control_api_up
+  changed_when: >-
+    'Created' in tungchiahui_control_api_up.stderr or
+    'Started' in tungchiahui_control_api_up.stderr or
+    'Recreated' in tungchiahui_control_api_up.stderr
+  when:
+    - not (tungchiahui_manage_stack | bool)
+    - tungchiahui_reconcile_control_api | bool
 
 - name: Install the audited daily backup scheduler service
   ansible.builtin.copy:
