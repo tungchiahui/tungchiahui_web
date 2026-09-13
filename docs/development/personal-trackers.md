@@ -61,8 +61,9 @@ replaces records; weight CSV merges matching planned dates after validation. Exp
    Ansible provisioning role with `tungchiahui_manage_stack=false` and
    `tungchiahui_reconcile_control_api=true`. This installs the reviewed encrypted Secret, applies
    versioned additive migrations, prepares the stopped migration runner, runs an idempotent,
-   health-waiting `docker compose up --no-deps` for `control-api` only, and reloads a changed
-   validated OpenResty configuration. A normal web-slot deployment alone does not update this
+   health-waiting `docker compose up --no-deps` for `control-api` only, and validates a changed
+   OpenResty configuration in a disposable container before recreating the gateway so its read-only
+   file bind mount receives the new inode. A normal web-slot deployment alone does not update this
    service; the scoped path must preserve both Web container IDs and the current rollback target.
 5. Verify login, save, anonymous public reads, logout and signed Operator status. Confirm no old
    Blob provider is contacted. Login remains unavailable until service code and verifier are ready.
@@ -71,6 +72,29 @@ Password rotation changes the verifier and invalidates all prior sessions. After
 restore/PITR, rotate it before enabling owner login to prevent restored sessions becoming valid.
 Keep owner login disabled during that activation window. Retained blue/green slots, deployment
 signing keys, backup credentials and recovery authentication are otherwise unaffected.
+
+## Production activation (2026-09-13)
+
+Owner explicitly authorized merge, production activation and the temporary owner password. PRs
+#22 through #25 and their corresponding `main` Quality Gates passed. Production Web and
+`control-api` were reconciled to `4a44c2d188beef067216d3d6c08c497bd779b6cd`; migration 0007 was
+applied by the versioned migration runner, which now reports eight migrations. The encrypted SOPS
+source passed validation with 11 sections. It contains the owner verifier and the six previously
+omitted R2 off-site keys restored from a trusted encrypted source after their values hash-matched
+the running deploy agent. No plaintext password or storage credential was committed or logged.
+
+Scoped Ansible reconciliation changed only the expected control-plane components and preserved both
+Web Slot container IDs. Its immediate repeat completed with `changed=0`. The technical and weight
+datasets remain empty, at revision 1 only because production write smoke saved each exact payload
+unchanged. Public smoke proved anonymous read-only access, authenticated writes, Origin denial,
+HttpOnly/Secure/SameSite=Strict cookies, logout and revoked-cookie replay denial. Diagnostic sessions
+were deleted afterward.
+
+The activation also exposed that Ansible's atomic replacement of the host OpenResty file leaves the
+running container's single-file bind mount on the old inode. The new config was validated in a
+disposable container before recreating only the gateway; DELETE then reached `control-api` and
+returned 200. PR #26 makes this behavior permanent by using that same validate-then-recreate path.
+Both Web Slot container IDs remained unchanged during recovery.
 
 ## Acceptance and gates
 
