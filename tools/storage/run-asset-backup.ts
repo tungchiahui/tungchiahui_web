@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import {
   S3ObjectStorageAdapter,
   S3ReadOnlyObjectStorageAdapter,
@@ -7,22 +7,12 @@ import { backupAssets } from './asset-backup'
 import { parseAssetBackupConfiguration } from './asset-backup-configuration'
 
 type RunAssetBackupOptions = Readonly<{
+  envFile: string
   execute: boolean
-  secretFile: string
 }>
 
-function decryptSecretDocument(path: string) {
-  const result = spawnSync('sops', ['--decrypt', '--output-type', 'json', path], {
-    encoding: 'utf8',
-  })
-  if (result.status !== 0) {
-    throw new Error('Unable to decrypt the production secret document')
-  }
-  return JSON.parse(result.stdout) as unknown
-}
-
 export async function runProductionAssetBackup(options: RunAssetBackupOptions) {
-  const configuration = parseAssetBackupConfiguration(decryptSecretDocument(options.secretFile))
+  const configuration = parseAssetBackupConfiguration(readFileSync(options.envFile, 'utf8'))
   const source = new S3ReadOnlyObjectStorageAdapter(configuration.source)
   const target = new S3ObjectStorageAdapter(configuration.target)
   try {

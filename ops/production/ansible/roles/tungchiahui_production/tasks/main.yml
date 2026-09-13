@@ -34,8 +34,8 @@
       - "':latest' not in tungchiahui_service_image"
       - "':latest' not in tungchiahui_recovery_image"
       - "':latest' not in tungchiahui_postgres_image"
-      - tungchiahui_secret_file | length > 0
-    fail_msg: Production provisioning requires a hostname/SSH alias, exact Git SHA images and an encrypted SOPS file.
+      - tungchiahui_production_env_file | length > 0
+    fail_msg: Production provisioning requires a hostname/SSH alias, exact Git SHA images and a host-local production env file.
 
 - name: Install pinned host prerequisites
   ansible.builtin.apt:
@@ -78,62 +78,101 @@
     - { path: "{{ tungchiahui_data_root }}/postgres", owner: "70", group: "70", mode: "0700" }
     - { path: "{{ tungchiahui_secret_root }}", owner: root, group: tungchiahui-runtime, mode: "0750" }
 
-- name: Check controller SOPS executable
-  ansible.builtin.command:
-    argv: [sops, --version]
-  delegate_to: localhost
-  become: false
-  changed_when: false
+- name: Inspect host-local production env file
+  ansible.builtin.stat:
+    path: "{{ tungchiahui_production_env_file }}"
+    checksum_algorithm: sha256
+  register: tungchiahui_production_env
   no_log: true
 
-- name: Decrypt structured runtime secrets on the controller
-  ansible.builtin.command:
-    argv: [sops, --decrypt, --output-type, json, "{{ tungchiahui_secret_file }}"]
-  delegate_to: localhost
-  become: false
-  register: tungchiahui_decrypted_secret
-  changed_when: false
-  no_log: true
-
-- name: Validate decrypted secret keys
+- name: Require deployment-root production env file permissions
   ansible.builtin.assert:
     that:
-      - (tungchiahui_decrypted_secret.stdout | from_json).web_env is string
-      - (tungchiahui_decrypted_secret.stdout | from_json).control_api_env is string
-      - (tungchiahui_decrypted_secret.stdout | from_json).content_worker_env is string
-      - (tungchiahui_decrypted_secret.stdout | from_json).database_role_bootstrap_env is string
-      - (tungchiahui_decrypted_secret.stdout | from_json).database_migrate_env is string
-      - (tungchiahui_decrypted_secret.stdout | from_json).postgres_env is string
-      - (tungchiahui_decrypted_secret.stdout | from_json).backup_env is string
-      - (tungchiahui_decrypted_secret.stdout | from_json).deployment_registry_env is string
-      - (tungchiahui_decrypted_secret.stdout | from_json).backup_age_identity is string
-      - (tungchiahui_decrypted_secret.stdout | from_json).pgbouncer_userlist is string
-      - (tungchiahui_decrypted_secret.stdout | from_json).observability_env is string
-      - "'REPLACE_WITH_' not in tungchiahui_decrypted_secret.stdout"
-    fail_msg: The encrypted production secret file does not match the Phase 12 schema.
+      - tungchiahui_production_env.stat.exists
+      - tungchiahui_production_env.stat.isreg
+      - tungchiahui_production_env.stat.uid == 0
+      - tungchiahui_production_env.stat.mode == '0600'
+    fail_msg: "Create {{ tungchiahui_production_env_file }} on the production host as root:root mode 0600 before provisioning."
   no_log: true
 
-- name: Install per-service runtime secrets without logging values
+- name: Read production env file for fail-closed validation
+  ansible.builtin.slurp:
+    path: "{{ tungchiahui_production_env_file }}"
+  register: tungchiahui_production_env_content
+  no_log: true
+
+- name: Decode production env file in memory
+  ansible.builtin.set_fact:
+    tungchiahui_production_env_text: "{{ tungchiahui_production_env_content.content | b64decode }}"
+  no_log: true
+
+- name: Validate required production env keys
+  ansible.builtin.assert:
+    that:
+      - "'REPLACE_WITH_' not in tungchiahui_production_env_text"
+      - "'BACKUP_R2_' not in tungchiahui_production_env_text"
+      - "tungchiahui_production_env_text is search('(?m)^' ~ item ~ '=.+$')"
+    fail_msg: "The host-local production env file is missing a required key or still contains a placeholder."
+  loop:
+    - ASSET_S3_ACCESS_KEY_ID
+    - ASSET_S3_BUCKET
+    - ASSET_S3_ENDPOINT
+    - ASSET_S3_SECRET_ACCESS_KEY
+    - BACKUP_AGE_IDENTITY_BASE64
+    - BACKUP_AGE_RECIPIENT
+    - BACKUP_OFFSITE_S3_ACCESS_KEY_ID
+    - BACKUP_OFFSITE_S3_BUCKET
+    - BACKUP_OFFSITE_S3_ENDPOINT
+    - BACKUP_OFFSITE_S3_SECRET_ACCESS_KEY
+    - BACKUP_S3_ACCESS_KEY_ID
+    - BACKUP_S3_BUCKET
+    - BACKUP_S3_ENDPOINT
+    - BACKUP_S3_SECRET_ACCESS_KEY
+    - CONTENT_WORKER_DATABASE_URL
+    - CONTROL_API_DATABASE_URL
+    - CONTROL_GITHUB_OIDC_POLICY_JSON
+    - CONTROL_OPERATOR_KEYS_JSON
+    - DATABASE_ADMIN_URL
+    - DATABASE_MIGRATE_URL
+    - DEPLOYMENT_REGISTRY_TOKEN
+    - DEPLOYMENT_REGISTRY_USERNAME
+    - GITHUB_CONTENT_REPOSITORY
+    - PGBACKREST_REPO1_CIPHER_PASS
+    - PGBOUNCER_USERLIST_BASE64
+    - POSTGRES_DB
+    - POSTGRES_PASSWORD
+    - POSTGRES_USER
+    - SITE_APP_LOGIN_NAME
+    - SITE_APP_LOGIN_PASSWORD
+    - SITE_BASE_URL
+    - SITE_CONTENT_WORKER_LOGIN_NAME
+    - SITE_CONTENT_WORKER_LOGIN_PASSWORD
+    - SITE_CONTROL_API_LOGIN_NAME
+    - SITE_CONTROL_API_LOGIN_PASSWORD
+    - SITE_MIGRATOR_LOGIN_NAME
+    - SITE_MIGRATOR_LOGIN_PASSWORD
+    - SITE_REVALIDATION_SECRET
+    - WEB_DATABASE_URL
+  no_log: true
+
+- name: Decode derived runtime secret files
+  ansible.builtin.set_fact:
+    tungchiahui_backup_age_identity: "{{ (tungchiahui_production_env_text | regex_search('(?m)^BACKUP_AGE_IDENTITY_BASE64=.+$') | regex_replace('^BACKUP_AGE_IDENTITY_BASE64=', '') | b64decode) }}"
+    tungchiahui_pgbouncer_userlist: "{{ (tungchiahui_production_env_text | regex_search('(?m)^PGBOUNCER_USERLIST_BASE64=.+$') | regex_replace('^PGBOUNCER_USERLIST_BASE64=', '') | b64decode) }}"
+  no_log: true
+
+- name: Install derived runtime secret files without logging values
   ansible.builtin.copy:
-    content: "{{ (tungchiahui_decrypted_secret.stdout | from_json)[item.source] }}"
+    content: "{{ item.content }}"
     dest: "{{ tungchiahui_secret_root }}/{{ item.destination }}"
     owner: root
     group: tungchiahui-runtime
     mode: "{{ item.mode }}"
   loop:
-    - { source: web_env, destination: web.env, mode: "0640" }
-    - { source: control_api_env, destination: control-api.env, mode: "0640" }
-    - { source: content_worker_env, destination: content-worker.env, mode: "0640" }
-    - { source: database_role_bootstrap_env, destination: database-role-bootstrap.env, mode: "0640" }
-    - { source: database_migrate_env, destination: database-migrate.env, mode: "0640" }
-    - { source: postgres_env, destination: postgres.env, mode: "0640" }
-    - { source: backup_env, destination: backup.env, mode: "0640" }
-    - { source: deployment_registry_env, destination: deployment-registry.env, mode: "0640" }
-    - { source: backup_age_identity, destination: backup-age-identity.txt, mode: "0640" }
-    - { source: pgbouncer_userlist, destination: pgbouncer-userlist.txt, mode: "0640" }
-    - { source: observability_env, destination: observability.env, mode: "0640" }
+    - { content: "{{ tungchiahui_backup_age_identity }}", destination: backup-age-identity.txt, mode: "0640" }
+    - { content: "{{ tungchiahui_pgbouncer_userlist }}", destination: pgbouncer-userlist.txt, mode: "0640" }
   no_log: true
-  register: tungchiahui_runtime_secrets
+  register: tungchiahui_runtime_secret_files
 
 - name: Install version-controlled production topology
   ansible.builtin.copy:
@@ -223,6 +262,7 @@
       TUNGCHIAHUI_OBSERVABILITY_RESTORE_DRILL_TIMESTAMP: "{{ tungchiahui_observability_restore_drill_timestamp }}"
       TUNGCHIAHUI_POSTGRES_CONTAINER_NAME: "{{ tungchiahui_compose_project_name }}-postgres-1"
       TUNGCHIAHUI_POSTGRES_IMAGE: "{{ tungchiahui_postgres_image }}"
+      TUNGCHIAHUI_PRODUCTION_ENV_FILE: "{{ tungchiahui_production_env_file }}"
       TUNGCHIAHUI_RECOVERY_IMAGE: "{{ tungchiahui_recovery_image }}"
       TUNGCHIAHUI_SECRET_DIRECTORY: "{{ tungchiahui_secret_root }}"
       TUNGCHIAHUI_SERVICE_IMAGE: "{{ tungchiahui_service_image }}"
@@ -235,6 +275,8 @@
     argv:
       - docker
       - compose
+      - --env-file
+      - "{{ tungchiahui_production_env_file }}"
       - --project-name
       - "{{ tungchiahui_compose_project_name }}"
       - --file
@@ -249,6 +291,8 @@
     argv:
       - docker
       - compose
+      - --env-file
+      - "{{ tungchiahui_production_env_file }}"
       - --project-name
       - "{{ tungchiahui_compose_project_name }}"
       - --file
@@ -270,6 +314,8 @@
     argv:
       - docker
       - compose
+      - --env-file
+      - "{{ tungchiahui_production_env_file }}"
       - --project-name
       - "{{ tungchiahui_compose_project_name }}"
       - --file
@@ -290,6 +336,8 @@
     argv:
       - docker
       - compose
+      - --env-file
+      - "{{ tungchiahui_production_env_file }}"
       - --project-name
       - "{{ tungchiahui_compose_project_name }}"
       - --file
@@ -316,13 +364,19 @@
   register: tungchiahui_database_role_marker_content
   when: tungchiahui_database_role_marker.stat.exists
 
+- name: Define expected database role bootstrap marker
+  ansible.builtin.set_fact:
+    tungchiahui_database_role_marker_expected: |-
+      schema: 3
+      production_env_sha256: {{ tungchiahui_production_env.stat.checksum }}
+
 - name: Determine whether database roles require reconciliation
   ansible.builtin.set_fact:
     tungchiahui_database_role_bootstrap_required: >-
       {{
-        tungchiahui_runtime_secrets.changed
+        tungchiahui_runtime_secret_files.changed
         or not tungchiahui_database_role_marker.stat.exists
-        or ((tungchiahui_database_role_marker_content.content | default('') | b64decode | trim) != 'schema: 2')
+        or ((tungchiahui_database_role_marker_content.content | default('') | b64decode | trim) != tungchiahui_database_role_marker_expected)
       }}
 
 - name: Reconcile least-privilege database login identities
@@ -330,6 +384,8 @@
     argv:
       - docker
       - compose
+      - --env-file
+      - "{{ tungchiahui_production_env_file }}"
       - --project-name
       - "{{ tungchiahui_compose_project_name }}"
       - --file
@@ -353,7 +409,8 @@
     group: tungchiahui-runtime
     mode: "0640"
     content: |
-      schema: 2
+      schema: 3
+      production_env_sha256: {{ tungchiahui_production_env.stat.checksum }}
   when:
     - tungchiahui_manage_stack | bool
     - tungchiahui_database_role_bootstrap_required | bool
@@ -363,6 +420,8 @@
     argv:
       - docker
       - compose
+      - --env-file
+      - "{{ tungchiahui_production_env_file }}"
       - --project-name
       - "{{ tungchiahui_compose_project_name }}"
       - --file
@@ -383,6 +442,8 @@
     argv:
       - docker
       - compose
+      - --env-file
+      - "{{ tungchiahui_production_env_file }}"
       - --project-name
       - "{{ tungchiahui_compose_project_name }}"
       - --file
@@ -405,6 +466,8 @@
     argv:
       - docker
       - compose
+      - --env-file
+      - "{{ tungchiahui_production_env_file }}"
       - --project-name
       - "{{ tungchiahui_compose_project_name }}"
       - --file
@@ -428,6 +491,8 @@
     argv:
       - docker
       - compose
+      - --env-file
+      - "{{ tungchiahui_production_env_file }}"
       - --project-name
       - "{{ tungchiahui_compose_project_name }}"
       - --file
@@ -498,6 +563,8 @@
     argv:
       - docker
       - compose
+      - --env-file
+      - "{{ tungchiahui_production_env_file }}"
       - --project-name
       - "{{ tungchiahui_compose_project_name }}"
       - --file
@@ -517,6 +584,8 @@
     argv:
       - docker
       - compose
+      - --env-file
+      - "{{ tungchiahui_production_env_file }}"
       - --project-name
       - "{{ tungchiahui_compose_project_name }}"
       - --file

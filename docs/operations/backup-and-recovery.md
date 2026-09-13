@@ -151,16 +151,17 @@ destroy disposable environment
 默认先执行只读 Hash Audit：
 
 ```bash
-./site storage backup assets
+./site storage backup assets --env-file /etc/tungchiahui/.env
 ```
 
 Owner 单独批准写入后执行：
 
 ```bash
-./site storage backup assets --execute --confirm ASSET-BACKUP-PRESERVE-R2-ONLY
+./site storage backup assets --env-file /etc/tungchiahui/.env \
+  --execute --confirm ASSET-BACKUP-PRESERVE-R2-ONLY
 ```
 
-命令在 Controller 内存中解密 Production SOPS 文档，逐对象计算 SHA-256，只复制缺失对象或覆盖
+命令读取 Host-local 生产 `.env` 中的 AList/R2 配置，逐对象计算 SHA-256，只复制缺失对象或覆盖
 同 Key 但内容变化的对象，并对每次写入做 R2 Read-back Hash Verification。成功后写入不可变的
 `asset-backups/manifests/<timestamp>-<sha256>.json` 和经读回验证的
 `asset-backups/latest.json`。
@@ -185,4 +186,4 @@ Phase 13 已收集一次 Disposable 小数据集 Measurement，用于证明可�
 
 ## Owner browser sessions after restore
 
-ADR 0021 personal-tracker data and `owner_auth.sessions` are included in PostgreSQL recovery. A PITR/restore may resurrect a session revoked after the chosen recovery point. Keep `OWNER_PASSWORD_HASH` absent during restore activation and rotate to a new verifier through encrypted `control_api_env` before enabling owner login. This invalidates restored sessions without resetting tracker data. Owner login is never a prerequisite for Operator/OIDC/SQLite recovery. Validate tracker row counts and representative progress/weight values, then verify old session rejection and new login/save/logout on an isolated restore target. Do not run this drill destructively against production.
+ADR 0021 personal-tracker data and `owner_auth.sessions` are included in PostgreSQL recovery. A PITR/restore may resurrect a session revoked after the chosen recovery point. Keep `OWNER_PASSWORD_HASH` absent during restore activation and rotate to a new verifier through `/etc/tungchiahui/.env` before enabling owner login. This invalidates restored sessions without resetting tracker data. Owner login is never a prerequisite for Operator/OIDC/SQLite recovery. Validate tracker row counts and representative progress/weight values, then verify old session rejection and new login/save/logout on an isolated restore target. Do not run this drill destructively against production.

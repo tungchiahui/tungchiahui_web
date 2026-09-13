@@ -262,4 +262,4 @@ Internal Identity 属于 Database/Runtime Concern。
 
 ## Personal tracker owner sessions (ADR 0020)
 
-Migration `0007_personal_trackers` adds `owner_auth.sessions` with token SHA-256, credential-version SHA-256, expiry and creation time. This separate schema receives no app-reader or content-worker default grants; only control-api can create/read/revoke sessions. Missing dataset rows are initialized empty with ON CONFLICT DO NOTHING. Password verifiers remain SOPS-managed service configuration. PostgreSQL backup/restore includes these rows; rotate the verifier after restore before enabling owner login.
+Migration `0007_personal_trackers` adds `owner_auth.sessions` with token SHA-256, credential-version SHA-256, expiry and creation time. This separate schema receives no app-reader or content-worker default grants; only control-api can create/read/revoke sessions. Missing dataset rows are initialized empty with ON CONFLICT DO NOTHING. Password verifiers remain host-local `.env` service configuration. PostgreSQL backup/restore includes these rows; rotate the verifier after restore before enabling owner login.

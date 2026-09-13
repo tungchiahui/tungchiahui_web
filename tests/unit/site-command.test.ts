@@ -16,8 +16,20 @@ describe('site command boundary', () => {
     expect(parseSiteCommand(['status'])).toEqual({ kind: 'status' })
     expect(parseSiteCommand(['production', 'secrets', 'init'])).toEqual({
       kind: 'production-secrets-init',
+      outputFile: '/etc/tungchiahui/.env',
+    })
+    expect(parseSiteCommand(['production', 'secrets', 'init', '--output', '/tmp/.env'])).toEqual({
+      kind: 'production-secrets-init',
+      outputFile: '/tmp/.env',
     })
     expect(parseSiteCommand(['production', 'secrets', 'validate'])).toEqual({
+      envFile: '/etc/tungchiahui/.env',
+      kind: 'production-secrets-validate',
+    })
+    expect(
+      parseSiteCommand(['production', 'secrets', 'validate', '--env-file', '/tmp/.env']),
+    ).toEqual({
+      envFile: '/tmp/.env',
       kind: 'production-secrets-validate',
     })
     expect(parseSiteCommand(['deploy'])).toEqual({
@@ -129,9 +141,9 @@ describe('site command boundary', () => {
       parseSiteCommand(['storage', 'contract', 's3', '--confirm', 'S3-NON-PRODUCTION']),
     ).toEqual({ kind: 'storage-contract-s3' })
     expect(parseSiteCommand(['storage', 'backup', 'assets'])).toEqual({
+      envFile: '/etc/tungchiahui/.env',
       execute: false,
       kind: 'asset-backup',
-      secretFile: 'ops/production/secrets/production.sops.yaml',
     })
     expect(
       parseSiteCommand([
@@ -143,9 +155,9 @@ describe('site command boundary', () => {
         'ASSET-BACKUP-PRESERVE-R2-ONLY',
       ]),
     ).toEqual({
+      envFile: '/etc/tungchiahui/.env',
       execute: true,
       kind: 'asset-backup',
-      secretFile: 'ops/production/secrets/production.sops.yaml',
     })
     expect(parseSiteCommand(['translate', 'pending', '--dry-run'])).toEqual({
       action: 'create',
@@ -188,6 +200,15 @@ describe('site command boundary', () => {
     expect(() => parseSiteCommand(['storage', 'backup', 'assets', '--execute'])).toThrow(
       SiteUsageError,
     )
+    expect(() =>
+      parseSiteCommand([
+        'storage',
+        'backup',
+        'assets',
+        '--secret-file',
+        'ops/production/secrets/production.sops.yaml',
+      ]),
+    ).toThrow(SiteUsageError)
     expect(() => parseSiteCommand(['migrate-server', '127.0.0.1'])).toThrow(SiteUsageError)
     expect(() => parseSiteCommand(['backup', '--environment', 'production'])).toThrow(
       SiteUsageError,

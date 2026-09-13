@@ -39,7 +39,7 @@ function operatorFixture() {
         jwksUrl: 'https://token.actions.githubusercontent.com/.well-known/jwks',
         ref: 'refs/heads/main',
         repository: 'owner/repository',
-        workflowRef: 'owner/repository/.github/workflows/deploy.yml@refs/heads/main',
+        workflowRef: 'owner/repository/.github/workflows/release.yml@refs/heads/main',
       }),
     ],
     operatorKeys: [key],
@@ -146,7 +146,7 @@ describe('control-plane authentication and authorization', () => {
       jwksUrl: 'https://token.actions.githubusercontent.com/.well-known/jwks',
       ref: 'refs/heads/main',
       repository: 'owner/repository',
-      workflowRef: 'owner/repository/.github/workflows/deploy.yml@refs/heads/main',
+      workflowRef: 'owner/repository/.github/workflows/release.yml@refs/heads/main',
     })
     const { privateKey, publicKey } = await generateKeyPair('RS256')
 
@@ -156,11 +156,11 @@ describe('control-plane authentication and authorization', () => {
     ) {
       const claims = {
         environment: 'production',
-        job_workflow_ref: 'owner/repository/.github/workflows/deploy.yml@refs/heads/main',
+        job_workflow_ref: 'owner/repository/.github/workflows/release.yml@refs/heads/main',
         ref: 'refs/heads/main',
         repository: 'owner/repository',
         sub: 'repo:owner/repository:environment:production',
-        workflow_ref: 'owner/repository/.github/workflows/deploy.yml@refs/heads/main',
+        workflow_ref: 'owner/repository/.github/workflows/release.yml@refs/heads/main',
         ...overrides,
       }
       return new SignJWT(claims)
@@ -210,7 +210,7 @@ describe('control-plane authentication and authorization', () => {
         jwksUrl: 'https://token.actions.githubusercontent.com/.well-known/jwks',
         ref: 'refs/heads/main',
         repository: 'owner/application',
-        workflowRef: 'owner/application/.github/workflows/deploy.yml@refs/heads/main',
+        workflowRef: 'owner/application/.github/workflows/release.yml@refs/heads/main',
       },
       {
         audience: 'control-api',

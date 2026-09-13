@@ -67,15 +67,96 @@ const dockerImageSchema = z.object({
   RepoDigests: z.array(z.string()).nullable().optional(),
 })
 
-function replaceEnvironment(environment: readonly string[] | null, release: DeploymentRelease) {
-  const retained = (environment ?? []).filter(
-    (entry) => !entry.startsWith('SITE_DEPLOYMENT_SHA=') && !entry.startsWith('SITE_SLOT='),
-  )
-  const withoutDigest = retained.filter(
-    (entry) => !entry.startsWith('SITE_DEPLOYMENT_IMAGE_DIGEST='),
-  )
+const propagatedProductionEnvironmentKeys = Object.freeze([
+  'ASSET_CDN_BASE_URL',
+  'ASSET_S3_ACCESS_KEY_ID',
+  'ASSET_S3_BUCKET',
+  'ASSET_S3_ENDPOINT',
+  'ASSET_S3_FORCE_PATH_STYLE',
+  'ASSET_S3_REGION',
+  'ASSET_S3_SECRET_ACCESS_KEY',
+  'BACKUP_AGE_IDENTITY_BASE64',
+  'BACKUP_AGE_RECIPIENT',
+  'BACKUP_OFFSITE_S3_ACCESS_KEY_ID',
+  'BACKUP_OFFSITE_S3_BUCKET',
+  'BACKUP_OFFSITE_S3_ENDPOINT',
+  'BACKUP_OFFSITE_S3_FORCE_PATH_STYLE',
+  'BACKUP_OFFSITE_S3_REGION',
+  'BACKUP_OFFSITE_S3_SECRET_ACCESS_KEY',
+  'BACKUP_REPLICATION_CONCURRENCY',
+  'BACKUP_S3_ACCESS_KEY_ID',
+  'BACKUP_S3_BUCKET',
+  'BACKUP_S3_ENDPOINT',
+  'BACKUP_S3_FORCE_PATH_STYLE',
+  'BACKUP_S3_REGION',
+  'BACKUP_S3_SECRET_ACCESS_KEY',
+  'CONTENT_WORKER_DATABASE_URL',
+  'CONTROL_API_DATABASE_URL',
+  'CONTROL_GITHUB_OIDC_POLICY_JSON',
+  'CONTROL_OPERATOR_KEYS_JSON',
+  'DATABASE_ADMIN_URL',
+  'DATABASE_MIGRATE_URL',
+  'DEPLOYMENT_IMAGE_REPOSITORY',
+  'DEPLOYMENT_REGISTRY_TOKEN',
+  'DEPLOYMENT_REGISTRY_USERNAME',
+  'GITHUB_CONTENT_READ_TOKEN',
+  'GITHUB_CONTENT_REPOSITORY',
+  'OWNER_PASSWORD_HASH',
+  'PGBACKREST_REPO1_CIPHER_PASS',
+  'PGBOUNCER_USERLIST_BASE64',
+  'POSTGRES_DB',
+  'POSTGRES_PASSWORD',
+  'POSTGRES_USER',
+  'SITE_APP_LOGIN_NAME',
+  'SITE_APP_LOGIN_PASSWORD',
+  'SITE_BASE_URL',
+  'SITE_CONTENT_WORKER_LOGIN_NAME',
+  'SITE_CONTENT_WORKER_LOGIN_PASSWORD',
+  'SITE_CONTROL_API_LOGIN_NAME',
+  'SITE_CONTROL_API_LOGIN_PASSWORD',
+  'SITE_MIGRATOR_LOGIN_NAME',
+  'SITE_MIGRATOR_LOGIN_PASSWORD',
+  'SITE_REVALIDATION_SECRET',
+  'WEB_DATABASE_URL',
+] as const)
+
+export function productionEnvironmentFromProcess(
+  environment: Readonly<Record<string, string | undefined>> = process.env,
+) {
+  const productionEnvironment: Record<string, string> = {}
+  for (const key of propagatedProductionEnvironmentKeys) {
+    const value = environment[key]
+    if (value !== undefined) productionEnvironment[key] = value
+  }
+  return productionEnvironment
+}
+
+function environmentMap(environment: readonly string[] | null) {
+  const map = new Map<string, string>()
+  for (const entry of environment ?? []) {
+    const separator = entry.indexOf('=')
+    if (separator <= 0) continue
+    map.set(entry.slice(0, separator), entry.slice(separator + 1))
+  }
+  return map
+}
+
+export function replaceEnvironment(
+  environment: readonly string[] | null,
+  release: DeploymentRelease,
+  latestProductionEnvironment: Readonly<Record<string, string | undefined>> = {},
+) {
+  const merged = environmentMap(environment)
+  for (const [key, value] of Object.entries(latestProductionEnvironment)) {
+    if (value !== undefined) merged.set(key, value)
+  }
+  const webDatabaseUrl = latestProductionEnvironment.WEB_DATABASE_URL
+  if (webDatabaseUrl !== undefined) merged.set('DATABASE_URL', webDatabaseUrl)
+  for (const key of ['SITE_DEPLOYMENT_IMAGE_DIGEST', 'SITE_DEPLOYMENT_SHA', 'SITE_SLOT']) {
+    merged.delete(key)
+  }
   return [
-    ...withoutDigest,
+    ...[...merged.entries()].map(([key, value]) => `${key}=${value}`),
     `SITE_DEPLOYMENT_IMAGE_DIGEST=${release.digest}`,
     `SITE_DEPLOYMENT_SHA=${release.sha}`,
     `SITE_SLOT=${release.slot}`,
@@ -198,6 +279,10 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
   private imageReference(release: DeploymentRelease) {
     const repository = this.configuration.DEPLOYMENT_IMAGE_REPOSITORY
     return repository === undefined ? release.digest : `${repository}@${release.digest}`
+  }
+
+  private latestProductionEnvironment() {
+    return productionEnvironmentFromProcess()
   }
 
   private registryAuthenticationHeader() {
@@ -328,7 +413,7 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
       {
         Cmd: template.Config.Cmd ?? undefined,
         Entrypoint: template.Config.Entrypoint ?? undefined,
-        Env: replaceEnvironment(template.Config.Env, release),
+        Env: replaceEnvironment(template.Config.Env, release, this.latestProductionEnvironment()),
         ExposedPorts: template.Config.ExposedPorts ?? undefined,
         Healthcheck: template.Config.Healthcheck ?? undefined,
         HostConfig: {

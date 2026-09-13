@@ -20,12 +20,12 @@
 ## Deploy
 
 ```bash
-./site deploy <40-char-git-sha> --image-digest sha256:<digest> --reason "<change reference>"
+./site deploy <40-char-git-sha> --reason "<change reference>"
 ```
 
 创建后用 `./site status` 查询 SQLite Operation Phase。确认 Target Digest、Inactive Slot、Migration/Backup Policy、Candidate Smoke 与 Cutover Evidence。Deployment 在 Cutover 前失败时，Production 必须继续停留在 Old Slot；Post-cutover Smoke 失败时 Shared Engine 会切回 Previous Slot并把 Failed Candidate 移除。
 
-正常 Application Release 由 Web Application Repository 的 `main` Workflow 在 CI Gates 通过后自动发起。这里的命令用于人工触发、重试或指定版本，并调用同一个 Deployment Engine。
+正常 Application Release 由 Web Application Repository 的 `main` push 在 `release.yml` 中完成 CI Gates、镜像构建和自动部署请求。这里的命令用于人工触发、重试或指定版本；默认会从 GHCR 解析 digest，必要时仍可显式追加 `--image-digest sha256:<digest>`，并调用同一个 Deployment Engine。
 
 连续发布没有固定等待时间。每次成功切流后，刚才的 Active Release 成为新的 Previous Rollback Target；准备下一候选版本会覆盖倒数第二个版本所在的 Inactive Slot。不得以连续发布为由跳过并发互斥、Migration、备份、镜像身份或 Smoke Gate。
 
@@ -178,10 +178,10 @@ Credential Scope 与轮换顺序见 `credential-rotation.md`。保留被影响�
 
 ## Control-plane Connectivity
 
-When only reviewed `control-api` code or its encrypted runtime configuration changes, run the
+When only reviewed `control-api` code or its host-local runtime configuration changes, run the
 production Ansible role with `tungchiahui_manage_stack=false` and
-`tungchiahui_reconcile_control_api=true`. This scoped reconciliation installs the SOPS-derived
-runtime files, applies reviewed additive migrations through the versioned migration runner,
+`tungchiahui_reconcile_control_api=true`. This scoped reconciliation validates the host-local
+`/etc/tungchiahui/.env`, refreshes derived PgBouncer/age runtime files, applies reviewed additive migrations through the versioned migration runner,
 prepares that stopped runner for the next deployment, recreates and waits for only `control-api`,
 and validates a changed OpenResty configuration in a disposable container before recreating only
 the gateway. Recreating the gateway is required because the read-only single-file bind mount retains

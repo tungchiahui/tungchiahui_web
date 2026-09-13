@@ -108,7 +108,7 @@ Feature 分类为：
 
 ## Repository Trigger Boundary
 
-- Web Application Repository `push/merge to main`：CI Gates、Immutable Image Build、Production Blue-Green。
+- Web Application Repository `push to main`：CI Gates、Immutable Image Build、Production Blue-Green。
 - Content Repository Markdown Push：Content Sync only，不触发 Next.js Build/Blue-Green。
 
 ## 翻译控制

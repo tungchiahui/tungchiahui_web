@@ -114,7 +114,7 @@ docs/planning/implementation-plan.md
 
 ## Phase 12 Production Foundation
 
-- `development/phase-12-production-foundation.md` — Ansible、Hardened Compose、SOPS/age、OpenResty、数据库 Identity 与独立控制路由。
+- `development/phase-12-production-foundation.md` — Ansible、Hardened Compose、单一生产 `.env`/age 派生文件、OpenResty、数据库 Identity 与独立控制路由。
 - `development/phase-12-verification-report.md` — Idempotent Provision、Container/Secret/Network/IPv4+IPv6 与 Next/PostgreSQL-down Gate 证据。
 
 ## Phase 13 Tested Recovery

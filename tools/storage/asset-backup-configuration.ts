@@ -9,13 +9,6 @@ import {
   StorageConfigurationError,
 } from '../../src/storage/contracts'
 
-const productionSecretSectionsSchema = z
-  .object({
-    backup_env: z.string().min(1),
-    web_env: z.string().min(1),
-  })
-  .passthrough()
-
 const backupEnvironmentSchema = z.object({
   BACKUP_OFFSITE_S3_ACCESS_KEY_ID: z.string().min(1),
   BACKUP_OFFSITE_S3_BUCKET: z.string().min(3),
@@ -30,10 +23,9 @@ export type AssetBackupConfiguration = Readonly<{
   target: S3ConnectionConfiguration
 }>
 
-export function parseAssetBackupConfiguration(input: unknown): AssetBackupConfiguration {
-  const sections = productionSecretSectionsSchema.parse(input)
-  const sourceEnvironment = parseEnv(sections.web_env)
-  const backupResult = backupEnvironmentSchema.safeParse(parseEnv(sections.backup_env))
+export function parseAssetBackupConfiguration(input: string): AssetBackupConfiguration {
+  const environment = parseEnv(input)
+  const backupResult = backupEnvironmentSchema.safeParse(environment)
   if (!backupResult.success) {
     throw new StorageConfigurationError(
       backupResult.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`),
@@ -41,7 +33,7 @@ export function parseAssetBackupConfiguration(input: unknown): AssetBackupConfig
   }
 
   const source = parseAssetStorageConfiguration({
-    ...sourceEnvironment,
+    ...environment,
     SITE_RUNTIME_MODE: 'production',
   })
   const target = parseS3ConnectionConfiguration({

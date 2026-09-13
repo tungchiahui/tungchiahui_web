@@ -20,8 +20,6 @@ ARG AGE_SHA256=cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10
 ARG AGE_VERSION=1.3.2
 ARG COMPOSE_SHA256=837fd1d35bf6a494f41b5b5988269a7be79de337cf1a1a6ff0e45ab51bb4e9be
 ARG COMPOSE_VERSION=5.4.0
-ARG SOPS_SHA256=e5bec3346a873ae91d871550f3e698c1aad962aff462a080e40f25fde17fef6b
-ARG SOPS_VERSION=3.13.3
 
 RUN apt-get update \
   && apt-get install --yes --no-install-recommends ca-certificates curl docker.io openssl \
@@ -34,17 +32,12 @@ RUN apt-get update \
   && echo "${COMPOSE_SHA256}  /tmp/docker-compose" | sha256sum --check --strict \
   && install -m 0755 /tmp/docker-compose /usr/local/libexec/docker/cli-plugins/docker-compose \
   && curl --fail --location --silent --show-error \
-    "https://github.com/getsops/sops/releases/download/v${SOPS_VERSION}/sops-v${SOPS_VERSION}.linux.amd64" \
-    --output /tmp/sops \
-  && echo "${SOPS_SHA256}  /tmp/sops" | sha256sum --check --strict \
-  && install -m 0755 /tmp/sops /usr/local/bin/sops \
-  && curl --fail --location --silent --show-error \
     "https://github.com/FiloSottile/age/releases/download/v${AGE_VERSION}/age-v${AGE_VERSION}-linux-amd64.tar.gz" \
     --output /tmp/age.tar.gz \
   && echo "${AGE_SHA256}  /tmp/age.tar.gz" | sha256sum --check --strict \
   && tar --extract --gzip --file /tmp/age.tar.gz --strip-components=1 --directory /usr/local/bin \
     "age/age" "age/age-keygen" \
-  && rm -f /tmp/docker-compose /tmp/sops /tmp/age.tar.gz
+  && rm -f /tmp/docker-compose /tmp/age.tar.gz
 
 COPY --from=build /usr/local/bin/node /usr/local/bin/node
 COPY --from=build /runner.cjs /runner.cjs

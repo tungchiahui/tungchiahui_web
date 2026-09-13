@@ -25,7 +25,12 @@ services:
     user: "70:70"
     group_add: ["10050"]
     env_file:
-      - ${TUNGCHIAHUI_SECRET_DIRECTORY:?secret directory is required}/postgres.env
+      - ${TUNGCHIAHUI_PRODUCTION_ENV_FILE:?production env file is required}
+    environment:
+      PGBACKREST_REPO1_CIPHER_PASS: ${PGBACKREST_REPO1_CIPHER_PASS:?pgBackRest cipher is required}
+      POSTGRES_DB: ${POSTGRES_DB:?PostgreSQL database is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?PostgreSQL password is required}
+      POSTGRES_USER: ${POSTGRES_USER:?PostgreSQL user is required}
     command:
       - postgres
       - -c
@@ -80,7 +85,17 @@ services:
     user: "10006:10050"
     command: [node, dist/database-role-bootstrap.cjs]
     env_file:
-      - ${TUNGCHIAHUI_SECRET_DIRECTORY:?secret directory is required}/database-role-bootstrap.env
+      - ${TUNGCHIAHUI_PRODUCTION_ENV_FILE:?production env file is required}
+    environment:
+      DATABASE_ADMIN_URL: ${DATABASE_ADMIN_URL:?database bootstrap admin URL is required}
+      SITE_APP_LOGIN_NAME: ${SITE_APP_LOGIN_NAME:?app login name is required}
+      SITE_APP_LOGIN_PASSWORD: ${SITE_APP_LOGIN_PASSWORD:?app login password is required}
+      SITE_CONTENT_WORKER_LOGIN_NAME: ${SITE_CONTENT_WORKER_LOGIN_NAME:?content worker login name is required}
+      SITE_CONTENT_WORKER_LOGIN_PASSWORD: ${SITE_CONTENT_WORKER_LOGIN_PASSWORD:?content worker login password is required}
+      SITE_CONTROL_API_LOGIN_NAME: ${SITE_CONTROL_API_LOGIN_NAME:?control-api login name is required}
+      SITE_CONTROL_API_LOGIN_PASSWORD: ${SITE_CONTROL_API_LOGIN_PASSWORD:?control-api login password is required}
+      SITE_MIGRATOR_LOGIN_NAME: ${SITE_MIGRATOR_LOGIN_NAME:?migrator login name is required}
+      SITE_MIGRATOR_LOGIN_PASSWORD: ${SITE_MIGRATOR_LOGIN_PASSWORD:?migrator login password is required}
     volumes:
       - ${TUNGCHIAHUI_SECRET_DIRECTORY:?secret directory is required}/pgbouncer-userlist.txt:/run/secrets/pgbouncer-userlist.txt:ro
     depends_on:
@@ -97,8 +112,9 @@ services:
     user: "10006:10050"
     command: [node, dist/database-migrate.cjs]
     env_file:
-      - ${TUNGCHIAHUI_SECRET_DIRECTORY:?secret directory is required}/database-migrate.env
+      - ${TUNGCHIAHUI_PRODUCTION_ENV_FILE:?production env file is required}
     environment:
+      DATABASE_URL: ${DATABASE_MIGRATE_URL:?database migration URL is required}
       DEPLOYMENT_HAS_FRESH_RECOVERABLE_BACKUP: "false"
       SITE_RUNTIME_MODE: production
     networks: [database]
@@ -110,13 +126,16 @@ services:
     user: "10002:10050"
     command: [node, dist/control-api.cjs]
     env_file:
-      - ${TUNGCHIAHUI_SECRET_DIRECTORY:?secret directory is required}/control-api.env
+      - ${TUNGCHIAHUI_PRODUCTION_ENV_FILE:?production env file is required}
     environment:
       CONTROL_API_HOST: 0.0.0.0
       CONTROL_API_PORT: "8080"
+      CONTROL_GITHUB_OIDC_POLICY_JSON: ${CONTROL_GITHUB_OIDC_POLICY_JSON:?GitHub OIDC policy is required}
+      CONTROL_OPERATOR_KEYS_JSON: ${CONTROL_OPERATOR_KEYS_JSON:?operator keys are required}
       CONTROL_RATE_LIMIT_PER_MINUTE: ${TUNGCHIAHUI_CONTROL_RATE_LIMIT_PER_MINUTE:-120}
       CONTROL_REPLAY_WINDOW_SECONDS: "300"
       CONTROL_STATE_PATH: /control-state/control.db
+      DATABASE_URL: ${CONTROL_API_DATABASE_URL:?control-api database URL is required}
       SITE_RUNTIME_MODE: production
     healthcheck:
       test: [CMD, node, -e, "fetch('http://127.0.0.1:8080/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
@@ -136,13 +155,17 @@ services:
     user: "10003:10050"
     command: [node, dist/content-worker.cjs]
     env_file:
-      - ${TUNGCHIAHUI_SECRET_DIRECTORY:?secret directory is required}/content-worker.env
+      - ${TUNGCHIAHUI_PRODUCTION_ENV_FILE:?production env file is required}
     environment:
       CONTENT_WORKER_HOST: 0.0.0.0
       CONTENT_WORKER_POLLING_ENABLED: ${TUNGCHIAHUI_CONTENT_POLLING_ENABLED:-false}
       CONTENT_WORKER_PORT: "8083"
+      DATABASE_URL: ${CONTENT_WORKER_DATABASE_URL:?content-worker database URL is required}
+      GITHUB_CONTENT_READ_TOKEN: ${GITHUB_CONTENT_READ_TOKEN:-}
+      GITHUB_CONTENT_REPOSITORY: ${GITHUB_CONTENT_REPOSITORY:?content repository is required}
       SEARCH_WORKER_POLLING_ENABLED: ${TUNGCHIAHUI_SEARCH_POLLING_ENABLED:-false}
       SITE_REVALIDATION_ENDPOINT: http://web-blue:3000/api/internal/revalidate
+      SITE_REVALIDATION_SECRET: ${SITE_REVALIDATION_SECRET:?revalidation secret is required}
       SITE_RUNTIME_MODE: production
       TRANSLATION_PROVIDER: disabled
       TRANSLATION_WORKER_POLLING_ENABLED: "false"
@@ -171,7 +194,7 @@ services:
       pgbouncer:
         condition: service_healthy
     env_file:
-      - ${TUNGCHIAHUI_SECRET_DIRECTORY:?secret directory is required}/observability.env
+      - ${TUNGCHIAHUI_PRODUCTION_ENV_FILE:?production env file is required}
     environment:
       OBSERVABILITY_BACKUP_MAX_AGE_SECONDS: ${TUNGCHIAHUI_OBSERVABILITY_BACKUP_MAX_AGE_SECONDS:?backup monitoring policy is required}
       OBSERVABILITY_CONTROL_URL: http://control-api:8080/health
@@ -212,9 +235,18 @@ services:
     image: ${TUNGCHIAHUI_WEB_BLUE_IMAGE:?immutable blue web image is required}
     user: "10001:10001"
     env_file:
-      - ${TUNGCHIAHUI_SECRET_DIRECTORY:?secret directory is required}/web.env
+      - ${TUNGCHIAHUI_PRODUCTION_ENV_FILE:?production env file is required}
     environment:
+      ASSET_S3_ACCESS_KEY_ID: ${ASSET_S3_ACCESS_KEY_ID:?asset S3 access key is required}
+      ASSET_S3_BUCKET: ${ASSET_S3_BUCKET:?asset S3 bucket is required}
+      ASSET_S3_ENDPOINT: ${ASSET_S3_ENDPOINT:?asset S3 endpoint is required}
+      ASSET_S3_FORCE_PATH_STYLE: ${ASSET_S3_FORCE_PATH_STYLE:-true}
+      ASSET_S3_REGION: ${ASSET_S3_REGION:-us-east-1}
+      ASSET_S3_SECRET_ACCESS_KEY: ${ASSET_S3_SECRET_ACCESS_KEY:?asset S3 secret is required}
+      DATABASE_URL: ${WEB_DATABASE_URL:?web database URL is required}
+      SITE_BASE_URL: ${SITE_BASE_URL:?site base URL is required}
       SITE_DEPLOYMENT_SHA: ${TUNGCHIAHUI_BLUE_DEPLOYMENT_SHA:?blue Git SHA is required}
+      SITE_REVALIDATION_SECRET: ${SITE_REVALIDATION_SECRET:?revalidation secret is required}
       SITE_RUNTIME_MODE: production
       SITE_SLOT: blue
     healthcheck:
@@ -230,9 +262,18 @@ services:
     image: ${TUNGCHIAHUI_WEB_GREEN_IMAGE:?immutable green web image is required}
     user: "10001:10001"
     env_file:
-      - ${TUNGCHIAHUI_SECRET_DIRECTORY:?secret directory is required}/web.env
+      - ${TUNGCHIAHUI_PRODUCTION_ENV_FILE:?production env file is required}
     environment:
+      ASSET_S3_ACCESS_KEY_ID: ${ASSET_S3_ACCESS_KEY_ID:?asset S3 access key is required}
+      ASSET_S3_BUCKET: ${ASSET_S3_BUCKET:?asset S3 bucket is required}
+      ASSET_S3_ENDPOINT: ${ASSET_S3_ENDPOINT:?asset S3 endpoint is required}
+      ASSET_S3_FORCE_PATH_STYLE: ${ASSET_S3_FORCE_PATH_STYLE:-true}
+      ASSET_S3_REGION: ${ASSET_S3_REGION:-us-east-1}
+      ASSET_S3_SECRET_ACCESS_KEY: ${ASSET_S3_SECRET_ACCESS_KEY:?asset S3 secret is required}
+      DATABASE_URL: ${WEB_DATABASE_URL:?web database URL is required}
+      SITE_BASE_URL: ${SITE_BASE_URL:?site base URL is required}
       SITE_DEPLOYMENT_SHA: ${TUNGCHIAHUI_GREEN_DEPLOYMENT_SHA:?green Git SHA is required}
+      SITE_REVALIDATION_SECRET: ${SITE_REVALIDATION_SECRET:?revalidation secret is required}
       SITE_RUNTIME_MODE: production
       SITE_SLOT: green
     healthcheck:
@@ -254,15 +295,27 @@ services:
       control-api:
         condition: service_healthy
     env_file:
-      - ${TUNGCHIAHUI_SECRET_DIRECTORY:?secret directory is required}/backup.env
-      - ${TUNGCHIAHUI_SECRET_DIRECTORY:?secret directory is required}/deployment-registry.env
+      - ${TUNGCHIAHUI_PRODUCTION_ENV_FILE:?production env file is required}
     environment:
       BACKUP_AGE_IDENTITY_PATH: /run/secrets/backup-age-identity.txt
+      BACKUP_AGE_RECIPIENT: ${BACKUP_AGE_RECIPIENT:?backup age recipient is required}
       BACKUP_LOCAL_REPOSITORY_PATH: /var/lib/pgbackrest
+      BACKUP_OFFSITE_S3_ACCESS_KEY_ID: ${BACKUP_OFFSITE_S3_ACCESS_KEY_ID:?off-site backup access key is required}
+      BACKUP_OFFSITE_S3_BUCKET: ${BACKUP_OFFSITE_S3_BUCKET:?off-site backup bucket is required}
+      BACKUP_OFFSITE_S3_ENDPOINT: ${BACKUP_OFFSITE_S3_ENDPOINT:?off-site backup endpoint is required}
+      BACKUP_OFFSITE_S3_FORCE_PATH_STYLE: ${BACKUP_OFFSITE_S3_FORCE_PATH_STYLE:-false}
+      BACKUP_OFFSITE_S3_REGION: ${BACKUP_OFFSITE_S3_REGION:-auto}
+      BACKUP_OFFSITE_S3_SECRET_ACCESS_KEY: ${BACKUP_OFFSITE_S3_SECRET_ACCESS_KEY:?off-site backup secret is required}
       BACKUP_PGBACKREST_CONFIG_PATH: /etc/pgbackrest/pgbackrest.conf
       BACKUP_PGBACKREST_STANZA: tungchiahui
       BACKUP_POSTGRES_DATA_PATH: /var/lib/postgresql/18/docker
       BACKUP_REPLICATION_CONCURRENCY: ${TUNGCHIAHUI_BACKUP_REPLICATION_CONCURRENCY:-8}
+      BACKUP_S3_ACCESS_KEY_ID: ${BACKUP_S3_ACCESS_KEY_ID:?backup access key is required}
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET:?backup bucket is required}
+      BACKUP_S3_ENDPOINT: ${BACKUP_S3_ENDPOINT:?backup endpoint is required}
+      BACKUP_S3_FORCE_PATH_STYLE: ${BACKUP_S3_FORCE_PATH_STYLE:-true}
+      BACKUP_S3_REGION: ${BACKUP_S3_REGION:-us-east-1}
+      BACKUP_S3_SECRET_ACCESS_KEY: ${BACKUP_S3_SECRET_ACCESS_KEY:?backup secret is required}
       BACKUP_WORK_DIRECTORY: /var/lib/tungchiahui-backup-work
       CONTROL_STATE_PATH: /control-state/control.db
       DEPLOYMENT_ACTIVE_SLOT_CONFIG_PATH: /deployment-config/active-slot.conf
@@ -280,6 +333,8 @@ services:
       DEPLOYMENT_OPENRESTY_CONTAINER_NAME: ${TUNGCHIAHUI_OPENRESTY_CONTAINER_NAME:?OpenResty container name is required}
       DEPLOYMENT_POLLING_ENABLED: "true"
       DEPLOYMENT_PUBLIC_ENTRY_URL: http://openresty:8082
+      DEPLOYMENT_REGISTRY_TOKEN: ${DEPLOYMENT_REGISTRY_TOKEN:?deployment registry token is required}
+      DEPLOYMENT_REGISTRY_USERNAME: ${DEPLOYMENT_REGISTRY_USERNAME:?deployment registry username is required}
       DEPLOYMENT_SEARCH_QUERY: ${TUNGCHIAHUI_DEPLOYMENT_SEARCH_QUERY:?representative search query is required}
       DEPLOY_AGENT_HOST: 0.0.0.0
       DEPLOY_AGENT_PORT: "8081"

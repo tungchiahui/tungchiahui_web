@@ -49,5 +49,6 @@ Off-site Account 需要以隔离 Prefix 同时保存 Asset 与 Recovery Artifact
 - 既有 R2-only Generation 不删除，但在 AList Primary 尚无同 Generation 时不满足新的双副本
   `valid` Policy；Control-state Schema Version 7 会在升级时把旧记录的 Primary 状态重置为
   `pending` 并设为 `valid=false`，必须在新配置生效后创建 Fresh Full Backup。
-- ADR 0017 的单目标配置不再有效。Production SOPS 必须新增 `BACKUP_OFFSITE_S3_*` 保存当前 R2
-  值，并把 `BACKUP_S3_*` 改为与现有 `ASSET_S3_*` 相同的 AList 连接值；不新增 AList Bucket。
+- ADR 0017 的单目标配置不再有效。ADR 0022 后，生产 Host-local `.env` 必须包含
+  `BACKUP_OFFSITE_S3_*` 保存当前 R2 值，并把 `BACKUP_S3_*` 改为与现有 `ASSET_S3_*`
+  相同的 AList 连接值；不新增 AList Bucket。
