@@ -18,6 +18,10 @@ const productionRoleSource = readFileSync(
   resolve('ops/production/ansible/roles/tungchiahui_production/tasks/main.yml'),
   'utf8',
 )
+const productionHandlersSource = readFileSync(
+  resolve('ops/production/ansible/roles/tungchiahui_production/handlers/main.yml'),
+  'utf8',
+)
 const productionRoleDefaultsSource = readFileSync(
   resolve('ops/production/ansible/roles/tungchiahui_production/defaults/main.yml'),
   'utf8',
@@ -173,6 +177,9 @@ describe('Phase 12 production foundation policy', () => {
     expect(productionRoleSource).toContain('TUNGCHIAHUI_DEPLOYMENT_ARTICLE_PATH')
     expect(productionRoleSource).toContain('TUNGCHIAHUI_DEPLOYMENT_ASSET_PATH')
     expect(productionRoleSource).toContain('TUNGCHIAHUI_DEPLOYMENT_SEARCH_QUERY')
+    expect(productionRoleSource).toContain('Reconcile validated OpenResty configuration')
+    expect(productionHandlersSource).toContain('--force-recreate')
+    expect(productionHandlersSource).toContain('--entrypoint')
     expect(productionRoleSource).toContain('replica: offsite-backup-s3')
     expect(productionRoleSource).not.toContain('primary-s3-and-r2')
     expect(productionRoleSource).toContain('schema: 2')

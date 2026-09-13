@@ -1,5 +1,5 @@
 ---
-- name: Validate OpenResty before reload
+- name: Validate OpenResty before recreation
   ansible.builtin.command:
     argv:
       - docker
@@ -8,19 +8,21 @@
       - "{{ tungchiahui_compose_project_name }}"
       - --file
       - "{{ tungchiahui_config_root }}/compose.yaml"
-      - exec
-      - --no-TTY
+      - run
+      - --rm
+      - --no-deps
+      - --entrypoint
       - openresty
       - openresty
       - -t
   environment: "{{ tungchiahui_compose_environment }}"
   changed_when: false
-  listen: Reload validated OpenResty configuration
+  listen: Reconcile validated OpenResty configuration
   when: >-
     (tungchiahui_manage_stack | bool) or
     (tungchiahui_reconcile_control_api | bool)
 
-- name: Reload OpenResty after successful validation
+- name: Recreate OpenResty after successful validation
   ansible.builtin.command:
     argv:
       - docker
@@ -29,15 +31,15 @@
       - "{{ tungchiahui_compose_project_name }}"
       - --file
       - "{{ tungchiahui_config_root }}/compose.yaml"
-      - exec
-      - --no-TTY
+      - up
+      - --detach
+      - --no-deps
+      - --force-recreate
+      - --wait
       - openresty
-      - openresty
-      - -s
-      - reload
   environment: "{{ tungchiahui_compose_environment }}"
   changed_when: true
-  listen: Reload validated OpenResty configuration
+  listen: Reconcile validated OpenResty configuration
   when: >-
     (tungchiahui_manage_stack | bool) or
     (tungchiahui_reconcile_control_api | bool)

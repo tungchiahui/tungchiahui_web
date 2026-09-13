@@ -147,7 +147,7 @@
     - { source: openresty.conf, destination: openresty.conf }
     - { source: pgbouncer.ini, destination: pgbouncer.ini }
     - { source: pgbackrest.conf, destination: pgbackrest.conf }
-  notify: Reload validated OpenResty configuration
+  notify: Reconcile validated OpenResty configuration
 
 - name: Initialize the deployment-owned active slot only once
   ansible.builtin.copy:

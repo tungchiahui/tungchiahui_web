@@ -183,9 +183,11 @@ production Ansible role with `tungchiahui_manage_stack=false` and
 `tungchiahui_reconcile_control_api=true`. This scoped reconciliation installs the SOPS-derived
 runtime files, applies reviewed additive migrations through the versioned migration runner,
 prepares that stopped runner for the next deployment, recreates and waits for only `control-api`,
-and reloads a changed validated OpenResty configuration. It must leave both Web Slot container IDs
-unchanged. Do not use full-stack reconciliation for a control-only activation because it can replace
-the inactive Web rollback target.
+and validates a changed OpenResty configuration in a disposable container before recreating only
+the gateway. Recreating the gateway is required because the read-only single-file bind mount retains
+the old inode after Ansible's atomic copy; a process reload would still read the old file. Both Web
+Slot container IDs must remain unchanged. Do not use full-stack reconciliation for a control-only
+activation because it can replace the inactive Web rollback target.
 
 正常 Remote Control Path：
 
