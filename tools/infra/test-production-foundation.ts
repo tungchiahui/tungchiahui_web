@@ -1122,6 +1122,16 @@ async function verifyRoutingAndIpFamilies() {
   )
   expect(ipv6Loopback.status !== 0, 'V2 gateway must not bind the host IPv6 interface')
   curl([`http://127.0.0.1:${port}/api/ops/status`], 401)
+  curl(
+    [
+      '--request',
+      'DELETE',
+      '--header',
+      'Origin: https://www.tungchiahui.cn',
+      `http://127.0.0.1:${port}/api/ops/owner/session`,
+    ],
+    503,
+  )
   compose(['stop', 'web-blue', 'web-green'])
   curl([`http://127.0.0.1:${port}/api/ops/status`], 401)
   compose(['start', 'web-blue', 'web-green'])

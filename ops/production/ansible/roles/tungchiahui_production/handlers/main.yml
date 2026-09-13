@@ -16,7 +16,9 @@
   environment: "{{ tungchiahui_compose_environment }}"
   changed_when: false
   listen: Reload validated OpenResty configuration
-  when: tungchiahui_manage_stack | bool
+  when: >-
+    (tungchiahui_manage_stack | bool) or
+    (tungchiahui_reconcile_control_api | bool)
 
 - name: Reload OpenResty after successful validation
   ansible.builtin.command:
@@ -36,4 +38,6 @@
   environment: "{{ tungchiahui_compose_environment }}"
   changed_when: true
   listen: Reload validated OpenResty configuration
-  when: tungchiahui_manage_stack | bool
+  when: >-
+    (tungchiahui_manage_stack | bool) or
+    (tungchiahui_reconcile_control_api | bool)

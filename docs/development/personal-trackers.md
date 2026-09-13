@@ -59,10 +59,11 @@ replaces records; weight CSV merges matching planned dates after validation. Exp
    source files, `.env.example`, Docker build arguments or GitHub Actions variables.
 4. Activate the new independent control-api service image/configuration through the existing
    Ansible provisioning role with `tungchiahui_manage_stack=false` and
-   `tungchiahui_reconcile_control_api=true`. This installs the reviewed encrypted Secret and runs
-   an idempotent, health-waiting `docker compose up --no-deps` for `control-api` only. A normal
-   web-slot deployment alone does not update this service; the scoped path must preserve both Web
-   container IDs and the current rollback target.
+   `tungchiahui_reconcile_control_api=true`. This installs the reviewed encrypted Secret, applies
+   versioned additive migrations, prepares the stopped migration runner, runs an idempotent,
+   health-waiting `docker compose up --no-deps` for `control-api` only, and reloads a changed
+   validated OpenResty configuration. A normal web-slot deployment alone does not update this
+   service; the scoped path must preserve both Web container IDs and the current rollback target.
 5. Verify login, save, anonymous public reads, logout and signed Operator status. Confirm no old
    Blob provider is contacted. Login remains unavailable until service code and verifier are ready.
 
