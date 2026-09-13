@@ -22,7 +22,7 @@ routes. Next.js retains a read-only, no-store `/api/personal-data/{datasetKey}` 
 
 The password verifier uses Node's scrypt (N=32768, r=8, p=3, 16 random salt bytes, 64 derived bytes)
 and a constant-time comparison. The sole production consumer of `OWNER_PASSWORD_HASH` is
-`control-api`, through SOPS-encrypted `control_api_env`. An absent verifier disables owner login;
+`control-api`, through the ADR 0022 host-local production `.env`. An absent verifier disables owner login;
 the development credential is explicitly rejected in production. Password input is bounded, with
 five attempts per minute across the service and at most one concurrent derivation. Existing
 OpenResty control rate limiting continues to apply. This small single-owner limiter resets when

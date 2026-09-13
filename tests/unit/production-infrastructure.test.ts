@@ -107,6 +107,7 @@ describe('Phase 12 production foundation policy', () => {
       'deploy-control',
       'deployment-probe',
     ])
+    expect(composeSource).not.toContain('/run/secrets/production.env')
     expect(compose.services['control-api']?.depends_on).toBeUndefined()
     expect(compose.services.openresty?.depends_on).toEqual({
       'control-api': { condition: 'service_healthy' },
@@ -122,6 +123,15 @@ describe('Phase 12 production foundation policy', () => {
     expect(JSON.stringify(compose.services['database-role-bootstrap']?.volumes)).toContain(
       '/run/secrets/pgbouncer-userlist.txt:ro',
     )
+    expect(composeSource).toContain('TUNGCHIAHUI_PRODUCTION_ENV_FILE')
+    expect(composeSource).toContain('WEB_DATABASE_URL')
+    expect(composeSource).toContain('CONTROL_API_DATABASE_URL')
+    expect(composeSource).toContain('CONTENT_WORKER_DATABASE_URL')
+    expect(composeSource).toContain('DATABASE_MIGRATE_URL')
+    expect(composeSource).not.toContain('postgres.env')
+    expect(composeSource).not.toContain('web.env')
+    expect(composeSource).not.toContain('control-api.env')
+    expect(composeSource).not.toContain('deployment-registry.env')
     expect(compose.services['observability-agent']?.networks).toEqual([
       'application',
       'deployment-probe',
@@ -179,10 +189,14 @@ describe('Phase 12 production foundation policy', () => {
     expect(productionRoleSource).toContain('TUNGCHIAHUI_DEPLOYMENT_SEARCH_QUERY')
     expect(productionRoleSource).toContain('Reconcile validated OpenResty configuration')
     expect(productionHandlersSource).toContain('--force-recreate')
+    expect(productionHandlersSource).toContain('--env-file')
     expect(productionHandlersSource).toContain('--entrypoint')
     expect(productionRoleSource).toContain('replica: offsite-backup-s3')
     expect(productionRoleSource).not.toContain('primary-s3-and-r2')
-    expect(productionRoleSource).toContain('schema: 2')
+    expect(productionRoleSource).toContain('schema: 3')
+    expect(productionRoleSource).toContain('PGBOUNCER_USERLIST_BASE64')
+    expect(productionRoleSource).toContain('BACKUP_AGE_IDENTITY_BASE64')
+    expect(productionRoleSource).not.toContain('sops, --decrypt')
   })
 
   it('requires externally supplied production authentication policy', () => {

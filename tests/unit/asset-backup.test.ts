@@ -64,17 +64,15 @@ class StaleListingStorage extends MemoryStorage {
 }
 
 describe('asset backup', () => {
-  it('parses separate HTTPS source and target identities from SOPS sections', () => {
-    const configuration = parseAssetBackupConfiguration({
-      backup_env: [
+  it('parses separate HTTPS source and target identities from the production env file', () => {
+    const configuration = parseAssetBackupConfiguration(
+      [
         'BACKUP_OFFSITE_S3_ENDPOINT=https://backup.example.test',
         'BACKUP_OFFSITE_S3_REGION=auto',
         'BACKUP_OFFSITE_S3_BUCKET=backup-bucket',
         'BACKUP_OFFSITE_S3_ACCESS_KEY_ID=backup-key',
         'BACKUP_OFFSITE_S3_SECRET_ACCESS_KEY=backup-secret',
         'BACKUP_OFFSITE_S3_FORCE_PATH_STYLE=false',
-      ].join('\n'),
-      web_env: [
         'ASSET_S3_ENDPOINT=https://assets.example.test',
         'ASSET_S3_REGION=us-east-1',
         'ASSET_S3_BUCKET=asset-bucket',
@@ -82,7 +80,7 @@ describe('asset backup', () => {
         'ASSET_S3_SECRET_ACCESS_KEY=asset-secret',
         'ASSET_S3_FORCE_PATH_STYLE=true',
       ].join('\n'),
-    })
+    )
 
     expect(configuration.source.bucket).toBe('asset-bucket')
     expect(configuration.target.bucket).toBe('backup-bucket')

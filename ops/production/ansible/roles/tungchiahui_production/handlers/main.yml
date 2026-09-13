@@ -4,6 +4,8 @@
     argv:
       - docker
       - compose
+      - --env-file
+      - "{{ tungchiahui_production_env_file }}"
       - --project-name
       - "{{ tungchiahui_compose_project_name }}"
       - --file
@@ -27,6 +29,8 @@
     argv:
       - docker
       - compose
+      - --env-file
+      - "{{ tungchiahui_production_env_file }}"
       - --project-name
       - "{{ tungchiahui_compose_project_name }}"
       - --file

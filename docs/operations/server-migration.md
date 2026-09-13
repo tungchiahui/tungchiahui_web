@@ -63,7 +63,7 @@ Controlled promotion
 
 1. 确认变更授权、稳定 Target Identity、维护窗口和回退责任人。
 2. 确认最新 Backup 是有效的：pgBackRest/WAL、Off-site Replica 与 Restore Evidence 均满足 Policy。
-3. 使用版本化 Ansible、精确 Git SHA/Digest Image 和 SOPS/age Secret Provision Target；连续运行两次，第二次必须 `changed=0`。
+3. 使用版本化 Ansible、精确 Git SHA/Digest Image 和 Host-local `/etc/tungchiahui/.env` Provision Target；连续运行两次，第二次必须 `changed=0`。
 4. 验证 Target Non-root、Read-only Root Filesystem、Drop-all Capability、Storage Ownership、Control-state Directory 和 IPv6 Reachability。
 5. 从 Source PostgreSQL 创建 Physical Base Backup 与 Replication Slot，启动 Target Standby。
 6. 验证 `pg_is_in_recovery()`、Streaming State、Replication Lag 和代表性新增 Row。

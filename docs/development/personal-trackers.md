@@ -54,12 +54,12 @@ replaces records; weight CSV merges matching planned dates after validation. Exp
    unset tracker_password
    ```
 
-3. Put the resulting `OWNER_PASSWORD_HASH=...` line only in the SOPS document's `control_api_env`.
-   Install it through the existing approved provisioning process. Do not put the password in chat,
-   source files, `.env.example`, Docker build arguments or GitHub Actions variables.
+3. Put the resulting `OWNER_PASSWORD_HASH=...` line only in `/etc/tungchiahui/.env`, then run
+   `./site production secrets validate --env-file /etc/tungchiahui/.env`. Do not put the password
+   in chat, source files, `.env.example`, Docker build arguments or GitHub Actions variables.
 4. Activate the new independent control-api service image/configuration through the existing
    Ansible provisioning role with `tungchiahui_manage_stack=false` and
-   `tungchiahui_reconcile_control_api=true`. This installs the reviewed encrypted Secret, applies
+   `tungchiahui_reconcile_control_api=true`. This validates the host-local `.env`, applies
    versioned additive migrations, prepares the stopped migration runner, runs an idempotent,
    health-waiting `docker compose up --no-deps` for `control-api` only, and validates a changed
    OpenResty configuration in a disposable container before recreating the gateway so its read-only
@@ -82,6 +82,8 @@ applied by the versioned migration runner, which now reports eight migrations. T
 source passed validation with 11 sections. It contains the owner verifier and the six previously
 omitted R2 off-site keys restored from a trusted encrypted source after their values hash-matched
 the running deploy agent. No plaintext password or storage credential was committed or logged.
+ADR 0022 supersedes that historical activation source for future operations: the verifier now belongs
+only in the production deployment-root `/etc/tungchiahui/.env` file and its Owner-maintained backup.
 
 Scoped Ansible reconciliation changed only the expected control-plane components and preserved both
 Web Slot container IDs. Its immediate repeat completed with `changed=0`. The technical and weight

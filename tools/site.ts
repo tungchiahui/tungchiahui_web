@@ -42,14 +42,14 @@ Validation:
 
 Deployment:
   status
-  deploy [git-sha] [--image-digest sha256:<digest>] [--reason <text>]
+  deploy [git-sha] [--image-digest sha256:<digest>] [--reason <text>] [--wait]
   rollback [--reason <text>]
 
 Production setup:
-  production secrets init
-            Generate internal credentials and an encrypted SOPS template without plaintext files
-  production secrets validate
-            Decrypt in memory and reject missing sections or unfilled placeholders
+  production secrets init [--output /etc/tungchiahui/.env]
+            Generate the single plaintext production env file; refuses to overwrite
+  production secrets validate [--env-file /etc/tungchiahui/.env]
+            Validate the single production env file without printing values
 
 Server lifecycle:
   provision <inventory-hostname-or-alias> [--reason <text>]
@@ -75,7 +75,8 @@ Translation:
 Storage:
   storage contract s3 --confirm S3-NON-PRODUCTION
             Run the generic contract against the configured non-production S3-compatible target
-  storage backup assets [--execute --confirm ASSET-BACKUP-PRESERVE-R2-ONLY]
+  storage backup assets [--env-file /etc/tungchiahui/.env]
+                        [--execute --confirm ASSET-BACKUP-PRESERVE-R2-ONLY]
             Hash-verify AList assets into R2 while preserving every R2-only object`
 
 async function main() {
@@ -85,8 +86,8 @@ async function main() {
   switch (command.kind) {
     case 'asset-backup':
       await runProductionAssetBackup({
+        envFile: command.envFile,
         execute: command.execute,
-        secretFile: command.secretFile,
       })
       return 0
     case 'backup-create': {
@@ -133,10 +134,10 @@ async function main() {
       console.log(usage)
       return 0
     case 'production-secrets-init':
-      initializeProductionSecrets()
+      initializeProductionSecrets(command.outputFile)
       return 0
     case 'production-secrets-validate':
-      validateProductionSecrets()
+      validateProductionSecrets(command.envFile)
       return 0
     case 'rollback-create': {
       console.log(JSON.stringify(await createRollback(command.reason), null, 2))

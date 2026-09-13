@@ -185,7 +185,7 @@ Secret 永远不得以明文提交。
 
 - `.env.example` 记录变量名
 - `.env.local` 作为本地开发 Override，并 Gitignore
-- SOPS + age 加密生产 Secret
+- ADR 0022 定义的生产部署根目录单一 Host-local 明文 `.env`；真实文件必须 Gitignore、`root:root`、`0600`，不得进入仓库、GitHub Actions、Docker Build Context、Image、Public 目录或日志
 - Zod 做 Startup Validation
 
 不应把本应成为 Typed Constant 的代码级 Invariant 放进 Environment Variable。
@@ -252,7 +252,7 @@ Deployment 使用 Blue-Green。
 Web Application Repository 的正常生产发布路径必须是：
 
 ```text
-push/merge to main
+push to main
 -> CI Quality Gates
 -> Build Git-SHA-tagged Immutable Image
 -> Production Blue-Green Deployment

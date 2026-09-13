@@ -7,8 +7,10 @@ import {
   translationOperationRequestSchema,
 } from '../src/translation/contracts'
 
+const defaultProductionEnvFile = '/etc/tungchiahui/.env'
+
 export type SiteCommand =
-  | Readonly<{ execute: boolean; kind: 'asset-backup'; secretFile: string }>
+  | Readonly<{ envFile: string; execute: boolean; kind: 'asset-backup' }>
   | Readonly<{
       backupType: 'diff' | 'full' | 'incr'
       environment: 'local' | 'production' | 'test'
@@ -35,8 +37,8 @@ export type SiteCommand =
   | Readonly<{ kind: 'dev-start' }>
   | Readonly<{ kind: 'dev-stop' }>
   | Readonly<{ kind: 'help' }>
-  | Readonly<{ kind: 'production-secrets-init' }>
-  | Readonly<{ kind: 'production-secrets-validate' }>
+  | Readonly<{ kind: 'production-secrets-init'; outputFile: string }>
+  | Readonly<{ envFile: string; kind: 'production-secrets-validate' }>
   | Readonly<{
       action: 'planned-migration' | 'provision-only'
       inventoryHost: string
@@ -79,19 +81,28 @@ export function parseSiteCommand(arguments_: readonly string[]): SiteCommand {
     return Object.freeze({ kind: 'help' })
   }
 
-  if (
-    arguments_.length === 3 &&
-    arguments_[0] === 'production' &&
-    arguments_[1] === 'secrets' &&
-    arguments_[2] === 'init'
-  ) {
-    return Object.freeze({ kind: 'production-secrets-init' })
+  if (arguments_[0] === 'production' && arguments_[1] === 'secrets' && arguments_[2] === 'init') {
+    let outputFile = defaultProductionEnvFile
+    let index = 3
+    while (index < arguments_.length) {
+      const argument = arguments_[index]
+      if (argument === '--output') {
+        outputFile = z
+          .string()
+          .min(1)
+          .parse(arguments_[index + 1])
+        index += 2
+        continue
+      }
+      throw new SiteUsageError(`Unknown production secrets init argument: ${String(argument)}`)
+    }
+    return Object.freeze({ kind: 'production-secrets-init', outputFile })
   }
 
   if (arguments_[0] === 'storage' && arguments_[1] === 'backup' && arguments_[2] === 'assets') {
     let execute = false
     let confirmed = false
-    let secretFile = 'ops/production/secrets/production.sops.yaml'
+    let envFile = defaultProductionEnvFile
     let index = 3
     while (index < arguments_.length) {
       const argument = arguments_[index]
@@ -105,13 +116,16 @@ export function parseSiteCommand(arguments_: readonly string[]): SiteCommand {
         index += 2
         continue
       }
-      if (argument === '--secret-file') {
-        secretFile = z
+      if (argument === '--env-file') {
+        envFile = z
           .string()
           .min(1)
           .parse(arguments_[index + 1])
         index += 2
         continue
+      }
+      if (argument === '--secret-file') {
+        throw new SiteUsageError('storage backup assets now uses --env-file <path>')
       }
       throw new SiteUsageError(`Unknown asset backup argument: ${String(argument)}`)
     }
@@ -120,16 +134,29 @@ export function parseSiteCommand(arguments_: readonly string[]): SiteCommand {
         'Asset backup execution requires --confirm ASSET-BACKUP-PRESERVE-R2-ONLY',
       )
     }
-    return Object.freeze({ execute, kind: 'asset-backup', secretFile })
+    return Object.freeze({ envFile, execute, kind: 'asset-backup' })
   }
 
   if (
-    arguments_.length === 3 &&
     arguments_[0] === 'production' &&
     arguments_[1] === 'secrets' &&
     arguments_[2] === 'validate'
   ) {
-    return Object.freeze({ kind: 'production-secrets-validate' })
+    let envFile = defaultProductionEnvFile
+    let index = 3
+    while (index < arguments_.length) {
+      const argument = arguments_[index]
+      if (argument === '--env-file') {
+        envFile = z
+          .string()
+          .min(1)
+          .parse(arguments_[index + 1])
+        index += 2
+        continue
+      }
+      throw new SiteUsageError(`Unknown production secrets validate argument: ${String(argument)}`)
+    }
+    return Object.freeze({ envFile, kind: 'production-secrets-validate' })
   }
 
   if (arguments_[0] === 'deploy') {

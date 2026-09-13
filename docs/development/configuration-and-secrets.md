@@ -53,21 +53,33 @@ Gitignored。
 ### Production Secret
 
 ```text
-ops/production/secrets/production.sops.yaml
+/etc/tungchiahui/.env
 ```
 
-使用 SOPS + age 加密；提交前必须以 `production.sops.yaml.example` 的结构创建真实密文，禁止提交对应明文。Ansible 在 Controller 解密并以 `no_log` 安装分 Service Runtime File，真实密钥值不经过 Build Argument。
+ADR 0022 后，生产 Secret 的手工 source of truth 是部署根目录的一份 Host-local 明文 `.env`。
+真实文件必须在生产主机上由授权 Operator 创建，`root:root`、mode `0600`，不得提交到仓库、
+不得放入 GitHub Actions、Docker Build Context、Image Layer、Public 目录或日志。Owner 接受同一生产主机上的服务可以看到同一 `.env` 中的其他服务 Secret，并自行维护明文本地备份。
 
-首次初始化使用 `./site production secrets init`。该命令从 Controller 的 SOPS age Identity
-和独立 Backup age Identity 生成随机数据库、Revalidation、Repository Cipher、PgBouncer
-SCRAM 与 Ed25519 Operator Credential，直接通过 stdin 交给 SOPS；不会在磁盘写出中间明文。
-它拒绝覆盖既有密文或 Operator Private Key。生成后只通过 `sops
-ops/production/secrets/production.sops.yaml` 填入 Asset S3、AList Primary Backup S3、R2 Off-site
-Backup S3 与 GHCR 外部凭据，再运行
-`./site production secrets validate`。校验只在进程内解密，检查精确 Schema，并在任意
-`REPLACE_WITH_` 占位符尚存时 Fail Closed；不会显示 Secret Value。
+首次初始化可使用：
 
-Secret 在 Runtime/Deployment 时注入，不得通过 Docker Build Argument、Layer、Image Environment 或复制文件的方式 Bake 进 Production Image。Ansible 通过 SSH 把 Controller 内存中的解密结果拆分为 `/etc/tungchiahui/secrets` 下 root-owned、mode-restricted 的 Runtime File；这些文件跨重启保留但不得进入 Backup Artifact，SOPS 密文仍是可恢复来源。需要文件形式 Secret 时，使用权限受限的明确 Runtime Mount，并确保不会进入 Image Layer 或一般 Log。
+```bash
+./site production secrets init --output /etc/tungchiahui/.env
+```
+
+该命令生成随机数据库、Revalidation、Repository Cipher、PgBouncer SCRAM 与 Ed25519 Operator
+Credential，并拒绝覆盖既有 `.env` 或 Operator Private Key。填入 Asset S3、AList Primary Backup
+S3、R2 Off-site Backup S3、GHCR 外部凭据和可选 `OWNER_PASSWORD_HASH` 后运行：
+
+```bash
+./site production secrets validate --env-file /etc/tungchiahui/.env
+```
+
+单 `.env` 使用分角色变量保存数据库连接：`WEB_DATABASE_URL`、`CONTROL_API_DATABASE_URL`、
+`CONTENT_WORKER_DATABASE_URL`、`DATABASE_MIGRATE_URL` 和 `DATABASE_ADMIN_URL`。Compose 在各服务边界映射成该服务实际读取的 `DATABASE_URL`，避免因为单文件而让所有服务共用同一个 DB Login。
+
+PgBouncer userlist 与 backup age identity 仍需要文件形态；`.env` 中保存
+`PGBOUNCER_USERLIST_BASE64` 和 `BACKUP_AGE_IDENTITY_BASE64`，Ansible 在生产主机上解码到
+`/etc/tungchiahui/secrets` 下的受限派生 runtime 文件。`deploy-agent` 在 Blue/Green 部署期间使用自己启动时由 `env_file` 注入的生产 env 键创建候选 Web Slot；修改主机 `.env` 后，应通过既有 provisioning/reconcile 重启受影响服务再部署。Secret 在 Runtime/Deployment 时注入，不得通过 Docker Build Argument、Layer、Image Environment 或复制文件的方式 Bake 进 Production Image。
 
 ## Validation
 
@@ -77,7 +89,7 @@ Invalid Configuration 必须在 Startup 时 Fail Fast，并给出安全 Error，
 
 Phase 2 Local/Test Infrastructure 使用固定、公开、仅本机有效的 Dummy DB/S3 Credential；它们不是 Secret，也不能由 Production Credential 覆盖。Local/Test Parser 只允许 Loopback/Docker Service DNS、`tungchiahui-local-*`/`tungchiahui-test-*` Bucket 和专用 Control-state Directory，并固定使用 Fake Translation Provider。
 
-Phase 12 Production Parser 必须显式获得 Operator Key 与 GitHub OIDC Policy；Production `content-worker` 禁止 Fake Translation Provider。数据库通过 SOPS Payload 为 `site_app_login`、`site_control_api_login`、`site_content_worker_login` 和 `site_migrator_login` 提供不同 Credential，并由一次性 Bootstrap 绑定到对应 NOLOGIN Least-privilege Group Role。不得让普通 Runtime Service 使用 PostgreSQL Bootstrap/Superuser Identity。
+Production Parser 必须显式获得 Operator Key 与 GitHub OIDC Policy；Production `content-worker` 禁止 Fake Translation Provider。数据库通过 Host-local `.env` 为 `site_app_login`、`site_control_api_login`、`site_content_worker_login` 和 `site_migrator_login` 提供不同 Credential，并由一次性 Bootstrap 绑定到对应 NOLOGIN Least-privilege Group Role。不得让普通 Runtime Service 使用 PostgreSQL Bootstrap/Superuser Identity。
 
 ## Secret Lifecycle
 
@@ -107,17 +119,17 @@ BACKUP_REPLICATION_CONCURRENCY
 
 `S3_CONTRACT_*` 是 Operator 验收专用的 Provider-neutral 配置，可指向任意明确授权的 S3-compatible 非生产 Target；其中没有 Provider 类型或 Label，也不允许按实现名称选择分支。External Contract 只通过显式 `./site storage contract s3 --confirm S3-NON-PRODUCTION` 读取这些值，普通 Local/Test 和 Production Application Runtime 不读取它们，也不得把这组变量部署给 Production Application、`content-worker`、`control-api` 或 `deploy-agent`。当前 Production 选用 AList，因此 Phase 11 Verification Report 另外记录 AList 非生产实例的兼容证据，但该部署事实不进入通用 Storage Adapter。
 
-Application 使用只读 Adapter；Contract Identity 只允许操作指定 Test Bucket，并只清理随机唯一 Prefix 下自己创建的 Object。ADR 0018 使用 `BACKUP_S3_*` AList Primary 与 `BACKUP_OFFSITE_S3_*` R2 Off-site 两组 Recovery 配置，并为 pgBackRest Repository Cipher 与 Control-state age Key 使用单独 Secret。Production 的 `BACKUP_S3_*` 与 `ASSET_S3_*` 指向同一 AList Bucket/Pair，Recovery Engine 只写固定 `backups/`，Public Asset Gateway 对该 Prefix 和历史 Recovery Prefix 返回 404；R2 Access Key/Bucket 必须独立。Runtime Validation 拒绝 AList/R2 Credential 复用与 Production HTTP Endpoint。`BACKUP_REPLICATION_CONCURRENCY` 是 1–32 的非 Secret 有界并发配置，默认 8。只有 `deploy-agent` 注入完整 Backup 配置，Public App、`control-api` 和 `content-worker` 不获得 R2 或 Recovery Engine 配置；Public App 仅获得 AList Asset 配置且代码接口只读。
+Application 使用只读 Adapter；Contract Identity 只允许操作指定 Test Bucket，并只清理随机唯一 Prefix 下自己创建的 Object。ADR 0018 使用 `BACKUP_S3_*` AList Primary 与 `BACKUP_OFFSITE_S3_*` R2 Off-site 两组 Recovery 配置，并为 pgBackRest Repository Cipher 与 Control-state age Key 使用单独 Secret。Production 的 `BACKUP_S3_*` 与 `ASSET_S3_*` 指向同一 AList Bucket/Pair，Recovery Engine 只写固定 `backups/`，Public Asset Gateway 对该 Prefix 和历史 Recovery Prefix 返回 404；R2 Access Key/Bucket 必须独立。Runtime Validation 拒绝 AList/R2 Credential 复用与 Production HTTP Endpoint。`BACKUP_REPLICATION_CONCURRENCY` 是 1–32 的非 Secret 有界并发配置，默认 8。单 `.env` 会被生产服务共同读取，因此 Host-level Secret 可见性不再按文件隔离；职责边界仍由不同数据库/S3/GHCR Credential、容器权限、网络和代码 Runtime Validation 维持。Public App 只使用 AList Asset 配置且代码接口只读；`content-worker` 仍没有 Docker Socket，`control-api` 仍不执行高权限 Host/Docker Action。
 
 ## 新服务器
 
 Provisioning 必须使用以下内容重新构建 Production Environment File：
 
 - Version-controlled Non-secret Config
-- Encrypted Secret Material
-- Authorized age Private Key
+- Owner 保存的 `/etc/tungchiahui/.env` 明文备份
+- 需要恢复 Control-state/Backup Artifact 时使用的 Authorized age Private Key
 
-不要把旧服务器上手工编辑的 `.env` 当作 Configuration 的唯一副本。
+不要把没有备份的服务器本地 `.env` 当作唯一副本；它必须有 Owner 管理的明文备份，但备份不得进入仓库或 GitHub Actions。
 
 ## 基于域名的生产控制
 

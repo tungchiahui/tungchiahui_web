@@ -58,20 +58,19 @@ function verifyPinnedActions(issues: WorkflowPolicyIssue[], file: string, source
 
 export function analyzeWorkflowPolicies(root: string): readonly WorkflowPolicyIssue[] {
   const issues: WorkflowPolicyIssue[] = []
-  const quality = workflow(root, 'quality.yml')
-  const deployment = workflow(root, 'deploy.yml')
+  const release = workflow(root, 'release.yml')
   const content = workflow(root, 'content-sync.yml')
   const translation = workflow(root, 'translation.yml')
 
-  const qualityTriggers = Object.keys(quality.parsed.on).toSorted()
-  if (
-    JSON.stringify(qualityTriggers) !==
-    JSON.stringify(['merge_group', 'pull_request', 'push', 'workflow_dispatch'])
-  ) {
-    issues.push({ file: 'quality.yml', message: 'Quality Gate triggers changed' })
+  const releaseTriggers = Object.keys(release.parsed.on).toSorted()
+  if (JSON.stringify(releaseTriggers) !== JSON.stringify(['push', 'workflow_dispatch'])) {
+    issues.push({ file: 'release.yml', message: 'Main Release triggers changed' })
   }
-  requireFragments(issues, 'quality.yml', quality.source, [
+  requireFragments(issues, 'release.yml', release.source, [
     'branches: [main]',
+    'group: application-production-release',
+    'cancel-in-progress: false',
+    'git merge-base --is-ancestor "$release_sha" origin/main',
     'pnpm run check:biome',
     'pnpm run check:source',
     'pnpm run check:workflows',
@@ -83,24 +82,6 @@ export function analyzeWorkflowPolicies(root: string): readonly WorkflowPolicyIs
     'pnpm run test:migration',
     'pnpm run renovate:validate',
     'pnpm run build',
-  ])
-  rejectFragments(issues, 'quality.yml', quality.source, ['id-token: write', 'packages: write'])
-
-  const deploymentTriggers = Object.keys(deployment.parsed.on).toSorted()
-  if (
-    JSON.stringify(deploymentTriggers) !== JSON.stringify(['workflow_dispatch', 'workflow_run'])
-  ) {
-    issues.push({
-      file: 'deploy.yml',
-      message: 'Deployment must only follow Quality Gate or manual retry',
-    })
-  }
-  requireFragments(issues, 'deploy.yml', deployment.source, [
-    "github.event.workflow_run.conclusion == 'success'",
-    "github.event.workflow_run.event == 'push'",
-    'group: application-production-deployment',
-    'cancel-in-progress: false',
-    'actions: read',
     'packages: write',
     'id-token: write',
     'environment: production',
@@ -111,7 +92,10 @@ export function analyzeWorkflowPolicies(root: string): readonly WorkflowPolicyIs
     './site deploy',
     '--wait',
   ])
-  rejectFragments(issues, 'deploy.yml', deployment.source, [
+  rejectFragments(issues, 'release.yml', release.source, [
+    'pull_request:',
+    'merge_group:',
+    'workflow_run:',
     'DATABASE_URL',
     'AI_API',
     'SITE_OPERATOR_PRIVATE_KEY',
@@ -159,8 +143,7 @@ export function analyzeWorkflowPolicies(root: string): readonly WorkflowPolicyIs
   ])
 
   for (const [file, source] of [
-    ['quality.yml', quality.source],
-    ['deploy.yml', deployment.source],
+    ['release.yml', release.source],
     ['content-sync.yml', content.source],
     ['translation.yml', translation.source],
   ] as const) {

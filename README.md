@@ -30,7 +30,7 @@
 14. **`ddns.tungchiahui.cn` 是生产源站 Hostname。它由 DNS-only/DDNS 管理，可以解析为 IPv4+IPv6，也可以只有 IPv6。**
 15. **公网数字 IP 地址不得成为长期的应用、CI、CLI、部署或源站配置。**
 16. **内容任务与部署任务分别由不同的最小权限 Worker/Agent 执行。**
-17. **Web Application Repository 合并或 Push 到 `main` 后，必须先通过 CI Quality Gates，再自动构建 Git SHA Immutable Image 并通过统一 Deployment Engine 执行 Production Blue-Green Deployment；Content Repository Push 只触发 Content Sync。**
+17. **Web Application Repository 直接 Push 到 `main` 后，必须先通过 CI Quality Gates，再自动构建 Git SHA Immutable Image 并通过统一 Deployment Engine 执行 Production Blue-Green Deployment；Content Repository Push 只触发 Content Sync。**
 18. **Renovate 负责创建 Dependency Update PR；它不得直接修改 `main`，升级仍须通过 Review 与全部 CI Quality Gates。**
 19. **不得仅仅因为这是个人网站，就简化已经确定的工程要求。**
 20. **共享生产主机由 1Panel OpenResty 承担公网 TLS/HTTP 入口；V2 只在 `127.0.0.1:3100` 暴露内部网关，并在该网关内执行蓝绿切换与 `/api/ops/*` 分流。**
@@ -166,7 +166,7 @@ GitHub Actions 的手动 `workflow_dispatch` 可以触发同一个 Translation J
 - pnpm
 - Docker Compose
 - OpenResty
-- SOPS + age
+- 单一 Host-local Production `.env`（ADR 0022）
 - Ansible
 - pgBackRest + WAL/PITR
 - Adobe S3Mock for local S3 emulation
@@ -184,9 +184,9 @@ Production Docker Image 使用 Multi-stage Build、尽量 Minimal 的 Runtime Im
 Web Application Repository 的正常发布路径固定为：
 
 ```text
-push/merge to main
+push to main
  -> CI Quality Gates
- -> build Git-SHA-tagged immutable image
+ -> build Git-SHA-tagged immutable image set
  -> control-api / shared Deployment Engine
  -> inactive Blue/Green slot
  -> pre-cutover health/ready/smoke
@@ -194,7 +194,7 @@ push/merge to main
  -> post-cutover public smoke
 ```
 
-`./site deploy [git-sha-or-release]` 保留为人工触发、重试或指定版本部署入口，并调用完全相同的 Control Plane 与 Deployment Engine。Content Repository 的 Markdown Push 只触发 Content Sync，不触发 Next.js Image Build 或 Blue-Green Deployment。
+`./site deploy [git-sha]` 保留为人工触发、重试或指定版本部署入口；未显式传 `--image-digest` 时会尝试从批准的镜像仓库解析 digest，并调用完全相同的 Control Plane 与 Deployment Engine。Content Repository 的 Markdown Push 只触发 Content Sync，不触发 Next.js Image Build 或 Blue-Green Deployment。
 
 ## 本地工程入口
 

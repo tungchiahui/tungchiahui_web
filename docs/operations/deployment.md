@@ -18,7 +18,7 @@ Digest:  sha256:2c26b46b...（完整 64 位十六进制）
 Web Application Repository 的正常 Production Trigger：
 
 ```text
-push/merge to main
+push to main
  -> CI Quality Gates
  -> build Git-SHA-tagged immutable image set
  -> POST /api/ops/deployments
@@ -34,13 +34,20 @@ API 与 Pre-cutover Gate 均通过后才设置为 `true`；该变量不能绕过
 Human-triggered/Retry/指定版本：
 
 ```bash
-SITE_DEPLOYMENT_IMAGE_DIGEST=sha256:<digest> ./site deploy
+./site deploy <40-char-git-sha> --reason <text>
 ./site deploy <40-char-git-sha> --image-digest sha256:<digest> --reason <text>
 ```
 
+未显式提供 `--image-digest` 且没有 `SITE_DEPLOYMENT_IMAGE_DIGEST` 时，CLI 会从
+`SITE_DEPLOYMENT_IMAGE_REPOSITORY`、`DEPLOYMENT_IMAGE_REPOSITORY` 或默认
+`ghcr.io/tungchiahui/tungchiahui_web` 解析 `<sha>` 对应的 Registry Manifest Digest。解析失败时，
+Operator 必须手工传入 digest。
+
 GitHub Actions 和 `./site deploy` 向同一个独立 `control-api` 完成认证，执行相同 Policy，并调用同一个底层 Deployment Engine；不得维护 CI/Manual 两套实现。
 
-Application Workflow 只接受成功的同仓库 `main` Quality run，或显式验证过成功 Quality run 且仍属于 `main` 历史的完整 SHA。Build Job 只持有 Repository Read 与 Package Write，并以同一完整 SHA 发布 Web、Service、Recovery、PostgreSQL 四个不可变镜像；Web Manifest Digest 继续作为 Blue/Green Deployment Identity。Deploy Job 只持有 Repository Read 与 OIDC，进入受保护的 `production` Environment，并由单一 non-cancelling Concurrency Group 序列化。Workflow 不持有 Production DB、AI Provider、Host Login、Origin Pull Credential 或 Docker Socket。
+`release.yml` 只接受 `main` push 或显式 `workflow_dispatch`。同一 workflow 顺序执行完整 Quality Gate、Build/Publish Web、Service、Recovery、PostgreSQL 四个不可变镜像，并以 Web Manifest Digest 作为 Blue/Green Deployment Identity。Deploy Job 只持有 Repository Read 与 OIDC，进入受保护的 `production` Environment，并由单一 non-cancelling Concurrency Group 序列化。Workflow 不持有 Production DB、AI Provider、Host Login、Origin Pull Credential、生产 `.env` 或 Docker Socket。
+
+Production 主机上的手工 Secret Source 只有部署根目录 `/etc/tungchiahui/.env`。Docker daemon 通过 `env_file` 读取该 `0600` 文件；`deploy-agent` 使用自身进程中由 `env_file` 注入的生产 env 键给新建 Blue/Green Web Slot 注入 env。修改 `.env` 后，通过既有 provisioning/reconcile 重启受影响服务后再依赖新值；不要在主机上另建第二份人工维护的 env 文件。
 
 正常 Remote Operation 使用：
 
@@ -101,7 +108,7 @@ post-cutover smoke
 - Target Registry Manifest Digest 可从唯一批准 Repository 精确 Resolve/Pull
 - Pulled `RepoDigest` 等于请求 Digest，OCI Revision Label 等于请求的完整 Git SHA
 - Production Config Validation 通过
-- Encrypted Secret 可以 Resolve
+- Host-local `/etc/tungchiahui/.env` 存在、权限为 `0600` 且通过配置校验
 - 如果 Release/Phase 需要 Database，则其可达且 Required Migration State 已知
 - Backup Policy 满足 Migration Risk 要求
 - Active Slot 和 Rollback Target 已确认
@@ -109,7 +116,7 @@ post-cutover smoke
 
 Production PostgreSQL 不可用不得阻止 `control-api`、Deployment Operation State 或 `deploy-agent` 启动。依赖 Database Readiness/Migration 的普通 Application Release 可以安全停在 Preflight/Recovery Phase，但基础 Deploy/Rollback/Restore/Recovery Control 仍可执行和查询。
 
-只有 `deploy-agent` 从运行时加密 Secret 获得 approved Registry 的 Package-read Identity。GitHub Actions 的短期 Package-write Token 不下发到 Origin；Registry 认证失败、404、Digest 或 SHA Label 不匹配都必须在 Candidate Mutation 前失败。Rollback 验证已运行的 Retained Container，不重新 Pull 或 Build。
+只有 `deploy-agent` 从 Host-local `/etc/tungchiahui/.env` 获得 approved Registry 的 Package-read Identity。GitHub Actions 的短期 Package-write Token 不下发到 Origin；Registry 认证失败、404、Digest 或 SHA Label 不匹配都必须在 Candidate Mutation 前失败。Rollback 验证已运行的 Retained Container，不重新 Pull 或 Build。
 
 ## Deployment Failure
 

@@ -42,3 +42,4 @@ ADR 是不可变的历史记录。
 - `0019-primary-first-daily-recovery-mirror.md`
 - `0020-no-time-based-deployment-block.md`
 - `0021-owner-browser-sessions.md`
+- `0022-single-host-production-env.md`

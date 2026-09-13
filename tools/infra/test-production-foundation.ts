@@ -58,8 +58,7 @@ const dataRoot = join(input.PHASE12_HOST_ROOT, 'var')
 const secretRoot = join(input.PHASE12_HOST_ROOT, 'run', 'secrets')
 const workRoot = join(input.PHASE12_HOST_ROOT, 'work')
 const identityPath = join(workRoot, 'age-identity.txt')
-const plainSecretPath = join(workRoot, 'production.plain.yaml')
-const encryptedSecretPath = join(workRoot, 'production.sops.yaml')
+const productionEnvPath = join(configRoot, '.env')
 const inventoryPath = join(workRoot, 'inventory.yml')
 const variablesPath = join(workRoot, 'variables.json')
 const targetProjectName = `tungchiahui-phase17-target-${process.pid}`
@@ -68,6 +67,7 @@ const targetConfigRoot = join(targetRoot, 'etc')
 const targetDataRoot = join(targetRoot, 'var')
 const targetSecretRoot = join(targetRoot, 'run', 'secrets')
 const targetWorkRoot = join(targetRoot, 'work')
+const targetProductionEnvPath = join(targetConfigRoot, '.env')
 const targetInventoryPath = join(targetWorkRoot, 'inventory.yml')
 const targetVariablesPath = join(targetWorkRoot, 'variables.json')
 
@@ -143,6 +143,7 @@ function composeEnvironment() {
     TUNGCHIAHUI_OBSERVABILITY_RESTORE_DRILL_TIMESTAMP: new Date().toISOString(),
     TUNGCHIAHUI_POSTGRES_CONTAINER_NAME: `${projectName}-postgres-1`,
     TUNGCHIAHUI_POSTGRES_IMAGE: postgresImage,
+    TUNGCHIAHUI_PRODUCTION_ENV_FILE: productionEnvPath,
     TUNGCHIAHUI_RECOVERY_IMAGE: recoveryImage,
     TUNGCHIAHUI_SEARCH_POLLING_ENABLED: 'false',
     TUNGCHIAHUI_SECRET_DIRECTORY: secretRoot,
@@ -157,6 +158,8 @@ function compose(arguments_: readonly string[], allowFailure = false) {
     'docker',
     [
       'compose',
+      '--env-file',
+      productionEnvPath,
       '--project-name',
       projectName,
       '--file',
@@ -181,6 +184,7 @@ function targetComposeEnvironment() {
     TUNGCHIAHUI_ORIGIN_BIND_ADDRESS: '::1',
     TUNGCHIAHUI_ORIGIN_PORT: String(input.PHASE17_TARGET_ORIGIN_PORT),
     TUNGCHIAHUI_POSTGRES_CONTAINER_NAME: `${targetProjectName}-postgres-1`,
+    TUNGCHIAHUI_PRODUCTION_ENV_FILE: targetProductionEnvPath,
     TUNGCHIAHUI_SECRET_DIRECTORY: targetSecretRoot,
   }
 }
@@ -190,6 +194,8 @@ function targetCompose(arguments_: readonly string[], allowFailure = false) {
     'docker',
     [
       'compose',
+      '--env-file',
+      targetProductionEnvPath,
       '--project-name',
       targetProjectName,
       '--file',
@@ -204,7 +210,7 @@ function expect(condition: boolean, message: string): asserts condition {
   if (!condition) throw new Error(message)
 }
 
-function createEncryptedSecret() {
+function createProductionEnv() {
   execute('age-keygen', ['--output', identityPath])
   chmodSync(identityPath, 0o600)
   const recipient = execute('age-keygen', ['--y', identityPath]).stdout.trim()
@@ -240,6 +246,7 @@ function createEncryptedSecret() {
   ])
   const testPassword = 'phase12-disposable-password'
   const testSecret = 'phase12-disposable-revalidation-secret-value'
+  const repositoryCipher = `phase13-disposable-pgbackrest-cipher-${'x'.repeat(48)}`
   const appPassword = 'phase12-disposable-app-password-0001'
   const controlPassword = 'phase12-disposable-control-password-0001'
   const migratorPassword = 'phase12-disposable-migrator-password-0001'
@@ -250,111 +257,75 @@ function createEncryptedSecret() {
     migrator: createPostgresScramVerifier(migratorPassword),
     worker: createPostgresScramVerifier(workerPassword),
   }
-  const payload = {
-    backup_age_identity: readFileSync(identityPath, 'utf8'),
-    backup_env: [
-      `PGBACKREST_REPO1_CIPHER_PASS=phase13-disposable-pgbackrest-cipher-${'x'.repeat(48)}`,
-      `BACKUP_AGE_RECIPIENT=${recipient}`,
-      'BACKUP_S3_ENDPOINT=https://phase13.r2.cloudflarestorage.com',
-      'BACKUP_S3_REGION=auto',
-      'BACKUP_S3_BUCKET=phase13-offsite-backup',
-      'BACKUP_S3_ACCESS_KEY_ID=phase13-backup-only-access',
-      'BACKUP_S3_SECRET_ACCESS_KEY=phase13-backup-only-secret',
-      'BACKUP_S3_FORCE_PATH_STYLE=false',
-      'BACKUP_OFFSITE_S3_ENDPOINT=https://phase13-offsite.r2.cloudflarestorage.com',
-      'BACKUP_OFFSITE_S3_REGION=auto',
-      'BACKUP_OFFSITE_S3_BUCKET=phase13-secondary-offsite-backup',
-      'BACKUP_OFFSITE_S3_ACCESS_KEY_ID=phase13-offsite-backup-only-access',
-      'BACKUP_OFFSITE_S3_SECRET_ACCESS_KEY=phase13-offsite-backup-only-secret',
-      'BACKUP_OFFSITE_S3_FORCE_PATH_STYLE=false',
-    ].join('\n'),
-    content_worker_env: [
-      `DATABASE_URL=postgresql://site_content_worker_login:${workerPassword}@pgbouncer:6432/tungchiahui`,
-      'GITHUB_CONTENT_REPOSITORY=tungchiahui/tungchiahui_content',
-      `SITE_REVALIDATION_SECRET=${testSecret}`,
-    ].join('\n'),
-    control_api_env: [
-      `DATABASE_URL=postgresql://site_control_api_login:${controlPassword}@pgbouncer:6432/tungchiahui`,
-      `CONTROL_OPERATOR_KEYS_JSON=${operatorKeys}`,
-      `CONTROL_GITHUB_OIDC_POLICY_JSON=${githubPolicy}`,
-    ].join('\n'),
-    deployment_registry_env: '\n',
-    database_role_bootstrap_env: [
-      `DATABASE_ADMIN_URL=postgresql://tungchiahui:${testPassword}@postgres:5432/tungchiahui`,
-      'SITE_APP_LOGIN_NAME=site_app_login',
-      `SITE_APP_LOGIN_PASSWORD=${appPassword}`,
-      'SITE_CONTENT_WORKER_LOGIN_NAME=site_content_worker_login',
-      `SITE_CONTENT_WORKER_LOGIN_PASSWORD=${workerPassword}`,
-      'SITE_CONTROL_API_LOGIN_NAME=site_control_api_login',
-      `SITE_CONTROL_API_LOGIN_PASSWORD=${controlPassword}`,
-      'SITE_MIGRATOR_LOGIN_NAME=site_migrator_login',
-      `SITE_MIGRATOR_LOGIN_PASSWORD=${migratorPassword}`,
-    ].join('\n'),
-    database_migrate_env: [
-      `DATABASE_URL=postgresql://site_migrator_login:${migratorPassword}@postgres:5432/tungchiahui`,
-    ].join('\n'),
-    observability_env: '\n',
-    pgbouncer_userlist: [
-      `"site_app_login" "${scramVerifiers.app}"`,
-      `"site_content_worker_login" "${scramVerifiers.worker}"`,
-      `"site_control_api_login" "${scramVerifiers.control}"`,
-      `"site_migrator_login" "${scramVerifiers.migrator}"`,
-    ].join('\n'),
-    postgres_env: [
-      'POSTGRES_DB=tungchiahui',
-      'POSTGRES_USER=tungchiahui',
-      `POSTGRES_PASSWORD=${testPassword}`,
-      `PGBACKREST_REPO1_CIPHER_PASS=phase13-disposable-pgbackrest-cipher-${'x'.repeat(48)}`,
-    ].join('\n'),
-    web_env: [
-      `DATABASE_URL=postgresql://site_app_login:${appPassword}@pgbouncer:6432/tungchiahui`,
-      'SITE_BASE_URL=https://www.tungchiahui.cn',
-      `SITE_REVALIDATION_SECRET=${testSecret}`,
-      'ASSET_S3_ENDPOINT=https://s3.example.invalid',
-      'ASSET_S3_REGION=us-east-1',
-      'ASSET_S3_BUCKET=phase12-disposable-assets',
-      'ASSET_S3_ACCESS_KEY_ID=phase12-disposable-access',
-      'ASSET_S3_SECRET_ACCESS_KEY=phase12-disposable-secret',
-      'ASSET_S3_FORCE_PATH_STYLE=true',
-    ].join('\n'),
-  }
-  writeFileSync(plainSecretPath, stringify(payload), { mode: 0o600 })
-  execute('sops', [
-    '--encrypt',
-    '--age',
-    recipient,
-    '--input-type',
-    'yaml',
-    '--output-type',
-    'yaml',
-    '--output',
-    encryptedSecretPath,
-    plainSecretPath,
-  ])
-  const encrypted = readFileSync(encryptedSecretPath, 'utf8')
-  expect(encrypted.includes('ENC[AES256_GCM'), 'SOPS output is not encrypted')
-  for (const password of [
-    testPassword,
-    appPassword,
-    controlPassword,
-    migratorPassword,
-    workerPassword,
-  ]) {
-    expect(!encrypted.includes(password), 'SOPS output leaked a plaintext secret')
-  }
+  const pgbouncerUserlist = [
+    `"site_app_login" "${scramVerifiers.app}"`,
+    `"site_content_worker_login" "${scramVerifiers.worker}"`,
+    `"site_control_api_login" "${scramVerifiers.control}"`,
+    `"site_migrator_login" "${scramVerifiers.migrator}"`,
+  ].join('\n')
+  const env = [
+    'POSTGRES_DB=tungchiahui',
+    'POSTGRES_USER=tungchiahui',
+    `POSTGRES_PASSWORD=${testPassword}`,
+    `PGBACKREST_REPO1_CIPHER_PASS=${repositoryCipher}`,
+    `WEB_DATABASE_URL=postgresql://site_app_login:${appPassword}@pgbouncer:6432/tungchiahui`,
+    `CONTROL_API_DATABASE_URL=postgresql://site_control_api_login:${controlPassword}@pgbouncer:6432/tungchiahui`,
+    `CONTENT_WORKER_DATABASE_URL=postgresql://site_content_worker_login:${workerPassword}@pgbouncer:6432/tungchiahui`,
+    `DATABASE_MIGRATE_URL=postgresql://site_migrator_login:${migratorPassword}@postgres:5432/tungchiahui`,
+    `DATABASE_ADMIN_URL=postgresql://tungchiahui:${testPassword}@postgres:5432/tungchiahui`,
+    'SITE_APP_LOGIN_NAME=site_app_login',
+    `SITE_APP_LOGIN_PASSWORD=${appPassword}`,
+    'SITE_CONTENT_WORKER_LOGIN_NAME=site_content_worker_login',
+    `SITE_CONTENT_WORKER_LOGIN_PASSWORD=${workerPassword}`,
+    'SITE_CONTROL_API_LOGIN_NAME=site_control_api_login',
+    `SITE_CONTROL_API_LOGIN_PASSWORD=${controlPassword}`,
+    'SITE_MIGRATOR_LOGIN_NAME=site_migrator_login',
+    `SITE_MIGRATOR_LOGIN_PASSWORD=${migratorPassword}`,
+    'SITE_BASE_URL=https://www.tungchiahui.cn',
+    `SITE_REVALIDATION_SECRET=${testSecret}`,
+    'GITHUB_CONTENT_REPOSITORY=tungchiahui/tungchiahui_content',
+    'GITHUB_CONTENT_READ_TOKEN=',
+    `CONTROL_OPERATOR_KEYS_JSON=${operatorKeys}`,
+    `CONTROL_GITHUB_OIDC_POLICY_JSON=${githubPolicy}`,
+    'ASSET_S3_ENDPOINT=https://s3.example.invalid',
+    'ASSET_S3_REGION=us-east-1',
+    'ASSET_S3_BUCKET=phase12-disposable-assets',
+    'ASSET_S3_ACCESS_KEY_ID=phase12-disposable-access',
+    'ASSET_S3_SECRET_ACCESS_KEY=phase12-disposable-secret',
+    'ASSET_S3_FORCE_PATH_STYLE=true',
+    `BACKUP_AGE_RECIPIENT=${recipient}`,
+    `BACKUP_AGE_IDENTITY_BASE64=${Buffer.from(readFileSync(identityPath, 'utf8')).toString('base64')}`,
+    'BACKUP_S3_ENDPOINT=https://phase13.r2.cloudflarestorage.com',
+    'BACKUP_S3_REGION=auto',
+    'BACKUP_S3_BUCKET=phase13-offsite-backup',
+    'BACKUP_S3_ACCESS_KEY_ID=phase13-backup-only-access',
+    'BACKUP_S3_SECRET_ACCESS_KEY=phase13-backup-only-secret',
+    'BACKUP_S3_FORCE_PATH_STYLE=false',
+    'BACKUP_OFFSITE_S3_ENDPOINT=https://phase13-offsite.r2.cloudflarestorage.com',
+    'BACKUP_OFFSITE_S3_REGION=auto',
+    'BACKUP_OFFSITE_S3_BUCKET=phase13-secondary-offsite-backup',
+    'BACKUP_OFFSITE_S3_ACCESS_KEY_ID=phase13-offsite-backup-only-access',
+    'BACKUP_OFFSITE_S3_SECRET_ACCESS_KEY=phase13-offsite-backup-only-secret',
+    'BACKUP_OFFSITE_S3_FORCE_PATH_STYLE=false',
+    'DEPLOYMENT_REGISTRY_USERNAME=phase15-registry-user',
+    'DEPLOYMENT_REGISTRY_TOKEN=phase15-registry-token-value',
+    `PGBOUNCER_USERLIST_BASE64=${Buffer.from(pgbouncerUserlist).toString('base64')}`,
+  ].join('\n')
+  writeFileSync(productionEnvPath, `${env}\n`, { mode: 0o600 })
+  writeFileSync(targetProductionEnvPath, `${env}\n`, { mode: 0o600 })
   return {
-    identityPath,
     secretSentinels: [
       testPassword,
       testSecret,
       appPassword,
       controlPassword,
       migratorPassword,
+      repositoryCipher,
       workerPassword,
       'phase12-disposable-access',
       'phase12-disposable-secret',
-      'phase13-primary-only-secret',
-      'phase13-r2-only-secret',
+      'phase13-backup-only-secret',
+      'phase13-offsite-backup-only-secret',
     ],
     workerPassword,
   }
@@ -480,7 +451,7 @@ function startRegistry() {
   ])
 }
 
-function runProvision(identityPath: string) {
+function runProvision() {
   writeFileSync(
     inventoryPath,
     stringify({
@@ -532,10 +503,10 @@ function runProvision(identityPath: string) {
       tungchiahui_observability_restore_drill_max_age_seconds: '86400',
       tungchiahui_observability_restore_drill_timestamp: new Date().toISOString(),
       tungchiahui_postgres_image: postgresImage,
+      tungchiahui_production_env_file: productionEnvPath,
       tungchiahui_recovery_image: recoveryImage,
       tungchiahui_repository_root: '/workspace',
       tungchiahui_search_polling_enabled: 'false',
-      tungchiahui_secret_file: encryptedSecretPath,
       tungchiahui_secret_root: secretRoot,
       tungchiahui_service_image: serviceImage,
       tungchiahui_web_image: webImage,
@@ -550,7 +521,6 @@ function runProvision(identityPath: string) {
   ]
   const environment = {
     ANSIBLE_CONFIG: resolve('ops/production/ansible/ansible.cfg'),
-    SOPS_AGE_KEY_FILE: identityPath,
   }
   const first = execute('ansible-playbook', command, { environment })
   expect(/changed=[1-9][0-9]*/.test(first.stdout), 'Initial provision did not report changes')
@@ -588,7 +558,7 @@ function runProvision(identityPath: string) {
   )
 }
 
-function runMigrationTargetProvision(identityPath: string) {
+function runMigrationTargetProvision() {
   writeFileSync(
     targetInventoryPath,
     stringify({
@@ -640,10 +610,10 @@ function runMigrationTargetProvision(identityPath: string) {
       tungchiahui_observability_restore_drill_max_age_seconds: '86400',
       tungchiahui_observability_restore_drill_timestamp: new Date().toISOString(),
       tungchiahui_postgres_image: postgresImage,
+      tungchiahui_production_env_file: targetProductionEnvPath,
       tungchiahui_recovery_image: recoveryImage,
       tungchiahui_repository_root: '/workspace',
       tungchiahui_search_polling_enabled: 'false',
-      tungchiahui_secret_file: encryptedSecretPath,
       tungchiahui_secret_root: targetSecretRoot,
       tungchiahui_service_image: serviceImage,
       tungchiahui_web_image: webImage,
@@ -658,7 +628,6 @@ function runMigrationTargetProvision(identityPath: string) {
   ]
   const environment = {
     ANSIBLE_CONFIG: resolve('ops/production/ansible/ansible.cfg'),
-    SOPS_AGE_KEY_FILE: identityPath,
   }
   const first = execute('ansible-playbook', command, { environment })
   expect(/changed=[1-9][0-9]*/.test(first.stdout), 'Migration target provision reported no changes')
@@ -1465,7 +1434,7 @@ function inspectMigrationTargetHardening() {
   }
 }
 
-async function verifyServerMigrationRehearsal(identityPath: string) {
+async function verifyServerMigrationRehearsal() {
   const sourcePostgres = `${projectName}-postgres-1`
   const targetPostgres = `${targetProjectName}-postgres-1`
   const sourceNetwork = `${projectName}_database`
@@ -1691,7 +1660,7 @@ async function verifyServerMigrationRehearsal(identityPath: string) {
         inventoryHost === 'phase17-nonproduction-target',
         'Numeric bootstrap address persisted',
       )
-      runMigrationTargetProvision(identityPath)
+      runMigrationTargetProvision()
       inspectMigrationTargetHardening()
       return { idempotent: true, stableIdentity: inventoryHost }
     },
@@ -1862,20 +1831,20 @@ async function verifyServerMigrationRehearsal(identityPath: string) {
 }
 
 async function main() {
-  const encrypted = createEncryptedSecret()
+  const productionEnv = createProductionEnv()
   try {
     startRegistry()
     buildImages()
     verifyImageSecurity()
-    runProvision(encrypted.identityPath)
+    runProvision()
     inspectHardening()
-    verifyDatabaseRoleBindings(encrypted.workerPassword)
-    await initializeDeploymentFixture(encrypted.workerPassword)
+    verifyDatabaseRoleBindings(productionEnv.workerPassword)
+    await initializeDeploymentFixture(productionEnv.workerPassword)
     await verifyBlueGreenDeployment()
     await verifyRoutingAndIpFamilies()
     await verifySecurityAndLoad()
-    const migrationReadiness = await verifyServerMigrationRehearsal(encrypted.identityPath)
-    verifyNoSecretLeakage(encrypted.secretSentinels)
+    const migrationReadiness = await verifyServerMigrationRehearsal()
+    verifyNoSecretLeakage(productionEnv.secretSentinels)
     console.log(
       JSON.stringify({
         ansibleIdempotency: 'pass',
@@ -1892,7 +1861,7 @@ async function main() {
         postgresDownDeploymentDependency: 'pass',
         postgresDownControlRoute: 'pass',
         productionTraffic: false,
-        secretInjection: 'sops-age-runtime-only',
+        secretInjection: 'single-env-derived-runtime-files',
         secretLogAndResponseLeakage: 'pass',
         sbomAndCriticalVulnerabilityScan: 'pass',
         securityHeadersAndAbuseControls: 'pass',

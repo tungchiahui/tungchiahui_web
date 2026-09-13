@@ -70,7 +70,7 @@ Provider-specific Concern 被隔离在：
 
 安装文档化的 Host Prerequisite 后，新的 Development Environment 应能够通过一个受支持命令完成 Bootstrap。
 
-新的 Production Server 应能够从 Version-controlled Infrastructure 和 Encrypted Secret 完成 Provision。
+新的 Production Server 应能够从 Version-controlled Infrastructure 和 Owner 提供的 Host-local `/etc/tungchiahui/.env` 明文备份完成 Provision。
 
 ## 网络独立性
 

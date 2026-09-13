@@ -62,7 +62,7 @@ Website V2 在满足以下标准之前，不视为 Production-ready。
 
 ## Deployment
 
-- [ ] Web Application Repository `push/merge to main` 只有在 CI Quality Gates 全部通过后才自动进入 Production Deployment。
+- [ ] Web Application Repository `push to main` 只有在 CI Quality Gates 全部通过后才自动进入 Production Deployment。
 - [ ] Image 是 Immutable 且通过 Git SHA 标识。
 - [ ] GitHub Actions 与 `./site deploy` 调用同一个 `control-api`、Policy 和 Deployment Engine。
 - [ ] `./site deploy` 支持人工触发、重试和指定版本部署。

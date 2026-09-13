@@ -248,12 +248,12 @@ workflow_dispatch
  -> trigger translation job
 ```
 
-Web Application Repository 的 `push/merge to main` 是正常 Production Deployment Trigger：
+Web Application Repository 的 `push to main` 是正常 Production Deployment Trigger：
 
 ```text
-push/merge to main
+push to main
  -> CI Quality Gates
- -> build Git-SHA-tagged immutable image
+ -> build Git-SHA-tagged immutable image set
  -> control-api
  -> shared Deployment Engine
  -> inactive slot
@@ -262,7 +262,7 @@ push/merge to main
  -> post-cutover public smoke
 ```
 
-Application Deployment Workflow 和本地 `./site deploy [git-sha-or-release]` 调用同一个 `control-api`、Policy 与底层 Production Deployment Engine。后者只用于人工触发、重试或指定版本，不是另一套实现。Content Repository Push 不构建 Next.js Image，也不触发 Blue-Green Deployment。
+`release.yml` 和本地 `./site deploy [git-sha]` 调用同一个 `control-api`、Policy 与底层 Production Deployment Engine。后者只用于人工触发、重试或指定版本，不是另一套实现。Content Repository Push 不构建 Next.js Image，也不触发 Blue-Green Deployment。
 
 在可行情况下，GitHub Actions 应使用短期 GitHub OIDC 对 Control-plane Request 进行认证，而不是使用权限宽泛的长期 Production Token。
 
@@ -334,7 +334,7 @@ Rollback 将流量切回此前完好的 Slot。
 
 Content Publication 不会触发 Next.js Rebuild。
 
-Production Image 使用 Multi-stage Build、Non-root Runtime User 和尽量 Minimal 的 Runtime Stage。Secret 不得 Bake 进 Image；实际可行的 Service 使用 Read-only Root Filesystem，只对明确的 Volume/tmpfs 开放写入。`content-worker` 无 Docker Socket；只有 `deploy-agent` 获得完成部署/恢复所需的最小 Docker/Host Permission。
+Production Image 使用 Multi-stage Build、Non-root Runtime User 和尽量 Minimal 的 Runtime Stage。Secret 只来自 Host-local `/etc/tungchiahui/.env` 或其派生 runtime 文件，不得 Bake 进 Image；实际可行的 Service 使用 Read-only Root Filesystem，只对明确的 Volume/tmpfs 开放写入。`content-worker` 无 Docker Socket；只有 `deploy-agent` 获得完成部署/恢复所需的最小 Docker/Host Permission。
 
 ## 11. 数据库生命周期
 
