@@ -367,7 +367,7 @@ test('keeps special pages, local Start interaction and public datasets available
   expect(startSize?.height).toBeGreaterThanOrEqual(viewport?.height ?? 0)
   expect(startSize?.width).toBeGreaterThanOrEqual(viewport?.width ?? 0)
   await page.getByRole('button', { name: '完整' }).click()
-  await expect(page.getByRole('button', { name: '编辑书签' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '编辑书签' })).toBeVisible()
 
   await page.goto('/tech-footprint')
   await expect(

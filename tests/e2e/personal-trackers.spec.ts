@@ -21,7 +21,7 @@ test('owner login directly enables both trackers; saves survive reload and remai
   await expect(progress).toBeDisabled()
   expect(
     (
-      await page.request.put('/api/ops/owner/datasets/tech_footprint', {
+      await page.request.put('/api/ops/site/datasets/tech_footprint', {
         headers: { origin },
         data: { expectedRevision: 0, payload: { version: 2, records: {} } },
       })
@@ -57,7 +57,7 @@ test('owner login directly enables both trackers; saves survive reload and remai
   ).dataset
   if (!snapshot) throw new Error('Missing dataset')
   const put = (expectedRevision: number) =>
-    page.request.put('/api/ops/owner/datasets/tech_footprint', {
+    page.request.put('/api/ops/site/datasets/tech_footprint', {
       headers: { origin },
       data: { ...snapshot, expectedRevision },
     })
@@ -66,7 +66,7 @@ test('owner login directly enables both trackers; saves survive reload and remai
   const validBody = { payload: snapshot.payload, expectedRevision: snapshot.revision }
   expect(
     (
-      await page.request.put('/api/ops/owner/datasets/tech_footprint', {
+      await page.request.put('/api/ops/site/datasets/tech_footprint', {
         headers: { origin },
         data: validBody,
       })
@@ -74,7 +74,7 @@ test('owner login directly enables both trackers; saves survive reload and remai
   ).toBe(200)
   expect(
     (
-      await page.request.put('/api/ops/owner/datasets/tech_footprint', {
+      await page.request.put('/api/ops/site/datasets/tech_footprint', {
         headers: { origin },
         data: validBody,
       })
@@ -109,7 +109,7 @@ test('owner login directly enables both trackers; saves survive reload and remai
   await expect(page.getByRole('img', { name: '目标与实际趋势' })).toBeVisible()
   expect(
     (
-      await page.request.put('/api/ops/owner/datasets/weight_loss', {
+      await page.request.put('/api/ops/site/datasets/weight_loss', {
         headers: { origin: 'https://attacker.example' },
         data: {},
       })
@@ -158,7 +158,7 @@ test('owner login directly enables both trackers; saves survive reload and remai
   const replayHeaders = { origin, cookie: `site_owner_session=${cookie?.value ?? ''}` }
   expect(
     (
-      await page.request.put('/api/ops/owner/datasets/weight_loss', {
+      await page.request.put('/api/ops/site/datasets/weight_loss', {
         headers: replayHeaders,
         data: { expectedRevision: weights?.revision, payload: weights?.payload },
       })
