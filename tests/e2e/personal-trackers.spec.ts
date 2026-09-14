@@ -28,14 +28,15 @@ test('owner login directly enables both trackers; saves survive reload and remai
     ).status(),
   ).toBe(401)
   await page.getByRole('button', { name: '登录', exact: true }).click()
-  await page.getByLabel('站主密码').fill('local-only-owner-password')
+  await page.getByLabel('用户名').fill('owner')
+  await page.getByLabel('密码').fill('local-only-owner-password')
   await page.getByRole('dialog').getByRole('button', { name: '登录', exact: true }).click()
   await expect(page.getByRole('dialog')).not.toBeVisible()
   await expect(progress).toBeEnabled()
-  const cookie = (await page.context().cookies()).find((item) => item.name === 'site_owner_session')
+  const cookie = (await page.context().cookies()).find((item) => item.name === 'site_session')
   expect(cookie?.httpOnly).toBe(true)
   expect(cookie?.sameSite).toBe('Strict')
-  expect(cookie?.path).toBe('/api/ops/owner')
+  expect(cookie?.path).toBe('/')
   await progress.fill('45')
   await page
     .getByRole('textbox', { name: /记录 \/ 下一步/ })
