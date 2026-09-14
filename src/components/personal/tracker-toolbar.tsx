@@ -1,7 +1,7 @@
 'use client'
 
 import { Dialog } from '@base-ui/react/dialog'
-import { LockKeyhole, LogOut } from 'lucide-react'
+import { LogOut } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useRef, useState } from 'react'
 import type { z } from 'zod'
@@ -92,18 +92,7 @@ export function TrackerToolbar<T>({
             <LogOut className="mr-2 size-4" />
             {t('logout')}
           </Button>
-        ) : (
-          <Button
-            disabled={store.checking || !store.enabled}
-            onClick={() => {
-              setError('')
-              setOpen(true)
-            }}
-          >
-            <LockKeyhole className="mr-2 size-4" />
-            {t('login')}
-          </Button>
-        )}
+        ) : null}
       </div>
       {!store.enabled && <p className="mt-2 text-sm">{t('unavailable')}</p>}
       {store.authenticated && (
