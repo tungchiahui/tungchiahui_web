@@ -156,14 +156,6 @@ test('owner login directly enables both trackers; saves survive reload and remai
       .parse(await (await page.request.get('/api/ops/auth/session')).json()).authenticated,
   ).toBe(false)
   const replayHeaders = { origin, cookie: `site_session=${cookie?.value ?? ''}` }
-  expect(
-    (
-      await page.request.put('/api/ops/site/datasets/weight_loss', {
-        headers: replayHeaders,
-        data: { expectedRevision: weights?.revision, payload: weights?.payload },
-      })
-    ).status(),
-  )
   expect([401, 403]).toContain(
     await page.request
       .put('/api/ops/site/datasets/weight_loss', {
