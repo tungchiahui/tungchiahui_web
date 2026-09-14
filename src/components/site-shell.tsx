@@ -5,6 +5,7 @@ import type { ReactNode } from 'react'
 
 import { type AppLocale, locales } from '@/i18n/locales'
 import { localeSwitchPath, type PublicRouteContext, withLocalePrefix } from '@/web/routes'
+import { AccountButton } from './account-button'
 import { MobileNavigation } from './mobile-navigation'
 import { ThemeToggle } from './theme-toggle'
 
@@ -34,6 +35,7 @@ export async function SiteShell({
   logicalPath = '/',
 }: Readonly<{ children: ReactNode; context: PublicRouteContext; logicalPath?: string }>) {
   const t = await getTranslations({ locale: context.locale, namespace: 'Web' })
+  const authT = await getTranslations({ locale: context.locale, namespace: 'Personal' })
   const links = [
     { path: '/', label: t('home') },
     { path: '/blog', label: t('blog') },
@@ -61,8 +63,8 @@ export async function SiteShell({
       <a className="sr-only focus:not-sr-only" href="#main-content">
         {t('skipToContent')}
       </a>
-      <header className="sticky top-0 z-20 border-b bg-background/90 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center gap-5 px-5 py-3">
+      <header className="sticky top-0 z-20 border-b bg-background/80 shadow-sm backdrop-blur-xl">
+        <div className="mx-auto flex max-w-7xl items-center gap-6 px-5 py-3 lg:px-8">
           <Link
             aria-label={t('siteName')}
             className="site-brand-mark mr-auto"
@@ -72,10 +74,13 @@ export async function SiteShell({
             {/* biome-ignore lint/performance/noImgElement: the exact Legacy ICO is also the browser favicon and is intentionally reused as the site mark. */}
             <img alt="" height="34" src="/favicon.ico" width="34" />
           </Link>
-          <nav aria-label={t('navigationLabel')} className="hidden items-center gap-4 sm:flex">
+          <nav
+            aria-label={t('navigationLabel')}
+            className="hidden items-center gap-1 rounded-full border bg-card/70 p-1 shadow-sm sm:flex"
+          >
             {links.map((link) => (
               <Link
-                className="text-sm hover:text-primary"
+                className="rounded-full px-3 py-1.5 text-sm transition hover:bg-background hover:text-primary"
                 href={withLocalePrefix(link.path, context)}
                 key={link.path}
               >
@@ -93,14 +98,6 @@ export async function SiteShell({
               }))}
               navigationLabel={t('navigationLabel')}
             />
-            <Link
-              aria-label={t('search')}
-              className="grid size-10 place-items-center rounded-full border bg-card shadow-sm transition hover:border-primary hover:text-primary"
-              href={withLocalePrefix('/search', context)}
-              title={t('search')}
-            >
-              <Search aria-hidden size={18} />
-            </Link>
             <ThemeToggle
               labels={{
                 dark: t('themeDark'),
@@ -109,6 +106,25 @@ export async function SiteShell({
                 system: t('themeSystem'),
               }}
             />
+            <AccountButton
+              labels={{
+                login: authT('login'),
+                logout: authT('logout'),
+                username: authT('username'),
+                password: authT('password'),
+                submit: authT('login'),
+                cancel: authT('cancel'),
+                failed: authT('loginFailed'),
+              }}
+            />
+            <Link
+              aria-label={t('search')}
+              className="grid size-10 place-items-center rounded-full border bg-card shadow-sm transition hover:border-primary hover:text-primary"
+              href={withLocalePrefix('/search', context)}
+              title={t('search')}
+            >
+              <Search aria-hidden size={18} />
+            </Link>
           </div>
         </div>
       </header>

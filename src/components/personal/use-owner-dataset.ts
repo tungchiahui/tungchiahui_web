@@ -115,11 +115,17 @@ export function useOwnerDataset<T>(
     const storage = (event: StorageEvent) => {
       if (event.key === 'personal-auth-change') void checkSession()
     }
+    const authChange = () => {
+      void checkSession()
+      if (!dirty.current && !sending.current) void reload().catch(() => setState('error'))
+    }
     window.addEventListener('focus', focus)
     window.addEventListener('storage', storage)
+    window.addEventListener('personal-auth-change', authChange)
     return () => {
       window.removeEventListener('focus', focus)
       window.removeEventListener('storage', storage)
+      window.removeEventListener('personal-auth-change', authChange)
     }
   }, [checkSession, draftKey, reload])
 
