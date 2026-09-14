@@ -44,7 +44,9 @@ export interface DeploymentPlatform {
   inspectActiveRelease(): Promise<DeploymentRelease>
   inspectTrafficSlot(): Promise<DeploymentSlot>
   prepareCandidate(release: DeploymentRelease): Promise<void>
-  runMigrations(input: Readonly<{ hasFreshRecoverableBackup: boolean }>): Promise<void>
+  runMigrations(
+    input: Readonly<{ hasFreshRecoverableBackup: boolean; targetSha: string }>,
+  ): Promise<void>
   smokeRelease(release: DeploymentRelease): Promise<DeploymentSmokeEvidence>
   smokePublicEntry(release: DeploymentRelease): Promise<DeploymentSmokeEvidence>
   switchTraffic(slot: DeploymentSlot): Promise<void>
@@ -246,7 +248,10 @@ export async function executeDeploymentOperation(
         candidatePrepared = true
       }
       if (phase < phaseIndex('migration-complete')) {
-        await platform.runMigrations({ hasFreshRecoverableBackup: freshBackup })
+        await platform.runMigrations({
+          hasFreshRecoverableBackup: freshBackup,
+          targetSha: target.sha,
+        })
         advance('migration-complete')
       }
     } else if (phase < phaseIndex('migration-complete')) {

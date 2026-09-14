@@ -441,10 +441,24 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
     )
   }
 
-  async runMigrations(input: Readonly<{ hasFreshRecoverableBackup: boolean }>) {
+  async runMigrations(input: Readonly<{ hasFreshRecoverableBackup: boolean; targetSha: string }>) {
     const name = this.configuration.DEPLOYMENT_MIGRATION_CONTAINER_NAME
     const container = await this.inspectContainer(name)
     if (container.State.Running) throw new Error('Migration container is already running')
+    const image = dockerImageSchema.parse(
+      await requireDocker(
+        this.socketPath,
+        'GET',
+        `/images/${encodeURIComponent(container.Image)}/json`,
+        [200],
+      ),
+    )
+    const imageRevision = image.Config.Labels?.['org.opencontainers.image.revision']
+    if (imageRevision !== input.targetSha) {
+      throw new Error(
+        `Migration image revision ${imageRevision ?? 'unknown'} does not match target ${input.targetSha}`,
+      )
+    }
     await requireDocker(
       this.socketPath,
       'DELETE',

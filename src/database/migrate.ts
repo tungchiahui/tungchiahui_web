@@ -85,6 +85,19 @@ export async function runPostgresMigrations(
       }
     }
 
+    const requiredRelations = await client.query<{ name: string; relation: string | null }>(
+      `SELECT value AS name, to_regclass(value) AS relation
+       FROM unnest(ARRAY['app.accounts', 'app.start_datasets', 'account_auth.sessions']) AS required(value)`,
+    )
+    const missingRelations = requiredRelations.rows
+      .filter((row) => row.relation === null)
+      .map((row) => row.name)
+    if (missingRelations.length > 0) {
+      throw new Error(
+        `Required account schema relations are missing: ${missingRelations.join(', ')}`,
+      )
+    }
+
     return Object.freeze({ migrationCount: count })
   } finally {
     try {
