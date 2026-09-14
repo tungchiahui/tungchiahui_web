@@ -19,14 +19,6 @@ test('owner login directly enables both trackers; saves survive reload and remai
   await expect(page.getByRole('button', { name: '研三下', exact: true })).toBeVisible()
   const progress = page.getByRole('spinbutton').first()
   await expect(progress).toBeDisabled()
-  expect(
-    (
-      await page.request.put('/api/ops/site/datasets/tech_footprint', {
-        headers: { origin },
-        data: { expectedRevision: 0, payload: { version: 2, records: {} } },
-      })
-    ).status(),
-  )
   expect([401, 403]).toContain(
     await page.request
       .put('/api/ops/site/datasets/tech_footprint', {
