@@ -275,11 +275,17 @@ Production activation is **not complete**. Read-only verification on 2026-09-14 
   `tungchiahui`, and one owner account exists. Earlier manual SQL application did not record 0008
   in the journal. After read-only object/constraint/index/privilege verification, an authorized,
   advisory-locked transaction inserted only the immutable 0008 hash/timestamp into the journal on
-  2026-09-14; it did not replay SQL or delete owner/session data. The production journal now has nine
-  rows and matches the checked-in artifact. Do not replay its owner-deletion statements.
+  2026-09-14; it did not replay SQL or delete owner/session data. A subsequent advisory-locked
+  transaction transferred the three 0008 tables and `account_auth` schema to `site_migrator`,
+  because the original manual apply left them owned by the bootstrap role. The production journal now
+  has nine rows and matches the checked-in artifact. Do not replay its owner-deletion statements.
 - Run `34820479592` for `f2676c6ccc64ee46a731503c82f9425f8fa3ab28` failed in the production
   foundation suite: the service fixture image lacked `SITE_DEPLOYMENT_SHA`, so the new migration
   image guard rejected its empty OCI revision. That run never built or deployed a production image.
+- Run `34839727251` for `1a2ed8723d84d193ad4beccff112829999beaa36` reached production deployment but
+  failed with `permission denied for table accounts`. The 0008 objects were owned by `tungchiahui`,
+  while the migration runner correctly uses `site_migrator`; ownership was repaired transactionally
+  after verifying the schema. A new push is required to retry with the new service/deploy-agent image.
 
 The local CI repair supplies the same service/recovery SHA build arguments as release.yml,
 recreates a verified migration runner by immutable image ID, and scopes account-relation validation
