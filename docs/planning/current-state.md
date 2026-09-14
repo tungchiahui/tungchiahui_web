@@ -270,10 +270,13 @@ Production activation is **not complete**. Read-only verification on 2026-09-14 
 - Web release `7398339eae359068e51cfb186602b86bd822e273` passed Actions run `34810146007`, but
   Web cutover did not upgrade those independent services. The workflow publishes four images and
   passes only the Web digest to the engine. Do not claim that a Web push updates the account API.
-- The production Drizzle journal has eight rows, ending at timestamp `1789225384076` (0007),
-  while all three 0008 account relations already exist. They are owned by bootstrap role
+- The production Drizzle journal initially had eight rows, ending at timestamp `1789225384076`
+  (0007), while all three 0008 account relations already existed. They are owned by bootstrap role
   `tungchiahui`, and one owner account exists. Earlier manual SQL application did not record 0008
-  in the journal. Do not replay its owner-deletion statements or describe eight rows as including 0008.
+  in the journal. After read-only object/constraint/index/privilege verification, an authorized,
+  advisory-locked transaction inserted only the immutable 0008 hash/timestamp into the journal on
+  2026-09-14; it did not replay SQL or delete owner/session data. The production journal now has nine
+  rows and matches the checked-in artifact. Do not replay its owner-deletion statements.
 - Run `34820479592` for `f2676c6ccc64ee46a731503c82f9425f8fa3ab28` failed in the production
   foundation suite: the service fixture image lacked `SITE_DEPLOYMENT_SHA`, so the new migration
   image guard rejected its empty OCI revision. That run never built or deployed a production image.
@@ -284,8 +287,7 @@ to migration targets that include 0008. Regression coverage rejects missing/empt
 revisions despite misleading container labels, checks immutable runner recreation, permits the
 historical schema fixture and rejects missing latest-schema relations with an otherwise valid journal.
 
-Remaining production work: preserve recoverable evidence and reconcile the manually applied 0008
-objects/ownership/grants/journal transactionally; activate the reviewed independent service and
+Remaining production work: activate the reviewed independent service and
 deployment-agent images through the existing scoped provisioning mechanisms; then verify account
 login/logout, per-account isolation, owner tracker writes and signed Operator status. Preserve the
 existing owner and both Web slots. No production mutation or push is part of this CI-repair checkout.
