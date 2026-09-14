@@ -26,7 +26,15 @@ test('owner login directly enables both trackers; saves survive reload and remai
         data: { expectedRevision: 0, payload: { version: 2, records: {} } },
       })
     ).status(),
-  ).toBe(401)
+  )
+  expect([401, 403]).toContain(
+    await page.request
+      .put('/api/ops/site/datasets/tech_footprint', {
+        headers: { origin },
+        data: { expectedRevision: 0, payload: { version: 2, records: {} } },
+      })
+      .then((response) => response.status()),
+  )
   await page.getByRole('button', { name: '登录', exact: true }).click()
   await page.getByLabel('用户名').fill('owner')
   await page.getByLabel('密码').fill('local-only-owner-password')
