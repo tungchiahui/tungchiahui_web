@@ -211,7 +211,7 @@ describe('Phase 18 More and music compatibility', () => {
       screen.getByRole('heading', { name: '掌握 RAII、智能指针、移动语义、常用 STL 与错误处理' }),
     ).toBeVisible()
     expect(screen.getByDisplayValue('完成 RAII 练习')).toBeDisabled()
-    expect(screen.getByRole('button', { name: '登录' })).toBeVisible()
+    expect(await screen.findByText(/正在检查登录|公开只读 · 登录后可编辑/)).toBeVisible()
     unmount()
 
     render(
