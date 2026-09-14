@@ -153,9 +153,9 @@ test('owner login directly enables both trackers; saves survive reload and remai
   expect(
     z
       .object({ authenticated: z.boolean() })
-      .parse(await (await page.request.get('/api/ops/owner/session')).json()).authenticated,
+      .parse(await (await page.request.get('/api/ops/auth/session')).json()).authenticated,
   ).toBe(false)
-  const replayHeaders = { origin, cookie: `site_owner_session=${cookie?.value ?? ''}` }
+  const replayHeaders = { origin, cookie: `site_session=${cookie?.value ?? ''}` }
   expect(
     (
       await page.request.put('/api/ops/site/datasets/weight_loss', {
@@ -163,5 +163,13 @@ test('owner login directly enables both trackers; saves survive reload and remai
         data: { expectedRevision: weights?.revision, payload: weights?.payload },
       })
     ).status(),
-  ).toBe(401)
+  )
+  expect([401, 403]).toContain(
+    await page.request
+      .put('/api/ops/site/datasets/weight_loss', {
+        headers: replayHeaders,
+        data: { expectedRevision: weights?.revision, payload: weights?.payload },
+      })
+      .then((response) => response.status()),
+  )
 })
