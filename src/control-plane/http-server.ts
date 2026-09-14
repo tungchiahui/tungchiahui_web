@@ -361,7 +361,11 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
       return
     }
 
-    if (url.pathname.startsWith('/api/ops/auth/') || url.pathname.startsWith('/api/ops/start/')) {
+    if (
+      url.pathname.startsWith('/api/ops/auth/') ||
+      url.pathname.startsWith('/api/ops/start/') ||
+      url.pathname.startsWith('/api/ops/site/datasets/')
+    ) {
       try {
         const result = await accountHandler(
           url.pathname,
