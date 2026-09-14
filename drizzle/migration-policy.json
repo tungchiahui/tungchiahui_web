@@ -64,6 +64,14 @@
       "requiresFreshRecoverableBackup": false,
       "reason": "Add isolated owner browser sessions and initialize only missing personal datasets.",
       "recovery": "Retain additive schema on application rollback. Invalidate browser sessions after restoring PostgreSQL; no legacy Blob data is imported."
+    },
+    {
+      "tag": "0008_accounts_and_start_data",
+      "changeKind": "expand",
+      "risk": "medium",
+      "requiresFreshRecoverableBackup": false,
+      "reason": "Adds unified owner/user accounts, account sessions, and per-account Start datasets; clears obsolete owner browser sessions without deleting public tracker data.",
+      "recovery": "Retain additive tables during blue-green rollback. Recreate an owner account explicitly with the account CLI after rollback or restore; no production credentials are stored in the repository."
     }
   ]
 }

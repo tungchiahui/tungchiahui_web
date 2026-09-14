@@ -15,10 +15,18 @@ async function derive(password: string, salt: string): Promise<Buffer> {
 }
 
 export async function hashOwnerPassword(password: string) {
-  z.string().min(16).max(256).parse(password)
+  z.string()
+    .min(8)
+    .max(256)
+    .regex(/[A-Za-z]/)
+    .regex(/[0-9]/)
+    .parse(password)
   const salt = randomBytes(16).toString('hex')
   return `scrypt:${salt}:${(await derive(password, salt)).toString('hex')}`
 }
+
+export const hashAccountPassword = hashOwnerPassword
+export const verifyAccountPassword = verifyOwnerPassword
 
 export async function verifyOwnerPassword(password: string, hash: string) {
   const [, salt, digest] = ownerPasswordHashSchema.parse(hash).split(':')

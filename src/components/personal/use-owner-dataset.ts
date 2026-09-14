@@ -55,12 +55,14 @@ export function useOwnerDataset<T>(
   const checkSession = useCallback(async () => {
     const request = ++sessionRequest.current
     try {
-      const response = await fetchTracker('/api/ops/owner/session', { cache: 'no-store' })
+      const response = await fetchTracker('/api/ops/auth/session', { cache: 'no-store' })
       if (!response.ok) throw new Error('session_unavailable')
       const session = sessionStatusSchema.parse(await response.json())
       if (request !== sessionRequest.current) return
-      owner.current = session.authenticated
-      setAuthenticated(session.authenticated)
+      owner.current =
+        session.authenticated &&
+        (session.account?.role === undefined || session.account.role === 'owner')
+      setAuthenticated(owner.current)
       setEnabled(session.enabled !== false)
       if (!session.authenticated && dirty.current) setState('expired')
     } catch {
@@ -148,7 +150,7 @@ export function useOwnerDataset<T>(
     sending.current = true
     setState('saving')
     try {
-      const response = await fetchTracker(`/api/ops/owner/datasets/${key}`, {
+      const response = await fetchTracker(`/api/ops/site/datasets/${key}`, {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ payload: parsed.data, expectedRevision: current.current.revision }),
@@ -215,11 +217,13 @@ export function useOwnerDataset<T>(
       /* Focus also rechecks server authentication. */
     }
   }
-  const login = async (password: string) => {
-    const response = await fetchTracker('/api/ops/owner/session', {
+  const login = async (usernameOrPassword: string, password?: string) => {
+    const username = password === undefined ? 'owner' : usernameOrPassword
+    const secret = password ?? usernameOrPassword
+    const response = await fetchTracker('/api/ops/auth/session', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ password }),
+      body: JSON.stringify({ username, password: secret }),
     })
     if (!response.ok) throw new Error(response.status === 429 ? 'limited' : 'loginFailed')
     sessionStatusSchema.parse(await response.json())
@@ -229,7 +233,7 @@ export function useOwnerDataset<T>(
     signalAuthChange()
   }
   const logout = async () => {
-    const response = await fetchTracker('/api/ops/owner/session', { method: 'DELETE' })
+    const response = await fetchTracker('/api/ops/auth/session', { method: 'DELETE' })
     if (!response.ok) throw new Error('logoutFailed')
     sessionRequest.current += 1
     owner.current = false

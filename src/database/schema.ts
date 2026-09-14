@@ -21,12 +21,15 @@ import {
   translationSegmentStatusValues,
 } from '../domain/persistence'
 import {
+  accountSessions,
+  accounts,
   applicationSchema,
   contentTypeEnum,
   documents,
   operationalJobs,
   ownerManagedDatasets,
   ownerSessions,
+  startDatasets,
 } from './schema-core'
 
 export * from './schema-core'
@@ -322,6 +325,9 @@ export const contentAliases = applicationSchema.table(
 
 export const persistenceSchema = {
   ownerSessions,
+  accounts,
+  accountSessions,
+  startDatasets,
   contentAliases,
   documentTranslationSegments,
   documentTranslations,

@@ -1,3 +1,4 @@
+import { createAccount } from './account/create'
 import { createContentSync } from './content/control-client'
 import { createDeployment, createRollback, readDeploymentStatus } from './deployment/control-client'
 import { resetDevelopmentStack, startDevelopmentStack, stopDevelopmentStack } from './dev/runtime'
@@ -39,6 +40,9 @@ Validation:
   check     Run formatting, lint, source policy, typecheck, Renovate validation, and build
   test      Run unit, disposable integration, critical E2E, and migration suites
   help      Show this help
+
+Accounts:
+  account create --username <name> --role <owner|user> --database-url <url>
 
 Deployment:
   status
@@ -84,6 +88,11 @@ async function main() {
   const command = parseSiteCommand(process.argv.slice(2))
 
   switch (command.kind) {
+    case 'account-create':
+      console.log(
+        JSON.stringify(await createAccount(command.databaseUrl, command.username, command.role)),
+      )
+      return 0
     case 'asset-backup':
       await runProductionAssetBackup({
         envFile: command.envFile,

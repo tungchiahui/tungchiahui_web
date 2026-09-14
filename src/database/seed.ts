@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm'
 import { contentHookInputSchema } from '../content/hooks'
+import { localOwnerPasswordHash } from '../control-plane/owner-password'
 import {
   applicationJobRequestSchema,
   documentWriteSchema,
@@ -7,13 +8,16 @@ import {
 } from '../domain/persistence'
 import { locales } from '../i18n/locales'
 import { SearchIndexRepository } from '../search/repository'
+import { defaultStartPayload } from '../start/contracts'
 import { createDatabaseClient } from './client'
 import {
+  accounts,
   documents,
   documentTranslations,
   ingestionRuns,
   operationalJobs,
   ownerManagedDatasets,
+  startDatasets,
   translationJobs,
   translationSegments,
 } from './schema'
@@ -304,6 +308,24 @@ export async function seedDevelopmentDatabase(connectionString: string) {
           { ...techFootprint, updatedAt: seedTimestamp },
           { ...weightLoss, updatedAt: seedTimestamp },
         ])
+        .onConflictDoNothing()
+      const localOwnerId = '50000000-0000-4000-8000-000000000001'
+      await transaction
+        .insert(accounts)
+        .values({
+          id: localOwnerId,
+          username: 'owner',
+          role: 'owner',
+          passwordHash: localOwnerPasswordHash,
+        })
+        .onConflictDoNothing()
+      await transaction
+        .insert(startDatasets)
+        .values({
+          accountId: localOwnerId,
+          payload: defaultStartPayload,
+          updatedBy: 'development-seed',
+        })
         .onConflictDoNothing()
     })
   } finally {

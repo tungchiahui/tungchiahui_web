@@ -38,6 +38,7 @@ export function TrackerToolbar<T>({
 }) {
   const t = useTranslations('Personal')
   const [open, setOpen] = useState(false)
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -199,7 +200,10 @@ export function TrackerToolbar<T>({
         open={open}
         onOpenChange={(value) => {
           setOpen(value)
-          if (!value) setPassword('')
+          if (!value) {
+            setUsername('')
+            setPassword('')
+          }
         }}
       >
         <Dialog.Portal>
@@ -216,7 +220,7 @@ export function TrackerToolbar<T>({
                 setBusy(true)
                 setError('')
                 try {
-                  await store.login(password)
+                  await store.login(username, password)
                   setOpen(false)
                 } catch (reason) {
                   setError(
@@ -228,10 +232,23 @@ export function TrackerToolbar<T>({
                   )
                 } finally {
                   setPassword('')
+                  setUsername('')
                   setBusy(false)
                 }
               }}
             >
+              <label className="block space-y-2">
+                <span>{t('username')}</span>
+                <input
+                  className={fieldClass}
+                  type="text"
+                  autoComplete="username"
+                  required
+                  maxLength={80}
+                  value={username}
+                  onChange={(event) => setUsername(event.target.value)}
+                />
+              </label>
               <label className="block space-y-2">
                 <span>{t('password')}</span>
                 <input

@@ -10,6 +10,10 @@ export type DatasetSnapshot<T> = { payload: T; revision: number }
 export const sessionStatusSchema = z.object({
   authenticated: z.boolean(),
   enabled: z.boolean().optional(),
+  account: z
+    .object({ username: z.string(), role: z.enum(['owner', 'user']) })
+    .nullable()
+    .optional(),
 })
 export const emptyTechPayload: TechPayload = { version: 2, records: {} }
 export const emptyWeightPayload: WeightPayload = { version: 2, records: [] }

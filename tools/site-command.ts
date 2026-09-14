@@ -10,6 +10,12 @@ import {
 const defaultProductionEnvFile = '/etc/tungchiahui/.env'
 
 export type SiteCommand =
+  | Readonly<{
+      databaseUrl: string
+      kind: 'account-create'
+      role: 'owner' | 'user'
+      username: string
+    }>
   | Readonly<{ envFile: string; execute: boolean; kind: 'asset-backup' }>
   | Readonly<{
       backupType: 'diff' | 'full' | 'incr'
@@ -79,6 +85,35 @@ export function assertToolchain(nodeVersion: string) {
 export function parseSiteCommand(arguments_: readonly string[]): SiteCommand {
   if (arguments_.length === 0) {
     return Object.freeze({ kind: 'help' })
+  }
+
+  if (arguments_[0] === 'account' && arguments_[1] === 'create') {
+    let username = ''
+    let role: 'owner' | 'user' = 'user'
+    let databaseUrl = process.env.CONTROL_API_DATABASE_URL ?? process.env.DATABASE_URL ?? ''
+    let index = 2
+    while (index < arguments_.length) {
+      const argument = arguments_[index]
+      if (argument === '--username')
+        username = z
+          .string()
+          .min(1)
+          .max(80)
+          .parse(arguments_[index + 1])
+      else if (argument === '--role') role = z.enum(['owner', 'user']).parse(arguments_[index + 1])
+      else if (argument === '--database-url')
+        databaseUrl = z
+          .string()
+          .url()
+          .parse(arguments_[index + 1])
+      else throw new SiteUsageError(`Unknown account argument: ${String(argument)}`)
+      index += 2
+    }
+    if (!username || !databaseUrl)
+      throw new SiteUsageError(
+        'account create requires --username and --database-url (or CONTROL_API_DATABASE_URL)',
+      )
+    return Object.freeze({ databaseUrl, kind: 'account-create', role, username })
   }
 
   if (arguments_[0] === 'production' && arguments_[1] === 'secrets' && arguments_[2] === 'init') {

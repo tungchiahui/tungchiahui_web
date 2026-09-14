@@ -219,7 +219,18 @@
       "greetingNoon": "中午好，慢一点也没关系。",
       "greetingAfternoon": "下午好，把下一步打开就行。",
       "greetingEvening": "晚上好，收束今天，也留点余地。",
-      "greetingNight": "夜深了，做完这一件就早点休息。"
+      "greetingNight": "夜深了，做完这一件就早点休息。",
+      "login": "登录",
+      "logout": "退出",
+      "username": "用户名",
+      "password": "密码",
+      "loginFailed": "登录失败，请检查用户名和密码。",
+      "loginLimited": "尝试次数过多，请稍后重试。",
+      "logoutFailed": "退出失败，请重试。",
+      "loadFailed": "无法读取起始页数据。",
+      "saveFailed": "保存失败，请稍后重试。",
+      "conflict": "数据已被其他设备更新，请刷新后重试。",
+      "saving": "正在保存…"
     },
     "stats": {
       "title": "网站公开统计",
@@ -314,6 +325,7 @@
     "editable": "已登录 · 可直接编辑",
     "readOnly": "公开只读 · 登录后可编辑",
     "login": "登录",
+    "username": "用户名",
     "logout": "退出登录",
     "loginTitle": "站主登录",
     "loginDescription": "登录后可直接编辑技术足迹和减脂记录。会话最长保留 12 小时。",

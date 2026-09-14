@@ -219,7 +219,18 @@
       "greetingNoon": "Good afternoon. It is okay to slow down.",
       "greetingAfternoon": "Good afternoon. Open up the next step.",
       "greetingEvening": "Good evening. Wrap up today and leave a little room.",
-      "greetingNight": "It is late. Finish this one thing, then get some rest."
+      "greetingNight": "It is late. Finish this one thing, then get some rest.",
+      "login": "登录",
+      "logout": "退出",
+      "username": "用户名",
+      "password": "Password",
+      "loginFailed": "Sign-in failed. Check your username and password.",
+      "loginLimited": "Too many attempts. Please try again later.",
+      "logoutFailed": "Sign-out failed. Please retry.",
+      "loadFailed": "Unable to load Start data.",
+      "saveFailed": "Unable to save. Please retry.",
+      "conflict": "This data changed on another device. Reload and try again.",
+      "saving": "Saving…"
     },
     "stats": {
       "title": "Public site analytics",
@@ -314,6 +325,7 @@
     "editable": "Signed in · Editing enabled",
     "readOnly": "Public view · Sign in to edit",
     "login": "Sign in",
+    "username": "Username",
     "logout": "Sign out",
     "loginTitle": "Owner sign-in",
     "loginDescription": "Sign in to edit the technology roadmap and weight records. Sessions last up to 12 hours.",

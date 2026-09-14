@@ -36,6 +36,9 @@ export const applicationJobStatusValues = [
 export const ingestionRunStatusValues = ['running', 'completed', 'failed'] as const
 export const translationScopeValues = ['pending', 'changed', 'article', 'all'] as const
 export const ownerDatasetKeyValues = ['tech_footprint', 'weight_loss'] as const
+export const accountRoleValues = ['owner', 'user'] as const
+export const accountRoleSchema = z.enum(accountRoleValues)
+export type AccountRole = z.infer<typeof accountRoleSchema>
 
 export const localeSchema = z.enum(localeValues)
 export const contentTypeSchema = z.enum(contentTypeValues)

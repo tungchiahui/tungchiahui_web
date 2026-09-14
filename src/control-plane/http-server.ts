@@ -8,7 +8,8 @@ import {
   requestIdFromHeaders,
   safeErrorAttributes,
 } from '../observability/telemetry'
-
+import { createAccountHttpHandler } from './account-http'
+import { AccountSessionRepository } from './account-sessions'
 import {
   ApplicationJobIdempotencyConflictError,
   ApplicationJobRepository,
@@ -282,10 +283,18 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
     ? new TranslationControlRepository(configuration.databaseUrl)
     : null
   const rateLimiter = new FixedWindowRateLimiter(configuration.rateLimitPerMinute)
-  const ownerSessions = configuration.databaseUrl
+  const accountSessions = configuration.databaseUrl
+    ? new AccountSessionRepository(configuration.databaseUrl)
+    : null
+  const accountHandler = createAccountHttpHandler(configuration, accountSessions, applicationJobs)
+  const legacyOwnerSessions = configuration.databaseUrl
     ? new OwnerSessionRepository(configuration.databaseUrl)
     : null
-  const ownerHandler = createOwnerHttpHandler(configuration, ownerSessions, applicationJobs)
+  const legacyOwnerHandler = createOwnerHttpHandler(
+    configuration,
+    legacyOwnerSessions,
+    applicationJobs,
+  )
 
   const server = createServer(async (request, response) => {
     const url = new URL(request.url ?? '/', 'http://control-api')
@@ -352,16 +361,16 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
       return
     }
 
-    if (url.pathname.startsWith('/api/ops/owner/')) {
+    if (url.pathname.startsWith('/api/ops/auth/') || url.pathname.startsWith('/api/ops/start/')) {
       try {
-        const result = await ownerHandler(
+        const result = await accountHandler(
           url.pathname,
           request.method ?? '',
           requestHeaders(request),
           await readRequestBody(request),
         )
         appendControlAuditEvent(configuration.statePath, {
-          actorId: 'owner-browser',
+          actorId: 'account-browser',
           createdAt: new Date().toISOString(),
           operationId: null,
           eventType: 'owner_request_completed',
@@ -371,11 +380,25 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
         sendJson(response, result)
       } catch (error: unknown) {
         const mapped = errorResponse(error)
-        auditFailure(configuration, 'owner-browser', 'owner_request_failed', 'failed', {
+        auditFailure(configuration, 'account-browser', 'account_request_failed', 'failed', {
           path: url.pathname,
           status: mapped.status,
         })
         sendJson(response, mapped)
+      }
+      return
+    }
+    if (url.pathname.startsWith('/api/ops/owner/')) {
+      try {
+        const result = await legacyOwnerHandler(
+          url.pathname,
+          request.method ?? '',
+          requestHeaders(request),
+          await readRequestBody(request),
+        )
+        sendJson(response, result)
+      } catch (error: unknown) {
+        sendJson(response, errorResponse(error))
       }
       return
     }
@@ -865,7 +888,8 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
       await Promise.all([
         applicationJobs?.close(),
         translationJobs?.close(),
-        ownerSessions?.close(),
+        accountSessions?.close(),
+        legacyOwnerSessions?.close(),
       ])
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()))

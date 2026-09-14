@@ -219,7 +219,18 @@
       "greetingNoon": "中午好，慢一點也沒關係。",
       "greetingAfternoon": "下午好，把下一步打開就行。",
       "greetingEvening": "晚上好，收束今天，也留點餘地。",
-      "greetingNight": "夜深了，做完這一件就早點休息。"
+      "greetingNight": "夜深了，做完這一件就早點休息。",
+      "login": "登录",
+      "logout": "退出",
+      "username": "用户名",
+      "password": "密碼",
+      "loginFailed": "登入失敗，請檢查使用者名稱和密碼。",
+      "loginLimited": "嘗試次數過多，請稍後再試。",
+      "logoutFailed": "登出失敗，請重試。",
+      "loadFailed": "無法讀取起始頁資料。",
+      "saveFailed": "儲存失敗，請稍後重試。",
+      "conflict": "資料已被其他裝置更新，請重新載入後再試。",
+      "saving": "正在儲存…"
     },
     "stats": {
       "title": "網站公開統計",
@@ -314,6 +325,7 @@
     "editable": "已登入 · 可直接編輯",
     "readOnly": "公開只讀 · 登入後可編輯",
     "login": "登入",
+    "username": "使用者名稱",
     "logout": "退出登入",
     "loginTitle": "站主登入",
     "loginDescription": "登入後可直接編輯技術足跡和減脂記錄。會話最長保留 12 小時。",

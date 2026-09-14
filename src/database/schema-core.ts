@@ -14,6 +14,7 @@ import {
 } from 'drizzle-orm/pg-core'
 
 import {
+  accountRoleValues,
   applicationJobStatusValues,
   applicationJobTypeValues,
   contentTypeValues,
@@ -33,6 +34,37 @@ export const ownerSessions = ownerAuthSchema.table(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index('owner_sessions_expiry_idx').on(table.expiresAt)],
+)
+export const accountAuthSchema = pgSchema('account_auth')
+export const accountRoleEnum = applicationSchema.enum('account_role', accountRoleValues)
+export const accounts = applicationSchema.table(
+  'accounts',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    username: text().notNull(),
+    role: accountRoleEnum().notNull().default('user'),
+    passwordHash: text('password_hash').notNull(),
+    disabled: boolean().notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('accounts_username_unique').on(table.username),
+    check('accounts_username_not_empty', sql`length(${table.username}) BETWEEN 1 AND 80`),
+    check('accounts_password_hash_not_empty', sql`length(${table.passwordHash}) > 0`),
+  ],
+)
+export const accountSessions = accountAuthSchema.table(
+  'sessions',
+  {
+    tokenHash: text('token_hash').primaryKey(),
+    accountId: uuid('account_id')
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    credentialVersion: text('credential_version').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('account_sessions_expiry_idx').on(table.expiresAt)],
 )
 export const contentTypeEnum = applicationSchema.enum('content_type', contentTypeValues)
 export const applicationJobTypeEnum = applicationSchema.enum(
@@ -138,5 +170,22 @@ export const ownerManagedDatasets = applicationSchema.table(
     check('owner_managed_datasets_payload_object', sql`jsonb_typeof(${table.payload}) = 'object'`),
     check('owner_managed_datasets_revision_nonnegative', sql`${table.revision} >= 0`),
     check('owner_managed_datasets_updated_by_not_empty', sql`length(${table.updatedBy}) > 0`),
+  ],
+)
+export const startDatasets = applicationSchema.table(
+  'start_datasets',
+  {
+    accountId: uuid('account_id')
+      .primaryKey()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    payload: jsonb().$type<Readonly<Record<string, JsonValue>>>().notNull(),
+    revision: bigint({ mode: 'number' }).notNull().default(0),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedBy: text('updated_by').notNull(),
+  },
+  (table) => [
+    check('start_datasets_payload_object', sql`jsonb_typeof(${table.payload}) = 'object'`),
+    check('start_datasets_revision_nonnegative', sql`${table.revision} >= 0`),
+    check('start_datasets_updated_by_not_empty', sql`length(${table.updatedBy}) > 0`),
   ],
 )

@@ -26,28 +26,17 @@ import {
 import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { type StartBackground, startBackgroundListSchema } from '@/start/backgrounds'
+import {
+  bookmarkSchema,
+  defaultStartPayload,
+  type StartPayload,
+  startDataResponseSchema,
+  startPayloadSchema,
+} from '@/start/contracts'
 
-const bookmarkSchema = z
-  .object({
-    color: z.string().max(24).default('#308eda'),
-    desc: z.string().max(160).default(''),
-    id: z.string().min(1).max(100),
-    name: z.string().min(1).max(80),
-    url: z.url(),
-  })
-  .strict()
-const sectionSchema = z
-  .object({ items: z.array(bookmarkSchema).max(100), title: z.string().min(1).max(80) })
-  .strict()
-const sectionListSchema = z.array(sectionSchema).max(24)
-const historySchema = z
-  .array(
-    z.object({ engine: z.string(), text: z.string().min(1), timestamp: z.number().int() }).strict(),
-  )
-  .max(20)
-type BookmarkSection = z.infer<typeof sectionSchema>
-type HistoryEntry = z.infer<typeof historySchema>[number]
-type EngineId = 'baidu' | 'google' | 'bing'
+type BookmarkSection = StartPayload['sections'][number]
+type HistoryEntry = StartPayload['history'][number]
+type EngineId = StartPayload['engine']
 
 const engines = [
   { id: 'baidu', name: '百度', url: 'https://www.baidu.com/s?wd=' },
@@ -67,106 +56,11 @@ const fallbackBackgrounds: readonly StartBackground[] = [
     copyright: 'Unsplash',
   },
 ] as const
-const defaultSections: readonly BookmarkSection[] = [
-  {
-    title: '日常工具',
-    items: [
-      {
-        id: 'tool-gmail',
-        name: 'Gmail',
-        desc: '邮件收件箱',
-        url: 'https://mail.google.com',
-        color: '#ef5b4d',
-      },
-      {
-        id: 'tool-github',
-        name: 'GitHub',
-        desc: '代码与项目',
-        url: 'https://github.com',
-        color: '#6f66d8',
-      },
-      {
-        id: 'tool-notion',
-        name: 'Notion',
-        desc: '笔记与资料',
-        url: 'https://notion.so',
-        color: '#2f3437',
-      },
-      {
-        id: 'tool-chatgpt',
-        name: 'ChatGPT',
-        desc: 'AI 助手',
-        url: 'https://chat.openai.com',
-        color: '#10a37f',
-      },
-    ],
-  },
-  {
-    title: '开发资源',
-    items: [
-      {
-        id: 'dev-mdn',
-        name: 'MDN',
-        desc: 'Web 文档',
-        url: 'https://developer.mozilla.org',
-        color: '#2f80ed',
-      },
-      {
-        id: 'dev-stack',
-        name: 'Stack Overflow',
-        desc: '技术问答',
-        url: 'https://stackoverflow.com',
-        color: '#f48225',
-      },
-      {
-        id: 'dev-caniuse',
-        name: 'Can I Use',
-        desc: '兼容性查询',
-        url: 'https://caniuse.com',
-        color: '#7bbf47',
-      },
-    ],
-  },
-  {
-    title: '阅读灵感',
-    items: [
-      {
-        id: 'read-hn',
-        name: 'Hacker News',
-        desc: '技术热榜',
-        url: 'https://news.ycombinator.com',
-        color: '#ff6600',
-      },
-      {
-        id: 'read-v2ex',
-        name: 'V2EX',
-        desc: '创意社区',
-        url: 'https://www.v2ex.com',
-        color: '#308eda',
-      },
-      {
-        id: 'read-zhihu',
-        name: '知乎',
-        desc: '知识问答',
-        url: 'https://www.zhihu.com',
-        color: '#0084ff',
-      },
-    ],
-  },
-]
-const keys = {
-  background: 'start-page-background',
-  bookmarks: 'start-page-bookmarks',
-  engine: 'start-page-engine',
-  history: 'start-page-history',
-  view: 'start-page-view-mode',
-} as const
-
 export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) {
   const t = useTranslations('Web.start')
   const locale = useLocale()
-  const [sections, setSections] = useState<readonly BookmarkSection[]>(defaultSections)
-  const [history, setHistory] = useState<readonly HistoryEntry[]>([])
+  const [sections, setSections] = useState<readonly BookmarkSection[]>(defaultStartPayload.sections)
+  const [history, setHistory] = useState<readonly HistoryEntry[]>(defaultStartPayload.history)
   const [engineIndex, setEngineIndex] = useState(0)
   const [backgroundIndex, setBackgroundIndex] = useState(0)
   const [backgrounds, setBackgrounds] = useState<readonly StartBackground[]>(fallbackBackgrounds)
@@ -176,32 +70,41 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
   const [showOptions, setShowOptions] = useState(false)
   const [now, setNow] = useState<Date | null>(null)
   const [editing, setEditing] = useState(false)
+  const [authenticated, setAuthenticated] = useState(false)
+  const [accountName, setAccountName] = useState<string | null>(null)
+  const [revision, setRevision] = useState(0)
+  const [dirty, setDirty] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [authError, setAuthError] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const importInput = useRef<HTMLInputElement>(null)
   const currentEngine = engines[engineIndex] ?? engines[0]
 
   useEffect(() => {
     setNow(new Date())
     const timer = window.setInterval(() => setNow(new Date()), 1000)
-    try {
-      const storedSections = sectionListSchema.safeParse(
-        JSON.parse(localStorage.getItem(keys.bookmarks) ?? 'null') as unknown,
-      )
-      if (storedSections.success) setSections(storedSections.data)
-      const storedHistory = historySchema.safeParse(
-        JSON.parse(localStorage.getItem(keys.history) ?? '[]') as unknown,
-      )
-      if (storedHistory.success) setHistory(storedHistory.data)
-      const engine = engines.findIndex((item) => item.id === localStorage.getItem(keys.engine))
-      if (engine >= 0) setEngineIndex(engine)
-      setDetailed(localStorage.getItem(keys.view) === 'detailed')
-      const background = Number(localStorage.getItem(keys.background) ?? 0)
-      if (Number.isInteger(background))
-        setBackgroundIndex(Math.abs(background) % fallbackBackgrounds.length)
-    } catch {
-      // Invalid legacy browser state falls back to the validated default launchpad.
-    }
+    void fetch('/api/ops/start/data', { cache: 'no-store' })
+      .then(async (response) => startDataResponseSchema.parse(await response.json()))
+      .then((data) => {
+        setAuthenticated(data.authenticated)
+        setAccountName(data.account?.username ?? null)
+        setRevision(data.dataset.revision)
+        setSections(data.dataset.payload.sections)
+        setHistory(data.dataset.payload.history)
+        setEngineIndex(
+          Math.max(
+            0,
+            engines.findIndex((item) => item.id === data.dataset.payload.engine),
+          ),
+        )
+        setBackgroundIndex(data.dataset.payload.background)
+        setDetailed(data.dataset.payload.detailed)
+      })
+      .catch(() => setSaveError(t('loadFailed')))
     return () => window.clearInterval(timer)
-  }, [])
+  }, [t])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -245,15 +148,72 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
     }
   }, [currentEngine.id, query])
 
-  const saveSections = useCallback((next: readonly BookmarkSection[]) => {
-    setSections(next)
-    localStorage.setItem(keys.bookmarks, JSON.stringify(next))
-  }, [])
-  const saveHistory = useCallback((next: readonly HistoryEntry[]) => {
-    const limited = next.slice(0, 20)
-    setHistory(limited)
-    localStorage.setItem(keys.history, JSON.stringify(limited))
-  }, [])
+  const saveSections = useCallback(
+    (next: readonly BookmarkSection[]) => {
+      if (!authenticated) return
+      setSections(next)
+      setDirty(true)
+    },
+    [authenticated],
+  )
+  const saveHistory = useCallback(
+    (next: readonly HistoryEntry[]) => {
+      if (!authenticated) return
+      const limited = next.slice(0, 20)
+      setHistory(limited)
+      setDirty(true)
+    },
+    [authenticated],
+  )
+  useEffect(() => {
+    if (!authenticated || !dirty || saving) return
+    const timer = window.setTimeout(() => {
+      setSaving(true)
+      setSaveError(null)
+      const payload = {
+        version: 1 as const,
+        sections,
+        history,
+        engine: currentEngine.id,
+        background: backgroundIndex,
+        detailed,
+      }
+      void fetch('/api/ops/start/data', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ expectedRevision: revision, payload }),
+      })
+        .then(async (response) => {
+          if (response.status === 409) throw new Error('conflict')
+          if (!response.ok) throw new Error('save_failed')
+          return startDataResponseSchema.parse(await response.json())
+        })
+        .then((result) => {
+          setRevision(result.dataset.revision)
+          setDirty(false)
+        })
+        .catch((error: unknown) =>
+          setSaveError(
+            error instanceof Error && error.message === 'conflict'
+              ? t('conflict')
+              : t('saveFailed'),
+          ),
+        )
+        .finally(() => setSaving(false))
+    }, 600)
+    return () => window.clearTimeout(timer)
+  }, [
+    authenticated,
+    backgroundIndex,
+    currentEngine.id,
+    detailed,
+    dirty,
+    history,
+    revision,
+    saving,
+    sections,
+    t,
+  ])
   const options = useMemo(() => {
     const value = query.trim().toLowerCase()
     const combined = [
@@ -272,10 +232,11 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
   function executeSearch(text = query) {
     const value = text.trim()
     if (!value) return
-    saveHistory([
-      { text: value, engine: currentEngine.name, timestamp: Date.now() },
-      ...history.filter((item) => item.text !== value),
-    ])
+    if (authenticated)
+      saveHistory([
+        { text: value, engine: currentEngine.name, timestamp: Date.now() },
+        ...history.filter((item) => item.text !== value),
+      ])
     window.location.assign(
       looksLikeUrl(value)
         ? value.startsWith('http')
@@ -287,20 +248,21 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
   function cycleEngine() {
     const next = (engineIndex + 1) % engines.length
     setEngineIndex(next)
-    localStorage.setItem(keys.engine, engines[next]?.id ?? 'baidu')
+    if (authenticated) setDirty(true)
   }
   function cycleBackground() {
     const next = (backgroundIndex + 1) % backgrounds.length
     setBackgroundIndex(next)
-    localStorage.setItem(keys.background, String(next))
+    if (authenticated) setDirty(true)
   }
   function switchView(next: boolean) {
     setDetailed(next)
     if (!next) setEditing(false)
-    localStorage.setItem(keys.view, next ? 'detailed' : 'simple')
+    if (authenticated) setDirty(true)
   }
   function add(event: FormEvent<HTMLFormElement>, sectionIndex: number) {
     event.preventDefault()
+    if (!authenticated) return
     const form = new FormData(event.currentTarget)
     const parsed = bookmarkSchema.safeParse({
       color: '#308eda',
@@ -326,9 +288,11 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
     URL.revokeObjectURL(anchor.href)
   }
   async function importBookmarks(file: File | undefined) {
-    if (!file) return
+    if (!file || !authenticated) return
     try {
-      const parsed = sectionListSchema.safeParse(JSON.parse(await file.text()) as unknown)
+      const parsed = startPayloadSchema.shape.sections.safeParse(
+        JSON.parse(await file.text()) as unknown,
+      )
       if (parsed.success) saveSections(parsed.data)
     } catch {
       /* Keep current collection. */
@@ -366,6 +330,78 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
             <img alt="" height="28" src="/favicon.ico" width="28" />
           </Link>
           <div className="start-toolbar-actions">
+            {authenticated ? (
+              <button
+                onClick={async () => {
+                  const response = await fetch('/api/ops/auth/session', { method: 'DELETE' })
+                  if (!response.ok) {
+                    setAuthError(t('logoutFailed'))
+                    return
+                  }
+                  setAuthenticated(false)
+                  setAccountName(null)
+                  setEditing(false)
+                  setDirty(false)
+                }}
+                type="button"
+              >
+                {accountName ?? t('logout')}
+              </button>
+            ) : (
+              <form
+                onSubmit={async (event) => {
+                  event.preventDefault()
+                  setAuthError(null)
+                  const response = await fetch('/api/ops/auth/session', {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify({ username, password }),
+                  })
+                  if (!response.ok) {
+                    setAuthError(response.status === 429 ? t('loginLimited') : t('loginFailed'))
+                    return
+                  }
+                  const data = startDataResponseSchema.parse(
+                    await (await fetch('/api/ops/start/data', { cache: 'no-store' })).json(),
+                  )
+                  setAuthenticated(data.authenticated)
+                  setAccountName(data.account?.username ?? null)
+                  setRevision(data.dataset.revision)
+                  setSections(data.dataset.payload.sections)
+                  setHistory(data.dataset.payload.history)
+                  setEngineIndex(
+                    Math.max(
+                      0,
+                      engines.findIndex((item) => item.id === data.dataset.payload.engine),
+                    ),
+                  )
+                  setBackgroundIndex(data.dataset.payload.background)
+                  setDetailed(data.dataset.payload.detailed)
+                  setPassword('')
+                  setUsername('')
+                }}
+              >
+                <input
+                  aria-label={t('username')}
+                  autoComplete="username"
+                  onChange={(event) => setUsername(event.currentTarget.value)}
+                  placeholder={t('username')}
+                  required
+                  value={username}
+                />
+                <input
+                  aria-label={t('password')}
+                  autoComplete="current-password"
+                  onChange={(event) => setPassword(event.currentTarget.value)}
+                  placeholder={t('password')}
+                  required
+                  type="password"
+                  value={password}
+                />
+                <Button type="submit">{t('login')}</Button>
+              </form>
+            )}
+            {authError ? <span role="alert">{authError}</span> : null}
             <div className="start-view-toggle">
               <button aria-pressed={!detailed} onClick={() => switchView(false)} type="button">
                 <List size={15} /> {t('simple')}
@@ -438,7 +474,11 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
                 <h1>{t('bookmarks')}</h1>
               </div>
               <div>
-                <Button onClick={() => setEditing(!editing)} type="button">
+                <Button
+                  disabled={!authenticated}
+                  onClick={() => setEditing(!editing)}
+                  type="button"
+                >
                   {editing ? t('finishEdit') : t('edit')}
                 </Button>
                 <Button
@@ -522,15 +562,23 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
               ))}
             </div>
             <footer className="start-data-actions">
-              <Button onClick={exportBookmarks} type="button">
+              <Button disabled={!authenticated} onClick={exportBookmarks} type="button">
                 <Download size={16} />
                 {t('export')}
               </Button>
-              <Button onClick={() => importInput.current?.click()} type="button">
+              <Button
+                disabled={!authenticated}
+                onClick={() => importInput.current?.click()}
+                type="button"
+              >
                 <Upload size={16} />
                 {t('import')}
               </Button>
-              <Button onClick={() => saveSections(defaultSections)} type="button">
+              <Button
+                disabled={!authenticated}
+                onClick={() => saveSections(defaultStartPayload.sections)}
+                type="button"
+              >
                 <RotateCcw size={16} />
                 {t('reset')}
               </Button>
@@ -543,6 +591,11 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
               />
             </footer>
           </section>
+        ) : null}
+        {saving || saveError ? (
+          <p aria-live="polite" className="start-save-status" role="status">
+            {saving ? t('saving') : saveError}
+          </p>
         ) : null}
         <p className="start-wallpaper-credit">
           {t('wallpaperSource', {
