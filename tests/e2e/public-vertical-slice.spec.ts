@@ -199,7 +199,7 @@ test('keeps mobile primary navigation and Wiki document/TOC drawers usable', asy
   await page.locator('[data-mobile-menu-backdrop]').click({ position: { x: 10, y: 400 } })
   await expect(page.getByRole('navigation', { name: '主导航' })).toBeHidden()
   const headerButtons = await page.locator('header a[aria-label="搜索"], header button').all()
-  expect(headerButtons).toHaveLength(3)
+  expect(headerButtons).toHaveLength(4)
   await page.getByRole('button', { name: '主题模式' }).click()
   await expect(page.getByRole('menuitemradio', { name: '跟随系统/浏览器' })).toBeVisible()
   await page.getByRole('menuitemradio', { name: '深色模式' }).click()

@@ -330,78 +330,7 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
             <img alt="" height="28" src="/favicon.ico" width="28" />
           </Link>
           <div className="start-toolbar-actions">
-            {authenticated ? (
-              <button
-                onClick={async () => {
-                  const response = await fetch('/api/ops/auth/session', { method: 'DELETE' })
-                  if (!response.ok) {
-                    setAuthError(t('logoutFailed'))
-                    return
-                  }
-                  setAuthenticated(false)
-                  setAccountName(null)
-                  setEditing(false)
-                  setDirty(false)
-                }}
-                type="button"
-              >
-                {accountName ?? t('logout')}
-              </button>
-            ) : (
-              <form
-                onSubmit={async (event) => {
-                  event.preventDefault()
-                  setAuthError(null)
-                  const response = await fetch('/api/ops/auth/session', {
-                    method: 'POST',
-                    headers: { 'content-type': 'application/json' },
-                    body: JSON.stringify({ username, password }),
-                  })
-                  if (!response.ok) {
-                    setAuthError(response.status === 429 ? t('loginLimited') : t('loginFailed'))
-                    return
-                  }
-                  const data = startDataResponseSchema.parse(
-                    await (await fetch('/api/ops/start/data', { cache: 'no-store' })).json(),
-                  )
-                  setAuthenticated(data.authenticated)
-                  setAccountName(data.account?.username ?? null)
-                  setRevision(data.dataset.revision)
-                  setSections(data.dataset.payload.sections)
-                  setHistory(data.dataset.payload.history)
-                  setEngineIndex(
-                    Math.max(
-                      0,
-                      engines.findIndex((item) => item.id === data.dataset.payload.engine),
-                    ),
-                  )
-                  setBackgroundIndex(data.dataset.payload.background)
-                  setDetailed(data.dataset.payload.detailed)
-                  setPassword('')
-                  setUsername('')
-                }}
-              >
-                <input
-                  aria-label={t('username')}
-                  autoComplete="username"
-                  onChange={(event) => setUsername(event.currentTarget.value)}
-                  placeholder={t('username')}
-                  required
-                  value={username}
-                />
-                <input
-                  aria-label={t('password')}
-                  autoComplete="current-password"
-                  onChange={(event) => setPassword(event.currentTarget.value)}
-                  placeholder={t('password')}
-                  required
-                  type="password"
-                  value={password}
-                />
-                <Button type="submit">{t('login')}</Button>
-              </form>
-            )}
-            {authError ? <span role="alert">{authError}</span> : null}
+            {authenticated && accountName ? <span>{accountName}</span> : null}
             <div className="start-view-toggle">
               <button aria-pressed={!detailed} onClick={() => switchView(false)} type="button">
                 <List size={15} /> {t('simple')}
