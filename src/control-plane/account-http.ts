@@ -1,6 +1,5 @@
 import { z } from 'zod'
 import { defaultStartPayload, startPayloadSchema } from '../start/contracts'
-import type { AccountSessionRepository } from './account-sessions'
 import type { ApplicationJobRepository } from './application-jobs'
 import type { ControlApiConfiguration } from './configuration'
 import { ownerDatasetUpdateSchema } from './contracts'

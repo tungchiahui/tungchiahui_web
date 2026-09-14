@@ -57,12 +57,8 @@
           "tableFrom": "content_aliases",
           "tableTo": "documents",
           "schemaTo": "app",
-          "columnsFrom": [
-            "document_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["document_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -216,12 +212,8 @@
           "tableFrom": "document_translation_segments",
           "tableTo": "documents",
           "schemaTo": "app",
-          "columnsFrom": [
-            "document_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["document_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -230,12 +222,8 @@
           "tableFrom": "document_translation_segments",
           "tableTo": "translation_segments",
           "schemaTo": "app",
-          "columnsFrom": [
-            "segment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["segment_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -244,12 +232,8 @@
           "tableFrom": "document_translation_segments",
           "tableTo": "translation_segments",
           "schemaTo": "app",
-          "columnsFrom": [
-            "previous_segment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["previous_segment_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -365,12 +349,8 @@
           "tableFrom": "document_translations",
           "tableTo": "documents",
           "schemaTo": "app",
-          "columnsFrom": [
-            "document_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["document_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -378,10 +358,7 @@
       "compositePrimaryKeys": {
         "document_translations_document_id_locale_pk": {
           "name": "document_translations_document_id_locale_pk",
-          "columns": [
-            "document_id",
-            "locale"
-          ]
+          "columns": ["document_id", "locale"]
         }
       },
       "uniqueConstraints": {},
@@ -531,12 +508,8 @@
           "tableFrom": "ingestion_runs",
           "tableTo": "operational_jobs",
           "schemaTo": "app",
-          "columnsFrom": [
-            "operational_job_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["operational_job_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -706,12 +679,8 @@
           "tableFrom": "search_documents",
           "tableTo": "documents",
           "schemaTo": "app",
-          "columnsFrom": [
-            "document_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["document_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -719,10 +688,7 @@
       "compositePrimaryKeys": {
         "search_documents_document_id_locale_pk": {
           "name": "search_documents_document_id_locale_pk",
-          "columns": [
-            "document_id",
-            "locale"
-          ]
+          "columns": ["document_id", "locale"]
         }
       },
       "uniqueConstraints": {},
@@ -907,12 +873,8 @@
           "tableFrom": "translation_jobs",
           "tableTo": "operational_jobs",
           "schemaTo": "app",
-          "columnsFrom": [
-            "id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -921,12 +883,8 @@
           "tableFrom": "translation_jobs",
           "tableTo": "documents",
           "schemaTo": "app",
-          "columnsFrom": [
-            "document_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["document_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -1248,12 +1206,8 @@
           "tableFrom": "sessions",
           "tableTo": "accounts",
           "schemaTo": "app",
-          "columnsFrom": [
-            "account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1869,12 +1823,8 @@
           "tableFrom": "start_datasets",
           "tableTo": "accounts",
           "schemaTo": "app",
-          "columnsFrom": [
-            "account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1903,109 +1853,57 @@
     "app.ingestion_run_status": {
       "name": "ingestion_run_status",
       "schema": "app",
-      "values": [
-        "running",
-        "completed",
-        "failed"
-      ]
+      "values": ["running", "completed", "failed"]
     },
     "app.locale": {
       "name": "locale",
       "schema": "app",
-      "values": [
-        "zh-cn",
-        "zh-hk",
-        "zh-tw",
-        "en-us"
-      ]
+      "values": ["zh-cn", "zh-hk", "zh-tw", "en-us"]
     },
     "app.translation_execution_mode": {
       "name": "translation_execution_mode",
       "schema": "app",
-      "values": [
-        "dry-run",
-        "execute"
-      ]
+      "values": ["dry-run", "execute"]
     },
     "app.translation_job_status": {
       "name": "translation_job_status",
       "schema": "app",
-      "values": [
-        "queued",
-        "running",
-        "completed",
-        "partial",
-        "failed",
-        "cancelled"
-      ]
+      "values": ["queued", "running", "completed", "partial", "failed", "cancelled"]
     },
     "app.translation_scope": {
       "name": "translation_scope",
       "schema": "app",
-      "values": [
-        "pending",
-        "changed",
-        "article",
-        "all"
-      ]
+      "values": ["pending", "changed", "article", "all"]
     },
     "app.translation_segment_status": {
       "name": "translation_segment_status",
       "schema": "app",
-      "values": [
-        "pending",
-        "translated",
-        "fallback",
-        "stale",
-        "failed",
-        "reviewed"
-      ]
+      "values": ["pending", "translated", "fallback", "stale", "failed", "reviewed"]
     },
     "app.account_role": {
       "name": "account_role",
       "schema": "app",
-      "values": [
-        "owner",
-        "user"
-      ]
+      "values": ["owner", "user"]
     },
     "app.application_job_status": {
       "name": "application_job_status",
       "schema": "app",
-      "values": [
-        "queued",
-        "running",
-        "retry_wait",
-        "completed",
-        "failed",
-        "cancelled"
-      ]
+      "values": ["queued", "running", "retry_wait", "completed", "failed", "cancelled"]
     },
     "app.application_job_type": {
       "name": "application_job_type",
       "schema": "app",
-      "values": [
-        "content_sync",
-        "translation",
-        "search_reindex",
-        "cache_revalidation"
-      ]
+      "values": ["content_sync", "translation", "search_reindex", "cache_revalidation"]
     },
     "app.content_type": {
       "name": "content_type",
       "schema": "app",
-      "values": [
-        "blog",
-        "wiki"
-      ]
+      "values": ["blog", "wiki"]
     },
     "app.owner_dataset_key": {
       "name": "owner_dataset_key",
       "schema": "app",
-      "values": [
-        "tech_footprint",
-        "weight_loss"
-      ]
+      "values": ["tech_footprint", "weight_loss"]
     }
   },
   "schemas": {
