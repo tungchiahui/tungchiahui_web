@@ -334,6 +334,8 @@ function createProductionEnv() {
 function buildImages() {
   execute('docker', [
     'build',
+    '--build-arg',
+    `SITE_DEPLOYMENT_SHA=${input.PHASE12_GIT_SHA}`,
     '--file',
     'ops/production/images/services.Dockerfile',
     '--tag',
@@ -350,6 +352,8 @@ function buildImages() {
   ])
   execute('docker', [
     'build',
+    '--build-arg',
+    `SITE_DEPLOYMENT_SHA=${input.PHASE12_GIT_SHA}`,
     '--file',
     'ops/production/images/recovery.Dockerfile',
     '--tag',

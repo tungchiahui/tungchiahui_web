@@ -61,6 +61,26 @@ https://www.tungchiahui.cn/api/ops/deployments
 
 `control-api` 校验请求并在 host-local SQLite 创建 Durable Deployment Operation。该 State 不依赖 Production PostgreSQL。
 
+### Independent service release boundary
+
+Publishing the four images does not upgrade all four running services. The current shared engine
+updates only the inactive Web slot; `control-api` and `deploy-agent` remain independent provisioned
+services. Their images, and the prepared migration runner, require explicit reconciliation through
+the existing provisioning path. A successful Web deployment is not evidence that a new account API
+is running. Verify the public account session endpoint as well as the Web version after activation.
+
+The migration guard requires the prepared runner's actual image OCI revision to equal the target
+Web SHA. Container labels and image tags are insufficient: labels may have been copied from an old
+container, and tags may have moved. After validation the runner is recreated using the inspected
+immutable image ID. A missing or different revision fails before runner replacement or SQL execution;
+the guard does not pull a newer service image or upgrade the running deployment agent itself.
+
+Until release coordination is implemented, do not assume another Web push repairs stale service
+images. Reconcile the reviewed service/migration image and deployment agent as needed, preserve
+both Web slots, and validate schema journal/hash, account API and Operator status before claiming
+activation is complete. The 2026-09-14 incident and remaining rollout work are recorded in
+`docs/planning/current-state.md` section 12.
+
 ## 共享主机入口
 
 生产 Compose 只把 V2 OpenResty 发布为 `http://127.0.0.1:3100`。已有 1Panel OpenResty

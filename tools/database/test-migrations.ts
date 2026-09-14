@@ -471,6 +471,31 @@ async function run() {
       await upgradedClient.end()
     }
 
+    // A matching journal must not hide missing objects in the latest schema.
+    const driftClient = new Client({ connectionString: previousUrl })
+    await driftClient.connect()
+    try {
+      await driftClient.query('ALTER TABLE app.start_datasets RENAME TO start_datasets_missing')
+      let rejected = false
+      try {
+        await runPostgresMigrations(previousUrl, { repositoryRoot })
+      } catch (error) {
+        if (
+          !(error instanceof Error) ||
+          !error.message.includes(
+            'Required account schema relations are missing: app.start_datasets',
+          )
+        ) {
+          throw error
+        }
+        rejected = true
+      }
+      if (!rejected) throw new Error('Latest-schema relation drift was not rejected')
+    } finally {
+      await driftClient.query('ALTER TABLE app.start_datasets_missing RENAME TO start_datasets')
+      await driftClient.end()
+    }
+
     console.log(`PostgreSQL migration suite: PASS (${expectedMigrationCount} migrations)`)
   } finally {
     if (stackStarted) {

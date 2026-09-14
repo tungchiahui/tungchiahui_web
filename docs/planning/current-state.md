@@ -260,3 +260,43 @@ Production Secret 手工 Source of Truth 改为部署根目录 Host-local `.env`
 ## 11. Unified accounts and Start datasets — 2026-09-14
 
 Owner and user now share PostgreSQL-backed accounts and browser sessions. Account rows carry the closed `owner | user` role; owner-only writes protect the site-wide technology and weight datasets, while each account receives an isolated `app.start_datasets` row with revision-checked updates. Migration `0008_accounts_and_start_data` removes existing owner accounts and sessions so a new owner can be created explicitly with `./site account create`; development seed creates only the disposable local owner. Anonymous `/start` renders validated defaults and cannot mutate data. The `/start` client no longer stores user content in localStorage. This stage context is recorded and ready for authorization of the next phase.
+
+## 12. Account activation incident and CI repair — 2026-09-14
+
+Production activation is **not complete**. Read-only verification on 2026-09-14 found:
+
+- `/api/ops/auth/session` returns HTTP 404. The independent `control-api`, `deploy-agent` and
+  stopped `database-migrate` runner still use release `3d0aaacd9b4ee0a98feaaad483d52e21daef8168`.
+- Web release `7398339eae359068e51cfb186602b86bd822e273` passed Actions run `34810146007`, but
+  Web cutover did not upgrade those independent services. The workflow publishes four images and
+  passes only the Web digest to the engine. Do not claim that a Web push updates the account API.
+- The production Drizzle journal has eight rows, ending at timestamp `1789225384076` (0007),
+  while all three 0008 account relations already exist. They are owned by bootstrap role
+  `tungchiahui`, and one owner account exists. Earlier manual SQL application did not record 0008
+  in the journal. Do not replay its owner-deletion statements or describe eight rows as including 0008.
+- Run `34820479592` for `f2676c6ccc64ee46a731503c82f9425f8fa3ab28` failed in the production
+  foundation suite: the service fixture image lacked `SITE_DEPLOYMENT_SHA`, so the new migration
+  image guard rejected its empty OCI revision. That run never built or deployed a production image.
+
+The local CI repair supplies the same service/recovery SHA build arguments as release.yml,
+recreates a verified migration runner by immutable image ID, and scopes account-relation validation
+to migration targets that include 0008. Regression coverage rejects missing/empty/wrong image
+revisions despite misleading container labels, checks immutable runner recreation, permits the
+historical schema fixture and rejects missing latest-schema relations with an otherwise valid journal.
+
+Remaining production work: preserve recoverable evidence and reconcile the manually applied 0008
+objects/ownership/grants/journal transactionally; activate the reviewed independent service and
+deployment-agent images through the existing scoped provisioning mechanisms; then verify account
+login/logout, per-account isolation, owner tracker writes and signed Operator status. Preserve the
+existing owner and both Web slots. No production mutation or push is part of this CI-repair checkout.
+The image guard is a rejection mechanism, not automatic service release coordination. Do not mark
+login or future cross-service deployment alignment as fixed until those rollout gaps are resolved.
+
+Local verification for this CI repair passed using Node 24.19.0 and pnpm 11.23.0: `./site check`
+(Biome, source/workflow policy, Drizzle, typecheck, Renovate, production build, static security),
+191 unit tests across 38 files, production foundation/blue-green/rollback/IPv4+IPv6/server migration
+and image Critical/Secret scans, full/differential/incremental backup and PITR/recovery tests,
+disposable integration with seven S3Mock cases and 12 E2E tests, and the nine-migration suite with
+historical upgrade and missing-relation regression coverage. All test processes exited zero and
+used disposable local targets. Biome retains six pre-existing unused-state warnings in
+`bookmark-workspace.tsx`. This local result does not change the failed GitHub run or activate production.

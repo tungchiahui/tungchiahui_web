@@ -90,3 +90,15 @@ Migration CI 验证：
 - Compatibility Assumption
 
 当前 Migration Suite 使用 Disposable PostgreSQL 18，分别验证 Empty -> Phase 18 Latest、由 `tests/fixtures/database/previous-schema.json` 固定的 Previous -> Latest、重复执行、Applied Hash、Representative Data Preservation、Role Boundary、数据库 Enum/JSON/Claim/Content-alias Namespace Constraint 和 transaction-mode PgBouncer + Drizzle Query。任何成功或失败路径都删除 Test Container、Network 和 Volume。
+
+For targets including `0008_accounts_and_start_data`, the runner also verifies that `app.accounts`,
+`app.start_datasets` and `account_auth.sessions` exist after journal/hash validation. Historical
+migration fixtures ending before 0008 must not require those later relations. The suite covers
+both previous-schema upgrades and missing account relations despite a complete journal.
+
+Eight journal rows mean migrations 0000 through 0007; a complete journal through 0008 has nine rows.
+If SQL was applied manually without its Drizzle journal entry, do not rerun 0008 or insert a journal
+row based only on table existence. Preserve a recoverable backup, verify the complete migration's
+objects, constraints, indexes, privileges and ownership against the immutable artifact, then prepare
+an audited transactional repair. Migration 0008 contains owner/session cleanup; replaying it can
+remove a newly created owner. Normal migration execution must continue to reject unexplained drift.

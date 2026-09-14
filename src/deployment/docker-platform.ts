@@ -495,7 +495,7 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
           SecurityOpt: container.HostConfig.SecurityOpt ?? undefined,
           Tmpfs: container.HostConfig.Tmpfs ?? undefined,
         },
-        Image: container.Config.Image,
+        Image: image.Id,
         Labels: container.Config.Labels ?? undefined,
         NetworkingConfig: { EndpointsConfig: endpointConfig },
         User: container.Config.User,
