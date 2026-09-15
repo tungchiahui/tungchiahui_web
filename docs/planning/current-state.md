@@ -350,3 +350,37 @@ tests and the nine-migration suite. Six existing Biome warnings remain in bookma
 Temporary diagnostic env copies were removed from the production host; the canonical `.env`
 remains root:root 0600. The retry change is committed locally only, not pushed or activated in the
 historical GitHub workflow. 本阶段上下文已沉淀，可以授权/开启下一阶段。
+
+## 14. Automatic target migration image selection — 2026-09-15
+
+The shared Docker deployment adapter now resolves the paired approved `-service:<target SHA>`
+image, pulls it when absent locally, verifies its OCI SHA and service repository digest, and pins
+its immutable image ID for runner creation. Validation runs in preflight before replacing either
+Web slot or discarding the retained rollback target. Docker HTTP 200 progress-stream errors fail
+closed without exposing registry response text. Migration policy/backup/lock/journal checks still
+run inside the target image; this change adds no SQL migration and does not replay 0008.
+
+Regression tests include a stopped runner with an older OCI revision, a missing target service
+image, an incorrectly labeled target image, explicit registry pull of the correct image, account
+preservation and successful cutover/rollback. The old fixture had pre-aligned all service images,
+which could not expose this production release-skew bug. Unit tests also verify HTTP/stream pull
+failures, registry credential handling, immutable runner identity and retained rollback state.
+
+The production agent remains `89c17113` until explicit activation of the reviewed new recovery
+image. Merely pushing the new code cannot update that agent. The ordered bootstrap is documented
+in `docs/operations/deployment.md`: pause automatic deployment before the authorized push, pass
+Quality/build, reconcile the exact published service/recovery images with the existing scoped
+Ansible path, verify independent services and unchanged Web slots, then restore automatic deploy
+and deploy through the corrected shared client. Do not repeat the earlier incomplete provisioning
+or unverified environment reconstruction. Normal later releases automatically align migrations;
+independent API/agent changes still require scoped rollout. No production operation or push was
+performed while implementing this fix.
+
+Final local validation passed with Node 24.19.0 / pnpm 11.23.0: `./site check` and `./site test`
+both exited zero, including 204 unit tests in 38 files, real Docker/Ansible deployment and migration
+image failure/upgrade tests, blue-green/rollback/server-migration, image security scans,
+backup/PITR/recovery, application integration/S3Mock, 12 E2E tests and the nine-migration suite.
+The final deployment assertions were also rerun independently (28 tests passed). Six existing
+Biome warnings in bookmark-workspace.tsx remain; no new warning was added. The implementation is
+committed on main only; there is no new GitHub Actions result until an authorized push/dispatch.
+本阶段上下文已沉淀，可以授权/开启下一阶段。

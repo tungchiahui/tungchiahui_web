@@ -49,6 +49,8 @@ const registryTag = `${registryRepository}:${input.PHASE12_GIT_SHA}`
 let registryDigest = ''
 const webImage = `tungchiahui-web:${input.PHASE12_GIT_SHA}`
 const serviceImage = `tungchiahui-services:${input.PHASE12_GIT_SHA}`
+const staleServiceImage = `${projectName}-stale-service:test`
+const serviceRegistryTag = `${registryRepository}-service:${input.PHASE12_GIT_SHA}`
 const recoveryImage = `tungchiahui-recovery:${input.PHASE12_GIT_SHA}`
 const postgresImage = `tungchiahui-postgres:${input.PHASE12_GIT_SHA}`
 const trivyImage =
@@ -153,7 +155,11 @@ function composeEnvironment() {
   }
 }
 
-function compose(arguments_: readonly string[], allowFailure = false) {
+function compose(
+  arguments_: readonly string[],
+  allowFailure = false,
+  environment: Readonly<Record<string, string>> = {},
+) {
   return execute(
     'docker',
     [
@@ -166,7 +172,7 @@ function compose(arguments_: readonly string[], allowFailure = false) {
       join(configRoot, 'compose.yaml'),
       ...arguments_,
     ],
-    { allowFailure, environment: composeEnvironment() },
+    { allowFailure, environment: { ...composeEnvironment(), ...environment } },
   )
 }
 
@@ -1263,6 +1269,83 @@ async function verifyBlueGreenDeployment() {
   execute('docker', ['image', 'rm', registryTag], { allowFailure: true })
   execute('docker', ['image', 'rm', `${registryRepository}@${digest}`], { allowFailure: true })
   const candidateSha = input.PHASE12_GIT_SHA
+  const removeCachedServiceTag = () => {
+    execute('docker', ['image', 'rm', serviceRegistryTag], { allowFailure: true })
+    expect(
+      execute('docker', ['image', 'inspect', serviceRegistryTag], { allowFailure: true }).status !==
+        0,
+      'Migration registry tag was still cached before the deployment pull gate',
+    )
+  }
+  removeCachedServiceTag()
+  // Reproduce production skew: the stopped runner belongs to an older release,
+  // while the target migration image initially exists only in the registry.
+  const staleRevision = candidateSha === 'b'.repeat(40) ? 'c'.repeat(40) : 'b'.repeat(40)
+  const staleBuildRoot = join(workRoot, 'stale-service-build')
+  mkdirSync(staleBuildRoot, { recursive: true })
+  const staleDockerfile = join(staleBuildRoot, 'Dockerfile')
+  writeFileSync(
+    staleDockerfile,
+    `FROM ${serviceImage}\nLABEL org.opencontainers.image.revision=${staleRevision}\n`,
+  )
+  execute('docker', [
+    'build',
+    '--file',
+    staleDockerfile,
+    '--tag',
+    staleServiceImage,
+    staleBuildRoot,
+  ])
+  compose(['--profile', 'deployment', 'create', '--force-recreate', 'database-migrate'], false, {
+    TUNGCHIAHUI_SERVICE_IMAGE: staleServiceImage,
+  })
+  const runnerName = `${projectName}-database-migrate-1`
+  const inspectId = (name: string) =>
+    execute('docker', ['inspect', '--format', '{{.Id}}', name]).stdout.trim()
+  const runnerBefore = inspectId(runnerName)
+  const blueBefore = inspectId(`${projectName}-web-blue-1`)
+  const greenBefore = inspectId(`${projectName}-web-green-1`)
+  const postgresContainer = compose(['ps', '--quiet', 'postgres']).stdout.trim()
+  const accountsBefore = psql(
+    postgresContainer,
+    'SELECT json_agg(a ORDER BY id) FROM app.accounts a',
+  )
+  for (const failure of ['missing', 'wrong-revision'] as const) {
+    if (failure === 'wrong-revision') {
+      execute('docker', ['tag', staleServiceImage, serviceRegistryTag])
+      execute('docker', ['push', serviceRegistryTag])
+    }
+    const failed = operationResponseSchema.parse(
+      await controlRequest('/api/ops/deployments', {
+        body: {
+          gitSha: candidateSha,
+          imageDigest: digest,
+          reason: `Migration image ${failure} gate`,
+        },
+        idempotencyKey: `migration-image-${failure}`,
+        method: 'POST',
+        purpose: `migration-image-${failure}`,
+      }),
+    )
+    const rejected = await waitForOperation(failed.operation.id)
+    expect(rejected.status === 'failed', `Migration image ${failure} was not rejected`)
+    expect(
+      failure === 'missing'
+        ? rejected.errorSummary?.includes('Docker rejected POST /images/create') === true
+        : rejected.errorSummary?.includes('does not match target') === true,
+      `Migration image failure has an unexpected cause: ${JSON.stringify(rejected)}`,
+    )
+    expect(
+      inspectId(runnerName) === runnerBefore &&
+        inspectId(`${projectName}-web-blue-1`) === blueBefore &&
+        inspectId(`${projectName}-web-green-1`) === greenBefore,
+      'Migration image preflight failure replaced a runner or Web slot',
+    )
+    expect(publicVersion().slot === 'blue', 'Migration image failure changed public traffic')
+  }
+  execute('docker', ['tag', serviceImage, serviceRegistryTag])
+  execute('docker', ['push', serviceRegistryTag])
+  removeCachedServiceTag()
   const created = operationResponseSchema.parse(
     await controlRequest('/api/ops/deployments', {
       body: { gitSha: candidateSha, imageDigest: digest, reason: 'Phase 14 production-like gate' },
@@ -1280,6 +1363,17 @@ async function verifyBlueGreenDeployment() {
   expect(
     deployedVersion.gitSha === candidateSha && deployedVersion.slot === 'green',
     'Public entry did not switch to the green candidate',
+  )
+  expect(inspectId(runnerName) !== runnerBefore, 'Stale migration runner was not replaced')
+  expect(
+    execute('docker', ['inspect', '--format', '{{.Image}}', runnerName]).stdout.trim() ===
+      execute('docker', ['image', 'inspect', '--format', '{{.Id}}', serviceImage]).stdout.trim(),
+    'Migration runner did not use the verified target service image',
+  )
+  expect(
+    psql(postgresContainer, 'SELECT json_agg(a ORDER BY id) FROM app.accounts a') ===
+      accountsBefore,
+    'Deployment migration replay changed existing accounts',
   )
 
   const rollback = operationResponseSchema.parse(

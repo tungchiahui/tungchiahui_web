@@ -31,13 +31,40 @@ const migrationConfiguration: DeploymentConfiguration = {
 }
 
 describe('Docker migration image identity', () => {
-  it.each([null, '', 'b'.repeat(40), 'a'.repeat(40)])(
-    'checks the actual image revision %s before replacing the runner',
-    async (revision) => {
+  it.each([
+    { revision: null },
+    { revision: '' },
+    { revision: 'b'.repeat(40) },
+    { revision: 'a'.repeat(40) },
+    { revision: 'a'.repeat(40), registry: true },
+    { revision: 'a'.repeat(40), registry: true, cached: true },
+    { revision: 'b'.repeat(40), registry: true },
+    { revision: 'a'.repeat(40), registry: true, pullError: 'http' },
+    { revision: 'a'.repeat(40), registry: true, pullError: 'stream' },
+    { revision: 'a'.repeat(40), registry: true, pullError: 'single' },
+    { revision: 'a'.repeat(40), registry: true, pullError: 'malformed' },
+    { revision: 'a'.repeat(40), registry: true, missingDigest: true },
+    { revision: 'a'.repeat(40), registry: true, running: true },
+  ] as const)(
+    'validates migration image before replacing the runner: %j',
+    async (scenario: {
+      revision: string | null
+      registry?: boolean
+      cached?: boolean
+      pullError?: string
+      missingDigest?: boolean
+      running?: boolean
+    }) => {
+      const { revision } = scenario
       const directory = mkdtempSync(join(tmpdir(), 'migration-docker-'))
       const socketPath = join(directory, 'docker.sock')
       const imageId = `sha256:${'c'.repeat(64)}`
       const targetSha = 'a'.repeat(40)
+      const repository = 'registry.example.test/site'
+      const reference = scenario.registry ? `${repository}-service:${targetSha}` : imageId
+      const targetImageId = scenario.registry ? `sha256:${'d'.repeat(64)}` : imageId
+      let pulled = scenario.cached === true
+      let authentication: string | undefined
       const requests: string[] = []
       let createdBody = ''
       const server = createServer(async (request, response) => {
@@ -68,19 +95,44 @@ describe('Docker migration image identity', () => {
               Image: imageId,
               Name: '/database-migrate',
               NetworkSettings: { Networks: { database: { Aliases: ['database-migrate'] } } },
-              State: { ExitCode: 0, Running: false },
+              State: { ExitCode: 0, Running: scenario.running === true },
             }),
           )
-        } else if (path === `/images/${imageId}/json`) {
+        } else if (path === `/images/${reference}/json`) {
+          if (scenario.registry && !pulled) {
+            response.statusCode = 404
+            response.end('{}')
+            return
+          }
           response.end(
             JSON.stringify({
               Config: {
                 Labels:
                   revision === null ? null : { 'org.opencontainers.image.revision': revision },
               },
-              Id: imageId,
+              Id: targetImageId,
+              RepoDigests: scenario.missingDigest
+                ? [`unapproved.test/service@sha256:${'d'.repeat(64)}`]
+                : [`${repository}-service@sha256:${'e'.repeat(64)}`],
             }),
           )
+        } else if (path === `/images/create?fromImage=${reference}`) {
+          authentication = request.headers['x-registry-auth'] as string | undefined
+          pulled = true
+          if (scenario.pullError === 'http') {
+            response.statusCode = 404
+            response.end('{}')
+          } else if (scenario.pullError === 'stream') {
+            response.end(
+              '{"status":"pulling"}\n{"errorDetail":{"message":"sensitive-registry-error"}}\n',
+            )
+          } else if (scenario.pullError === 'single') {
+            response.end('{"error":"sensitive-registry-error"}')
+          } else if (scenario.pullError === 'malformed') {
+            response.end('invalid sensitive-registry-error')
+          } else {
+            response.end('{"status":"pulling"}\n{"status":"complete"}\n')
+          }
         } else if (path === '/containers/create?name=database-migrate') {
           for await (const chunk of request) createdBody += String(chunk)
           response.statusCode = 201
@@ -98,22 +150,65 @@ describe('Docker migration image identity', () => {
         server.listen(socketPath, resolve)
       })
       try {
-        const platform = new DockerDeploymentPlatform(migrationConfiguration, socketPath)
+        const platform = new DockerDeploymentPlatform(
+          {
+            ...migrationConfiguration,
+            ...(scenario.registry
+              ? {
+                  DEPLOYMENT_IMAGE_REPOSITORY: repository,
+                  DEPLOYMENT_REGISTRY_USERNAME: 'registry-user',
+                  DEPLOYMENT_REGISTRY_TOKEN: 'test-registry-token',
+                }
+              : {}),
+          },
+          socketPath,
+        )
+        if (scenario.cached) await platform.validateMigrationImage(targetSha)
         const migration = platform.runMigrations({ hasFreshRecoverableBackup: true, targetSha })
-        if (revision !== targetSha) {
-          await expect(migration).rejects.toThrow('does not match target')
-          expect(requests).toEqual([
-            'GET /containers/database-migrate/json',
-            `GET /images/${imageId}/json`,
-          ])
+        if (
+          revision !== targetSha ||
+          scenario.pullError ||
+          scenario.missingDigest ||
+          scenario.running
+        ) {
+          const error = await migration.catch((error: unknown) => error)
+          expect(error).toBeInstanceOf(Error)
+          expect(String(error)).toContain(
+            scenario.running
+              ? 'already running'
+              : scenario.pullError === 'http'
+                ? 'Docker rejected'
+                : scenario.pullError
+                  ? 'image pull failed'
+                  : scenario.missingDigest
+                    ? 'approved service repository'
+                    : 'does not match target',
+          )
+          expect(String(error)).not.toContain('sensitive-registry-error')
+          expect(
+            requests.some(
+              (request) => request.startsWith('DELETE') || request.startsWith('POST /containers'),
+            ),
+          ).toBe(false)
         } else {
           await migration
           expect(JSON.parse(createdBody)).toMatchObject({
             Env: ['DEPLOYMENT_HAS_FRESH_RECOVERABLE_BACKUP=true'],
             HostConfig: { CapDrop: ['ALL'], ReadonlyRootfs: true },
-            Image: imageId,
+            Image: targetImageId,
           })
           expect(requests).toContain('POST /containers/database-migrate/start')
+          expect(
+            requests.filter((request) => request === `GET /images/${reference}/json`),
+          ).toHaveLength(scenario.registry && !scenario.cached ? 2 : 1)
+          if (scenario.registry && !scenario.cached) {
+            expect(requests).toContain(`POST /images/create?fromImage=${reference}`)
+            expect(JSON.parse(Buffer.from(authentication ?? '', 'base64url').toString())).toEqual({
+              password: 'test-registry-token',
+              serveraddress: 'registry.example.test',
+              username: 'registry-user',
+            })
+          }
         }
       } finally {
         await new Promise<void>((resolve, reject) =>

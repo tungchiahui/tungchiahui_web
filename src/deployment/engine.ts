@@ -52,6 +52,7 @@ export interface DeploymentPlatform {
   switchTraffic(slot: DeploymentSlot): Promise<void>
   validateCutover(slot: DeploymentSlot): Promise<void>
   validateImage(release: DeploymentRelease): Promise<void>
+  validateMigrationImage(targetSha: string): Promise<void>
   verifyRetainedRelease(release: DeploymentRelease): Promise<void>
 }
 
@@ -219,6 +220,7 @@ export async function executeDeploymentOperation(
     if (phase < phaseIndex('preflight-complete')) {
       if (operation.operationType === 'deploy') {
         await platform.validateImage(target)
+        await platform.validateMigrationImage(target.sha)
       }
       validateMigrationPolicy(options.migrationPolicyPath, options.journalPath, {
         allowContract: false,

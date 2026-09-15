@@ -257,6 +257,11 @@ function requestHttp(url: URL) {
 }
 
 export class DockerDeploymentPlatform implements DeploymentPlatform {
+  private migrationImage: Readonly<{
+    sha: string
+    image: z.infer<typeof dockerImageSchema>
+  }> | null = null
+
   constructor(
     private readonly configuration: DeploymentConfiguration,
     private readonly socketPath: string,
@@ -297,6 +302,92 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
       JSON.stringify({ password: token, serveraddress: repository.split('/')[0], username }),
       'utf8',
     ).toString('base64url')
+  }
+
+  private async pullImage(reference: string) {
+    const authentication = this.registryAuthenticationHeader()
+    const body = await requireDocker(
+      this.socketPath,
+      'POST',
+      `/images/create?fromImage=${encodeURIComponent(reference)}`,
+      [200],
+      undefined,
+      authentication === undefined ? undefined : { 'x-registry-auth': authentication },
+    )
+    // Docker can report a registry failure in an HTTP 200 JSON progress stream.
+    // Do not include the raw response: registry errors may contain credentials.
+    try {
+      const events: unknown[] =
+        typeof body === 'string'
+          ? body
+              .trim()
+              .split('\n')
+              .filter(Boolean)
+              .map((line) => JSON.parse(line) as unknown)
+          : [body]
+      if (events.length === 0) throw new Error('Empty progress stream')
+      for (const event of events) {
+        const progress = z
+          .object({ error: z.unknown().optional(), errorDetail: z.unknown().optional() })
+          .parse(event)
+        if (progress.error !== undefined || progress.errorDetail !== undefined) {
+          throw new Error('Registry error')
+        }
+      }
+    } catch {
+      throw new Error(`Docker image pull failed or returned invalid progress for ${reference}`)
+    }
+  }
+
+  async validateMigrationImage(targetSha: string) {
+    z.string()
+      .regex(/^[a-f0-9]{40}$/)
+      .parse(targetSha)
+    const container = await this.inspectContainer(
+      this.configuration.DEPLOYMENT_MIGRATION_CONTAINER_NAME,
+    )
+    if (container.State.Running) throw new Error('Migration container is already running')
+    const repository = this.configuration.DEPLOYMENT_IMAGE_REPOSITORY
+    // release.yml publishes the migration bundle in the paired -service repository.
+    // The repository is host configuration; callers supply only a validated Git SHA.
+    const reference =
+      repository === undefined ? container.Image : `${repository}-service:${targetSha}`
+    let inspection = await requestJson(
+      this.socketPath,
+      'GET',
+      `/images/${encodeURIComponent(reference)}/json`,
+    )
+    if (inspection.status === 404 && repository !== undefined) {
+      await this.pullImage(reference)
+      inspection = await requestJson(
+        this.socketPath,
+        'GET',
+        `/images/${encodeURIComponent(reference)}/json`,
+      )
+    }
+    if (inspection.status !== 200) {
+      throw new Error(`Migration image is unavailable (HTTP ${String(inspection.status)})`)
+    }
+    const image = dockerImageSchema.parse(inspection.body)
+    const revision = image.Config.Labels?.['org.opencontainers.image.revision']
+    if (revision !== targetSha) {
+      throw new Error(
+        `Migration image revision ${revision ?? 'unknown'} does not match target ${targetSha}`,
+      )
+    }
+    if (
+      repository !== undefined &&
+      !(image.RepoDigests ?? []).some(
+        (digest) =>
+          digest.startsWith(`${repository}-service@`) &&
+          /^sha256:[a-f0-9]{64}$/.test(digest.split('@')[1] ?? ''),
+      )
+    ) {
+      throw new Error(
+        'Migration image does not expose a digest from the approved service repository',
+      )
+    }
+    this.migrationImage = { image, sha: targetSha }
   }
 
   private async inspectContainer(name: string) {
@@ -442,23 +533,13 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
   }
 
   async runMigrations(input: Readonly<{ hasFreshRecoverableBackup: boolean; targetSha: string }>) {
+    if (this.migrationImage?.sha !== input.targetSha)
+      await this.validateMigrationImage(input.targetSha)
+    const image = this.migrationImage?.image
+    if (!image) throw new Error('Migration image has not been validated')
     const name = this.configuration.DEPLOYMENT_MIGRATION_CONTAINER_NAME
     const container = await this.inspectContainer(name)
     if (container.State.Running) throw new Error('Migration container is already running')
-    const image = dockerImageSchema.parse(
-      await requireDocker(
-        this.socketPath,
-        'GET',
-        `/images/${encodeURIComponent(container.Image)}/json`,
-        [200],
-      ),
-    )
-    const imageRevision = image.Config.Labels?.['org.opencontainers.image.revision']
-    if (imageRevision !== input.targetSha) {
-      throw new Error(
-        `Migration image revision ${imageRevision ?? 'unknown'} does not match target ${input.targetSha}`,
-      )
-    }
     await requireDocker(
       this.socketPath,
       'DELETE',
@@ -496,7 +577,10 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
           Tmpfs: container.HostConfig.Tmpfs ?? undefined,
         },
         Image: image.Id,
-        Labels: container.Config.Labels ?? undefined,
+        Labels: {
+          ...container.Config.Labels,
+          'org.opencontainers.image.revision': input.targetSha,
+        },
         NetworkingConfig: { EndpointsConfig: endpointConfig },
         User: container.Config.User,
         WorkingDir: container.Config.WorkingDir,
@@ -619,15 +703,7 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
       `/images/${encodeURIComponent(reference)}/json`,
     )
     if (inspection.status === 404 && this.configuration.DEPLOYMENT_IMAGE_REPOSITORY !== undefined) {
-      const authentication = this.registryAuthenticationHeader()
-      await requireDocker(
-        this.socketPath,
-        'POST',
-        `/images/create?fromImage=${encodeURIComponent(reference)}`,
-        [200],
-        undefined,
-        authentication === undefined ? undefined : { 'x-registry-auth': authentication },
-      )
+      await this.pullImage(reference)
       inspection = await requestJson(
         this.socketPath,
         'GET',

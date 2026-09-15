@@ -71,17 +71,30 @@ https://www.tungchiahui.cn/api/ops/deployments
 
 ### Independent service release boundary
 
-Publishing the four images does not upgrade all four running services. The current shared engine
-updates only the inactive Web slot; `control-api` and `deploy-agent` remain independent provisioned
-services. Their images, and the prepared migration runner, require explicit reconciliation through
-the existing provisioning path. A successful Web deployment is not evidence that a new account API
-is running. Verify the public account session endpoint as well as the Web version after activation.
+Publishing the four images does not upgrade all running services. The shared engine updates the
+inactive Web slot and the one-shot migration runner. `control-api`, `content-worker` and
+`deploy-agent` remain independent provisioned services; changes to their APIs or execution code
+require a reviewed scoped rollout. A successful Web deployment is not evidence that a new account
+API is running. Verify the public account session endpoint as well as the Web version.
 
-The migration guard requires the prepared runner's actual image OCI revision to equal the target
-Web SHA. Container labels and image tags are insufficient: labels may have been copied from an old
-container, and tags may have moved. After validation the runner is recreated using the inspected
-immutable image ID. A missing or different revision fails before runner replacement or SQL execution;
-the guard does not pull a newer service image or upgrade the running deployment agent itself.
+For normal releases, the engine resolves `<DEPLOYMENT_IMAGE_REPOSITORY>-service:<target SHA>`,
+matching the paired repository convention in `release.yml`. No additional env variable or public
+request field is needed. If absent locally, Docker pulls it with the existing host-local registry
+read identity. Preflight verifies the actual image OCI revision and an approved service repository
+RepoDigest before either Web slot or the stopped migration runner is replaced. HTTP errors,
+JSON-stream pull errors (including HTTP 200), missing digests and missing/wrong revisions fail
+closed. Raw registry responses are not logged. The active worker retains the verified immutable
+image ID and uses it to recreate the runner, so moving a tag between its preflight and execution
+cannot change the image executed. After an agent restart, a resumed migration revalidates the
+target image before touching the runner. Offline fixtures without a configured repository require
+the prepared runner's actual image revision to match; they do not pull arbitrary repositories.
+
+The runner retains its non-root user, restricted database connection, network, mounts and security
+settings. The target image validates its own migration policy/journal, advisory lock and applied
+hashes before executing pending migrations with `allowContract=false`; it receives fresh-backup
+evidence from the shared engine. A newer target migration therefore cannot bypass its policy just
+because the long-running deploy-agent bundles an older journal. Applied migrations remain applied;
+0008 is not replayed and existing accounts are preserved. No schema migration is added by this fix.
 
 The scoped reconciliation path now recreates the stopped migration runner before applying SQL and
 updates both `control-api` and `deploy-agent` through the same Compose project, without touching
@@ -90,6 +103,37 @@ journal/hash, account API and Operator status before claiming activation is comp
 Web deployment by itself is still not evidence that the independent account API is running.
 The 2026-09-14 incident and rollout evidence are recorded in `docs/planning/current-state.md`
 section 12.
+
+### One-time activation of the automatic migration-image resolver
+
+The already running 2026-09-15 agent (`89c17113`) does not contain this resolver. Do not assume a
+push can upgrade the agent that must execute that very deployment. The first release containing
+this fix needs the following ordered bootstrap through existing mechanisms:
+
+1. Before the authorized push, record and temporarily set repository Actions variable
+   `PRODUCTION_DEPLOYMENT_ENABLED=false`. Push the reviewed commit; wait for Quality and all four
+   SHA images to succeed. Deployment must be skipped, rather than sent to the old agent.
+2. Verify the service/recovery image digests and OCI revision against that exact SHA. With no
+   executing infrastructure operation, use the existing approved host inventory and complete
+   production Ansible variables, changing only the reviewed image identities and scoped flags
+   `tungchiahui_manage_stack=false`, `tungchiahui_reconcile_control_api=true`. Preserve actual Web
+   images/SHAs, gateway settings, backup evidence and the canonical host-local `.env`; never copy
+   disposable test values or fabricate freshness. The role recreates the migration runner, applies
+   journaled pending migrations, and reconciles control-api/deploy-agent. Do not use `./site provision`
+   as a substitute: its queued server-migration request is not this scoped Ansible execution.
+3. Verify agent health, its image revision, actual host Docker socket GID, signed Operator status,
+   unchanged Web container IDs, and account session/login/read/logout. Keep the socket mount `:ro`.
+4. Restore the activation variable and use the corrected `./site deploy <sha> --wait` client (or a
+   new explicit workflow dispatch) to execute and verify the shared blue-green deployment. Do not
+   rerun the historical release-only-idempotency client or rewrite failed operation records.
+
+This is a one-time agent activation for the resolver. Subsequent ordinary Web/schema releases use
+the paired target migration image automatically. Future changes to independent service code still
+need their own scoped rollout. If bootstrap validation fails, leave Web traffic unchanged and
+restore the previously recorded independent service images; do not undo applied expand migrations.
+The disposable production-foundation gate exercises the same scoped Ansible path and separately
+verifies missing/wrong migration image rejection, stale-runner replacement via registry pull,
+account preservation, blue-green cutover and no-rebuild rollback.
 
 ## 共享主机入口
 

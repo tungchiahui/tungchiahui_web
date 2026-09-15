@@ -116,6 +116,9 @@ class FakePlatform implements DeploymentPlatform {
   async validateImage(release: DeploymentRelease) {
     this.call(`validate-image:${release.slot}`)
   }
+  async validateMigrationImage() {
+    this.call('validate-migration-image')
+  }
   async verifyRetainedRelease(release: DeploymentRelease) {
     this.call(`verify-retained:${release.slot}`)
   }
@@ -208,6 +211,7 @@ describe('Phase 14 shared deployment engine', () => {
   it('keeps the active slot unchanged when an inactive deployment or config validation fails', async () => {
     for (const [failure, expectsCleanup] of [
       ['validate-image:green', false],
+      ['validate-migration-image', false],
       ['pre-smoke:green', true],
       ['validate-cutover:green', true],
     ] as const) {
@@ -330,6 +334,35 @@ describe('Phase 14 shared deployment engine', () => {
         'restore',
       ]),
     ).toMatchObject({ operationType: 'recovery' })
+  })
+
+  it('retains both releases when the next migration image fails preflight', async () => {
+    const path = statePath()
+    const platform = new FakePlatform()
+    const first = startOperation(path, 'deploy')
+    await executeDeploymentOperation(first.operation, first.lease, [], platform, options(path))
+    finishInfrastructureOperation(path, first.operation.id, first.lease, {
+      phase: 'deployment-verified',
+      status: 'completed',
+    })
+    const before = readDeploymentState(path)
+    const next = startOperation(path, 'deploy', {
+      sha: 'd'.repeat(40),
+      digest: `sha256:${'d'.repeat(64)}`,
+      slot: 'blue',
+    })
+    platform.calls.splice(0)
+    platform.failAt = 'validate-migration-image'
+    await expect(
+      executeDeploymentOperation(next.operation, next.lease, [], platform, options(path)),
+    ).rejects.toThrow('validate-migration-image')
+    expect(platform.calls).toEqual([
+      'inspect-active',
+      'validate-image:blue',
+      'validate-migration-image',
+    ])
+    expect({ ...readDeploymentState(path), updatedAt: before.updatedAt }).toEqual(before)
+    expect(platform.trafficSlot).toBe('green')
   })
 
   it('treats only valid dual-replica records inside the configured window as fresh', () => {
