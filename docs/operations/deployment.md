@@ -75,11 +75,13 @@ container, and tags may have moved. After validation the runner is recreated usi
 immutable image ID. A missing or different revision fails before runner replacement or SQL execution;
 the guard does not pull a newer service image or upgrade the running deployment agent itself.
 
-Until release coordination is implemented, do not assume another Web push repairs stale service
-images. Reconcile the reviewed service/migration image and deployment agent as needed, preserve
-both Web slots, and validate schema journal/hash, account API and Operator status before claiming
-activation is complete. The 2026-09-14 incident and remaining rollout work are recorded in
-`docs/planning/current-state.md` section 12.
+The scoped reconciliation path now recreates the stopped migration runner before applying SQL and
+updates both `control-api` and `deploy-agent` through the same Compose project, without touching
+either Web slot. Reconcile the reviewed service/recovery image explicitly, then validate schema
+journal/hash, account API and Operator status before claiming activation is complete. A successful
+Web deployment by itself is still not evidence that the independent account API is running.
+The 2026-09-14 incident and rollout evidence are recorded in `docs/planning/current-state.md`
+section 12.
 
 ## 共享主机入口
 

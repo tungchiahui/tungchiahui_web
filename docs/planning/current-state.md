@@ -297,6 +297,12 @@ Remaining production work: activate the reviewed independent service and
 deployment-agent images through the existing scoped provisioning mechanisms; then verify account
 login/logout, per-account isolation, owner tracker writes and signed Operator status. Preserve the
 existing owner and both Web slots. No production mutation or push is part of this CI-repair checkout.
+
+The scoped provisioning path was corrected after the failed run: it now force-recreates the stopped
+`database-migrate` runner before executing reviewed migrations, then reconciles both `control-api`
+and `deploy-agent` in the same Compose project while leaving Web slots untouched. This closes the
+known stale-runner/agent gap in the activation procedure; production still requires an authorized
+scoped reconciliation and post-activation account smoke before activation can be declared complete.
 The image guard is a rejection mechanism, not automatic service release coordination. Do not mark
 login or future cross-service deployment alignment as fixed until those rollout gaps are resolved.
 
