@@ -43,6 +43,14 @@ Human-triggered/Retry/指定版本：
 `ghcr.io/tungchiahui/tungchiahui_web` 解析 `<sha>` 对应的 Registry Manifest Digest。解析失败时，
 Operator 必须手工传入 digest。
 
+Deployment request idempotency includes the GitHub run ID and run attempt in addition to the
+release SHA/digest. Repeated requests within an attempt return the same operation; **Re-run failed
+jobs** creates a new attempt, preserving the original failed operation and audit history. Manual
+CLI invocations receive a fresh attempt UUID. The server still rejects concurrent deployments.
+Clients from before this fix reuse a release-only key: rerunning those historical workflow commits
+returns the original failure without executing Docker again. Use the corrected client for an
+explicit retry; do not delete or rewrite failed operations to make a historical run green.
+
 GitHub Actions 和 `./site deploy` 向同一个独立 `control-api` 完成认证，执行相同 Policy，并调用同一个底层 Deployment Engine；不得维护 CI/Manual 两套实现。
 
 `release.yml` 只接受 `main` push 或显式 `workflow_dispatch`。同一 workflow 顺序执行完整 Quality Gate、Build/Publish Web、Service、Recovery、PostgreSQL 四个不可变镜像，并以 Web Manifest Digest 作为 Blue/Green Deployment Identity。Deploy Job 只持有 Repository Read 与 OIDC，进入受保护的 `production` Environment，并由单一 non-cancelling Concurrency Group 序列化。Workflow 不持有 Production DB、AI Provider、Host Login、Origin Pull Credential、生产 `.env` 或 Docker Socket。

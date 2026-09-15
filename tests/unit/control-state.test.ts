@@ -24,6 +24,7 @@ import {
   reconcileInfrastructureOperations,
   startInfrastructureOperation,
 } from '../../src/control-plane/control-state'
+import { deploymentAttemptIdentity } from '../../tools/deployment/control-client'
 
 const temporaryDirectories: string[] = []
 const actor: ActorIdentity = {
@@ -53,6 +54,47 @@ function restoreRequest(backupId = 'backup-001') {
 }
 
 describe('control-state SQLite engine', () => {
+  it('preserves failed deployment history while a new workflow attempt can be claimed', () => {
+    const path = statePath()
+    initializeControlState(path, 'test')
+    const request = {
+      operationType: 'deploy' as const,
+      reason: 'Retry the same immutable release',
+      target: { gitSha: 'a'.repeat(40), imageDigest: `sha256:${'b'.repeat(64)}` },
+    }
+    const environment = { GITHUB_ACTIONS: 'true', GITHUB_RUN_ID: '123', GITHUB_RUN_ATTEMPT: '1' }
+    const key = deploymentAttemptIdentity(environment)
+    const original = createInfrastructureOperation(path, request, actor, key).operation
+    const claimed = claimNextInfrastructureOperation(path, 'test-agent', 30)
+    if (!claimed) throw new Error('Expected deployment claim')
+    finishInfrastructureOperation(
+      path,
+      original.id,
+      {
+        fencingToken: claimed.fencingToken,
+        leaseOwner: 'test-agent',
+      },
+      { status: 'failed', phase: 'deployment-failed', errorSummary: 'socket permission denied' },
+    )
+    expect(createInfrastructureOperation(path, request, actor, key)).toMatchObject({
+      created: false,
+      operation: { id: original.id, status: 'failed' },
+    })
+    const retry = createInfrastructureOperation(
+      path,
+      request,
+      actor,
+      deploymentAttemptIdentity({ ...environment, GITHUB_RUN_ATTEMPT: '2' }),
+    )
+    expect(retry.created).toBe(true)
+    expect(retry.operation.id).not.toBe(original.id)
+    expect(claimNextInfrastructureOperation(path, 'test-agent', 30)?.id).toBe(retry.operation.id)
+    expect(getInfrastructureOperation(path, original.id)).toMatchObject({
+      status: 'failed',
+      errorSummary: 'socket permission denied',
+    })
+  })
+
   it('uses a versioned WAL/FULL/checkpoint baseline and migrates a Phase 2 database', () => {
     const path = statePath()
     const legacy = new DatabaseSync(path)

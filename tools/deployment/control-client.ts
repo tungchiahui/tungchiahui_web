@@ -108,7 +108,7 @@ async function waitForDeployment(operationId: string) {
     if (result.operation.status === 'completed') return result
     if (['failed', 'cancelled', 'needs-attention'].includes(result.operation.status)) {
       throw new Error(
-        `Deployment operation ended in ${result.operation.status}: ${result.operation.errorSummary ?? 'no error summary'}`,
+        `Deployment operation ${operationId} ended in ${result.operation.status}: ${result.operation.errorSummary ?? 'no error summary'}`,
       )
     }
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 2_000))
@@ -138,12 +138,24 @@ export async function createDeployment(
   const created = operationEnvelopeSchema.parse(
     await controlRequest('/api/ops/deployments', {
       body: { gitSha, imageDigest, reason: input.reason },
-      idempotencyKey: `deployment:${gitSha}:${imageDigest.slice(7)}`,
+      idempotencyKey: `deployment:${gitSha}:${imageDigest.slice(7)}:${deploymentAttemptIdentity(process.env)}`,
       method: 'POST',
       purpose: 'deployment-create',
     }),
   )
   return input.wait === true ? waitForDeployment(created.operation.id) : created
+}
+
+export function deploymentAttemptIdentity(
+  environment: Readonly<Record<string, string | undefined>>,
+) {
+  if (environment.GITHUB_ACTIONS === 'true') {
+    const positiveInteger = z.string().regex(/^[1-9][0-9]*$/)
+    const runId = positiveInteger.parse(environment.GITHUB_RUN_ID)
+    const attempt = positiveInteger.parse(environment.GITHUB_RUN_ATTEMPT)
+    return `github:${runId}:${attempt}`
+  }
+  return `operator:${randomUUID()}`
 }
 
 export async function createRollback(reason: string) {

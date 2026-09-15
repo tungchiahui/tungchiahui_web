@@ -263,7 +263,7 @@ Owner and user now share PostgreSQL-backed accounts and browser sessions. Accoun
 
 ## 12. Account activation incident and CI repair — 2026-09-14
 
-Production activation is **not complete**. Read-only verification on 2026-09-14 found:
+Historical findings before activation (resolved as recorded in section 13):
 
 - `/api/ops/auth/session` returns HTTP 404. The independent `control-api`, `deploy-agent` and
   stopped `database-migrate` runner still use release `3d0aaacd9b4ee0a98feaaad483d52e21daef8168`.
@@ -285,7 +285,7 @@ Production activation is **not complete**. Read-only verification on 2026-09-14 
 - Run `34839727251` for `1a2ed8723d84d193ad4beccff112829999beaa36` reached production deployment but
   failed with `permission denied for table accounts`. The 0008 objects were owned by `tungchiahui`,
   while the migration runner correctly uses `site_migrator`; ownership was repaired transactionally
-  after verifying the schema. A new push is required to retry with the new service/deploy-agent image.
+  after verifying the schema. Independent service reconciliation was still required before retrying.
 
 The local CI repair supplies the same service/recovery SHA build arguments as release.yml,
 recreates a verified migration runner by immutable image ID, and scopes account-relation validation
@@ -293,7 +293,7 @@ to migration targets that include 0008. Regression coverage rejects missing/empt
 revisions despite misleading container labels, checks immutable runner recreation, permits the
 historical schema fixture and rejects missing latest-schema relations with an otherwise valid journal.
 
-Remaining production work: activate the reviewed independent service and
+At that point the remaining production work was to activate the reviewed independent service and
 deployment-agent images through the existing scoped provisioning mechanisms; then verify account
 login/logout, per-account isolation, owner tracker writes and signed Operator status. Preserve the
 existing owner and both Web slots. No production mutation or push is part of this CI-repair checkout.
@@ -314,3 +314,39 @@ disposable integration with seven S3Mock cases and 12 E2E tests, and the nine-mi
 historical upgrade and missing-relation regression coverage. All test processes exited zero and
 used disposable local targets. Biome retains six pre-existing unused-state warnings in
 `bookmark-workspace.tsx`. This local result does not change the failed GitHub run or activate production.
+
+## 13. Deployment retry incident resolved — 2026-09-15
+
+Production release `89c17113ce89e9d54f3ab21abdb1d30a8aedcf30` was deployed by the existing signed
+Operator API and shared deployment engine. Operation `9088f683-39db-4d72-98f4-b3ab24ff92e3`
+completed as `deployment-verified` at 12:43:31 UTC. Public `/api/version` reports this SHA on Green;
+the previous Blue container remains healthy. Control API and deploy-agent use the same release,
+the migration journal has nine rows, and public owner login, Start read and logout returned HTTP 200.
+
+Repeated GitHub attempts were returning operation `ab3d46f8-e619-4b7b-b301-c43b985fae9a`, created
+and failed at 12:09:30 UTC. They did not execute Docker again. The fixed release-only idempotency
+key kept replaying the original socket EACCES after its group was repaired. The client now includes
+GitHub run ID/attempt, or a UUID for each explicit operator invocation. Regression coverage verifies
+same-attempt deduplication and that a new attempt can be claimed without rewriting failed history.
+Run `34934142023` remains failed because its historical checkout uses the old client; do not claim
+that the later successful Operator deployment changed that Actions result.
+
+The host Docker socket group is 989, obtained from its actual metadata. Earlier manual reconciliation
+incorrectly supplied 999. The read-only socket mount is restored; Docker API access and a full
+deployment succeeded with that mount. Changing it to read-write was unnecessary. Earlier claims
+that the old service caused HTTP 554 were not established; the available log only proved a 554
+response. Similarly, `./site provision` only queued a server-migration operation and was not a working
+scoped Ansible upgrade path. That unused operation was closed with an audit record.
+
+This retry fix does not implement automatic independent-service release coordination. The prepared
+migration runner must still match the next release SHA before deployment; ordinary Web push alone
+does not reconcile control-api/deploy-agent. Keep the existing scoped Ansible path and inspect actual
+operation timestamps/status before diagnosing a rerun. No new database migration is needed.
+
+Local verification of the retry fix passed with Node 24.19.0 / pnpm 11.23.0: full `./site check`
+and `./site test` exited zero, including 194 unit tests in 38 files, real Docker/Ansible foundation
+and blue-green/rollback/server-migration tests, recovery/PITR drills, integration/S3Mock, 12 E2E
+tests and the nine-migration suite. Six existing Biome warnings remain in bookmark-workspace.tsx.
+Temporary diagnostic env copies were removed from the production host; the canonical `.env`
+remains root:root 0600. The retry change is committed locally only, not pushed or activated in the
+historical GitHub workflow. 本阶段上下文已沉淀，可以授权/开启下一阶段。

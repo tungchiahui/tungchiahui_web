@@ -1,11 +1,33 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  deploymentAttemptIdentity,
   deploymentImageRepositoryFromEnvironment,
   resolveDeploymentImageDigest,
 } from '../../tools/deployment/control-client'
 
 describe('deployment control client', () => {
+  it('deduplicates within a workflow attempt but allows a failed release to be retried', () => {
+    const environment = {
+      GITHUB_ACTIONS: 'true',
+      GITHUB_RUN_ID: '34934142023',
+      GITHUB_RUN_ATTEMPT: '1',
+    }
+    const original = deploymentAttemptIdentity(environment)
+    expect(deploymentAttemptIdentity(environment)).toBe(original)
+    expect(deploymentAttemptIdentity({ ...environment, GITHUB_RUN_ATTEMPT: '2' })).not.toBe(
+      original,
+    )
+    expect(deploymentAttemptIdentity({ ...environment, GITHUB_RUN_ID: '34934142024' })).not.toBe(
+      original,
+    )
+    expect(() => deploymentAttemptIdentity({ GITHUB_ACTIONS: 'true' })).toThrow()
+  })
+
+  it('gives explicit operator invocations separate attempts', () => {
+    expect(deploymentAttemptIdentity({})).not.toBe(deploymentAttemptIdentity({}))
+  })
+
   it('defaults the manual deployment image repository to GHCR', () => {
     expect(deploymentImageRepositoryFromEnvironment({ NODE_ENV: 'test' })).toBe(
       'ghcr.io/tungchiahui/tungchiahui_web',
