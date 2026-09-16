@@ -872,6 +872,7 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
                   : 'request_rejected',
           method: request.method,
           path: url.pathname,
+          ...(error instanceof AuthenticationError ? error.details : {}),
         },
       )
       sendJson(response, mapped)
