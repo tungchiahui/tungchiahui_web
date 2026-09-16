@@ -145,11 +145,7 @@ export class AuthenticationError extends Error {
   readonly code: string
   readonly details?: Readonly<Record<string, string | boolean>>
 
-  constructor(
-    code: string,
-    message: string,
-    details?: Readonly<Record<string, string | boolean>>,
-  ) {
+  constructor(code: string, message: string, details?: Readonly<Record<string, string | boolean>>) {
     super(message)
     this.code = code
     this.details = details
@@ -325,18 +321,22 @@ export async function validateGitHubOidcToken(
     (policy.workflowRef !== undefined && claims.data.workflow_ref !== policy.workflowRef) ||
     (policy.jobWorkflowRef !== undefined && claims.data.job_workflow_ref !== policy.jobWorkflowRef)
   ) {
-    throw new AuthenticationError('github_oidc_policy_denied', 'GitHub OIDC claims are not allowed', {
-      actualEnvironment: claims.data.environment,
-      actualJobWorkflowRef: claims.data.job_workflow_ref ?? '',
-      actualRef: claims.data.ref,
-      actualRepository: claims.data.repository,
-      actualWorkflowRef: claims.data.workflow_ref,
-      expectedEnvironment: policy.environment,
-      expectedJobWorkflowRef: policy.jobWorkflowRef ?? '',
-      expectedRef: policy.ref,
-      expectedRepository: policy.repository,
-      expectedWorkflowRef: policy.workflowRef ?? '',
-    })
+    throw new AuthenticationError(
+      'github_oidc_policy_denied',
+      'GitHub OIDC claims are not allowed',
+      {
+        actualEnvironment: claims.data.environment,
+        actualJobWorkflowRef: claims.data.job_workflow_ref ?? '',
+        actualRef: claims.data.ref,
+        actualRepository: claims.data.repository,
+        actualWorkflowRef: claims.data.workflow_ref,
+        expectedEnvironment: policy.environment,
+        expectedJobWorkflowRef: policy.jobWorkflowRef ?? '',
+        expectedRef: policy.ref,
+        expectedRepository: policy.repository,
+        expectedWorkflowRef: policy.workflowRef ?? '',
+      },
+    )
   }
 
   return actorIdentitySchema.parse({
