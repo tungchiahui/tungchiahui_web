@@ -27,11 +27,17 @@ test('owner login directly enables both trackers; saves survive reload and remai
       })
       .then((response) => response.status()),
   )
-  await page.getByRole('button', { name: '登录', exact: true }).click()
-  await page.getByLabel('用户名').fill('owner')
-  await page.getByLabel('密码').fill('local-only-owner-password')
-  await page.getByRole('dialog').getByRole('button', { name: '登录', exact: true }).click()
-  await expect(page.getByRole('dialog')).not.toBeVisible()
+  const loginButton = page.getByRole('button', { name: '登录', exact: true })
+  await expect(loginButton).toBeVisible()
+  await expect(loginButton).toBeEnabled()
+  await loginButton.click()
+  const loginDialog = page.getByRole('dialog')
+  await expect(loginDialog).toBeVisible()
+  await expect(loginDialog.getByLabel('用户名')).toBeVisible()
+  await loginDialog.getByLabel('用户名').fill('owner')
+  await loginDialog.getByLabel('密码').fill('local-only-owner-password')
+  await loginDialog.getByRole('button', { name: '登录', exact: true }).click()
+  await expect(loginDialog).not.toBeVisible()
   await expect(progress).toBeEnabled()
   const cookie = (await page.context().cookies()).find((item) => item.name === 'site_session')
   expect(cookie?.httpOnly).toBe(true)
@@ -148,7 +154,9 @@ test('owner login directly enables both trackers; saves survive reload and remai
   } finally {
     await visitor.close()
   }
-  await page.getByRole('button', { name: '退出登录' }).click()
+  const logoutButton = page.getByRole('button', { name: '退出登录', exact: true })
+  await expect(logoutButton).toBeVisible()
+  await logoutButton.click()
   await expect(weight).toBeDisabled()
   expect(
     z
