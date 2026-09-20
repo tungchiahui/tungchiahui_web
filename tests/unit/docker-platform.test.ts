@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest'
 import type { DeploymentConfiguration } from '../../src/deployment/configuration'
 import {
   DockerDeploymentPlatform,
+  replaceContainerLabels,
   replaceEnvironment,
   webEnvironmentFromProcess,
 } from '../../src/deployment/docker-platform'
@@ -257,6 +258,28 @@ describe('Docker migration image identity', () => {
 })
 
 describe('Docker deployment platform environment handling', () => {
+  it('replaces stale template image labels with the validated release image labels', () => {
+    expect(
+      replaceContainerLabels(
+        {
+          'com.docker.compose.project': 'tungchiahui-production',
+          'com.docker.compose.service': 'web-blue',
+          'org.opencontainers.image.revision': 'a'.repeat(40),
+        },
+        {
+          'cn.tungchiahui.release.service-digest': `sha256:${'c'.repeat(64)}`,
+          'org.opencontainers.image.revision': 'b'.repeat(40),
+        },
+        'web-green',
+      ),
+    ).toEqual({
+      'cn.tungchiahui.release.service-digest': `sha256:${'c'.repeat(64)}`,
+      'com.docker.compose.project': 'tungchiahui-production',
+      'com.docker.compose.service': 'web-green',
+      'org.opencontainers.image.revision': 'b'.repeat(40),
+    })
+  })
+
   it('propagates only production env keys from deploy-agent process env', () => {
     expect(
       webEnvironmentFromProcess({

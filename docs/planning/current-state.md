@@ -437,6 +437,12 @@ updates `control-api`, `content-worker`, `observability-agent` and `deploy-agent
 Content revalidation and Web readiness checks go through an internal-only OpenResty listener that uses
 the active-slot configuration, while the public listener still hides `/api/internal/*`.
 
+Production rollout preflight additionally found that newly created Web containers inherited the
+template Slot's image-derived OCI labels even while running the requested new image digest. Runtime
+identity and `/api/version` remained correct, but Docker inspection could show a stale revision. The
+deployment adapter now overlays labels from the validated target image on the template's Compose
+labels and then sets the target service name, so revision and paired-service metadata remain truthful.
+
 `release.yml` now rejects an automatic Push Release that is no longer the current `origin/main`, and
 its final fail-closed job prevents a skipped deployment from appearing as a complete release. Workflow
 policy tests validate job structure as well as critical command fragments. The GitHub OIDC policy stays
@@ -453,7 +459,7 @@ production host operation, host-local `.env` mutation, Secret rotation, OIDC rel
 replay or historical operation rewrite is authorized by this repository state.
 
 Final local validation used the pinned Node 24.19.0 and pnpm 11.23.0. `check:biome` passed with only
-the six pre-existing unused-state warnings in `bookmark-workspace.tsx`; typecheck, 211 unit tests,
+the six pre-existing unused-state warnings in `bookmark-workspace.tsx`; typecheck, 212 unit tests,
 workflow policy, Drizzle, Production Build and static security passed. The requested personal-tracker
 spec passed five consecutive Chromium repetitions after starting the supported local stack. Full
 `./site test` passed production foundation/Ansible/blue-green/digest binding/image scans, full/diff/incr

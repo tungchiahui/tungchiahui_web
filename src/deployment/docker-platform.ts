@@ -116,6 +116,18 @@ export function replaceEnvironment(
   ]
 }
 
+export function replaceContainerLabels(
+  templateLabels: Readonly<Record<string, string>> | null,
+  imageLabels: Readonly<Record<string, string>> | null,
+  serviceName: string,
+) {
+  return {
+    ...(templateLabels ?? {}),
+    ...(imageLabels ?? {}),
+    'com.docker.compose.service': serviceName,
+  }
+}
+
 function requestJson(
   socketPath: string,
   method: DockerMethod,
@@ -422,7 +434,7 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
   }
 
   async prepareCandidate(release: DeploymentRelease) {
-    await this.validateImage(release)
+    const releaseImage = await this.inspectValidatedImage(release)
     const targetName = this.containerName(release.slot)
     const templateName =
       (
@@ -469,8 +481,11 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
         },
       ]),
     )
-    const labels = { ...(template.Config.Labels ?? {}) }
-    labels['com.docker.compose.service'] = serviceName
+    const labels = replaceContainerLabels(
+      template.Config.Labels,
+      releaseImage.Config.Labels,
+      serviceName,
+    )
     await requireDocker(
       this.socketPath,
       'POST',
@@ -677,7 +692,7 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
     renameSync(temporary, target)
   }
 
-  async validateImage(release: DeploymentRelease) {
+  private async inspectValidatedImage(release: DeploymentRelease) {
     const reference = this.imageReference(release)
     let inspection = await requestJson(
       this.socketPath,
@@ -700,7 +715,7 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
     const image = dockerImageSchema.parse(inspection.body)
     if (this.configuration.DEPLOYMENT_IMAGE_REPOSITORY === undefined) {
       if (image.Id !== release.digest) throw new Error('Docker image digest does not match request')
-      return
+      return image
     }
     if (!(image.RepoDigests ?? []).includes(reference)) {
       throw new Error('Pulled image does not expose the requested registry digest')
@@ -708,6 +723,11 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
     if (image.Config.Labels?.['org.opencontainers.image.revision'] !== release.sha) {
       throw new Error('Pulled image revision label does not match the requested Git SHA')
     }
+    return image
+  }
+
+  async validateImage(release: DeploymentRelease) {
+    await this.inspectValidatedImage(release)
   }
 
   async verifyRetainedRelease(release: DeploymentRelease) {

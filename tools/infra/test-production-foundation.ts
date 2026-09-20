@@ -1400,6 +1400,26 @@ async function verifyBlueGreenDeployment() {
     deployedVersion.gitSha === candidateSha && deployedVersion.slot === 'green',
     'Public entry did not switch to the green candidate',
   )
+  const candidateLabels = z
+    .record(z.string(), z.string())
+    .parse(
+      JSON.parse(
+        execute('docker', [
+          'inspect',
+          '--format',
+          '{{json .Config.Labels}}',
+          `${projectName}-web-green-1`,
+        ]).stdout,
+      ) as unknown,
+    )
+  expect(
+    candidateLabels['org.opencontainers.image.revision'] === candidateSha,
+    'Candidate container retained a stale template revision label',
+  )
+  expect(
+    candidateLabels['cn.tungchiahui.release.service-digest'] === serviceRegistryDigest,
+    'Candidate container lost the digest-bound service release label',
+  )
   expect(inspectId(runnerName) !== runnerBefore, 'Stale migration runner was not replaced')
   expect(
     execute('docker', ['inspect', '--format', '{{.Image}}', runnerName]).stdout.trim() ===
