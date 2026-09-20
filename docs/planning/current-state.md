@@ -384,3 +384,37 @@ The final deployment assertions were also rerun independently (28 tests passed).
 Biome warnings in bookmark-workspace.tsx remain; no new warning was added. The implementation is
 committed on main only; there is no new GitHub Actions result until an authorized push/dispatch.
 本阶段上下文已沉淀，可以授权/开启下一阶段。
+
+## 15. Protected GitHub OIDC mismatch diagnostics — 2026-09-20
+
+Runs `35042695623` and `35047154653` did not build or deploy the diagnostic change: the first failed
+Biome formatting and the second failed TypeScript because an optional `AuthenticationError.details`
+property was assigned a possibly undefined constructor argument under
+`exactOptionalPropertyTypes`. The implementation now assigns the property only when details exist.
+It also fixes the deeper propagation defect: policy-specific mismatch details were previously caught
+and discarded while iterating the configured policies, so the outer HTTP audit still received a
+generic denial. Authentication now retains only the closest strict-policy mismatch and carries its
+allowlisted five GitHub identity claims into the protected SQLite Control Audit. The client response
+remains only `github_oidc_policy_denied`; JWTs, Authorization/Cookie headers, arbitrary claims and
+Secrets are excluded from the audit and ordinary telemetry.
+
+Historical run `34977257435` is not evidence that push OIDC succeeded because its Deploy Job was
+skipped. Push run `35041813617` did complete the protected deployment job and deployed Web
+`28b8c9569cdfc08618e37b631bce74e130cb9caf`; manual run `34983703885` reached the same job and was
+denied. Public `/api/version` identifies only the Green Web slot and cannot identify the separately
+provisioned `control-api`. A normal Web deployment does not activate this diagnostic. After the exact
+reviewed service image is published, production evidence still requires Owner-authorized scoped
+`control-api` reconciliation, followed by one new `workflow_dispatch` and authorized inspection of
+the protected audit. Until those actual values are obtained, repository, `refs/heads/main`,
+`production` Environment and reviewed workflow identity remain unchanged. No migration is added and
+`0008_accounts_and_start_data` must not be replayed.
+
+Unit coverage verifies details and no-details authentication errors, closest-policy propagation into
+Control Audit, generic client responses, and negative leakage checks for the JWT, Authorization,
+Cookie, passthrough Secret claim and Secret values. No production reconciliation, host-local `.env`
+change, policy relaxation or historical operation rewrite is part of this repository change. Final
+local validation with Node 24.19.0 / pnpm 11.23.0 passed `check:biome` (only the six existing
+`bookmark-workspace.tsx` warnings), TypeScript, 205 unit tests, five repeated personal-tracker E2E
+runs, full `./site check`, and full `./site test`: production foundation/blue-green/migration-image
+and workflow policy, recovery/PITR, disposable S3Mock/application integration with 12 E2E tests,
+and all nine migrations. 本阶段上下文已沉淀，可以授权/开启下一阶段。

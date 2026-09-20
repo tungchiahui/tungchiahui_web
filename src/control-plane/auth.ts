@@ -140,15 +140,29 @@ export type AuthenticationConfiguration = Readonly<{
   replayWindowSeconds: number
 }>
 
+type AuthenticationAuditDetails = Readonly<{
+  actualEnvironment: string
+  actualJobWorkflowRef: string
+  actualRef: string
+  actualRepository: string
+  actualWorkflowRef: string
+  expectedEnvironment: string
+  expectedJobWorkflowRef: string
+  expectedRef: string
+  expectedRepository: string
+  expectedWorkflowRef: string
+  mismatchedClaims: string
+}>
+
 export class AuthenticationError extends Error {
   override readonly name = 'AuthenticationError'
   readonly code: string
-  readonly details?: Readonly<Record<string, string | boolean>>
+  readonly details?: AuthenticationAuditDetails
 
-  constructor(code: string, message: string, details?: Readonly<Record<string, string | boolean>>) {
+  constructor(code: string, message: string, details?: AuthenticationAuditDetails) {
     super(message)
     this.code = code
-    this.details = details
+    if (details !== undefined) this.details = details
   }
 }
 
@@ -313,14 +327,19 @@ export async function validateGitHubOidcToken(
     throw new AuthenticationError('invalid_github_oidc_claims', 'GitHub OIDC claims are invalid')
   }
 
-  if (
-    claims.data.iss !== policy.issuer ||
-    claims.data.repository !== policy.repository ||
-    claims.data.ref !== policy.ref ||
-    claims.data.environment !== policy.environment ||
-    (policy.workflowRef !== undefined && claims.data.workflow_ref !== policy.workflowRef) ||
-    (policy.jobWorkflowRef !== undefined && claims.data.job_workflow_ref !== policy.jobWorkflowRef)
-  ) {
+  const mismatchedClaims = [
+    claims.data.iss !== policy.issuer ? 'iss' : null,
+    claims.data.repository !== policy.repository ? 'repository' : null,
+    claims.data.ref !== policy.ref ? 'ref' : null,
+    claims.data.environment !== policy.environment ? 'environment' : null,
+    policy.workflowRef !== undefined && claims.data.workflow_ref !== policy.workflowRef
+      ? 'workflow_ref'
+      : null,
+    policy.jobWorkflowRef !== undefined && claims.data.job_workflow_ref !== policy.jobWorkflowRef
+      ? 'job_workflow_ref'
+      : null,
+  ].filter((claim): claim is string => claim !== null)
+  if (mismatchedClaims.length > 0) {
     throw new AuthenticationError(
       'github_oidc_policy_denied',
       'GitHub OIDC claims are not allowed',
@@ -335,6 +354,7 @@ export async function validateGitHubOidcToken(
         expectedRef: policy.ref,
         expectedRepository: policy.repository,
         expectedWorkflowRef: policy.workflowRef ?? '',
+        mismatchedClaims: mismatchedClaims.join(','),
       },
     )
   }
@@ -357,16 +377,30 @@ async function authenticateGitHub(
   }
   const token = authorization.data.slice('Bearer '.length)
   let actor: ActorIdentity | undefined
+  let closestPolicyMismatch: AuthenticationAuditDetails | undefined
   for (const policy of configuration.githubPolicies) {
     try {
       actor = await validateGitHubOidcToken(token, policy, configuration.githubVerificationKey)
       break
     } catch (error: unknown) {
       if (!(error instanceof AuthenticationError)) throw error
+      if (
+        error.code === 'github_oidc_policy_denied' &&
+        error.details !== undefined &&
+        (closestPolicyMismatch === undefined ||
+          error.details.mismatchedClaims.split(',').length <
+            closestPolicyMismatch.mismatchedClaims.split(',').length)
+      ) {
+        closestPolicyMismatch = error.details
+      }
     }
   }
   if (!actor) {
-    throw new AuthenticationError('github_oidc_policy_denied', 'GitHub OIDC claims are not allowed')
+    throw new AuthenticationError(
+      'github_oidc_policy_denied',
+      'GitHub OIDC claims are not allowed',
+      closestPolicyMismatch,
+    )
   }
   consumeReplayNonce(
     replayStore,

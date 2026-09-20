@@ -3,8 +3,10 @@ import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { generateKeyPair, SignJWT } from 'jose'
 import { afterEach, describe, expect, it } from 'vitest'
 
+import { parseGitHubOidcPolicy, sha256 } from '../../src/control-plane/auth'
 import { parseControlApiConfiguration } from '../../src/control-plane/configuration'
 import type { Capability } from '../../src/control-plane/contracts'
 import {
@@ -23,7 +25,14 @@ afterEach(async () => {
   }
 })
 
-async function serverFixture(rateLimitPerMinute = 120, capabilities?: readonly Capability[]) {
+async function serverFixture(
+  rateLimitPerMinute = 120,
+  capabilities?: readonly Capability[],
+  githubAuthentication?: Readonly<{
+    policies: ReturnType<typeof parseGitHubOidcPolicy>[]
+    verificationKey: Awaited<ReturnType<typeof generateKeyPair>>['publicKey']
+  }>,
+) {
   const directory = mkdtempSync(join(tmpdir(), 'control-http-unit-'))
   const statePath = join(directory, 'control.db')
   initializeControlState(statePath, 'test')
@@ -40,12 +49,18 @@ async function serverFixture(rateLimitPerMinute = 120, capabilities?: readonly C
   const controlApi = createControlApiServer({
     ...baseline,
     authentication:
-      capabilities === undefined
-        ? baseline.authentication
-        : {
+      githubAuthentication !== undefined
+        ? {
             ...baseline.authentication,
-            operatorKeys: [{ ...operator, capabilities: [...capabilities] }],
-          },
+            githubPolicies: githubAuthentication.policies,
+            githubVerificationKey: githubAuthentication.verificationKey,
+          }
+        : capabilities === undefined
+          ? baseline.authentication
+          : {
+              ...baseline.authentication,
+              operatorKeys: [{ ...operator, capabilities: [...capabilities] }],
+            },
     statePath,
   })
   await new Promise<void>((resolve) => controlApi.server.listen(0, '127.0.0.1', resolve))
@@ -105,6 +120,92 @@ describe('independent control-api HTTP boundary', () => {
       'authentication_failed',
       'control_request_authorized',
     ])
+    expect(listControlAuditEvents(statePath)[0]?.details).toEqual({
+      code: 'malformed_auth_headers',
+      method: 'GET',
+      path: '/api/ops/status',
+    })
+  })
+
+  it('stores allowlisted OIDC mismatch details only in protected control audit', async () => {
+    const policy = parseGitHubOidcPolicy({
+      audience: 'control-api',
+      capabilities: ['status:read'],
+      environment: 'production',
+      issuer: 'https://token.actions.githubusercontent.com',
+      jwksUrl: 'https://token.actions.githubusercontent.com/.well-known/jwks',
+      ref: 'refs/heads/main',
+      repository: 'owner/repository',
+      workflowRef: 'owner/repository/.github/workflows/release.yml@refs/heads/main',
+    })
+    const { privateKey, publicKey } = await generateKeyPair('RS256')
+    const unrelatedPolicy = parseGitHubOidcPolicy({
+      ...policy,
+      environment: 'unrelated',
+      ref: 'refs/heads/unrelated',
+      repository: 'other/repository',
+      workflowRef: 'other/repository/.github/workflows/other.yml@refs/heads/unrelated',
+    })
+    const secretClaim = 'private-claim-value-that-must-not-be-audited'
+    const token = await new SignJWT({
+      environment: 'production',
+      job_workflow_ref: 'owner/repository/.github/workflows/release.yml@refs/heads/main',
+      ref: 'refs/heads/main',
+      repository: 'owner/repository',
+      secret: secretClaim,
+      sub: 'repo:owner/repository:environment:production',
+      workflow_ref: 'owner/repository/.github/workflows/other.yml@refs/heads/main',
+    })
+      .setProtectedHeader({ alg: 'RS256' })
+      .setIssuer(policy.issuer)
+      .setAudience(policy.audience)
+      .setIssuedAt()
+      .setExpirationTime('5m')
+      .sign(privateKey)
+    const { base, statePath } = await serverFixture(120, undefined, {
+      policies: [unrelatedPolicy, policy],
+      verificationKey: publicKey,
+    })
+    const body = Buffer.from('')
+    const headers = new Headers({
+      authorization: `Bearer ${token}`,
+      cookie: 'session=private-cookie-value-that-must-not-be-audited',
+      'x-ops-body-sha256': sha256(body),
+      'x-ops-nonce': 'oidc-mismatch-audit-0001',
+      'x-ops-timestamp': String(Math.floor(Date.now() / 1_000)),
+    })
+
+    const response = await fetch(new URL('/api/ops/status', base), { headers })
+    expect(response.status).toBe(401)
+    expect(await response.json()).toEqual({ error: 'github_oidc_policy_denied' })
+
+    const [audit] = listControlAuditEvents(statePath)
+    expect(audit).toMatchObject({
+      actorId: 'anonymous',
+      details: {
+        actualEnvironment: 'production',
+        actualJobWorkflowRef: 'owner/repository/.github/workflows/release.yml@refs/heads/main',
+        actualRef: 'refs/heads/main',
+        actualRepository: 'owner/repository',
+        actualWorkflowRef: 'owner/repository/.github/workflows/other.yml@refs/heads/main',
+        code: 'github_oidc_policy_denied',
+        expectedEnvironment: 'production',
+        expectedJobWorkflowRef: '',
+        expectedRef: 'refs/heads/main',
+        expectedRepository: 'owner/repository',
+        expectedWorkflowRef: 'owner/repository/.github/workflows/release.yml@refs/heads/main',
+        method: 'GET',
+        mismatchedClaims: 'workflow_ref',
+        path: '/api/ops/status',
+      },
+      eventType: 'authentication_failed',
+      outcome: 'denied',
+    })
+    const serializedAudit = JSON.stringify(audit)
+    expect(serializedAudit).not.toContain(token)
+    expect(serializedAudit).not.toContain(secretClaim)
+    expect(serializedAudit).not.toContain('private-cookie-value-that-must-not-be-audited')
+    expect(serializedAudit).not.toMatch(/authorization|cookie|secret|token/i)
   })
 
   it('accepts immutable deployment operations without a PostgreSQL dependency', async () => {

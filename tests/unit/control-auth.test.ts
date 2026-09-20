@@ -190,6 +190,30 @@ describe('control-plane authentication and authorization', () => {
     }
     await expect(
       validateGitHubOidcToken(
+        await token({
+          workflow_ref: 'owner/repository/.github/workflows/other.yml@refs/heads/main',
+        }),
+        policy,
+        publicKey,
+      ),
+    ).rejects.toMatchObject({
+      code: 'github_oidc_policy_denied',
+      details: {
+        actualEnvironment: 'production',
+        actualJobWorkflowRef: 'owner/repository/.github/workflows/release.yml@refs/heads/main',
+        actualRef: 'refs/heads/main',
+        actualRepository: 'owner/repository',
+        actualWorkflowRef: 'owner/repository/.github/workflows/other.yml@refs/heads/main',
+        expectedEnvironment: 'production',
+        expectedJobWorkflowRef: '',
+        expectedRef: 'refs/heads/main',
+        expectedRepository: 'owner/repository',
+        expectedWorkflowRef: 'owner/repository/.github/workflows/release.yml@refs/heads/main',
+        mismatchedClaims: 'workflow_ref',
+      },
+    })
+    await expect(
+      validateGitHubOidcToken(
         await token({ iss: 'https://issuer.example.invalid' }),
         policy,
         publicKey,

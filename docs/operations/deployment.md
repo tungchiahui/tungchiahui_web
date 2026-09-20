@@ -104,6 +104,23 @@ Web deployment by itself is still not evidence that the independent account API 
 The 2026-09-14 incident and rollout evidence are recorded in `docs/planning/current-state.md`
 section 12.
 
+GitHub OIDC policy denials keep the HTTP response generic. After signature, issuer, audience and
+claim-shape validation, the independent `control-api` records only the allowlisted
+`repository`/`ref`/`environment`/`workflow_ref`/`job_workflow_ref` actual-versus-expected values and
+the mismatched claim names in the protected SQLite Control Audit. It never records the JWT,
+Authorization header, Cookie, arbitrary passthrough claim or request Secret, and ordinary telemetry
+does not receive these details. With multiple strict policies, the denial records the closest policy
+match; a successful later policy produces no denial audit.
+
+This diagnostic has the same independent-service release boundary as every other `control-api`
+change. If the running service predates it, repeating `workflow_dispatch` cannot create the new
+evidence. First let the reviewed `main` push pass Quality and publish the exact service image; then,
+only after explicit production authorization, use the existing scoped reconciliation path to replace
+`control-api` without touching either Web slot. Trigger one new dispatch, inspect the protected audit
+through the authorized host path, and compare all five claims before changing policy. Never copy the
+claim details into an Actions artifact, client response or ordinary log, and never relax repository,
+`refs/heads/main`, `production` Environment or reviewed workflow identity speculatively.
+
 ### One-time activation of the automatic migration-image resolver
 
 The already running 2026-09-15 agent (`89c17113`) does not contain this resolver. Do not assume a
