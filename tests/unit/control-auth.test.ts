@@ -222,6 +222,70 @@ describe('control-plane authentication and authorization', () => {
     await expect(
       validateGitHubOidcToken(await token({}, 'wrong-control-api'), policy, publicKey),
     ).rejects.toBeInstanceOf(AuthenticationError)
+
+    await expect(
+      validateGitHubOidcToken(await token(), policy, async () => {
+        throw new TypeError('simulated JWKS network failure')
+      }),
+    ).rejects.toMatchObject({ code: 'github_oidc_verification_unavailable' })
+  })
+
+  it('does not misreport token verification failures as policy mismatches', async () => {
+    const policy = parseGitHubOidcPolicy({
+      audience: 'control-api',
+      capabilities: ['application-job:create'],
+      environment: 'production',
+      issuer: 'https://token.actions.githubusercontent.com',
+      jwksUrl: 'https://token.actions.githubusercontent.com/.well-known/jwks',
+      ref: 'refs/heads/main',
+      repository: 'owner/repository',
+      workflowRef: 'owner/repository/.github/workflows/release.yml@refs/heads/main',
+    })
+    const alternatePolicy = parseGitHubOidcPolicy({
+      ...policy,
+      workflowRef: 'owner/repository/.github/workflows/content-sync.yml@refs/heads/main',
+    })
+    const { privateKey } = await generateKeyPair('RS256')
+    const { publicKey: unrelatedPublicKey } = await generateKeyPair('RS256')
+    const token = await new SignJWT({
+      environment: 'production',
+      ref: 'refs/heads/main',
+      repository: 'owner/repository',
+      sub: 'repo:owner/repository:environment:production',
+      workflow_ref: 'owner/repository/.github/workflows/release.yml@refs/heads/main',
+    })
+      .setProtectedHeader({ alg: 'RS256' })
+      .setIssuer(policy.issuer)
+      .setAudience(policy.audience)
+      .setIssuedAt()
+      .setExpirationTime('5m')
+      .sign(privateKey)
+    const body = Buffer.from('')
+    const input = {
+      body,
+      headers: new Headers({
+        authorization: `Bearer ${token}`,
+        'x-ops-body-sha256': sha256(body),
+        'x-ops-nonce': 'invalid-oidc-token-0001',
+        'x-ops-timestamp': String(Math.floor(Date.now() / 1_000)),
+      }),
+      method: 'GET',
+      now: new Date(),
+      path: '/api/ops/status',
+    }
+
+    await expect(
+      authenticateControlRequest(
+        input,
+        {
+          githubPolicies: [policy, alternatePolicy],
+          githubVerificationKey: unrelatedPublicKey,
+          operatorKeys: [],
+          replayWindowSeconds: 300,
+        },
+        { consumeNonce: () => true },
+      ),
+    ).rejects.toMatchObject({ code: 'invalid_github_oidc_token', details: undefined })
   })
 
   it('binds reusable content automation independently from deploy and translation workflows', async () => {

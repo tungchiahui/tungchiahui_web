@@ -47,3 +47,16 @@
   when: >-
     (tungchiahui_manage_stack | bool) or
     (tungchiahui_reconcile_control_api | bool)
+
+- name: Record the applied OpenResty topology fingerprint
+  ansible.builtin.copy:
+    dest: "{{ tungchiahui_config_root }}/openresty-topology.sha256"
+    owner: root
+    group: tungchiahui-runtime
+    mode: "0640"
+    content: |
+      {{ tungchiahui_openresty_topology_fingerprint }}
+  listen: Reconcile validated OpenResty configuration
+  when: >-
+    (tungchiahui_manage_stack | bool) or
+    (tungchiahui_reconcile_control_api | bool)

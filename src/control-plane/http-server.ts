@@ -243,7 +243,10 @@ function errorResponse(error: unknown): JsonResponse {
     return { body: { error: error.message }, status: error.status }
   }
   if (error instanceof AuthenticationError) {
-    return { body: { error: error.code }, status: 401 }
+    return {
+      body: { error: error.code },
+      status: error.code === 'github_oidc_verification_unavailable' ? 503 : 401,
+    }
   }
   if (error instanceof AuthorizationError) {
     return { body: { error: 'capability_denied' }, status: 403 }

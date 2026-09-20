@@ -188,6 +188,37 @@
     - { source: pgbackrest.conf, destination: pgbackrest.conf }
   notify: Reconcile validated OpenResty configuration
 
+- name: Inspect the installed OpenResty topology inputs
+  ansible.builtin.stat:
+    path: "{{ tungchiahui_config_root }}/{{ item }}"
+    checksum_algorithm: sha256
+  loop:
+    - compose.yaml
+    - openresty.conf
+  register: tungchiahui_openresty_topology_inputs
+
+- name: Define the expected OpenResty topology fingerprint
+  ansible.builtin.set_fact:
+    tungchiahui_openresty_topology_fingerprint: >-
+      {{
+        (
+          tungchiahui_openresty_topology_inputs.results[0].stat.checksum
+          ~ ':'
+          ~ tungchiahui_openresty_topology_inputs.results[1].stat.checksum
+        ) | hash('sha256')
+      }}
+
+- name: Inspect the applied OpenResty topology fingerprint
+  ansible.builtin.stat:
+    path: "{{ tungchiahui_config_root }}/openresty-topology.sha256"
+  register: tungchiahui_openresty_topology_marker
+
+- name: Read the applied OpenResty topology fingerprint
+  ansible.builtin.slurp:
+    path: "{{ tungchiahui_config_root }}/openresty-topology.sha256"
+  register: tungchiahui_openresty_topology_marker_content
+  when: tungchiahui_openresty_topology_marker.stat.exists
+
 - name: Initialize the deployment-owned active slot only once
   ansible.builtin.copy:
     src: "{{ tungchiahui_repository_root }}/ops/production/active-slot.conf"
@@ -285,6 +316,30 @@
       - --quiet
   environment: "{{ tungchiahui_compose_environment }}"
   changed_when: false
+
+- name: Schedule missing OpenResty convergence for scoped control-plane reconciliation
+  ansible.builtin.debug:
+    msg: Reconcile the validated on-disk OpenResty topology before scoped service changes.
+  changed_when: true
+  notify: Reconcile validated OpenResty configuration
+  when:
+    - not (tungchiahui_manage_stack | bool)
+    - tungchiahui_reconcile_control_api | bool
+    - >-
+      not tungchiahui_openresty_topology_marker.stat.exists
+      or
+      (
+        tungchiahui_openresty_topology_marker_content.content
+        | default('')
+        | b64decode
+        | trim
+      ) != tungchiahui_openresty_topology_fingerprint
+
+- name: Apply pending OpenResty convergence before scoped service changes
+  ansible.builtin.meta: flush_handlers
+  when:
+    - not (tungchiahui_manage_stack | bool)
+    - tungchiahui_reconcile_control_api | bool
 
 - name: Start and wait for the PostgreSQL foundation
   ansible.builtin.command:
@@ -454,6 +509,10 @@
       - --force-recreate
       - database-migrate
   environment: "{{ tungchiahui_compose_environment }}"
+  register: tungchiahui_scoped_migration_runner_prepare
+  until: tungchiahui_scoped_migration_runner_prepare.rc == 0
+  retries: 5
+  delay: 3
   changed_when: false
   no_log: true
   when:
@@ -505,6 +564,9 @@
       - deploy-agent
   environment: "{{ tungchiahui_compose_environment }}"
   register: tungchiahui_control_api_up
+  until: tungchiahui_control_api_up.rc == 0
+  retries: 5
+  delay: 3
   changed_when: >-
     'Created' in tungchiahui_control_api_up.stderr or
     'Started' in tungchiahui_control_api_up.stderr or

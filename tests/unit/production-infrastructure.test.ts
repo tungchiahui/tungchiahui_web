@@ -264,8 +264,30 @@ describe('Phase 12 production foundation policy', () => {
     expect(productionRoleSource).toContain('TUNGCHIAHUI_DEPLOYMENT_SEARCH_QUERY')
     expect(productionRoleSource).toContain('Reconcile validated OpenResty configuration')
     expect(productionRoleSource).toContain(
+      'Schedule missing OpenResty convergence for scoped control-plane reconciliation',
+    )
+    expect(productionRoleSource).toContain(
+      'Apply pending OpenResty convergence before scoped service changes',
+    )
+    expect(productionRoleSource).toContain('ansible.builtin.meta: flush_handlers')
+    expect(productionRoleSource).toContain('openresty-topology.sha256')
+    expect(productionHandlersSource).toContain('Record the applied OpenResty topology fingerprint')
+    expect(
+      productionRoleSource.indexOf(
+        'Apply pending OpenResty convergence before scoped service changes',
+      ),
+    ).toBeLessThan(
+      productionRoleSource.indexOf(
+        'Prepare the scoped migration runner for the control API release',
+      ),
+    )
+    expect(productionRoleSource).toContain(
       'Reconcile the independent service release as one reviewed unit',
     )
+    expect(productionRoleSource).toContain(
+      'until: tungchiahui_scoped_migration_runner_prepare.rc == 0',
+    )
+    expect(productionRoleSource).toContain('until: tungchiahui_control_api_up.rc == 0')
     for (const service of [
       'control-api',
       'content-worker',

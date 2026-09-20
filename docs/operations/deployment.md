@@ -107,6 +107,12 @@ because the long-running deploy-agent bundles an older journal. Applied migratio
 The scoped reconciliation path now recreates the stopped migration runner before applying SQL and
 updates `control-api`, `content-worker`, `observability-agent` and `deploy-agent` as one reviewed
 independent-service unit through the same Compose project, without touching either Web slot.
+Each scoped attempt compares the current Compose/OpenResty fingerprint with a success marker and
+converges a mismatch before migration. The marker is written only after validated recreation, so a
+failure after an atomic config copy cannot consume the only handler notification and leave the
+running gateway on stale config; a successful repeat remains a zero-change operation. Image
+preparation and service reconciliation have bounded retries for transient registry/TLS failures;
+migration execution remains journaled and is not blindly retried.
 Reconcile the reviewed service/recovery image explicitly, then validate schema journal/hash, all
 service health/image revisions, account API and Operator status before claiming activation is
 complete. A successful Web deployment by itself is still not evidence that independent services
@@ -121,6 +127,13 @@ the mismatched claim names in the protected SQLite Control Audit. It never recor
 Authorization header, Cookie, arbitrary passthrough claim or request Secret, and ordinary telemetry
 does not receive these details. With multiple strict policies, the denial records the closest policy
 match; a successful later policy produces no denial audit.
+
+Only a token that has passed signature, issuer, audience and claim-shape verification may produce
+policy-mismatch details. The multi-policy loop must preserve a preceding verification failure rather
+than relabeling it as `github_oidc_policy_denied`. A remote JWKS fetch timeout/failure is reported as
+the generic `github_oidc_verification_unavailable` service error and records no token or claim data.
+Resolve that outbound trust dependency before looking for claim differences; do not weaken policy to
+compensate for a verification-network failure.
 
 This diagnostic has the same independent-service release boundary as every other `control-api`
 change. If the running service predates it, repeating `workflow_dispatch` cannot create the new

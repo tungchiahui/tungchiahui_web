@@ -176,6 +176,12 @@ export class AuthorizationError extends Error {
   }
 }
 
+function isGitHubOidcVerificationUnavailable(error: unknown) {
+  if (error instanceof TypeError) return true
+  if (typeof error !== 'object' || error === null || !('code' in error)) return false
+  return error.code === 'ERR_JWKS_TIMEOUT'
+}
+
 function headerRecord(headers: Headers) {
   return {
     authorization: headers.get('authorization'),
@@ -318,7 +324,13 @@ export async function validateGitHubOidcToken(
       issuer: policy.issuer,
     })
     payload = verified.payload
-  } catch {
+  } catch (error: unknown) {
+    if (isGitHubOidcVerificationUnavailable(error)) {
+      throw new AuthenticationError(
+        'github_oidc_verification_unavailable',
+        'GitHub OIDC verification is unavailable',
+      )
+    }
     throw new AuthenticationError('invalid_github_oidc_token', 'GitHub OIDC token is invalid')
   }
 
@@ -378,6 +390,7 @@ async function authenticateGitHub(
   const token = authorization.data.slice('Bearer '.length)
   let actor: ActorIdentity | undefined
   let closestPolicyMismatch: AuthenticationAuditDetails | undefined
+  let verificationFailure: AuthenticationError | undefined
   for (const policy of configuration.githubPolicies) {
     try {
       actor = await validateGitHubOidcToken(token, policy, configuration.githubVerificationKey)
@@ -392,10 +405,15 @@ async function authenticateGitHub(
             closestPolicyMismatch.mismatchedClaims.split(',').length)
       ) {
         closestPolicyMismatch = error.details
+      } else if (error.code !== 'github_oidc_policy_denied' && verificationFailure === undefined) {
+        verificationFailure = error
       }
     }
   }
   if (!actor) {
+    if (closestPolicyMismatch === undefined && verificationFailure !== undefined) {
+      throw verificationFailure
+    }
     throw new AuthenticationError(
       'github_oidc_policy_denied',
       'GitHub OIDC claims are not allowed',

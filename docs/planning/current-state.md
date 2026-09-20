@@ -467,3 +467,39 @@ backup plus WAL/PITR and off-site fallback, seven S3Mock contract cases, 12 E2E 
 migrations. The local stack was stopped afterward with data preserved. The initial direct Playwright
 attempt reached no server and failed only with connection-refused before assertions; the correctly
 provisioned rerun is the functional result. 本阶段上下文已沉淀，可以授权/开启下一阶段。
+
+## 17. Scoped reconciliation retry convergence — 2026-09-20
+
+The authorized production bootstrap exposed three retry/diagnostic defects without changing Web traffic.
+The first scoped attempt copied the reviewed Compose/OpenResty topology and then stopped before any
+migration because the production Docker daemon timed out during a GHCR TLS handshake. Ansible did
+not flush the notified OpenResty handler on the failed play. The next idempotent attempt saw the file
+already present, so no new notification was emitted; the independent services became healthy at
+`1d740bd06cbf662400a031cfee8fa36478878475`, but the running gateway still lacked the internal-only
+revalidation listener. Both Web container IDs and public `f2f82369` blue traffic remained unchanged.
+
+Scoped reconciliation now compares the current Compose/OpenResty fingerprint with a success marker,
+schedules missing convergence, and flushes it before migration or independent-service replacement.
+The marker is written only after validated gateway recreation, making a failed attempt self-healing
+while keeping a successful repeat at zero changes. Migration-runner preparation and the final
+independent-service Compose convergence use bounded retries for transient registry/network failures;
+the journaled migration command itself is not blindly retried. Tests assert the ordering, retry
+bounds and four-service unit. No production `.env`, Secret, OIDC policy, historical operation or
+database migration was changed, and 0008 was not replayed.
+
+Dispatch run `35495890407` passed Quality and image publication, reached the reconciled control-api,
+and was rejected after approximately 15 seconds. The control-api remained healthy with zero restarts
+and recorded a generic authentication denial, while the public edge converted the slow 401 into a
+non-JSON 554. The protected audit contained no claim mismatch details because verification never
+reached the policy comparison: direct production-host probes to GitHub's OIDC discovery/JWKS host
+timed out, and host DNS resolved that name through an unroutable proxy/fake-IP path. Therefore this
+run is not evidence of any `repository`, `ref`, `environment`, `workflow_ref` or `job_workflow_ref`
+difference, and OIDC policy remains unchanged.
+
+Authentication now preserves non-policy failures across the multi-policy loop instead of always
+relabeling them as `github_oidc_policy_denied`. A remote JWKS network/timeout failure becomes the
+generic `github_oidc_verification_unavailable` service response; only a token that passed signature,
+issuer, audience and claim-shape verification can create allowlisted mismatch details. Unit tests
+cover the availability classification, invalid-token preservation, useful policy diagnostics and
+negative Token/Header/Cookie/Secret leakage. Production OIDC remains blocked on an Owner-controlled
+outbound DNS/proxy correction; no host network, `.env` or Secret change was attempted.

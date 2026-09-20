@@ -182,12 +182,19 @@ When only reviewed `control-api` code or its host-local runtime configuration ch
 production Ansible role with `tungchiahui_manage_stack=false` and
 `tungchiahui_reconcile_control_api=true`. This scoped reconciliation validates the host-local
 `/etc/tungchiahui/.env`, refreshes derived PgBouncer/age runtime files, applies reviewed additive migrations through the versioned migration runner,
-prepares that stopped runner for the next deployment, recreates and waits for only `control-api`,
-and validates a changed OpenResty configuration in a disposable container before recreating only
-the gateway. Recreating the gateway is required because the read-only single-file bind mount retains
-the old inode after Ansible's atomic copy; a process reload would still read the old file. Both Web
-Slot container IDs must remain unchanged. Do not use full-stack reconciliation for a control-only
-activation because it can replace the inactive Web rollback target.
+prepares that stopped runner for the next deployment, and recreates and waits for the reviewed
+independent-service unit. Before any migration or service change, every scoped retry compares the
+current Compose/OpenResty fingerprint with the last successfully applied fingerprint. A mismatch
+validates the on-disk configuration in a disposable container and recreates only the gateway, even
+when Ansible copied the file during an earlier failed attempt. The success marker is written only
+after recreation, so a failed run cannot consume its change notification and leave the running
+gateway on stale config; repeated successful reconciliation remains a zero-change operation.
+Image preparation and independent-service reconciliation use bounded retries for transient registry
+or network failures; migration execution itself is not blindly retried. Recreating the gateway is
+required because the read-only single-file bind mount retains the old inode after Ansible's atomic
+copy; a process reload would still read the old file. Both Web Slot container IDs must remain
+unchanged. Do not use full-stack reconciliation for a control-only activation because it can replace
+the inactive Web rollback target.
 
 正常 Remote Control Path：
 
