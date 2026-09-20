@@ -484,7 +484,7 @@
     - not (tungchiahui_manage_stack | bool)
     - tungchiahui_reconcile_control_api | bool
 
-- name: Reconcile only the independent control API
+- name: Reconcile the independent service release as one reviewed unit
   ansible.builtin.command:
     argv:
       - docker
@@ -500,6 +500,8 @@
       - --no-deps
       - --wait
       - control-api
+      - content-worker
+      - observability-agent
       - deploy-agent
   environment: "{{ tungchiahui_compose_environment }}"
   register: tungchiahui_control_api_up

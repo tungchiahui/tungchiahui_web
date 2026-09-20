@@ -58,7 +58,9 @@ Gitignored。
 
 ADR 0022 后，生产 Secret 的手工 source of truth 是部署根目录的一份 Host-local 明文 `.env`。
 真实文件必须在生产主机上由授权 Operator 创建，`root:root`、mode `0600`，不得提交到仓库、
-不得放入 GitHub Actions、Docker Build Context、Image Layer、Public 目录或日志。Owner 接受同一生产主机上的服务可以看到同一 `.env` 中的其他服务 Secret，并自行维护明文本地备份。
+不得放入 GitHub Actions、Docker Build Context、Image Layer、Public 目录或日志。该文件只供
+Compose CLI 插值；每个容器只获得显式 Allowlist 中属于自身职责的配置。Owner 自行维护受控的
+明文本地备份。
 
 首次初始化可使用：
 
@@ -79,7 +81,11 @@ S3、R2 Off-site Backup S3、GHCR 外部凭据和可选 `OWNER_PASSWORD_HASH` �
 
 PgBouncer userlist 与 backup age identity 仍需要文件形态；`.env` 中保存
 `PGBOUNCER_USERLIST_BASE64` 和 `BACKUP_AGE_IDENTITY_BASE64`，Ansible 在生产主机上解码到
-`/etc/tungchiahui/secrets` 下的受限派生 runtime 文件。`deploy-agent` 在 Blue/Green 部署期间使用自己启动时由 `env_file` 注入的生产 env 键创建候选 Web Slot；修改主机 `.env` 后，应通过既有 provisioning/reconcile 重启受影响服务再部署。Secret 在 Runtime/Deployment 时注入，不得通过 Docker Build Argument、Layer、Image Environment 或复制文件的方式 Bake 进 Production Image。
+`/etc/tungchiahui/secrets` 下的受限派生 runtime 文件。`deploy-agent` 在 Blue/Green 部署期间只用
+自身显式获得的 Web Runtime Allowlist 创建候选 Web Slot；不得继承 Template Container 中的
+未知或过期环境变量。修改主机 `.env` 后，应通过既有 provisioning/reconcile 重启受影响服务再
+部署。Secret 在 Runtime/Deployment 时注入，不得通过 Docker Build Argument、Layer、Image
+Environment 或复制文件的方式 Bake 进 Production Image。
 
 ## Validation
 
@@ -119,7 +125,7 @@ BACKUP_REPLICATION_CONCURRENCY
 
 `S3_CONTRACT_*` 是 Operator 验收专用的 Provider-neutral 配置，可指向任意明确授权的 S3-compatible 非生产 Target；其中没有 Provider 类型或 Label，也不允许按实现名称选择分支。External Contract 只通过显式 `./site storage contract s3 --confirm S3-NON-PRODUCTION` 读取这些值，普通 Local/Test 和 Production Application Runtime 不读取它们，也不得把这组变量部署给 Production Application、`content-worker`、`control-api` 或 `deploy-agent`。当前 Production 选用 AList，因此 Phase 11 Verification Report 另外记录 AList 非生产实例的兼容证据，但该部署事实不进入通用 Storage Adapter。
 
-Application 使用只读 Adapter；Contract Identity 只允许操作指定 Test Bucket，并只清理随机唯一 Prefix 下自己创建的 Object。ADR 0018 使用 `BACKUP_S3_*` AList Primary 与 `BACKUP_OFFSITE_S3_*` R2 Off-site 两组 Recovery 配置，并为 pgBackRest Repository Cipher 与 Control-state age Key 使用单独 Secret。Production 的 `BACKUP_S3_*` 与 `ASSET_S3_*` 指向同一 AList Bucket/Pair，Recovery Engine 只写固定 `backups/`，Public Asset Gateway 对该 Prefix 和历史 Recovery Prefix 返回 404；R2 Access Key/Bucket 必须独立。Runtime Validation 拒绝 AList/R2 Credential 复用与 Production HTTP Endpoint。`BACKUP_REPLICATION_CONCURRENCY` 是 1–32 的非 Secret 有界并发配置，默认 8。单 `.env` 会被生产服务共同读取，因此 Host-level Secret 可见性不再按文件隔离；职责边界仍由不同数据库/S3/GHCR Credential、容器权限、网络和代码 Runtime Validation 维持。Public App 只使用 AList Asset 配置且代码接口只读；`content-worker` 仍没有 Docker Socket，`control-api` 仍不执行高权限 Host/Docker Action。
+Application 使用只读 Adapter；Contract Identity 只允许操作指定 Test Bucket，并只清理随机唯一 Prefix 下自己创建的 Object。ADR 0018 使用 `BACKUP_S3_*` AList Primary 与 `BACKUP_OFFSITE_S3_*` R2 Off-site 两组 Recovery 配置，并为 pgBackRest Repository Cipher 与 Control-state age Key 使用单独 Secret。Production 的 `BACKUP_S3_*` 与 `ASSET_S3_*` 指向同一 AList Bucket/Pair，Recovery Engine 只写固定 `backups/`，Public Asset Gateway 对该 Prefix 和历史 Recovery Prefix 返回 404；R2 Access Key/Bucket 必须独立。Runtime Validation 拒绝 AList/R2 Credential 复用与 Production HTTP Endpoint。`BACKUP_REPLICATION_CONCURRENCY` 是 1–32 的非 Secret 有界并发配置，默认 8。单 `.env` 是 Host-level Source，但不进入容器；职责边界由 Compose 显式 Allowlist、不同数据库/S3/GHCR Credential、容器权限、网络和代码 Runtime Validation 共同维持。Public App 只使用 AList Asset 配置且代码接口只读；`content-worker` 仍没有 Docker Socket，`control-api` 仍不执行高权限 Host/Docker Action。
 
 ## 新服务器
 

@@ -45,14 +45,14 @@ export interface DeploymentPlatform {
   inspectTrafficSlot(): Promise<DeploymentSlot>
   prepareCandidate(release: DeploymentRelease): Promise<void>
   runMigrations(
-    input: Readonly<{ hasFreshRecoverableBackup: boolean; targetSha: string }>,
+    input: Readonly<{ hasFreshRecoverableBackup: boolean; target: DeploymentRelease }>,
   ): Promise<void>
   smokeRelease(release: DeploymentRelease): Promise<DeploymentSmokeEvidence>
   smokePublicEntry(release: DeploymentRelease): Promise<DeploymentSmokeEvidence>
   switchTraffic(slot: DeploymentSlot): Promise<void>
   validateCutover(slot: DeploymentSlot): Promise<void>
   validateImage(release: DeploymentRelease): Promise<void>
-  validateMigrationImage(targetSha: string): Promise<void>
+  validateMigrationImage(target: DeploymentRelease): Promise<void>
   verifyRetainedRelease(release: DeploymentRelease): Promise<void>
 }
 
@@ -220,7 +220,7 @@ export async function executeDeploymentOperation(
     if (phase < phaseIndex('preflight-complete')) {
       if (operation.operationType === 'deploy') {
         await platform.validateImage(target)
-        await platform.validateMigrationImage(target.sha)
+        await platform.validateMigrationImage(target)
       }
       validateMigrationPolicy(options.migrationPolicyPath, options.journalPath, {
         allowContract: false,
@@ -252,7 +252,7 @@ export async function executeDeploymentOperation(
       if (phase < phaseIndex('migration-complete')) {
         await platform.runMigrations({
           hasFreshRecoverableBackup: freshBackup,
-          targetSha: target.sha,
+          target,
         })
         advance('migration-complete')
       }

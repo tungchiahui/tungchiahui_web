@@ -43,3 +43,4 @@ ADR 是不可变的历史记录。
 - `0020-no-time-based-deployment-block.md`
 - `0021-owner-browser-sessions.md`
 - `0022-single-host-production-env.md`
+- `0023-scoped-production-runtime-configuration.md`

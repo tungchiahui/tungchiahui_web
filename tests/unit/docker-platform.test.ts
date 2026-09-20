@@ -8,8 +8,8 @@ import { describe, expect, it } from 'vitest'
 import type { DeploymentConfiguration } from '../../src/deployment/configuration'
 import {
   DockerDeploymentPlatform,
-  productionEnvironmentFromProcess,
   replaceEnvironment,
+  webEnvironmentFromProcess,
 } from '../../src/deployment/docker-platform'
 
 const migrationConfiguration: DeploymentConfiguration = {
@@ -38,12 +38,15 @@ describe('Docker migration image identity', () => {
     { revision: 'a'.repeat(40) },
     { revision: 'a'.repeat(40), registry: true },
     { revision: 'a'.repeat(40), registry: true, cached: true },
+    { revision: 'a'.repeat(40), registry: true, cached: true, changedWebDigest: true },
     { revision: 'b'.repeat(40), registry: true },
     { revision: 'a'.repeat(40), registry: true, pullError: 'http' },
     { revision: 'a'.repeat(40), registry: true, pullError: 'stream' },
     { revision: 'a'.repeat(40), registry: true, pullError: 'single' },
     { revision: 'a'.repeat(40), registry: true, pullError: 'malformed' },
     { revision: 'a'.repeat(40), registry: true, missingDigest: true },
+    { revision: 'a'.repeat(40), registry: true, missingServiceLabel: true },
+    { revision: 'a'.repeat(40), registry: true, invalidWebDigest: true },
     { revision: 'a'.repeat(40), registry: true, running: true },
   ] as const)(
     'validates migration image before replacing the runner: %j',
@@ -51,8 +54,11 @@ describe('Docker migration image identity', () => {
       revision: string | null
       registry?: boolean
       cached?: boolean
+      changedWebDigest?: boolean
       pullError?: string
       missingDigest?: boolean
+      missingServiceLabel?: boolean
+      invalidWebDigest?: boolean
       running?: boolean
     }) => {
       const { revision } = scenario
@@ -60,8 +66,11 @@ describe('Docker migration image identity', () => {
       const socketPath = join(directory, 'docker.sock')
       const imageId = `sha256:${'c'.repeat(64)}`
       const targetSha = 'a'.repeat(40)
+      const webDigest = `sha256:${'a'.repeat(64)}`
+      const serviceDigest = `sha256:${'e'.repeat(64)}`
       const repository = 'registry.example.test/site'
-      const reference = scenario.registry ? `${repository}-service:${targetSha}` : imageId
+      const reference = scenario.registry ? `${repository}-service@${serviceDigest}` : imageId
+      const webReference = `${repository}@${webDigest}`
       const targetImageId = scenario.registry ? `sha256:${'d'.repeat(64)}` : imageId
       let pulled = scenario.cached === true
       let authentication: string | undefined
@@ -98,6 +107,18 @@ describe('Docker migration image identity', () => {
               State: { ExitCode: 0, Running: scenario.running === true },
             }),
           )
+        } else if (path === `/images/${webReference}/json`) {
+          response.end(
+            JSON.stringify({
+              Config: {
+                Labels: scenario.missingServiceLabel
+                  ? {}
+                  : { 'cn.tungchiahui.release.service-digest': serviceDigest },
+              },
+              Id: `sha256:${'f'.repeat(64)}`,
+              RepoDigests: scenario.invalidWebDigest ? [] : [webReference],
+            }),
+          )
         } else if (path === `/images/${reference}/json`) {
           if (scenario.registry && !pulled) {
             response.statusCode = 404
@@ -113,7 +134,7 @@ describe('Docker migration image identity', () => {
               Id: targetImageId,
               RepoDigests: scenario.missingDigest
                 ? [`unapproved.test/service@sha256:${'d'.repeat(64)}`]
-                : [`${repository}-service@sha256:${'e'.repeat(64)}`],
+                : [`${repository}-service@${serviceDigest}`],
             }),
           )
         } else if (path === `/images/create?fromImage=${reference}`) {
@@ -163,12 +184,21 @@ describe('Docker migration image identity', () => {
           },
           socketPath,
         )
-        if (scenario.cached) await platform.validateMigrationImage(targetSha)
-        const migration = platform.runMigrations({ hasFreshRecoverableBackup: true, targetSha })
+        const target = { digest: webDigest, sha: targetSha, slot: 'green' as const }
+        if (scenario.cached) await platform.validateMigrationImage(target)
+        const migration = platform.runMigrations({
+          hasFreshRecoverableBackup: true,
+          target: scenario.changedWebDigest
+            ? { ...target, digest: `sha256:${'9'.repeat(64)}` }
+            : target,
+        })
         if (
           revision !== targetSha ||
           scenario.pullError ||
           scenario.missingDigest ||
+          scenario.missingServiceLabel ||
+          scenario.invalidWebDigest ||
+          scenario.changedWebDigest ||
           scenario.running
         ) {
           const error = await migration.catch((error: unknown) => error)
@@ -176,13 +206,19 @@ describe('Docker migration image identity', () => {
           expect(String(error)).toContain(
             scenario.running
               ? 'already running'
-              : scenario.pullError === 'http'
-                ? 'Docker rejected'
-                : scenario.pullError
-                  ? 'image pull failed'
-                  : scenario.missingDigest
-                    ? 'approved service repository'
-                    : 'does not match target',
+              : scenario.changedWebDigest
+                ? 'release manifest'
+                : scenario.pullError === 'http'
+                  ? 'Docker rejected'
+                  : scenario.pullError
+                    ? 'image pull failed'
+                    : scenario.missingDigest
+                      ? 'approved service repository'
+                      : scenario.missingServiceLabel
+                        ? 'digest-bound service image'
+                        : scenario.invalidWebDigest
+                          ? 'approved release digest'
+                          : 'does not match target',
           )
           expect(String(error)).not.toContain('sensitive-registry-error')
           expect(
@@ -223,7 +259,10 @@ describe('Docker migration image identity', () => {
 describe('Docker deployment platform environment handling', () => {
   it('propagates only production env keys from deploy-agent process env', () => {
     expect(
-      productionEnvironmentFromProcess({
+      webEnvironmentFromProcess({
+        BACKUP_AGE_IDENTITY_BASE64: 'must-not-reach-web',
+        DATABASE_ADMIN_URL: 'postgresql://admin:secret@postgres:5432/site',
+        DEPLOYMENT_REGISTRY_TOKEN: 'must-not-reach-web',
         DEPLOYMENT_OPENRESTY_CONTAINER_NAME: 'openresty',
         DOCKER_SOCKET_PATH: '/run/deploy-capability/docker.sock',
         NODE_ENV: 'production',
@@ -237,8 +276,9 @@ describe('Docker deployment platform environment handling', () => {
   it('refreshes web slot environment from the production env file overlay', () => {
     const result = replaceEnvironment(
       [
-        'DATABASE_URL=postgresql://old-role:old@pgbouncer:6432/tungchiahui',
-        'SITE_BASE_URL=https://old.example.test',
+        'DATABASE_ADMIN_URL=postgresql://admin:old@postgres:5432/tungchiahui',
+        'DEPLOYMENT_REGISTRY_TOKEN=old-registry-token',
+        'OWNER_PASSWORD_HASH=old-owner-password-hash',
         'SITE_DEPLOYMENT_IMAGE_DIGEST=sha256:old',
         `SITE_DEPLOYMENT_SHA=${'0'.repeat(40)}`,
         'SITE_SLOT=blue',
@@ -263,12 +303,14 @@ describe('Docker deployment platform environment handling', () => {
     expect(environment.get('DATABASE_URL')).toBe(
       'postgresql://site_app_login:new@pgbouncer:6432/tungchiahui',
     )
-    expect(environment.get('WEB_DATABASE_URL')).toBe(
-      'postgresql://site_app_login:new@pgbouncer:6432/tungchiahui',
-    )
+    expect(environment.has('WEB_DATABASE_URL')).toBe(false)
     expect(environment.get('SITE_BASE_URL')).toBe('https://www.tungchiahui.cn')
     expect(environment.get('SITE_DEPLOYMENT_IMAGE_DIGEST')).toBe(`sha256:${'a'.repeat(64)}`)
     expect(environment.get('SITE_DEPLOYMENT_SHA')).toBe('b'.repeat(40))
     expect(environment.get('SITE_SLOT')).toBe('green')
+    expect(environment.get('SITE_RUNTIME_MODE')).toBe('production')
+    expect(environment.has('DATABASE_ADMIN_URL')).toBe(false)
+    expect(environment.has('DEPLOYMENT_REGISTRY_TOKEN')).toBe(false)
+    expect(environment.has('OWNER_PASSWORD_HASH')).toBe(false)
   })
 })

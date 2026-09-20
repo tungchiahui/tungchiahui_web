@@ -14,6 +14,16 @@ const workflowSchema = z
   })
   .passthrough()
 
+const workflowJobSchema = z
+  .object({
+    environment: z.union([z.string(), z.object({ name: z.string() }).passthrough()]).optional(),
+    if: z.string().optional(),
+    needs: z.union([z.string(), z.array(z.string())]).optional(),
+    outputs: z.record(z.string(), z.string()).optional(),
+    permissions: z.record(z.string(), z.string()).optional(),
+  })
+  .passthrough()
+
 const pinnedActionPattern = /uses:\s+[^\s@]+@([a-f0-9]{40})(?:\s|$)/g
 const everyActionPattern = /uses:\s+[^\s@]+@([^\s#]+)/g
 const translationInvocation = './site "$' + '{arguments[@]}"'
@@ -56,6 +66,82 @@ function verifyPinnedActions(issues: WorkflowPolicyIssue[], file: string, source
   }
 }
 
+function normalizedNeeds(job: z.infer<typeof workflowJobSchema>) {
+  return typeof job.needs === 'string' ? [job.needs] : (job.needs ?? [])
+}
+
+function requireReleaseJobStructure(
+  issues: WorkflowPolicyIssue[],
+  jobs: Readonly<Record<string, unknown>>,
+) {
+  const parsedJobs = new Map(
+    Object.entries(jobs).map(
+      ([name, value]) => [name, workflowJobSchema.safeParse(value)] as const,
+    ),
+  )
+  const requireJob = (name: string) => {
+    const parsed = parsedJobs.get(name)
+    if (!parsed?.success) {
+      issues.push({ file: 'release.yml', message: `Missing or invalid release job: ${name}` })
+      return undefined
+    }
+    return parsed.data
+  }
+
+  const build = requireJob('build')
+  if (build) {
+    const requiredOutputs = [
+      'git_sha',
+      'image_digest',
+      'postgres_image_digest',
+      'recovery_image_digest',
+      'service_image_digest',
+    ]
+    if (
+      JSON.stringify(Object.keys(build.outputs ?? {}).toSorted()) !==
+      JSON.stringify(requiredOutputs.toSorted())
+    ) {
+      issues.push({
+        file: 'release.yml',
+        message: 'Build job must expose every immutable release image digest',
+      })
+    }
+    if (build.permissions?.packages !== 'write') {
+      issues.push({ file: 'release.yml', message: 'Build job must retain packages: write' })
+    }
+  }
+
+  const deploy = requireJob('deploy')
+  if (deploy) {
+    const environment =
+      typeof deploy.environment === 'string' ? deploy.environment : deploy.environment?.name
+    if (
+      JSON.stringify(normalizedNeeds(deploy)) !== JSON.stringify(['build']) ||
+      deploy.if !== "vars.PRODUCTION_DEPLOYMENT_ENABLED == 'true'" ||
+      environment !== 'production' ||
+      deploy.permissions?.['id-token'] !== 'write'
+    ) {
+      issues.push({
+        file: 'release.yml',
+        message: 'Deploy job must remain build-gated, production-scoped and OIDC-only',
+      })
+    }
+  }
+
+  const result = requireJob('release-result')
+  if (
+    result &&
+    (JSON.stringify(normalizedNeeds(result).toSorted()) !==
+      JSON.stringify(['build', 'deploy'].toSorted()) ||
+      result.if !== 'always()')
+  ) {
+    issues.push({
+      file: 'release.yml',
+      message: 'Release result job must fail closed across build and deployment outcomes',
+    })
+  }
+}
+
 export function analyzeWorkflowPolicies(root: string): readonly WorkflowPolicyIssue[] {
   const issues: WorkflowPolicyIssue[] = []
   const release = workflow(root, 'release.yml')
@@ -66,6 +152,7 @@ export function analyzeWorkflowPolicies(root: string): readonly WorkflowPolicyIs
   if (JSON.stringify(releaseTriggers) !== JSON.stringify(['push', 'workflow_dispatch'])) {
     issues.push({ file: 'release.yml', message: 'Main Release triggers changed' })
   }
+  requireReleaseJobStructure(issues, release.parsed.jobs)
   requireFragments(issues, 'release.yml', release.source, [
     'branches: [main]',
     'group: application-production-release',
@@ -89,8 +176,11 @@ export function analyzeWorkflowPolicies(root: string): readonly WorkflowPolicyIs
     'ghcr.io/tungchiahui/tungchiahui_web',
     workflowShaReference,
     'SITE_CONTROL_API_URL: https://www.tungchiahui.cn',
+    '--build-arg "SITE_SERVICE_IMAGE_DIGEST=$service_image_digest"',
+    'git rev-parse origin/main',
     './site deploy',
     '--wait',
+    '[[ "$DEPLOY_RESULT" == "success" ]]',
   ])
   rejectFragments(issues, 'release.yml', release.source, [
     'pull_request:',

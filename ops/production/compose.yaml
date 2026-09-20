@@ -24,8 +24,6 @@ services:
       - no-new-privileges:true
     user: "70:70"
     group_add: ["10050"]
-    env_file:
-      - ${TUNGCHIAHUI_PRODUCTION_ENV_FILE:?production env file is required}
     environment:
       PGBACKREST_REPO1_CIPHER_PASS: ${PGBACKREST_REPO1_CIPHER_PASS:?pgBackRest cipher is required}
       POSTGRES_DB: ${POSTGRES_DB:?PostgreSQL database is required}
@@ -84,8 +82,6 @@ services:
     profiles: [provision]
     user: "10006:10050"
     command: [node, dist/database-role-bootstrap.cjs]
-    env_file:
-      - ${TUNGCHIAHUI_PRODUCTION_ENV_FILE:?production env file is required}
     environment:
       DATABASE_ADMIN_URL: ${DATABASE_ADMIN_URL:?database bootstrap admin URL is required}
       SITE_APP_LOGIN_NAME: ${SITE_APP_LOGIN_NAME:?app login name is required}
@@ -111,8 +107,6 @@ services:
     profiles: [deployment]
     user: "10006:10050"
     command: [node, dist/database-migrate.cjs]
-    env_file:
-      - ${TUNGCHIAHUI_PRODUCTION_ENV_FILE:?production env file is required}
     environment:
       DATABASE_URL: ${DATABASE_MIGRATE_URL:?database migration URL is required}
       DEPLOYMENT_HAS_FRESH_RECOVERABLE_BACKUP: "false"
@@ -125,8 +119,6 @@ services:
     image: ${TUNGCHIAHUI_SERVICE_IMAGE:?immutable service image is required}
     user: "10002:10050"
     command: [node, dist/control-api.cjs]
-    env_file:
-      - ${TUNGCHIAHUI_PRODUCTION_ENV_FILE:?production env file is required}
     environment:
       CONTROL_API_HOST: 0.0.0.0
       CONTROL_API_PORT: "8080"
@@ -136,6 +128,7 @@ services:
       CONTROL_REPLAY_WINDOW_SECONDS: "300"
       CONTROL_STATE_PATH: /control-state/control.db
       DATABASE_URL: ${CONTROL_API_DATABASE_URL:?control-api database URL is required}
+      OWNER_PASSWORD_HASH: ${OWNER_PASSWORD_HASH:-}
       SITE_RUNTIME_MODE: production
     healthcheck:
       test: [CMD, node, -e, "fetch('http://127.0.0.1:8080/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
@@ -154,8 +147,6 @@ services:
     image: ${TUNGCHIAHUI_SERVICE_IMAGE:?immutable service image is required}
     user: "10003:10050"
     command: [node, dist/content-worker.cjs]
-    env_file:
-      - ${TUNGCHIAHUI_PRODUCTION_ENV_FILE:?production env file is required}
     environment:
       CONTENT_WORKER_HOST: 0.0.0.0
       CONTENT_WORKER_POLLING_ENABLED: ${TUNGCHIAHUI_CONTENT_POLLING_ENABLED:-false}
@@ -164,7 +155,7 @@ services:
       GITHUB_CONTENT_READ_TOKEN: ${GITHUB_CONTENT_READ_TOKEN:-}
       GITHUB_CONTENT_REPOSITORY: ${GITHUB_CONTENT_REPOSITORY:?content repository is required}
       SEARCH_WORKER_POLLING_ENABLED: ${TUNGCHIAHUI_SEARCH_POLLING_ENABLED:-false}
-      SITE_REVALIDATION_ENDPOINT: http://web-blue:3000/api/internal/revalidate
+      SITE_REVALIDATION_ENDPOINT: http://openresty:8085/api/internal/revalidate
       SITE_REVALIDATION_SECRET: ${SITE_REVALIDATION_SECRET:?revalidation secret is required}
       SITE_RUNTIME_MODE: production
       TRANSLATION_PROVIDER: disabled
@@ -174,7 +165,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 30
-    networks: [application, content-egress]
+    networks: [application, content-egress, deployment-probe]
     tmpfs: *node-tmpfs
 
   observability-agent:
@@ -193,9 +184,9 @@ services:
         condition: service_healthy
       pgbouncer:
         condition: service_healthy
-    env_file:
-      - ${TUNGCHIAHUI_PRODUCTION_ENV_FILE:?production env file is required}
     environment:
+      OBSERVABILITY_ALERT_WEBHOOK_BEARER_TOKEN: ${OBSERVABILITY_ALERT_WEBHOOK_BEARER_TOKEN:-}
+      OBSERVABILITY_ALERT_WEBHOOK_URL: ${OBSERVABILITY_ALERT_WEBHOOK_URL:-}
       OBSERVABILITY_BACKUP_MAX_AGE_SECONDS: ${TUNGCHIAHUI_OBSERVABILITY_BACKUP_MAX_AGE_SECONDS:?backup monitoring policy is required}
       OBSERVABILITY_CONTROL_URL: http://control-api:8080/health
       OBSERVABILITY_DEPLOY_AGENT_URL: http://deploy-agent:8081/health
@@ -216,7 +207,7 @@ services:
       OBSERVABILITY_PUBLIC_URL: ${TUNGCHIAHUI_OBSERVABILITY_PUBLIC_URL:-https://www.tungchiahui.cn/}
       OBSERVABILITY_RESTORE_DRILL_MAX_AGE_SECONDS: ${TUNGCHIAHUI_OBSERVABILITY_RESTORE_DRILL_MAX_AGE_SECONDS:?restore-drill policy is required}
       OBSERVABILITY_RESTORE_DRILL_TIMESTAMP: ${TUNGCHIAHUI_OBSERVABILITY_RESTORE_DRILL_TIMESTAMP:?last restore-drill evidence is required}
-      OBSERVABILITY_WEB_URL: http://web-blue:3000/api/ready
+      OBSERVABILITY_WEB_URL: http://openresty:8082/api/ready
       OBSERVABILITY_WORKER_URL: http://content-worker:8083/health
       SITE_RUNTIME_MODE: production
     healthcheck:
@@ -234,8 +225,6 @@ services:
     <<: *hardened-service
     image: ${TUNGCHIAHUI_WEB_BLUE_IMAGE:?immutable blue web image is required}
     user: "10001:10001"
-    env_file:
-      - ${TUNGCHIAHUI_PRODUCTION_ENV_FILE:?production env file is required}
     environment:
       ASSET_S3_ACCESS_KEY_ID: ${ASSET_S3_ACCESS_KEY_ID:?asset S3 access key is required}
       ASSET_S3_BUCKET: ${ASSET_S3_BUCKET:?asset S3 bucket is required}
@@ -261,8 +250,6 @@ services:
     <<: *hardened-service
     image: ${TUNGCHIAHUI_WEB_GREEN_IMAGE:?immutable green web image is required}
     user: "10001:10001"
-    env_file:
-      - ${TUNGCHIAHUI_PRODUCTION_ENV_FILE:?production env file is required}
     environment:
       ASSET_S3_ACCESS_KEY_ID: ${ASSET_S3_ACCESS_KEY_ID:?asset S3 access key is required}
       ASSET_S3_BUCKET: ${ASSET_S3_BUCKET:?asset S3 bucket is required}
@@ -294,9 +281,13 @@ services:
     depends_on:
       control-api:
         condition: service_healthy
-    env_file:
-      - ${TUNGCHIAHUI_PRODUCTION_ENV_FILE:?production env file is required}
     environment:
+      ASSET_S3_ACCESS_KEY_ID: ${ASSET_S3_ACCESS_KEY_ID:?asset S3 access key is required}
+      ASSET_S3_BUCKET: ${ASSET_S3_BUCKET:?asset S3 bucket is required}
+      ASSET_S3_ENDPOINT: ${ASSET_S3_ENDPOINT:?asset S3 endpoint is required}
+      ASSET_S3_FORCE_PATH_STYLE: ${ASSET_S3_FORCE_PATH_STYLE:-true}
+      ASSET_S3_REGION: ${ASSET_S3_REGION:-us-east-1}
+      ASSET_S3_SECRET_ACCESS_KEY: ${ASSET_S3_SECRET_ACCESS_KEY:?asset S3 secret is required}
       BACKUP_AGE_IDENTITY_PATH: /run/secrets/backup-age-identity.txt
       BACKUP_AGE_RECIPIENT: ${BACKUP_AGE_RECIPIENT:?backup age recipient is required}
       BACKUP_LOCAL_REPOSITORY_PATH: /var/lib/pgbackrest
@@ -340,8 +331,12 @@ services:
       DEPLOY_AGENT_PORT: "8081"
       DOCKER_SOCKET_PATH: /run/deploy-capability/docker.sock
       POSTGRES_CONTAINER_NAME: ${TUNGCHIAHUI_POSTGRES_CONTAINER_NAME:?PostgreSQL container name is required}
+      PGBACKREST_REPO1_CIPHER_PASS: ${PGBACKREST_REPO1_CIPHER_PASS:?pgBackRest cipher is required}
       RECOVERY_POLLING_ENABLED: "true"
+      SITE_BASE_URL: ${SITE_BASE_URL:?site base URL is required}
+      SITE_REVALIDATION_SECRET: ${SITE_REVALIDATION_SECRET:?revalidation secret is required}
       SITE_RUNTIME_MODE: production
+      WEB_DATABASE_URL: ${WEB_DATABASE_URL:?web database URL is required}
     healthcheck:
       test: [CMD, node, -e, "fetch('http://127.0.0.1:8081/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 5s

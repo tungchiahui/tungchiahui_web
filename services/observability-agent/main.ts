@@ -36,8 +36,14 @@ const httpsOrInternalGatewayUrl = z.url().superRefine((value, context) => {
 
 const configuration = z
   .object({
-    OBSERVABILITY_ALERT_WEBHOOK_BEARER_TOKEN: z.string().min(16).optional(),
-    OBSERVABILITY_ALERT_WEBHOOK_URL: z.url().startsWith('https://').optional(),
+    OBSERVABILITY_ALERT_WEBHOOK_BEARER_TOKEN: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      z.string().min(16).optional(),
+    ),
+    OBSERVABILITY_ALERT_WEBHOOK_URL: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      z.url().startsWith('https://').optional(),
+    ),
     OBSERVABILITY_BACKUP_MAX_AGE_SECONDS: z.coerce.number().int().positive(),
     OBSERVABILITY_CONTROL_URL: z.url(),
     OBSERVABILITY_DEPLOY_AGENT_URL: z.url(),
@@ -282,7 +288,11 @@ async function collect() {
   )
   consecutive5xx = currentProbeHas5xx ? consecutive5xx + 1 : 0
   const signals: AlertSignal[] = [
-    { active: !publicPath.ok || !originPath.ok, details: {}, name: 'WebAvailabilityFailed' },
+    {
+      active: !publicPath.ok || !originPath.ok || !webReady.ok,
+      details: {},
+      name: 'WebAvailabilityFailed',
+    },
     {
       active:
         Math.max(publicPath.durationMs, originPath.durationMs) >

@@ -37,6 +37,8 @@ const composeSchema = z.object({
     z.object({
       cap_drop: z.array(z.string()).optional(),
       depends_on: z.unknown().optional(),
+      env_file: z.array(z.string()).optional(),
+      environment: z.record(z.string(), z.unknown()).optional(),
       image: z.string(),
       networks: z.array(z.string()).optional(),
       read_only: z.boolean().optional(),
@@ -71,6 +73,11 @@ describe('Phase 12 production foundation policy', () => {
       expect(source).not.toContain('latest')
       expect(source).not.toMatch(/(?:SECRET|PASSWORD|TOKEN)=/)
     }
+    const webDockerfile = readFileSync(resolve('ops/production/images/web.Dockerfile'), 'utf8')
+    expect(webDockerfile).toContain('ARG SITE_SERVICE_IMAGE_DIGEST')
+    expect(webDockerfile).toMatch(
+      /cn\.tungchiahui\.release\.service-digest=\$\{SITE_SERVICE_IMAGE_DIGEST\}/,
+    )
   })
 
   it('hardens practical services and isolates Docker capability to deploy-agent', () => {
@@ -113,7 +120,11 @@ describe('Phase 12 production foundation policy', () => {
       'control-api': { condition: 'service_healthy' },
     })
     expect(compose.services['control-api']?.networks).not.toContain('deploy-control')
-    expect(compose.services['content-worker']?.networks).toEqual(['application', 'content-egress'])
+    expect(compose.services['content-worker']?.networks).toEqual([
+      'application',
+      'content-egress',
+      'deployment-probe',
+    ])
     expect(compose.networks['content-egress']).toEqual({})
     expect(
       Object.entries(compose.services)
@@ -123,7 +134,10 @@ describe('Phase 12 production foundation policy', () => {
     expect(JSON.stringify(compose.services['database-role-bootstrap']?.volumes)).toContain(
       '/run/secrets/pgbouncer-userlist.txt:ro',
     )
-    expect(composeSource).toContain('TUNGCHIAHUI_PRODUCTION_ENV_FILE')
+    expect(composeSource).not.toContain('env_file:')
+    expect(Object.values(compose.services).every((service) => service.env_file === undefined)).toBe(
+      true,
+    )
     expect(composeSource).toContain('WEB_DATABASE_URL')
     expect(composeSource).toContain('CONTROL_API_DATABASE_URL')
     expect(composeSource).toContain('CONTENT_WORKER_DATABASE_URL')
@@ -132,6 +146,59 @@ describe('Phase 12 production foundation policy', () => {
     expect(composeSource).not.toContain('web.env')
     expect(composeSource).not.toContain('control-api.env')
     expect(composeSource).not.toContain('deployment-registry.env')
+    const forbiddenByService = {
+      'content-worker': [
+        'BACKUP_S3_SECRET_ACCESS_KEY',
+        'CONTROL_OPERATOR_KEYS_JSON',
+        'DATABASE_ADMIN_URL',
+        'DEPLOYMENT_REGISTRY_TOKEN',
+      ],
+      'control-api': [
+        'ASSET_S3_SECRET_ACCESS_KEY',
+        'BACKUP_S3_SECRET_ACCESS_KEY',
+        'DATABASE_ADMIN_URL',
+        'DEPLOYMENT_REGISTRY_TOKEN',
+        'GITHUB_CONTENT_READ_TOKEN',
+        'SITE_REVALIDATION_SECRET',
+      ],
+      'deploy-agent': [
+        'CONTENT_WORKER_DATABASE_URL',
+        'CONTROL_API_DATABASE_URL',
+        'CONTROL_GITHUB_OIDC_POLICY_JSON',
+        'CONTROL_OPERATOR_KEYS_JSON',
+        'DATABASE_ADMIN_URL',
+        'DATABASE_MIGRATE_URL',
+        'GITHUB_CONTENT_READ_TOKEN',
+        'OBSERVABILITY_ALERT_WEBHOOK_BEARER_TOKEN',
+        'OWNER_PASSWORD_HASH',
+        'PGBOUNCER_USERLIST_BASE64',
+        'POSTGRES_PASSWORD',
+      ],
+      'observability-agent': [
+        'ASSET_S3_SECRET_ACCESS_KEY',
+        'CONTROL_API_DATABASE_URL',
+        'DEPLOYMENT_REGISTRY_TOKEN',
+        'SITE_REVALIDATION_SECRET',
+      ],
+      'web-blue': [
+        'BACKUP_S3_SECRET_ACCESS_KEY',
+        'CONTROL_OPERATOR_KEYS_JSON',
+        'DATABASE_ADMIN_URL',
+        'DEPLOYMENT_REGISTRY_TOKEN',
+        'OWNER_PASSWORD_HASH',
+      ],
+      'web-green': [
+        'BACKUP_S3_SECRET_ACCESS_KEY',
+        'CONTROL_OPERATOR_KEYS_JSON',
+        'DATABASE_ADMIN_URL',
+        'DEPLOYMENT_REGISTRY_TOKEN',
+        'OWNER_PASSWORD_HASH',
+      ],
+    } as const
+    for (const [serviceName, forbiddenKeys] of Object.entries(forbiddenByService)) {
+      const environment = compose.services[serviceName]?.environment ?? {}
+      for (const key of forbiddenKeys) expect(environment).not.toHaveProperty(key)
+    }
     expect(compose.services['observability-agent']?.networks).toEqual([
       'application',
       'deployment-probe',
@@ -171,6 +238,14 @@ describe('Phase 12 production foundation policy', () => {
     expect(openRestySource).toContain('location = /api/traffic')
     expect(openRestySource).toContain('if ($request_method != POST) { return 405; }')
     expect(openRestySource).toContain('location ^~ /api/internal/')
+    expect(openRestySource).toContain('listen 8085;')
+    expect(openRestySource).toContain('location = /api/internal/revalidate')
+    expect(compose.services['content-worker']?.environment?.SITE_REVALIDATION_ENDPOINT).toBe(
+      'http://openresty:8085/api/internal/revalidate',
+    )
+    expect(compose.services['observability-agent']?.environment?.OBSERVABILITY_WEB_URL).toBe(
+      'http://openresty:8082/api/ready',
+    )
     expect(inventorySource).toContain('ansible_host: Debian')
     expect(inventorySource).toContain('ansible_user: tungchiahui')
     expect(inventorySource).toContain('tungchiahui_content_polling_enabled: "true"')
@@ -188,6 +263,17 @@ describe('Phase 12 production foundation policy', () => {
     expect(productionRoleSource).toContain('TUNGCHIAHUI_DEPLOYMENT_ASSET_PATH')
     expect(productionRoleSource).toContain('TUNGCHIAHUI_DEPLOYMENT_SEARCH_QUERY')
     expect(productionRoleSource).toContain('Reconcile validated OpenResty configuration')
+    expect(productionRoleSource).toContain(
+      'Reconcile the independent service release as one reviewed unit',
+    )
+    for (const service of [
+      'control-api',
+      'content-worker',
+      'observability-agent',
+      'deploy-agent',
+    ]) {
+      expect(productionRoleSource).toContain(`      - ${service}`)
+    }
     expect(productionHandlersSource).toContain('--force-recreate')
     expect(productionHandlersSource).toContain('--env-file')
     expect(productionHandlersSource).toContain('--entrypoint')

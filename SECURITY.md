@@ -13,14 +13,15 @@
 ADR 0022 后，生产 Secret 的手工 source of truth 是生产部署根目录的单一 Host-local 明文
 `/etc/tungchiahui/.env`。真实文件必须由授权 Operator 维护为 `root:root`、mode `0600`，不得进入
 仓库、GitHub Actions、Docker Build Context、Image Layer、Public 目录、日志或 Issue/PR 文本。Owner
-接受同一生产主机上的运行服务可以看到同一 `.env` 中的其他服务 Secret，并自行维护明文本地备份。
+该文件只作为 Compose 插值输入；每个容器必须通过显式 Allowlist 获得自身需要的变量，不得以
+`env_file` 注入整份文件，也不得从旧容器模板继承未知环境变量。Owner 自行维护受控的明文本地备份。
 
 需要文件形态的 PgBouncer userlist 与 backup age identity 只允许从 `.env` 中的 base64 字段派生到
 `/etc/tungchiahui/secrets` 下的受限 runtime 文件；这些派生文件不是第二套手工 Secret 源。
 
 不得把仅服务器使用的环境变量暴露到 Client Bundle。
 
-每类 Runtime、Migration、Backup、S3、AI、Deploy、Operator 与 Alert Credential 的最小权限与轮换流程定义在 `docs/operations/credential-rotation.md`。即使它们放在同一个 `.env` 文件中，也不得复用同一个 Credential 跨越这些职责边界。
+每类 Runtime、Migration、Backup、S3、AI、Deploy、Operator 与 Alert Credential 的最小权限与轮换流程定义在 `docs/operations/credential-rotation.md`。即使它们源自同一个 `.env` 文件，也不得复用同一个 Credential 跨越这些职责边界或注入无关容器。
 
 ## 数据库
 

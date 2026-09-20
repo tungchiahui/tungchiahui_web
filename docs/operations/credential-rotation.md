@@ -1,6 +1,6 @@
 # Credential 最小权限与轮换
 
-本文件定义 Production Credential 的职责、持有者、轮换和验证顺序。ADR 0022 后，明文值只存在于授权 Host 的 `/etc/tungchiahui/.env`、Owner 自行保存的明文本地备份，以及必要的受限派生 runtime 文件；仓库只保存变量名和示例占位符。
+本文件定义 Production Credential 的职责、持有者、轮换和验证顺序。ADR 0023 后，明文值只存在于授权 Host 的 `/etc/tungchiahui/.env`、Owner 自行保存的明文本地备份，以及必要的受限派生 runtime 文件；仓库只保存变量名和示例占位符。该 Host 文件只用于 Compose 插值，每个容器仅接收其职责 Allowlist。
 
 ## 权限矩阵
 

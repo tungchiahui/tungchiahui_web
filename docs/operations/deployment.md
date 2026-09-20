@@ -27,9 +27,10 @@ push to main
 Quality Gates 未全部通过时不得构建/发布 Production Candidate，也不得 Cutover。
 
 首次上线使用 Repository Actions Variable `PRODUCTION_DEPLOYMENT_ENABLED` 作为显式 Activation
-Gate。变量不存在或不等于 `true` 时，成功的 `main` Quality Run 仍发布完整 Immutable Image Set，
-但 Deploy Job 必须保持 Skipped。只有 Production Environment Protection、Origin Provision、Control
-API 与 Pre-cutover Gate 均通过后才设置为 `true`；该变量不能绕过 Quality Gate。
+Gate。变量不存在或不等于 `true` 时，`main` Quality/Build 仍可发布完整 Immutable Image Set，
+但 Deploy Job 保持 Skipped，最终 Release Result 会 Fail-closed，避免把“只构建未部署”误报为完整
+发布成功。只有 Production Environment Protection、Origin Provision、Control API 与 Pre-cutover
+Gate 均通过后才设置为 `true`；该变量不能绕过 Quality Gate。
 
 Human-triggered/Retry/指定版本：
 
@@ -53,9 +54,14 @@ explicit retry; do not delete or rewrite failed operations to make a historical 
 
 GitHub Actions 和 `./site deploy` 向同一个独立 `control-api` 完成认证，执行相同 Policy，并调用同一个底层 Deployment Engine；不得维护 CI/Manual 两套实现。
 
-`release.yml` 只接受 `main` push 或显式 `workflow_dispatch`。同一 workflow 顺序执行完整 Quality Gate、Build/Publish Web、Service、Recovery、PostgreSQL 四个不可变镜像，并以 Web Manifest Digest 作为 Blue/Green Deployment Identity。Deploy Job 只持有 Repository Read 与 OIDC，进入受保护的 `production` Environment，并由单一 non-cancelling Concurrency Group 序列化。Workflow 不持有 Production DB、AI Provider、Host Login、Origin Pull Credential、生产 `.env` 或 Docker Socket。
+`release.yml` 只接受 `main` push 或显式 `workflow_dispatch`。同一 workflow 顺序执行完整 Quality Gate、Build/Publish Web、Service、Recovery、PostgreSQL 四个不可变镜像，并以 Web Manifest Digest 作为 Blue/Green Deployment Identity；Web Image Label 同时绑定精确 Service Image Digest。自动 Push 在部署前必须确认目标 SHA 仍是 `origin/main`，落后的并发 Release 不得切流；最终 Result Job 要求 Build 和 Deploy 都成功。Deploy Job 只持有 Repository Read 与 OIDC，进入受保护的 `production` Environment，并由单一 non-cancelling Concurrency Group 序列化。Workflow 不持有 Production DB、AI Provider、Host Login、Origin Pull Credential、生产 `.env` 或 Docker Socket。
 
-Production 主机上的手工 Secret Source 只有部署根目录 `/etc/tungchiahui/.env`。Docker daemon 通过 `env_file` 读取该 `0600` 文件；`deploy-agent` 使用自身进程中由 `env_file` 注入的生产 env 键给新建 Blue/Green Web Slot 注入 env。修改 `.env` 后，通过既有 provisioning/reconcile 重启受影响服务后再依赖新值；不要在主机上另建第二份人工维护的 env 文件。
+Production 主机上的手工 Secret Source 只有部署根目录 `/etc/tungchiahui/.env`。Compose CLI 通过
+`--env-file` 使用该 `0600` 文件做变量插值，但不得把整份文件注入容器。每个 Service 的
+`environment` 是显式 Allowlist；`deploy-agent` 只获得部署/恢复配置与创建 Web Slot 所需的 Web
+变量，并以固定 Allowlist 重建候选 Slot 环境，不保留旧 Template 的未知变量。修改 `.env` 后，
+通过既有 provisioning/reconcile 重启受影响服务后再依赖新值；不要在主机上另建第二份人工维护
+的 env 文件。
 
 正常 Remote Operation 使用：
 
@@ -72,16 +78,18 @@ https://www.tungchiahui.cn/api/ops/deployments
 ### Independent service release boundary
 
 Publishing the four images does not upgrade all running services. The shared engine updates the
-inactive Web slot and the one-shot migration runner. `control-api`, `content-worker` and
-`deploy-agent` remain independent provisioned services; changes to their APIs or execution code
-require a reviewed scoped rollout. A successful Web deployment is not evidence that a new account
-API is running. Verify the public account session endpoint as well as the Web version.
+inactive Web slot and the one-shot migration runner. `control-api`, `content-worker`,
+`observability-agent` and `deploy-agent` remain independent provisioned services; changes to their
+APIs or execution code require a reviewed scoped rollout. A successful Web deployment is not
+evidence that new independent-service code is running. Verify their image revisions and health in
+addition to the public Web version.
 
-For normal releases, the engine resolves `<DEPLOYMENT_IMAGE_REPOSITORY>-service:<target SHA>`,
-matching the paired repository convention in `release.yml`. No additional env variable or public
-request field is needed. If absent locally, Docker pulls it with the existing host-local registry
-read identity. Preflight verifies the actual image OCI revision and an approved service repository
-RepoDigest before either Web slot or the stopped migration runner is replaced. HTTP errors,
+For normal releases, the engine validates the requested Web Digest, reads its
+`cn.tungchiahui.release.service-digest` Label and resolves
+`<DEPLOYMENT_IMAGE_REPOSITORY>-service@<bound digest>`. No additional env variable or public request
+field is needed. If absent locally, Docker pulls it with the existing host-local registry read
+identity. Preflight verifies the Web RepoDigest, bound Service Digest, actual Service OCI revision
+and approved Service Repository RepoDigest before either Web slot or the stopped migration runner is replaced. HTTP errors,
 JSON-stream pull errors (including HTTP 200), missing digests and missing/wrong revisions fail
 closed. Raw registry responses are not logged. The active worker retains the verified immutable
 image ID and uses it to recreate the runner, so moving a tag between its preflight and execution
@@ -97,10 +105,12 @@ because the long-running deploy-agent bundles an older journal. Applied migratio
 0008 is not replayed and existing accounts are preserved. No schema migration is added by this fix.
 
 The scoped reconciliation path now recreates the stopped migration runner before applying SQL and
-updates both `control-api` and `deploy-agent` through the same Compose project, without touching
-either Web slot. Reconcile the reviewed service/recovery image explicitly, then validate schema
-journal/hash, account API and Operator status before claiming activation is complete. A successful
-Web deployment by itself is still not evidence that the independent account API is running.
+updates `control-api`, `content-worker`, `observability-agent` and `deploy-agent` as one reviewed
+independent-service unit through the same Compose project, without touching either Web slot.
+Reconcile the reviewed service/recovery image explicitly, then validate schema journal/hash, all
+service health/image revisions, account API and Operator status before claiming activation is
+complete. A successful Web deployment by itself is still not evidence that independent services
+are current.
 The 2026-09-14 incident and rollout evidence are recorded in `docs/planning/current-state.md`
 section 12.
 
@@ -116,7 +126,7 @@ This diagnostic has the same independent-service release boundary as every other
 change. If the running service predates it, repeating `workflow_dispatch` cannot create the new
 evidence. First let the reviewed `main` push pass Quality and publish the exact service image; then,
 only after explicit production authorization, use the existing scoped reconciliation path to replace
-`control-api` without touching either Web slot. Trigger one new dispatch, inspect the protected audit
+the independent-service unit without touching either Web slot. Trigger one new dispatch, inspect the protected audit
 through the authorized host path, and compare all five claims before changing policy. Never copy the
 claim details into an Actions artifact, client response or ordinary log, and never relax repository,
 `refs/heads/main`, `production` Environment or reviewed workflow identity speculatively.
@@ -136,10 +146,12 @@ this fix needs the following ordered bootstrap through existing mechanisms:
    `tungchiahui_manage_stack=false`, `tungchiahui_reconcile_control_api=true`. Preserve actual Web
    images/SHAs, gateway settings, backup evidence and the canonical host-local `.env`; never copy
    disposable test values or fabricate freshness. The role recreates the migration runner, applies
-   journaled pending migrations, and reconciles control-api/deploy-agent. Do not use `./site provision`
+   journaled pending migrations, and reconciles control-api/content-worker/observability-agent/deploy-agent.
+   Do not use `./site provision`
    as a substitute: its queued server-migration request is not this scoped Ansible execution.
-3. Verify agent health, its image revision, actual host Docker socket GID, signed Operator status,
-   unchanged Web container IDs, and account session/login/read/logout. Keep the socket mount `:ro`.
+3. Verify all independent-service health and image revisions, actual host Docker socket GID, signed
+   Operator status, internal active-slot revalidation, unchanged Web container IDs, and account
+   session/login/read/logout. Keep the socket mount `:ro`.
 4. Restore the activation variable and use the corrected `./site deploy <sha> --wait` client (or a
    new explicit workflow dispatch) to execute and verify the shared blue-green deployment. Do not
    rerun the historical release-only-idempotency client or rewrite failed operation records.

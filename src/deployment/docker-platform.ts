@@ -67,98 +67,51 @@ const dockerImageSchema = z.object({
   RepoDigests: z.array(z.string()).nullable().optional(),
 })
 
-const propagatedProductionEnvironmentKeys = Object.freeze([
-  'ASSET_CDN_BASE_URL',
+const propagatedWebEnvironmentKeys = Object.freeze([
   'ASSET_S3_ACCESS_KEY_ID',
   'ASSET_S3_BUCKET',
   'ASSET_S3_ENDPOINT',
   'ASSET_S3_FORCE_PATH_STYLE',
   'ASSET_S3_REGION',
   'ASSET_S3_SECRET_ACCESS_KEY',
-  'BACKUP_AGE_IDENTITY_BASE64',
-  'BACKUP_AGE_RECIPIENT',
-  'BACKUP_OFFSITE_S3_ACCESS_KEY_ID',
-  'BACKUP_OFFSITE_S3_BUCKET',
-  'BACKUP_OFFSITE_S3_ENDPOINT',
-  'BACKUP_OFFSITE_S3_FORCE_PATH_STYLE',
-  'BACKUP_OFFSITE_S3_REGION',
-  'BACKUP_OFFSITE_S3_SECRET_ACCESS_KEY',
-  'BACKUP_REPLICATION_CONCURRENCY',
-  'BACKUP_S3_ACCESS_KEY_ID',
-  'BACKUP_S3_BUCKET',
-  'BACKUP_S3_ENDPOINT',
-  'BACKUP_S3_FORCE_PATH_STYLE',
-  'BACKUP_S3_REGION',
-  'BACKUP_S3_SECRET_ACCESS_KEY',
-  'CONTENT_WORKER_DATABASE_URL',
-  'CONTROL_API_DATABASE_URL',
-  'CONTROL_GITHUB_OIDC_POLICY_JSON',
-  'CONTROL_OPERATOR_KEYS_JSON',
-  'DATABASE_ADMIN_URL',
-  'DATABASE_MIGRATE_URL',
-  'DEPLOYMENT_IMAGE_REPOSITORY',
-  'DEPLOYMENT_REGISTRY_TOKEN',
-  'DEPLOYMENT_REGISTRY_USERNAME',
-  'GITHUB_CONTENT_READ_TOKEN',
-  'GITHUB_CONTENT_REPOSITORY',
-  'OWNER_PASSWORD_HASH',
-  'PGBACKREST_REPO1_CIPHER_PASS',
-  'PGBOUNCER_USERLIST_BASE64',
-  'POSTGRES_DB',
-  'POSTGRES_PASSWORD',
-  'POSTGRES_USER',
-  'SITE_APP_LOGIN_NAME',
-  'SITE_APP_LOGIN_PASSWORD',
   'SITE_BASE_URL',
-  'SITE_CONTENT_WORKER_LOGIN_NAME',
-  'SITE_CONTENT_WORKER_LOGIN_PASSWORD',
-  'SITE_CONTROL_API_LOGIN_NAME',
-  'SITE_CONTROL_API_LOGIN_PASSWORD',
-  'SITE_MIGRATOR_LOGIN_NAME',
-  'SITE_MIGRATOR_LOGIN_PASSWORD',
   'SITE_REVALIDATION_SECRET',
   'WEB_DATABASE_URL',
 ] as const)
 
-export function productionEnvironmentFromProcess(
+export function webEnvironmentFromProcess(
   environment: Readonly<Record<string, string | undefined>> = process.env,
 ) {
-  const productionEnvironment: Record<string, string> = {}
-  for (const key of propagatedProductionEnvironmentKeys) {
+  const webEnvironment: Record<string, string> = {}
+  for (const key of propagatedWebEnvironmentKeys) {
     const value = environment[key]
-    if (value !== undefined) productionEnvironment[key] = value
+    if (value !== undefined) webEnvironment[key] = value
   }
-  return productionEnvironment
-}
-
-function environmentMap(environment: readonly string[] | null) {
-  const map = new Map<string, string>()
-  for (const entry of environment ?? []) {
-    const separator = entry.indexOf('=')
-    if (separator <= 0) continue
-    map.set(entry.slice(0, separator), entry.slice(separator + 1))
-  }
-  return map
+  return webEnvironment
 }
 
 export function replaceEnvironment(
-  environment: readonly string[] | null,
+  _environment: readonly string[] | null,
   release: DeploymentRelease,
   latestProductionEnvironment: Readonly<Record<string, string | undefined>> = {},
 ) {
-  const merged = environmentMap(environment)
-  for (const [key, value] of Object.entries(latestProductionEnvironment)) {
-    if (value !== undefined) merged.set(key, value)
+  const webEnvironment = new Map<string, string>()
+  for (const key of propagatedWebEnvironmentKeys) {
+    const value = latestProductionEnvironment[key]
+    if (value !== undefined) webEnvironment.set(key, value)
   }
   const webDatabaseUrl = latestProductionEnvironment.WEB_DATABASE_URL
-  if (webDatabaseUrl !== undefined) merged.set('DATABASE_URL', webDatabaseUrl)
-  for (const key of ['SITE_DEPLOYMENT_IMAGE_DIGEST', 'SITE_DEPLOYMENT_SHA', 'SITE_SLOT']) {
-    merged.delete(key)
-  }
+  if (webDatabaseUrl !== undefined) webEnvironment.set('DATABASE_URL', webDatabaseUrl)
+  webEnvironment.delete('WEB_DATABASE_URL')
   return [
-    ...[...merged.entries()].map(([key, value]) => `${key}=${value}`),
+    ...[...webEnvironment.entries()].map(([key, value]) => `${key}=${value}`),
+    'NODE_ENV=production',
+    'NEXT_TELEMETRY_DISABLED=1',
+    'HOSTNAME=0.0.0.0',
+    'PORT=3000',
     `SITE_DEPLOYMENT_IMAGE_DIGEST=${release.digest}`,
     `SITE_DEPLOYMENT_SHA=${release.sha}`,
+    'SITE_RUNTIME_MODE=production',
     `SITE_SLOT=${release.slot}`,
   ]
 }
@@ -258,8 +211,9 @@ function requestHttp(url: URL) {
 
 export class DockerDeploymentPlatform implements DeploymentPlatform {
   private migrationImage: Readonly<{
-    sha: string
+    digest: string
     image: z.infer<typeof dockerImageSchema>
+    sha: string
   }> | null = null
 
   constructor(
@@ -287,7 +241,7 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
   }
 
   private latestProductionEnvironment() {
-    return productionEnvironmentFromProcess()
+    return webEnvironmentFromProcess()
   }
 
   private registryAuthenticationHeader() {
@@ -339,19 +293,40 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
     }
   }
 
-  async validateMigrationImage(targetSha: string) {
-    z.string()
-      .regex(/^[a-f0-9]{40}$/)
-      .parse(targetSha)
+  async validateMigrationImage(target: DeploymentRelease) {
+    const release = deploymentReleaseSchema.parse(target)
     const container = await this.inspectContainer(
       this.configuration.DEPLOYMENT_MIGRATION_CONTAINER_NAME,
     )
     if (container.State.Running) throw new Error('Migration container is already running')
     const repository = this.configuration.DEPLOYMENT_IMAGE_REPOSITORY
-    // release.yml publishes the migration bundle in the paired -service repository.
-    // The repository is host configuration; callers supply only a validated Git SHA.
+    let serviceDigest: string | undefined
+    if (repository !== undefined) {
+      const webInspection = await requestJson(
+        this.socketPath,
+        'GET',
+        `/images/${encodeURIComponent(this.imageReference(release))}/json`,
+      )
+      if (webInspection.status !== 200) {
+        throw new Error('Validated Web image is unavailable while resolving its release manifest')
+      }
+      const webImage = dockerImageSchema.parse(webInspection.body)
+      if (!(webImage.RepoDigests ?? []).includes(`${repository}@${release.digest}`)) {
+        throw new Error('Web image does not expose the approved release digest')
+      }
+      const parsedServiceDigest = z
+        .string()
+        .regex(/^sha256:[a-f0-9]{64}$/)
+        .safeParse(webImage.Config.Labels?.['cn.tungchiahui.release.service-digest'])
+      if (!parsedServiceDigest.success) {
+        throw new Error('Web image does not declare a valid digest-bound service image')
+      }
+      serviceDigest = parsedServiceDigest.data
+    }
+    // The Web image is the immutable release manifest: its digest-bound label selects the exact
+    // paired migration bundle. Offline fixtures retain their prepared local image identity.
     const reference =
-      repository === undefined ? container.Image : `${repository}-service:${targetSha}`
+      repository === undefined ? container.Image : `${repository}-service@${serviceDigest}`
     let inspection = await requestJson(
       this.socketPath,
       'GET',
@@ -370,9 +345,9 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
     }
     const image = dockerImageSchema.parse(inspection.body)
     const revision = image.Config.Labels?.['org.opencontainers.image.revision']
-    if (revision !== targetSha) {
+    if (revision !== release.sha) {
       throw new Error(
-        `Migration image revision ${revision ?? 'unknown'} does not match target ${targetSha}`,
+        `Migration image revision ${revision ?? 'unknown'} does not match target ${release.sha}`,
       )
     }
     if (
@@ -380,14 +355,14 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
       !(image.RepoDigests ?? []).some(
         (digest) =>
           digest.startsWith(`${repository}-service@`) &&
-          /^sha256:[a-f0-9]{64}$/.test(digest.split('@')[1] ?? ''),
+          digest === `${repository}-service@${serviceDigest}`,
       )
     ) {
       throw new Error(
         'Migration image does not expose a digest from the approved service repository',
       )
     }
-    this.migrationImage = { image, sha: targetSha }
+    this.migrationImage = { digest: release.digest, image, sha: release.sha }
   }
 
   private async inspectContainer(name: string) {
@@ -532,9 +507,16 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
     )
   }
 
-  async runMigrations(input: Readonly<{ hasFreshRecoverableBackup: boolean; targetSha: string }>) {
-    if (this.migrationImage?.sha !== input.targetSha)
-      await this.validateMigrationImage(input.targetSha)
+  async runMigrations(
+    input: Readonly<{ hasFreshRecoverableBackup: boolean; target: DeploymentRelease }>,
+  ) {
+    const validatedMigration = this.migrationImage
+    if (
+      validatedMigration === null ||
+      validatedMigration.sha !== input.target.sha ||
+      validatedMigration.digest !== input.target.digest
+    )
+      await this.validateMigrationImage(input.target)
     const image = this.migrationImage?.image
     if (!image) throw new Error('Migration image has not been validated')
     const name = this.configuration.DEPLOYMENT_MIGRATION_CONTAINER_NAME
@@ -579,7 +561,7 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
         Image: image.Id,
         Labels: {
           ...container.Config.Labels,
-          'org.opencontainers.image.revision': input.targetSha,
+          'org.opencontainers.image.revision': input.target.sha,
         },
         NetworkingConfig: { EndpointsConfig: endpointConfig },
         User: container.Config.User,

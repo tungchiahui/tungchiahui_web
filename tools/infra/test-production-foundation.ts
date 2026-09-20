@@ -47,6 +47,7 @@ const registryImage =
 const registryRepository = `127.0.0.1:${String(input.PHASE15_REGISTRY_PORT)}/tungchiahui-web`
 const registryTag = `${registryRepository}:${input.PHASE12_GIT_SHA}`
 let registryDigest = ''
+let serviceRegistryDigest = ''
 const webImage = `tungchiahui-web:${input.PHASE12_GIT_SHA}`
 const serviceImage = `tungchiahui-services:${input.PHASE12_GIT_SHA}`
 const staleServiceImage = `${projectName}-stale-service:test`
@@ -356,6 +357,22 @@ function buildImages() {
     postgresImage,
     '.',
   ])
+  execute('docker', ['tag', serviceImage, serviceRegistryTag])
+  execute('docker', ['push', serviceRegistryTag])
+  serviceRegistryDigest = z
+    .string()
+    .regex(/^sha256:[a-f0-9]{64}$/)
+    .parse(
+      execute('docker', [
+        'image',
+        'inspect',
+        '--format',
+        '{{(index .RepoDigests 0)}}',
+        serviceRegistryTag,
+      ])
+        .stdout.trim()
+        .split('@')[1],
+    )
   execute('docker', [
     'build',
     '--build-arg',
@@ -370,6 +387,8 @@ function buildImages() {
     'build',
     '--build-arg',
     `SITE_DEPLOYMENT_SHA=${input.PHASE12_GIT_SHA}`,
+    '--build-arg',
+    `SITE_SERVICE_IMAGE_DIGEST=${serviceRegistryDigest}`,
     '--file',
     'ops/production/images/web.Dockerfile',
     '--tag',
@@ -649,6 +668,39 @@ function runMigrationTargetProvision() {
 }
 
 function inspectHardening() {
+  const credentialConsumers: Readonly<Record<string, readonly string[]>> = {
+    ASSET_S3_ACCESS_KEY_ID: ['deploy-agent', 'web-blue', 'web-green'],
+    ASSET_S3_SECRET_ACCESS_KEY: ['deploy-agent', 'web-blue', 'web-green'],
+    BACKUP_OFFSITE_S3_ACCESS_KEY_ID: ['deploy-agent'],
+    BACKUP_OFFSITE_S3_SECRET_ACCESS_KEY: ['deploy-agent'],
+    BACKUP_S3_ACCESS_KEY_ID: ['deploy-agent'],
+    BACKUP_S3_SECRET_ACCESS_KEY: ['deploy-agent'],
+    CONTROL_GITHUB_OIDC_POLICY_JSON: ['control-api'],
+    CONTROL_OPERATOR_KEYS_JSON: ['control-api'],
+    DATABASE_URL: ['content-worker', 'control-api', 'web-blue', 'web-green'],
+    DEPLOYMENT_REGISTRY_TOKEN: ['deploy-agent'],
+    GITHUB_CONTENT_READ_TOKEN: ['content-worker'],
+    OBSERVABILITY_ALERT_WEBHOOK_BEARER_TOKEN: ['observability-agent'],
+    OWNER_PASSWORD_HASH: ['control-api'],
+    PGBACKREST_REPO1_CIPHER_PASS: ['deploy-agent', 'postgres'],
+    POSTGRES_PASSWORD: ['postgres'],
+    SITE_REVALIDATION_SECRET: ['content-worker', 'deploy-agent', 'web-blue', 'web-green'],
+  }
+  const verifyCredentialScope = (service: string, entries: readonly string[] | null) => {
+    const names = new Set(
+      (entries ?? []).map((entry) => {
+        const separator = entry.indexOf('=')
+        return separator === -1 ? entry : entry.slice(0, separator)
+      }),
+    )
+    for (const [name, consumers] of Object.entries(credentialConsumers)) {
+      expect(
+        !names.has(name) || consumers.includes(service),
+        `${service} unexpectedly receives ${name}`,
+      )
+    }
+  }
+
   for (const image of [webImage, serviceImage, recoveryImage, postgresImage]) {
     const user = execute('docker', [
       'image',
@@ -692,7 +744,7 @@ function inspectHardening() {
     const parsed = z
       .array(
         z.object({
-          Config: z.object({ User: z.string() }),
+          Config: z.object({ Env: z.array(z.string()).nullable(), User: z.string() }),
           HostConfig: z.object({
             Binds: z.array(z.string()).nullable(),
             CapDrop: z.array(z.string()).nullable(),
@@ -706,6 +758,7 @@ function inspectHardening() {
       )
       .parse(inspection)[0]
     expect(parsed !== undefined, `Unable to inspect ${service}`)
+    verifyCredentialScope(service, parsed.Config.Env)
     expect(parsed.Config.User !== '' && !parsed.Config.User.startsWith('0:'), `${service} is root`)
     expect(parsed.HostConfig.ReadonlyRootfs, `${service} root filesystem is writable`)
     expect(!parsed.HostConfig.Privileged, `${service} is privileged`)
@@ -735,7 +788,7 @@ function inspectHardening() {
   const deployAgentParsed = z
     .array(
       z.object({
-        Config: z.object({ User: z.string() }),
+        Config: z.object({ Env: z.array(z.string()).nullable(), User: z.string() }),
         HostConfig: z.object({
           Binds: z.array(z.string()).nullable(),
           CapDrop: z.array(z.string()).nullable(),
@@ -749,6 +802,7 @@ function inspectHardening() {
     )
     .parse(JSON.parse(deployAgentInspection) as unknown)[0]
   expect(deployAgentParsed !== undefined, 'Unable to inspect deploy-agent')
+  verifyCredentialScope('deploy-agent', deployAgentParsed.Config.Env)
   expect(
     deployAgentParsed.HostConfig.Binds?.some((bind) =>
       bind.endsWith(':/run/deploy-capability/docker.sock:ro'),
@@ -957,6 +1011,19 @@ async function verifySecurityAndLoad() {
   curl([`http://127.0.0.1:${port}/api/internal/revalidate`], 404)
   curl([`http://127.0.0.1:${port}/api/search?q=`], 400)
 
+  const contentWorker = compose(['ps', '--quiet', 'content-worker']).stdout.trim()
+  const internalRevalidationStatus = execute('docker', [
+    'exec',
+    contentWorker,
+    'node',
+    '-e',
+    "fetch('http://openresty:8085/api/internal/revalidate',{method:'POST',headers:{'content-type':'application/json'},body:'{}'}).then(r=>console.log(r.status))",
+  ]).stdout.trim()
+  expect(
+    internalRevalidationStatus === '401',
+    `Internal revalidation gateway did not reach the active Web slot: ${internalRevalidationStatus}`,
+  )
+
   const baseline = parallelRequests('/', 80)
   expect(
     baseline.every((sample) => sample.status === 200),
@@ -988,7 +1055,7 @@ async function verifySecurityAndLoad() {
     observability,
     'node',
     '-e',
-    "const started=Date.now();Promise.all(Array.from({length:80},()=>fetch('http://web-blue:3000/api/ready').then(r=>r.status))).then(statuses=>console.log(JSON.stringify({durationMs:Date.now()-started,failures:statuses.filter(s=>s!==200).length})))",
+    "const started=Date.now();Promise.all(Array.from({length:80},()=>fetch('http://openresty:8082/api/ready').then(r=>r.status))).then(statuses=>console.log(JSON.stringify({durationMs:Date.now()-started,failures:statuses.filter(s=>s!==200).length})))",
   ]).stdout.trim()
   const pool = z
     .object({ durationMs: z.number().nonnegative(), failures: z.literal(0) })
@@ -1271,6 +1338,9 @@ async function verifyBlueGreenDeployment() {
   const candidateSha = input.PHASE12_GIT_SHA
   const removeCachedServiceTag = () => {
     execute('docker', ['image', 'rm', serviceRegistryTag], { allowFailure: true })
+    execute('docker', ['image', 'rm', `${registryRepository}-service@${serviceRegistryDigest}`], {
+      allowFailure: true,
+    })
     expect(
       execute('docker', ['image', 'inspect', serviceRegistryTag], { allowFailure: true }).status !==
         0,
@@ -1303,47 +1373,13 @@ async function verifyBlueGreenDeployment() {
   const inspectId = (name: string) =>
     execute('docker', ['inspect', '--format', '{{.Id}}', name]).stdout.trim()
   const runnerBefore = inspectId(runnerName)
-  const blueBefore = inspectId(`${projectName}-web-blue-1`)
-  const greenBefore = inspectId(`${projectName}-web-green-1`)
   const postgresContainer = compose(['ps', '--quiet', 'postgres']).stdout.trim()
   const accountsBefore = psql(
     postgresContainer,
     'SELECT json_agg(a ORDER BY id) FROM app.accounts a',
   )
-  for (const failure of ['missing', 'wrong-revision'] as const) {
-    if (failure === 'wrong-revision') {
-      execute('docker', ['tag', staleServiceImage, serviceRegistryTag])
-      execute('docker', ['push', serviceRegistryTag])
-    }
-    const failed = operationResponseSchema.parse(
-      await controlRequest('/api/ops/deployments', {
-        body: {
-          gitSha: candidateSha,
-          imageDigest: digest,
-          reason: `Migration image ${failure} gate`,
-        },
-        idempotencyKey: `migration-image-${failure}`,
-        method: 'POST',
-        purpose: `migration-image-${failure}`,
-      }),
-    )
-    const rejected = await waitForOperation(failed.operation.id)
-    expect(rejected.status === 'failed', `Migration image ${failure} was not rejected`)
-    expect(
-      failure === 'missing'
-        ? rejected.errorSummary?.includes('Docker rejected POST /images/create') === true
-        : rejected.errorSummary?.includes('does not match target') === true,
-      `Migration image failure has an unexpected cause: ${JSON.stringify(rejected)}`,
-    )
-    expect(
-      inspectId(runnerName) === runnerBefore &&
-        inspectId(`${projectName}-web-blue-1`) === blueBefore &&
-        inspectId(`${projectName}-web-green-1`) === greenBefore,
-      'Migration image preflight failure replaced a runner or Web slot',
-    )
-    expect(publicVersion().slot === 'blue', 'Migration image failure changed public traffic')
-  }
-  execute('docker', ['tag', serviceImage, serviceRegistryTag])
+  // Retagging the SHA must not change the migration image selected by the Web release manifest.
+  execute('docker', ['tag', staleServiceImage, serviceRegistryTag])
   execute('docker', ['push', serviceRegistryTag])
   removeCachedServiceTag()
   const created = operationResponseSchema.parse(
@@ -1368,7 +1404,7 @@ async function verifyBlueGreenDeployment() {
   expect(
     execute('docker', ['inspect', '--format', '{{.Image}}', runnerName]).stdout.trim() ===
       execute('docker', ['image', 'inspect', '--format', '{{.Id}}', serviceImage]).stdout.trim(),
-    'Migration runner did not use the verified target service image',
+    'Migration runner followed a moved tag instead of the digest-bound target service image',
   )
   expect(
     psql(postgresContainer, 'SELECT json_agg(a ORDER BY id) FROM app.accounts a') ===
@@ -1959,7 +1995,7 @@ async function main() {
         postgresDownDeploymentDependency: 'pass',
         postgresDownControlRoute: 'pass',
         productionTraffic: false,
-        secretInjection: 'single-env-derived-runtime-files',
+        secretInjection: 'single-source-service-scoped-runtime',
         secretLogAndResponseLeakage: 'pass',
         sbomAndCriticalVulnerabilityScan: 'pass',
         securityHeadersAndAbuseControls: 'pass',

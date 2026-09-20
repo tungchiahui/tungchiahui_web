@@ -183,6 +183,10 @@ Application Job 使用 PostgreSQL；Deploy/Rollback/Restore/Recovery 使用 host
 - Search Refresh
 - Revalidation
 
+Revalidation 请求使用共享 Secret 签名，并通过只存在于 Docker Internal Network 的 OpenResty
+Endpoint 进入当前 Active Slot；Worker 不直接绑定 Blue 或 Green。Public Listener 对全部
+`/api/internal/*` 保持 404。
+
 ### deploy-agent
 
 内部、不对公网暴露的 Operational Agent，用于：
@@ -209,6 +213,9 @@ Application Job 使用 PostgreSQL；Deploy/Rollback/Restore/Recovery 使用 host
 生产主机已有的 1Panel OpenResty 是共享公网入口，负责 `ddns.tungchiahui.cn:8443` 的 TLS
 与静态反向代理。V2 自己的 OpenResty 仅发布到 `127.0.0.1:3100`，继续独立拥有
 Blue/Green Upstream Selection 和 Path Ownership；外层代理不直接指向任一 Next.js Slot。
+
+Host-local `.env` 是唯一人工配置源，但只供 Compose 插值。各容器的 Runtime Environment 必须
+显式 Allowlist；普通 Blue/Green Adapter 只把 Web 所需的最小变量传入候选 Slot。
 
 ### PgBouncer
 

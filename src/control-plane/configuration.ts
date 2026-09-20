@@ -17,7 +17,10 @@ const configurationSchema = z.object({
   CONTROL_GITHUB_OIDC_POLICY_JSON: z.string().min(2).optional(),
   CONTROL_OPERATOR_KEYS_JSON: z.string().min(2).optional(),
   DATABASE_URL: z.string().url().optional(),
-  OWNER_PASSWORD_HASH: ownerPasswordHashSchema.optional(),
+  OWNER_PASSWORD_HASH: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    ownerPasswordHashSchema.optional(),
+  ),
   SITE_RUNTIME_MODE: z.enum(['local', 'test', 'production']),
 })
 

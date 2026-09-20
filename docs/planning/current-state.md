@@ -253,7 +253,7 @@ Owner authorized restoring both `/tech-footprint` and `/weight-loss`, discarding
 
 Owner 明确保留完整 Blue/Green，但简化日常操作为“本地直接 push `main`”。ADR 0022 已接受：`.github/workflows/release.yml` 是 Web Repository 唯一默认 Release Workflow，按 `resolve-release -> quality-gate -> build-and-publish-immutable-image-set -> shared-control-plane-blue-green-deployment` 顺序运行；`quality.yml` 与 `deploy.yml` 已移除。失败的 Quality/Build 不会产出可部署镜像，失败的 Deploy 不切换 Active Slot。
 
-Production Secret 手工 Source of Truth 改为部署根目录 Host-local `.env`，默认路径 `/etc/tungchiahui/.env`，真实文件必须 `root:root`、`0600`，且只在生产主机和 Owner 明文备份中存在；不得放入仓库、GitHub Actions、Image、Docker Build Context、Public 目录、日志或 PR 文本。Compose 使用同一 `.env`，并在服务边界把 `WEB_DATABASE_URL`、`CONTROL_API_DATABASE_URL`、`CONTENT_WORKER_DATABASE_URL`、`DATABASE_MIGRATE_URL` 映射到各自 `DATABASE_URL`；`deploy-agent` 使用自身进程中由 `env_file` 注入的生产 env 键创建新 Web Slot。修改 `.env` 后，需通过既有 provisioning/reconcile 重启受影响服务再依赖新值。Owner 接受同主机服务可读取同一 `.env` 中其他 Secret 的风险。
+Production Secret 手工 Source of Truth 改为部署根目录 Host-local `.env`，默认路径 `/etc/tungchiahui/.env`，真实文件必须 `root:root`、`0600`，且只在生产主机和 Owner 明文备份中存在；不得放入仓库、GitHub Actions、Image、Docker Build Context、Public 目录、日志或 PR 文本。ADR 0023 进一步收紧运行时边界：Compose 只把它作为插值输入，各 Service 通过显式 Allowlist 获得自身配置；`deploy-agent` 只用固定 Web Runtime Allowlist 创建新 Slot，不继承旧 Template 的未知变量。修改 `.env` 后，需通过既有 provisioning/reconcile 重启受影响服务再依赖新值。
 
 `./site deploy <sha>` 仍保留为人工重试/指定版本入口；未显式传 `--image-digest` 且没有 `SITE_DEPLOYMENT_IMAGE_DIGEST` 时，会从批准 GHCR Repository 解析 Web Manifest Digest。此任务没有 PostgreSQL/Drizzle schema 变更，因此没有新增数据库 Migration；需要的变更集中在 GitHub Actions、deployment control client、Ansible/Compose secret injection、asset backup env 读取、测试与运维文档。
 
@@ -353,9 +353,10 @@ historical GitHub workflow. 本阶段上下文已沉淀，可以授权/开启下
 
 ## 14. Automatic target migration image selection — 2026-09-15
 
-The shared Docker deployment adapter now resolves the paired approved `-service:<target SHA>`
-image, pulls it when absent locally, verifies its OCI SHA and service repository digest, and pins
-its immutable image ID for runner creation. Validation runs in preflight before replacing either
+The shared Docker deployment adapter now validates the target Web Digest, reads the Service Digest
+bound into that Web Image Label, resolves the paired approved `-service@<digest>` image, pulls it
+when absent locally, verifies its OCI SHA and service repository digest, and pins its immutable
+image ID for runner creation. Validation runs in preflight before replacing either
 Web slot or discarding the retained rollback target. Docker HTTP 200 progress-stream errors fail
 closed without exposing registry response text. Migration policy/backup/lock/journal checks still
 run inside the target image; this change adds no SQL migration and does not replay 0008.
@@ -418,3 +419,45 @@ local validation with Node 24.19.0 / pnpm 11.23.0 passed `check:biome` (only the
 runs, full `./site check`, and full `./site test`: production foundation/blue-green/migration-image
 and workflow policy, recovery/PITR, disposable S3Mock/application integration with 12 E2E tests,
 and all nine migrations. 本阶段上下文已沉淀，可以授权/开启下一阶段。
+
+## 16. Deployment simplification hardening — 2026-09-20
+
+A focused review found that ADR 0022 simplified the operator source of truth but accidentally widened
+runtime privilege: almost every container received the complete host `.env`, and new Web slots kept
+arbitrary environment entries from their template container. ADR 0023 keeps the single host-local
+source while restoring service-scoped injection. Compose now uses `--env-file` only for interpolation;
+every runtime declares an explicit environment Allowlist, and the deploy adapter constructs Web Slot
+environment only from the reviewed Web keys. Removed or unrelated values cannot survive through the
+template. No production Secret value was read or changed while implementing this correction.
+
+The same review closed three release-consistency defects. The Web Image now carries the exact Service
+Image Digest, so migration preflight selects `-service@<digest>` after validating the Web RepoDigest;
+a moved SHA Tag can no longer change the runner. The scoped independent-service reconciliation now
+updates `control-api`, `content-worker`, `observability-agent` and `deploy-agent` as one reviewed unit.
+Content revalidation and Web readiness checks go through an internal-only OpenResty listener that uses
+the active-slot configuration, while the public listener still hides `/api/internal/*`.
+
+`release.yml` now rejects an automatic Push Release that is no longer the current `origin/main`, and
+its final fail-closed job prevents a skipped deployment from appearing as a complete release. Workflow
+policy tests validate job structure as well as critical command fragments. The GitHub OIDC policy stays
+strict and unchanged; actual five-claim evidence is still required before any policy adjustment. The
+GitHub `production` Environment now permits deployments only from the `main` branch; repository branch
+protection remains unchanged because the direct-to-`main` release model has no pre-push check to require.
+
+These changes alter independent service/recovery images and production Compose topology. They are not
+active merely because a Web image is deployed. The reviewed Image Set must first be published with
+automatic deployment suspended, then an Owner-authorized scoped reconciliation must activate the full
+independent-service unit while proving Web container IDs and traffic remain unchanged. Only afterward
+may automatic deployment be restored and a fresh dispatch collect protected OIDC audit evidence. No
+production host operation, host-local `.env` mutation, Secret rotation, OIDC relaxation, migration
+replay or historical operation rewrite is authorized by this repository state.
+
+Final local validation used the pinned Node 24.19.0 and pnpm 11.23.0. `check:biome` passed with only
+the six pre-existing unused-state warnings in `bookmark-workspace.tsx`; typecheck, 211 unit tests,
+workflow policy, Drizzle, Production Build and static security passed. The requested personal-tracker
+spec passed five consecutive Chromium repetitions after starting the supported local stack. Full
+`./site test` passed production foundation/Ansible/blue-green/digest binding/image scans, full/diff/incr
+backup plus WAL/PITR and off-site fallback, seven S3Mock contract cases, 12 E2E flows and all nine
+migrations. The local stack was stopped afterward with data preserved. The initial direct Playwright
+attempt reached no server and failed only with connection-refused before assertions; the correctly
+provisioned rerun is the functional result. 本阶段上下文已沉淀，可以授权/开启下一阶段。

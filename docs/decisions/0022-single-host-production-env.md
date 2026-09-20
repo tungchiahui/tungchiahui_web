@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Superseded by [ADR 0023](./0023-scoped-production-runtime-configuration.md)
 
 ## Context
 
