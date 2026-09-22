@@ -503,3 +503,29 @@ issuer, audience and claim-shape verification can create allowlisted mismatch de
 cover the availability classification, invalid-token preservation, useful policy diagnostics and
 negative Token/Header/Cookie/Secret leakage. Production OIDC remains blocked on an Owner-controlled
 outbound DNS/proxy correction; no host network, `.env` or Secret change was attempted.
+
+## 18. Single-env runtime convergence and parallel release — 2026-09-22
+
+Owner approved implementing the deployment-simplification and single-`.env` corrections after a
+read-only comparison with `sdutvinci_web` and the live origin. The canonical production file remains
+`/etc/tungchiahui/.env`, `root:root`, `0600`; copying the other site's user-owned placement would
+weaken this repository's recovery/control-plane boundary. Owner-managed non-secret policy now lives
+beside the Secret values in that one file. Ansible inventory/defaults retain only bootstrap, host
+facts, dynamic container identities and exact release images, so it can no longer silently override
+polling or other policy after `.env` validation.
+
+The strict schema rejects duplicate and unknown keys. `./site production doctor` checks file and
+derived-secret metadata/content plus every running service against the Compose environment Allowlist,
+reporting only service/key/problem type. Separate export/restore commands create a validated age-
+encrypted off-host recovery copy with a Recipient that must differ from the production backup key;
+both commands refuse overwrite. ADR 0024 records these controls and requires a one-time two-slot
+runtime convergence because legacy containers are not fixed merely by installing new Compose.
+
+`release.yml` preserves every merge gate but runs five independent quality groups in parallel behind
+the stable fail-closed `quality-gate`. PostgreSQL, Recovery and Service images build in parallel with
+Buildx/GitHub cache; Web then binds the exact Service Digest, and a manifest aggregation job validates
+all four digests before the existing OIDC shared-control-plane deployment. No `latest`, server polling,
+production credential in Actions, or gate relaxation was introduced. Exact duration remains dependent
+on hosted-runner cold start and the slowest full gate; five minutes is not treated as a safety promise.
+
+本阶段上下文已沉淀，可以授权/开启下一阶段。

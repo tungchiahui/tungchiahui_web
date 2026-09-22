@@ -7,6 +7,7 @@ import { parseEnv } from 'node:util'
 import { z } from 'zod'
 
 import { capabilityValues } from '../../src/control-plane/contracts'
+import { ownerPasswordHashSchema } from '../../src/control-plane/owner-password'
 import {
   createPostgresScramVerifier,
   parsePgbouncerScramUserlist,
@@ -35,6 +36,11 @@ const releaseWorkflowRef =
   'tungchiahui/tungchiahui_web/.github/workflows/release.yml@refs/heads/main'
 const legacyDeployWorkflowRef =
   'tungchiahui/tungchiahui_web/.github/workflows/deploy.yml@refs/heads/main'
+const productionProbeUrlSchema = z.union([
+  z.url().startsWith('https://'),
+  z.literal('http://openresty:8082/'),
+  z.literal('http://openresty:8082/api/ready'),
+])
 
 const requiredProductionEnvironmentKeys = Object.freeze([
   'ASSET_S3_ACCESS_KEY_ID',
@@ -81,6 +87,31 @@ const requiredProductionEnvironmentKeys = Object.freeze([
   'SITE_MIGRATOR_LOGIN_NAME',
   'SITE_MIGRATOR_LOGIN_PASSWORD',
   'SITE_REVALIDATION_SECRET',
+  'TUNGCHIAHUI_BACKUP_REPLICATION_CONCURRENCY',
+  'TUNGCHIAHUI_CONTENT_POLLING_ENABLED',
+  'TUNGCHIAHUI_CONTROL_RATE_LIMIT_PER_MINUTE',
+  'TUNGCHIAHUI_DEPLOYMENT_ARTICLE_PATH',
+  'TUNGCHIAHUI_DEPLOYMENT_ASSET_PATH',
+  'TUNGCHIAHUI_DEPLOYMENT_BACKUP_MAX_AGE_SECONDS',
+  'TUNGCHIAHUI_DEPLOYMENT_IMAGE_REPOSITORY',
+  'TUNGCHIAHUI_DEPLOYMENT_SEARCH_QUERY',
+  'TUNGCHIAHUI_OBSERVABILITY_BACKUP_MAX_AGE_SECONDS',
+  'TUNGCHIAHUI_OBSERVABILITY_DISK_CRITICAL_PERCENT',
+  'TUNGCHIAHUI_OBSERVABILITY_INTERVAL_SECONDS',
+  'TUNGCHIAHUI_OBSERVABILITY_JOB_MAX_AGE_SECONDS',
+  'TUNGCHIAHUI_OBSERVABILITY_LATENCY_WARNING_MS',
+  'TUNGCHIAHUI_OBSERVABILITY_ORIGIN_HOSTNAME',
+  'TUNGCHIAHUI_OBSERVABILITY_ORIGIN_IPV6_REQUIRED',
+  'TUNGCHIAHUI_OBSERVABILITY_ORIGIN_SERVER_NAME',
+  'TUNGCHIAHUI_OBSERVABILITY_ORIGIN_URL',
+  'TUNGCHIAHUI_OBSERVABILITY_PUBLIC_ASSET_PATH',
+  'TUNGCHIAHUI_OBSERVABILITY_PUBLIC_SERVER_NAME',
+  'TUNGCHIAHUI_OBSERVABILITY_PUBLIC_URL',
+  'TUNGCHIAHUI_OBSERVABILITY_RESTORE_DRILL_MAX_AGE_SECONDS',
+  'TUNGCHIAHUI_OBSERVABILITY_RESTORE_DRILL_TIMESTAMP',
+  'TUNGCHIAHUI_ORIGIN_BIND_ADDRESS',
+  'TUNGCHIAHUI_ORIGIN_PORT',
+  'TUNGCHIAHUI_SEARCH_POLLING_ENABLED',
   'WEB_DATABASE_URL',
 ] as const)
 
@@ -116,7 +147,18 @@ const productionEnvironmentSchema = z
     DEPLOYMENT_REGISTRY_USERNAME: z.string().min(1),
     GITHUB_CONTENT_READ_TOKEN: z.string().optional(),
     GITHUB_CONTENT_REPOSITORY: z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/),
-    OWNER_PASSWORD_HASH: z.string().optional(),
+    OBSERVABILITY_ALERT_WEBHOOK_BEARER_TOKEN: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      z.string().min(16).optional(),
+    ),
+    OBSERVABILITY_ALERT_WEBHOOK_URL: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      z.url().startsWith('https://').optional(),
+    ),
+    OWNER_PASSWORD_HASH: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      ownerPasswordHashSchema.optional(),
+    ),
     PGBACKREST_REPO1_CIPHER_PASS: z.string().min(32),
     PGBOUNCER_USERLIST_BASE64: z.string().min(1),
     POSTGRES_DB: z.string().min(1),
@@ -132,9 +174,52 @@ const productionEnvironmentSchema = z
     SITE_MIGRATOR_LOGIN_NAME: z.literal('site_migrator_login'),
     SITE_MIGRATOR_LOGIN_PASSWORD: z.string().min(16),
     SITE_REVALIDATION_SECRET: z.string().min(32),
+    TUNGCHIAHUI_BACKUP_REPLICATION_CONCURRENCY: z.coerce.number().int().min(1).max(32),
+    TUNGCHIAHUI_CONTENT_POLLING_ENABLED: z.enum(['true', 'false']),
+    TUNGCHIAHUI_CONTROL_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).max(10_000),
+    TUNGCHIAHUI_DEPLOYMENT_ARTICLE_PATH: z.string().startsWith('/'),
+    TUNGCHIAHUI_DEPLOYMENT_ASSET_PATH: z.string().startsWith('/'),
+    TUNGCHIAHUI_DEPLOYMENT_BACKUP_MAX_AGE_SECONDS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .max(31_536_000),
+    TUNGCHIAHUI_DEPLOYMENT_IMAGE_REPOSITORY: z
+      .string()
+      .regex(/^[a-z0-9.-]+(?::[0-9]{2,5})?\/[a-z0-9._/-]+$/),
+    TUNGCHIAHUI_DEPLOYMENT_SEARCH_QUERY: z.string().trim().min(1).max(200),
+    TUNGCHIAHUI_OBSERVABILITY_BACKUP_MAX_AGE_SECONDS: z.coerce.number().int().positive(),
+    TUNGCHIAHUI_OBSERVABILITY_DISK_CRITICAL_PERCENT: z.coerce.number().min(50).max(99),
+    TUNGCHIAHUI_OBSERVABILITY_INTERVAL_SECONDS: z.coerce.number().int().min(10).max(300),
+    TUNGCHIAHUI_OBSERVABILITY_JOB_MAX_AGE_SECONDS: z.coerce.number().int().positive(),
+    TUNGCHIAHUI_OBSERVABILITY_LATENCY_WARNING_MS: z.coerce.number().int().positive(),
+    TUNGCHIAHUI_OBSERVABILITY_ORIGIN_HOSTNAME: z.string().min(1),
+    TUNGCHIAHUI_OBSERVABILITY_ORIGIN_IPV6_REQUIRED: z.enum(['true', 'false']),
+    TUNGCHIAHUI_OBSERVABILITY_ORIGIN_SERVER_NAME: z.string().min(1),
+    TUNGCHIAHUI_OBSERVABILITY_ORIGIN_URL: productionProbeUrlSchema,
+    TUNGCHIAHUI_OBSERVABILITY_PUBLIC_ASSET_PATH: z.string().startsWith('/'),
+    TUNGCHIAHUI_OBSERVABILITY_PUBLIC_SERVER_NAME: z.string().min(1),
+    TUNGCHIAHUI_OBSERVABILITY_PUBLIC_URL: productionProbeUrlSchema,
+    TUNGCHIAHUI_OBSERVABILITY_RESTORE_DRILL_MAX_AGE_SECONDS: z.coerce.number().int().positive(),
+    TUNGCHIAHUI_OBSERVABILITY_RESTORE_DRILL_TIMESTAMP: z.iso.datetime({ offset: true }),
+    TUNGCHIAHUI_ORIGIN_BIND_ADDRESS: z.enum(['127.0.0.1', '::1']),
+    TUNGCHIAHUI_ORIGIN_PORT: z.coerce.number().int().min(1).max(65_535),
+    TUNGCHIAHUI_SEARCH_POLLING_ENABLED: z.enum(['true', 'false']),
     WEB_DATABASE_URL: z.string().url(),
   })
-  .passthrough()
+  .strict()
+  .superRefine((value, context) => {
+    if (
+      (value.OBSERVABILITY_ALERT_WEBHOOK_URL === undefined) !==
+      (value.OBSERVABILITY_ALERT_WEBHOOK_BEARER_TOKEN === undefined)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Alert webhook URL and bearer token must be configured together',
+        path: ['OBSERVABILITY_ALERT_WEBHOOK_URL'],
+      })
+    }
+  })
 
 function randomSecret(bytes = 32) {
   return randomBytes(bytes).toString('base64url')
@@ -229,7 +314,20 @@ function formatEnvironment(lines: readonly (readonly [string, string] | string)[
     .join('\n')}\n`
 }
 
+function rejectDuplicateEnvironmentKeys(contents: string) {
+  const seen = new Set<string>()
+  for (const [index, line] of contents.split(/\r?\n/u).entries()) {
+    if (line.trim() === '' || line.trimStart().startsWith('#')) continue
+    const match = /^([A-Za-z_][A-Za-z0-9_]*)=/.exec(line)
+    if (!match?.[1])
+      throw new Error(`Production env contains an invalid line: ${String(index + 1)}`)
+    if (seen.has(match[1])) throw new Error(`Production env contains duplicate key: ${match[1]}`)
+    seen.add(match[1])
+  }
+}
+
 export function validateProductionEnvironmentContents(contents: string) {
+  rejectDuplicateEnvironmentKeys(contents)
   const placeholderCount = contents.split(placeholderMarker).length - 1
   if (placeholderCount > 0) {
     throw new Error(
@@ -348,6 +446,36 @@ export function createProductionEnvironmentContents(backupIdentity: string, publ
     ['SITE_REVALIDATION_SECRET', revalidationSecret],
     ['GITHUB_CONTENT_REPOSITORY', 'tungchiahui/tungchiahui_content'],
     ['GITHUB_CONTENT_READ_TOKEN', ''],
+    ['TUNGCHIAHUI_BACKUP_REPLICATION_CONCURRENCY', '8'],
+    ['TUNGCHIAHUI_CONTENT_POLLING_ENABLED', 'false'],
+    ['TUNGCHIAHUI_SEARCH_POLLING_ENABLED', 'false'],
+    ['TUNGCHIAHUI_CONTROL_RATE_LIMIT_PER_MINUTE', '120'],
+    ['TUNGCHIAHUI_DEPLOYMENT_ARTICLE_PATH', '/blog/2026-09-02-wm-lun-wen-luo-lie'],
+    ['TUNGCHIAHUI_DEPLOYMENT_ASSET_PATH', '/docs/ros2/core/index.html'],
+    ['TUNGCHIAHUI_DEPLOYMENT_BACKUP_MAX_AGE_SECONDS', '172800'],
+    ['TUNGCHIAHUI_DEPLOYMENT_IMAGE_REPOSITORY', 'ghcr.io/tungchiahui/tungchiahui_web'],
+    ['TUNGCHIAHUI_DEPLOYMENT_SEARCH_QUERY', 'ROS2_Control'],
+    ['TUNGCHIAHUI_ORIGIN_BIND_ADDRESS', '127.0.0.1'],
+    ['TUNGCHIAHUI_ORIGIN_PORT', '3100'],
+    ['TUNGCHIAHUI_OBSERVABILITY_BACKUP_MAX_AGE_SECONDS', '172800'],
+    ['TUNGCHIAHUI_OBSERVABILITY_DISK_CRITICAL_PERCENT', '90'],
+    ['TUNGCHIAHUI_OBSERVABILITY_INTERVAL_SECONDS', '30'],
+    ['TUNGCHIAHUI_OBSERVABILITY_JOB_MAX_AGE_SECONDS', '900'],
+    ['TUNGCHIAHUI_OBSERVABILITY_LATENCY_WARNING_MS', '2000'],
+    ['TUNGCHIAHUI_OBSERVABILITY_ORIGIN_HOSTNAME', 'ddns.tungchiahui.cn'],
+    ['TUNGCHIAHUI_OBSERVABILITY_ORIGIN_IPV6_REQUIRED', 'true'],
+    ['TUNGCHIAHUI_OBSERVABILITY_ORIGIN_SERVER_NAME', 'ddns.tungchiahui.cn'],
+    ['TUNGCHIAHUI_OBSERVABILITY_ORIGIN_URL', 'https://ddns.tungchiahui.cn:8443/api/ready'],
+    ['TUNGCHIAHUI_OBSERVABILITY_PUBLIC_ASSET_PATH', '/api/assets/monitoring/health.svg'],
+    ['TUNGCHIAHUI_OBSERVABILITY_PUBLIC_SERVER_NAME', 'www.tungchiahui.cn'],
+    ['TUNGCHIAHUI_OBSERVABILITY_PUBLIC_URL', 'https://www.tungchiahui.cn/'],
+    ['TUNGCHIAHUI_OBSERVABILITY_RESTORE_DRILL_MAX_AGE_SECONDS', '2678400'],
+    [
+      'TUNGCHIAHUI_OBSERVABILITY_RESTORE_DRILL_TIMESTAMP',
+      'REPLACE_WITH_LAST_RESTORE_DRILL_TIMESTAMP',
+    ],
+    ['OBSERVABILITY_ALERT_WEBHOOK_URL', ''],
+    ['OBSERVABILITY_ALERT_WEBHOOK_BEARER_TOKEN', ''],
     ['CONTROL_OPERATOR_KEYS_JSON', operatorKeys],
     ['CONTROL_GITHUB_OIDC_POLICY_JSON', JSON.stringify(githubOidcPolicies())],
     '# OWNER_PASSWORD_HASH=scrypt:<32-hex-salt>:<128-hex-derived-key>',

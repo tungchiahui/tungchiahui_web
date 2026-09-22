@@ -17,6 +17,36 @@
 - Backup Freshness
 - Disk Warning
 
+配置或部署拓扑变更后，在生产主机仓库中以 root 运行：
+
+```bash
+./site production doctor
+```
+
+它只报告键名/Service/问题类型，不打印 Secret 值。`healthy` 才证明 Host 文件、派生文件、Compose
+和运行容器一致；只修改磁盘 `.env` 或 Compose 不算完成。
+
+## 生产配置异地恢复副本
+
+使用一把只保存在生产主机之外的 age Key。Recipient 不得等于 `.env` 内数据库备份使用的
+`BACKUP_AGE_RECIPIENT`：
+
+```bash
+./site production secrets export \
+  --recipient <offline-age-recipient> \
+  --output /secure-removable-media/tungchiahui-production.env.age
+```
+
+将加密制品移出生产主机。灾难恢复时只写到不存在的目标路径：
+
+```bash
+./site production secrets restore \
+  --identity /secure-removable-media/recovery-age-identity.txt \
+  --input /secure-removable-media/tungchiahui-production.env.age
+```
+
+Restore 会先校验完整键集合并以 `0600` 创建文件，不会覆盖现有 `.env`。
+
 ## Deploy
 
 ```bash

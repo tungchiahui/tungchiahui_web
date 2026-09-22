@@ -54,14 +54,25 @@ explicit retry; do not delete or rewrite failed operations to make a historical 
 
 GitHub Actions 和 `./site deploy` 向同一个独立 `control-api` 完成认证，执行相同 Policy，并调用同一个底层 Deployment Engine；不得维护 CI/Manual 两套实现。
 
-`release.yml` 只接受 `main` push 或显式 `workflow_dispatch`。同一 workflow 顺序执行完整 Quality Gate、Build/Publish Web、Service、Recovery、PostgreSQL 四个不可变镜像，并以 Web Manifest Digest 作为 Blue/Green Deployment Identity；Web Image Label 同时绑定精确 Service Image Digest。自动 Push 在部署前必须确认目标 SHA 仍是 `origin/main`，落后的并发 Release 不得切流；最终 Result Job 要求 Build 和 Deploy 都成功。Deploy Job 只持有 Repository Read 与 OIDC，进入受保护的 `production` Environment，并由单一 non-cancelling Concurrency Group 序列化。Workflow 不持有 Production DB、AI Provider、Host Login、Origin Pull Credential、生产 `.env` 或 Docker Socket。
+`release.yml` 只接受 `main` push 或显式 `workflow_dispatch`。完整 Quality Gate 按静态/Build、Unit、
+Production Infrastructure/Recovery、Integration/E2E、Migration 并行执行，再由稳定的
+`quality-gate` Fail-closed 汇总。Gate 全部成功后，PostgreSQL、Recovery、Service 镜像并行使用
+Buildx/GitHub Cache 构建，Web 镜像在精确 Service Digest 可用后构建；四个 Digest 汇总成
+Immutable Release Manifest 后才能部署。Web Manifest Digest 仍是 Blue/Green Deployment Identity，
+Web Image Label 同时绑定精确 Service Image Digest。自动 Push 在部署前必须确认目标 SHA 仍是
+`origin/main`，落后的并发 Release 不得切流；最终 Result Job 要求 Build 和 Deploy 都成功。Deploy
+Job 只持有 Repository Read 与 OIDC，进入受保护的 `production` Environment，并由单一
+non-cancelling Concurrency Group 序列化。Workflow 不持有 Production DB、AI Provider、Host
+Login、Origin Pull Credential、生产 `.env` 或 Docker Socket。
 
-Production 主机上的手工 Secret Source 只有部署根目录 `/etc/tungchiahui/.env`。Compose CLI 通过
+Production 主机上的手工 Secret/Policy Source 只有部署根目录 `/etc/tungchiahui/.env`。Ansible
+Inventory 只提供主机事实和本次不可变 Release Identity，不得覆盖其中的 Polling、Probe、Rate
+Limit、Ingress 或 Smoke Policy。Compose CLI 通过
 `--env-file` 使用该 `0600` 文件做变量插值，但不得把整份文件注入容器。每个 Service 的
 `environment` 是显式 Allowlist；`deploy-agent` 只获得部署/恢复配置与创建 Web Slot 所需的 Web
 变量，并以固定 Allowlist 重建候选 Slot 环境，不保留旧 Template 的未知变量。修改 `.env` 后，
-通过既有 provisioning/reconcile 重启受影响服务后再依赖新值；不要在主机上另建第二份人工维护
-的 env 文件。
+通过既有 provisioning/reconcile 重启受影响服务后再依赖新值，并运行
+`./site production doctor` 验证运行容器边界；不要在主机上另建第二份人工维护的 env 文件。
 
 正常 Remote Operation 使用：
 

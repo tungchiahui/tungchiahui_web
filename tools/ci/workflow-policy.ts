@@ -28,6 +28,10 @@ const pinnedActionPattern = /uses:\s+[^\s@]+@([a-f0-9]{40})(?:\s|$)/g
 const everyActionPattern = /uses:\s+[^\s@]+@([^\s#]+)/g
 const translationInvocation = './site "$' + '{arguments[@]}"'
 const workflowShaReference = 'ref: $' + '{{ github.workflow_sha }}'
+const serviceDigestReference =
+  'SITE_SERVICE_IMAGE_DIGEST=$' + '{{ needs.build-service.outputs.image_digest }}'
+const releaseShaBuildArgument =
+  'SITE_DEPLOYMENT_SHA=$' + '{{ needs.resolve-release.outputs.git_sha }}'
 
 export type WorkflowPolicyIssue = Readonly<{ file: string; message: string }>
 
@@ -88,6 +92,35 @@ function requireReleaseJobStructure(
     return parsed.data
   }
 
+  const qualityGate = requireJob('quality-gate')
+  const qualityJobs = [
+    'quality-static',
+    'quality-unit',
+    'quality-infrastructure',
+    'quality-integration',
+    'quality-migration',
+  ]
+  for (const qualityJob of qualityJobs) requireJob(qualityJob)
+  if (
+    qualityGate &&
+    (JSON.stringify(normalizedNeeds(qualityGate).toSorted()) !==
+      JSON.stringify(qualityJobs.toSorted()) ||
+      qualityGate.if !== 'always()')
+  ) {
+    issues.push({
+      file: 'release.yml',
+      message: 'Quality gate must fail closed across every parallel quality job',
+    })
+  }
+
+  const publishJobs = ['build-postgres', 'build-recovery', 'build-service', 'build-web']
+  for (const name of publishJobs) {
+    const publish = requireJob(name)
+    if (publish?.permissions?.packages !== 'write') {
+      issues.push({ file: 'release.yml', message: `${name} must retain packages: write` })
+    }
+  }
+
   const build = requireJob('build')
   if (build) {
     const requiredOutputs = [
@@ -106,8 +139,14 @@ function requireReleaseJobStructure(
         message: 'Build job must expose every immutable release image digest',
       })
     }
-    if (build.permissions?.packages !== 'write') {
-      issues.push({ file: 'release.yml', message: 'Build job must retain packages: write' })
+    if (
+      JSON.stringify(normalizedNeeds(build).toSorted()) !==
+      JSON.stringify(['resolve-release', ...publishJobs].toSorted())
+    ) {
+      issues.push({
+        file: 'release.yml',
+        message: 'Build manifest must require every immutable image publication',
+      })
     }
   }
 
@@ -174,14 +213,25 @@ export function analyzeWorkflowPolicies(root: string): readonly WorkflowPolicyIs
     'environment: production',
     "if: vars.PRODUCTION_DEPLOYMENT_ENABLED == 'true'",
     'ghcr.io/tungchiahui/tungchiahui_web',
+    'docker/setup-buildx-action@',
+    'docker/build-push-action@',
+    'cache-from: type=gha,scope=production-web',
+    'cache-to: type=gha,mode=max,scope=production-web',
     workflowShaReference,
     'SITE_CONTROL_API_URL: https://www.tungchiahui.cn',
-    '--build-arg "SITE_SERVICE_IMAGE_DIGEST=$service_image_digest"',
+    serviceDigestReference,
+    '### Immutable release manifest',
     'git rev-parse origin/main',
     './site deploy',
     '--wait',
     '[[ "$DEPLOY_RESULT" == "success" ]]',
   ])
+  if (release.source.split(releaseShaBuildArgument).length - 1 !== 4) {
+    issues.push({
+      file: 'release.yml',
+      message: 'Every production image must bind the exact release SHA',
+    })
+  }
   rejectFragments(issues, 'release.yml', release.source, [
     'pull_request:',
     'merge_group:',

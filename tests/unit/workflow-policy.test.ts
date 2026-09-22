@@ -6,6 +6,9 @@ import { describe, expect, it } from 'vitest'
 
 import { analyzeWorkflowPolicies } from '../../tools/ci/workflow-policy'
 
+const serviceDigestReference =
+  'SITE_SERVICE_IMAGE_DIGEST=$' + '{{ needs.build-service.outputs.image_digest }}'
+
 describe('Phase 15 workflow trigger and credential separation', () => {
   it('keeps Quality, Application, Content and Translation automation hard-gated and separate', () => {
     expect(analyzeWorkflowPolicies(resolve(process.cwd()))).toEqual([])
@@ -23,9 +26,9 @@ describe('Phase 15 workflow trigger and credential separation', () => {
       target: '  release-result:',
     },
     {
-      expected: 'Missing policy: --build-arg "SITE_SERVICE_IMAGE_DIGEST=$service_image_digest"',
-      replacement: '--build-arg "SITE_SERVICE_IMAGE_DIGEST=sha256:unbound"',
-      target: '--build-arg "SITE_SERVICE_IMAGE_DIGEST=$service_image_digest"',
+      expected: `Missing policy: ${serviceDigestReference}`,
+      replacement: 'SITE_SERVICE_IMAGE_DIGEST=sha256:unbound',
+      target: serviceDigestReference,
     },
   ])('rejects a structurally unsafe release workflow mutation: $target', (scenario) => {
     const root = mkdtempSync(join(tmpdir(), 'workflow-policy-'))

@@ -43,7 +43,25 @@ export type SiteCommand =
   | Readonly<{ kind: 'dev-start' }>
   | Readonly<{ kind: 'dev-stop' }>
   | Readonly<{ kind: 'help' }>
+  | Readonly<{
+      composeFile: string
+      envFile: string
+      kind: 'production-doctor'
+      projectName: string
+    }>
   | Readonly<{ kind: 'production-secrets-init'; outputFile: string }>
+  | Readonly<{
+      envFile: string
+      kind: 'production-secrets-export'
+      outputFile: string
+      recipient: string
+    }>
+  | Readonly<{
+      identityFile: string
+      inputFile: string
+      kind: 'production-secrets-restore'
+      outputFile: string
+    }>
   | Readonly<{ envFile: string; kind: 'production-secrets-validate' }>
   | Readonly<{
       action: 'planned-migration' | 'provision-only'
@@ -132,6 +150,85 @@ export function parseSiteCommand(arguments_: readonly string[]): SiteCommand {
       throw new SiteUsageError(`Unknown production secrets init argument: ${String(argument)}`)
     }
     return Object.freeze({ kind: 'production-secrets-init', outputFile })
+  }
+
+  if (arguments_[0] === 'production' && arguments_[1] === 'doctor') {
+    let envFile = defaultProductionEnvFile
+    let composeFile = '/etc/tungchiahui/compose.yaml'
+    let projectName = 'tungchiahui-production'
+    let index = 2
+    while (index < arguments_.length) {
+      const argument = arguments_[index]
+      const value = z
+        .string()
+        .min(1)
+        .parse(arguments_[index + 1])
+      if (argument === '--env-file') envFile = value
+      else if (argument === '--compose-file') composeFile = value
+      else if (argument === '--project-name') projectName = value
+      else throw new SiteUsageError(`Unknown production doctor argument: ${String(argument)}`)
+      index += 2
+    }
+    return Object.freeze({ composeFile, envFile, kind: 'production-doctor', projectName })
+  }
+
+  if (arguments_[0] === 'production' && arguments_[1] === 'secrets') {
+    const action = arguments_[2]
+    if (action === 'export') {
+      let envFile = defaultProductionEnvFile
+      let outputFile = ''
+      let recipient = ''
+      let index = 3
+      while (index < arguments_.length) {
+        const argument = arguments_[index]
+        const value = z
+          .string()
+          .min(1)
+          .parse(arguments_[index + 1])
+        if (argument === '--env-file') envFile = value
+        else if (argument === '--output') outputFile = value
+        else if (argument === '--recipient') recipient = value
+        else
+          throw new SiteUsageError(
+            `Unknown production secrets export argument: ${String(argument)}`,
+          )
+        index += 2
+      }
+      if (!outputFile || !recipient) {
+        throw new SiteUsageError('production secrets export requires --recipient and --output')
+      }
+      return Object.freeze({ envFile, kind: 'production-secrets-export', outputFile, recipient })
+    }
+    if (action === 'restore') {
+      let identityFile = ''
+      let inputFile = ''
+      let outputFile = defaultProductionEnvFile
+      let index = 3
+      while (index < arguments_.length) {
+        const argument = arguments_[index]
+        const value = z
+          .string()
+          .min(1)
+          .parse(arguments_[index + 1])
+        if (argument === '--identity') identityFile = value
+        else if (argument === '--input') inputFile = value
+        else if (argument === '--output') outputFile = value
+        else
+          throw new SiteUsageError(
+            `Unknown production secrets restore argument: ${String(argument)}`,
+          )
+        index += 2
+      }
+      if (!identityFile || !inputFile) {
+        throw new SiteUsageError('production secrets restore requires --identity and --input')
+      }
+      return Object.freeze({
+        identityFile,
+        inputFile,
+        kind: 'production-secrets-restore',
+        outputFile,
+      })
+    }
   }
 
   if (arguments_[0] === 'storage' && arguments_[1] === 'backup' && arguments_[2] === 'assets') {

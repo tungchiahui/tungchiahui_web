@@ -3,6 +3,11 @@ import { createContentSync } from './content/control-client'
 import { createDeployment, createRollback, readDeploymentStatus } from './deployment/control-client'
 import { resetDevelopmentStack, startDevelopmentStack, stopDevelopmentStack } from './dev/runtime'
 import {
+  exportProductionConfiguration,
+  restoreProductionConfiguration,
+} from './production/config-backup'
+import { runProductionDoctor } from './production/doctor'
+import {
   initializeProductionSecrets,
   validateProductionSecrets,
 } from './production/initialize-secrets'
@@ -50,10 +55,20 @@ Deployment:
   rollback [--reason <text>]
 
 Production setup:
+  production doctor [--env-file /etc/tungchiahui/.env]
+                    [--compose-file /etc/tungchiahui/compose.yaml]
+                    [--project-name tungchiahui-production]
+            Validate the canonical env, derived files and live service environment boundaries
   production secrets init [--output /etc/tungchiahui/.env]
             Generate the single plaintext production env file; refuses to overwrite
   production secrets validate [--env-file /etc/tungchiahui/.env]
             Validate the single production env file without printing values
+  production secrets export --recipient <offline-age-recipient> --output <file.age>
+                            [--env-file /etc/tungchiahui/.env]
+            Encrypt the validated env for off-host recovery with a separate recipient
+  production secrets restore --identity <offline-age-identity> --input <file.age>
+                             [--output /etc/tungchiahui/.env]
+            Restore only to a missing output path, validate, and write mode 0600
 
 Server lifecycle:
   provision <inventory-hostname-or-alias> [--reason <text>]
@@ -142,8 +157,23 @@ async function main() {
     case 'help':
       console.log(usage)
       return 0
+    case 'production-doctor':
+      console.log(
+        JSON.stringify(
+          runProductionDoctor(command.envFile, command.composeFile, command.projectName),
+          null,
+          2,
+        ),
+      )
+      return 0
     case 'production-secrets-init':
       initializeProductionSecrets(command.outputFile)
+      return 0
+    case 'production-secrets-export':
+      console.log(JSON.stringify(exportProductionConfiguration(command), null, 2))
+      return 0
+    case 'production-secrets-restore':
+      console.log(JSON.stringify(restoreProductionConfiguration(command), null, 2))
       return 0
     case 'production-secrets-validate':
       validateProductionSecrets(command.envFile)

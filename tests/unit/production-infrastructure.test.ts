@@ -26,6 +26,10 @@ const productionRoleDefaultsSource = readFileSync(
   resolve('ops/production/ansible/roles/tungchiahui_production/defaults/main.yml'),
   'utf8',
 )
+const productionEnvironmentExampleSource = readFileSync(
+  resolve('ops/production/secrets/.env.example'),
+  'utf8',
+)
 const recoveryDockerfileSource = readFileSync(
   resolve('ops/production/images/recovery.Dockerfile'),
   'utf8',
@@ -248,8 +252,8 @@ describe('Phase 12 production foundation policy', () => {
     )
     expect(inventorySource).toContain('ansible_host: Debian')
     expect(inventorySource).toContain('ansible_user: tungchiahui')
-    expect(inventorySource).toContain('tungchiahui_content_polling_enabled: "true"')
-    expect(inventorySource).toContain('tungchiahui_search_polling_enabled: "true"')
+    expect(inventorySource).not.toContain('tungchiahui_content_polling_enabled')
+    expect(inventorySource).not.toContain('tungchiahui_search_polling_enabled')
     expect(inventorySource).not.toMatch(/ansible_host:\s*(?:\d{1,3}\.){3}\d{1,3}/)
     expect(composeSource).not.toContain('S3_CONTRACT_')
     expect(composeSource).toContain(
@@ -259,9 +263,9 @@ describe('Phase 12 production foundation policy', () => {
     expect(composeSource).toContain(
       'DEPLOYMENT_SEARCH_QUERY: ${TUNGCHIAHUI_DEPLOYMENT_SEARCH_QUERY:',
     )
-    expect(productionRoleSource).toContain('TUNGCHIAHUI_DEPLOYMENT_ARTICLE_PATH')
-    expect(productionRoleSource).toContain('TUNGCHIAHUI_DEPLOYMENT_ASSET_PATH')
-    expect(productionRoleSource).toContain('TUNGCHIAHUI_DEPLOYMENT_SEARCH_QUERY')
+    expect(productionEnvironmentExampleSource).toContain('TUNGCHIAHUI_DEPLOYMENT_ARTICLE_PATH')
+    expect(productionEnvironmentExampleSource).toContain('TUNGCHIAHUI_DEPLOYMENT_ASSET_PATH')
+    expect(productionEnvironmentExampleSource).toContain('TUNGCHIAHUI_DEPLOYMENT_SEARCH_QUERY')
     expect(productionRoleSource).toContain('Reconcile validated OpenResty configuration')
     expect(productionRoleSource).toContain(
       'Schedule missing OpenResty convergence for scoped control-plane reconciliation',
@@ -327,8 +331,9 @@ describe('Phase 12 production foundation policy', () => {
   it('defines the owner-gated 03:05 production backup schedule', () => {
     expect(productionRoleDefaultsSource).toContain('tungchiahui_manage_backup_schedule: false')
     expect(productionRoleDefaultsSource).toContain('tungchiahui_backup_schedule_enabled: false')
-    expect(productionRoleDefaultsSource).toContain(
-      'tungchiahui_backup_replication_concurrency: "8"',
+    expect(productionRoleDefaultsSource).not.toContain('tungchiahui_backup_replication_concurrency')
+    expect(productionEnvironmentExampleSource).toContain(
+      'TUNGCHIAHUI_BACKUP_REPLICATION_CONCURRENCY=8',
     )
     expect(composeSource).toContain(
       'BACKUP_REPLICATION_CONCURRENCY: $' + '{TUNGCHIAHUI_BACKUP_REPLICATION_CONCURRENCY:-8}',

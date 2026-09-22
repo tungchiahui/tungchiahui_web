@@ -27,6 +27,44 @@ describe('site command boundary', () => {
       kind: 'production-secrets-validate',
     })
     expect(
+      parseSiteCommand([
+        'production',
+        'secrets',
+        'export',
+        '--recipient',
+        `age1${'a'.repeat(58)}`,
+        '--output',
+        '/tmp/production.env.age',
+      ]),
+    ).toEqual({
+      envFile: '/etc/tungchiahui/.env',
+      kind: 'production-secrets-export',
+      outputFile: '/tmp/production.env.age',
+      recipient: `age1${'a'.repeat(58)}`,
+    })
+    expect(
+      parseSiteCommand([
+        'production',
+        'secrets',
+        'restore',
+        '--identity',
+        '/offline/recovery.txt',
+        '--input',
+        '/offline/production.env.age',
+      ]),
+    ).toEqual({
+      identityFile: '/offline/recovery.txt',
+      inputFile: '/offline/production.env.age',
+      kind: 'production-secrets-restore',
+      outputFile: '/etc/tungchiahui/.env',
+    })
+    expect(parseSiteCommand(['production', 'doctor'])).toEqual({
+      composeFile: '/etc/tungchiahui/compose.yaml',
+      envFile: '/etc/tungchiahui/.env',
+      kind: 'production-doctor',
+      projectName: 'tungchiahui-production',
+    })
+    expect(
       parseSiteCommand(['production', 'secrets', 'validate', '--env-file', '/tmp/.env']),
     ).toEqual({
       envFile: '/tmp/.env',

@@ -89,17 +89,16 @@ function addEnvironmentEntry(
   entries.set(key, value)
 }
 
-function addOptionalEnvironmentEntries(
-  entries: Map<string, string>,
-  sectionName: string,
-  section: Readonly<Record<string, string>>,
-  excludedKeys: readonly string[],
+function firstEnvironmentValue(
+  sections: readonly Readonly<Record<string, string>>[],
+  key: string,
+  fallback: string,
 ) {
-  const excluded = new Set(excludedKeys)
-  for (const [key, value] of Object.entries(section)) {
-    if (excluded.has(key)) continue
-    addEnvironmentEntry(entries, key, value, sectionName)
+  for (const section of sections) {
+    const value = section[key]
+    if (value !== undefined) return value
   }
+  return fallback
 }
 
 export function createProductionEnvironmentContentsFromLegacySopsDocument(input: unknown) {
@@ -204,19 +203,60 @@ export function createProductionEnvironmentContentsFromLegacySopsDocument(input:
     'pgbouncer_userlist',
   )
 
-  const sectionPairs = [
-    ['web_env', web, ['DATABASE_URL']],
-    ['control_api_env', controlApi, ['DATABASE_URL', 'CONTROL_GITHUB_OIDC_POLICY_JSON']],
-    ['content_worker_env', contentWorker, ['DATABASE_URL']],
-    ['database_role_bootstrap_env', databaseBootstrap, []],
-    ['database_migrate_env', databaseMigrate, ['DATABASE_URL']],
-    ['postgres_env', postgres, []],
-    ['backup_env', backup, []],
-    ['deployment_registry_env', deploymentRegistry, []],
-    ['observability_env', observability, []],
+  const legacySections = [
+    web,
+    controlApi,
+    contentWorker,
+    databaseBootstrap,
+    databaseMigrate,
+    postgres,
+    backup,
+    deploymentRegistry,
+    observability,
   ] as const
-  for (const [sectionName, section, excluded] of sectionPairs) {
-    addOptionalEnvironmentEntries(entries, sectionName, section, excluded)
+  const productionConfigurationDefaults = {
+    TUNGCHIAHUI_BACKUP_REPLICATION_CONCURRENCY: '8',
+    TUNGCHIAHUI_CONTENT_POLLING_ENABLED: 'false',
+    TUNGCHIAHUI_CONTROL_RATE_LIMIT_PER_MINUTE: '120',
+    TUNGCHIAHUI_DEPLOYMENT_ARTICLE_PATH: '/blog/2026-09-02-wm-lun-wen-luo-lie',
+    TUNGCHIAHUI_DEPLOYMENT_ASSET_PATH: '/docs/ros2/core/index.html',
+    TUNGCHIAHUI_DEPLOYMENT_BACKUP_MAX_AGE_SECONDS: '172800',
+    TUNGCHIAHUI_DEPLOYMENT_IMAGE_REPOSITORY: 'ghcr.io/tungchiahui/tungchiahui_web',
+    TUNGCHIAHUI_DEPLOYMENT_SEARCH_QUERY: 'ROS2_Control',
+    TUNGCHIAHUI_OBSERVABILITY_BACKUP_MAX_AGE_SECONDS: '172800',
+    TUNGCHIAHUI_OBSERVABILITY_DISK_CRITICAL_PERCENT: '90',
+    TUNGCHIAHUI_OBSERVABILITY_INTERVAL_SECONDS: '30',
+    TUNGCHIAHUI_OBSERVABILITY_JOB_MAX_AGE_SECONDS: '900',
+    TUNGCHIAHUI_OBSERVABILITY_LATENCY_WARNING_MS: '2000',
+    TUNGCHIAHUI_OBSERVABILITY_ORIGIN_HOSTNAME: 'ddns.tungchiahui.cn',
+    TUNGCHIAHUI_OBSERVABILITY_ORIGIN_IPV6_REQUIRED: 'true',
+    TUNGCHIAHUI_OBSERVABILITY_ORIGIN_SERVER_NAME: 'ddns.tungchiahui.cn',
+    TUNGCHIAHUI_OBSERVABILITY_ORIGIN_URL: 'https://ddns.tungchiahui.cn:8443/api/ready',
+    TUNGCHIAHUI_OBSERVABILITY_PUBLIC_ASSET_PATH: '/api/assets/monitoring/health.svg',
+    TUNGCHIAHUI_OBSERVABILITY_PUBLIC_SERVER_NAME: 'www.tungchiahui.cn',
+    TUNGCHIAHUI_OBSERVABILITY_PUBLIC_URL: 'https://www.tungchiahui.cn/',
+    TUNGCHIAHUI_OBSERVABILITY_RESTORE_DRILL_MAX_AGE_SECONDS: '2678400',
+    TUNGCHIAHUI_OBSERVABILITY_RESTORE_DRILL_TIMESTAMP:
+      observability.OBSERVABILITY_RESTORE_DRILL_TIMESTAMP ?? '1970-01-01T00:00:00.000Z',
+    TUNGCHIAHUI_ORIGIN_BIND_ADDRESS: '127.0.0.1',
+    TUNGCHIAHUI_ORIGIN_PORT: '3100',
+    TUNGCHIAHUI_SEARCH_POLLING_ENABLED: 'false',
+  } as const
+  for (const [key, fallback] of Object.entries(productionConfigurationDefaults)) {
+    addEnvironmentEntry(
+      entries,
+      key,
+      firstEnvironmentValue(legacySections, key, fallback),
+      'legacy production configuration',
+    )
+  }
+  for (const key of [
+    'OBSERVABILITY_ALERT_WEBHOOK_URL',
+    'OBSERVABILITY_ALERT_WEBHOOK_BEARER_TOKEN',
+    'OWNER_PASSWORD_HASH',
+  ] as const) {
+    const value = firstEnvironmentValue(legacySections, key, '')
+    if (value !== '') addEnvironmentEntry(entries, key, value, 'legacy optional configuration')
   }
 
   const contents = formatEnvironment([

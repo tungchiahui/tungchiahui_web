@@ -143,7 +143,12 @@ Phase 10 在同一 Disposable Stack 先通过 PostgreSQL Durable Job 重建四 L
 
 ## Deployment Pipeline Test
 
-验证 Web Application Repository 的 `release.yml` 必须只由 `main` push 或显式 dispatch 触发，并在全部 CI Quality Gates 通过后才 Build Git-SHA-tagged Immutable Image Set、解析 digest 并调用与 `./site deploy` 相同的 Control Plane/Deployment Engine。验证 Content Repository Push 只触发 Content Sync，不触发 Next.js Build 或 Blue-Green Deployment。
+验证 Web Application Repository 的 `release.yml` 必须只由 `main` push 或显式 dispatch 触发。
+静态/Build、Unit、Production Infrastructure/Recovery、Integration/E2E 和 Migration 可以并行，但
+稳定的 `quality-gate` 必须 Fail-closed 汇总全部结果；只有汇总成功后才可用缓存并行 Build
+Git-SHA-tagged Immutable Image Set、汇总四个 digest 并调用与 `./site deploy` 相同的 Control
+Plane/Deployment Engine。验证 Content Repository Push 只触发 Content Sync，不触发 Next.js Build
+或 Blue-Green Deployment。
 
 ## Container Hardening Test
 

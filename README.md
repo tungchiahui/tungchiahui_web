@@ -166,7 +166,7 @@ GitHub Actions 的手动 `workflow_dispatch` 可以触发同一个 Translation J
 - pnpm
 - Docker Compose
 - OpenResty
-- 单一 Host-local Production `.env` + Service-scoped Runtime Injection（ADR 0023）
+- 单一 Host-local Production `.env` + Service-scoped Runtime Injection/Convergence（ADR 0023/0024）
 - Ansible
 - pgBackRest + WAL/PITR
 - Adobe S3Mock for local S3 emulation

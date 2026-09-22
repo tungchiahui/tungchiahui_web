@@ -48,12 +48,17 @@ const registryRepository = `127.0.0.1:${String(input.PHASE15_REGISTRY_PORT)}/tun
 const registryTag = `${registryRepository}:${input.PHASE12_GIT_SHA}`
 let registryDigest = ''
 let serviceRegistryDigest = ''
+const initialSha = input.PHASE12_GIT_SHA === 'a'.repeat(40) ? 'b'.repeat(40) : 'a'.repeat(40)
 const webImage = `tungchiahui-web:${input.PHASE12_GIT_SHA}`
 const serviceImage = `tungchiahui-services:${input.PHASE12_GIT_SHA}`
+const initialWebImage = `tungchiahui-web:${initialSha}`
+const initialServiceImage = `tungchiahui-services:${initialSha}`
 const staleServiceImage = `${projectName}-stale-service:test`
 const serviceRegistryTag = `${registryRepository}-service:${input.PHASE12_GIT_SHA}`
 const recoveryImage = `tungchiahui-recovery:${input.PHASE12_GIT_SHA}`
 const postgresImage = `tungchiahui-postgres:${input.PHASE12_GIT_SHA}`
+const initialRecoveryImage = `tungchiahui-recovery:${initialSha}`
+const initialPostgresImage = `tungchiahui-postgres:${initialSha}`
 const trivyImage =
   'aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969'
 const configRoot = join(input.PHASE12_HOST_ROOT, 'etc')
@@ -114,7 +119,7 @@ function composeEnvironment() {
   const socket = execute('stat', ['--format=%g', '/var/run/docker.sock']).stdout.trim()
   return {
     TUNGCHIAHUI_BLUE_CONTAINER_NAME: `${projectName}-web-blue-1`,
-    TUNGCHIAHUI_BLUE_DEPLOYMENT_SHA: input.PHASE12_GIT_SHA,
+    TUNGCHIAHUI_BLUE_DEPLOYMENT_SHA: initialSha,
     TUNGCHIAHUI_CONFIG_ROOT: configRoot,
     TUNGCHIAHUI_CONTENT_POLLING_ENABLED: 'false',
     TUNGCHIAHUI_CONTROL_RATE_LIMIT_PER_MINUTE: '1000',
@@ -126,7 +131,7 @@ function composeEnvironment() {
     TUNGCHIAHUI_DEPLOYMENT_SEARCH_QUERY: 'ROS2_Control',
     TUNGCHIAHUI_DOCKER_SOCKET_GID: socket,
     TUNGCHIAHUI_GREEN_CONTAINER_NAME: `${projectName}-web-green-1`,
-    TUNGCHIAHUI_GREEN_DEPLOYMENT_SHA: input.PHASE12_GIT_SHA,
+    TUNGCHIAHUI_GREEN_DEPLOYMENT_SHA: initialSha,
     TUNGCHIAHUI_MIGRATION_CONTAINER_NAME: `${projectName}-database-migrate-1`,
     TUNGCHIAHUI_OPENRESTY_CONTAINER_NAME: `${projectName}-openresty-1`,
     TUNGCHIAHUI_ORIGIN_PORT: String(input.PHASE12_ORIGIN_PORT),
@@ -145,14 +150,14 @@ function composeEnvironment() {
     TUNGCHIAHUI_OBSERVABILITY_RESTORE_DRILL_MAX_AGE_SECONDS: '86400',
     TUNGCHIAHUI_OBSERVABILITY_RESTORE_DRILL_TIMESTAMP: new Date().toISOString(),
     TUNGCHIAHUI_POSTGRES_CONTAINER_NAME: `${projectName}-postgres-1`,
-    TUNGCHIAHUI_POSTGRES_IMAGE: postgresImage,
+    TUNGCHIAHUI_POSTGRES_IMAGE: initialPostgresImage,
     TUNGCHIAHUI_PRODUCTION_ENV_FILE: productionEnvPath,
-    TUNGCHIAHUI_RECOVERY_IMAGE: recoveryImage,
+    TUNGCHIAHUI_RECOVERY_IMAGE: initialRecoveryImage,
     TUNGCHIAHUI_SEARCH_POLLING_ENABLED: 'false',
     TUNGCHIAHUI_SECRET_DIRECTORY: secretRoot,
-    TUNGCHIAHUI_SERVICE_IMAGE: serviceImage,
-    TUNGCHIAHUI_WEB_BLUE_IMAGE: webImage,
-    TUNGCHIAHUI_WEB_GREEN_IMAGE: webImage,
+    TUNGCHIAHUI_SERVICE_IMAGE: initialServiceImage,
+    TUNGCHIAHUI_WEB_BLUE_IMAGE: initialWebImage,
+    TUNGCHIAHUI_WEB_GREEN_IMAGE: initialWebImage,
   }
 }
 
@@ -186,13 +191,20 @@ function targetComposeEnvironment() {
     TUNGCHIAHUI_DATA_ROOT: targetDataRoot,
     TUNGCHIAHUI_DOCKER_SOCKET_GID: socket,
     TUNGCHIAHUI_GREEN_CONTAINER_NAME: `${targetProjectName}-web-green-1`,
+    TUNGCHIAHUI_BLUE_DEPLOYMENT_SHA: input.PHASE12_GIT_SHA,
+    TUNGCHIAHUI_GREEN_DEPLOYMENT_SHA: input.PHASE12_GIT_SHA,
     TUNGCHIAHUI_MIGRATION_CONTAINER_NAME: `${targetProjectName}-database-migrate-1`,
     TUNGCHIAHUI_OPENRESTY_CONTAINER_NAME: `${targetProjectName}-openresty-1`,
     TUNGCHIAHUI_ORIGIN_BIND_ADDRESS: '::1',
     TUNGCHIAHUI_ORIGIN_PORT: String(input.PHASE17_TARGET_ORIGIN_PORT),
     TUNGCHIAHUI_POSTGRES_CONTAINER_NAME: `${targetProjectName}-postgres-1`,
+    TUNGCHIAHUI_POSTGRES_IMAGE: postgresImage,
     TUNGCHIAHUI_PRODUCTION_ENV_FILE: targetProductionEnvPath,
     TUNGCHIAHUI_SECRET_DIRECTORY: targetSecretRoot,
+    TUNGCHIAHUI_RECOVERY_IMAGE: recoveryImage,
+    TUNGCHIAHUI_SERVICE_IMAGE: serviceImage,
+    TUNGCHIAHUI_WEB_BLUE_IMAGE: webImage,
+    TUNGCHIAHUI_WEB_GREEN_IMAGE: webImage,
   }
 }
 
@@ -292,6 +304,31 @@ function createProductionEnv() {
     `SITE_REVALIDATION_SECRET=${testSecret}`,
     'GITHUB_CONTENT_REPOSITORY=tungchiahui/tungchiahui_content',
     'GITHUB_CONTENT_READ_TOKEN=',
+    'TUNGCHIAHUI_BACKUP_REPLICATION_CONCURRENCY=8',
+    'TUNGCHIAHUI_CONTENT_POLLING_ENABLED=false',
+    'TUNGCHIAHUI_SEARCH_POLLING_ENABLED=false',
+    'TUNGCHIAHUI_CONTROL_RATE_LIMIT_PER_MINUTE=1000',
+    'TUNGCHIAHUI_DEPLOYMENT_ARTICLE_PATH=/blog/phase-3-seed',
+    'TUNGCHIAHUI_DEPLOYMENT_ASSET_PATH=/docs/ros2/core/index.html',
+    'TUNGCHIAHUI_DEPLOYMENT_BACKUP_MAX_AGE_SECONDS=86400',
+    `TUNGCHIAHUI_DEPLOYMENT_IMAGE_REPOSITORY=${registryRepository}`,
+    'TUNGCHIAHUI_DEPLOYMENT_SEARCH_QUERY=ROS2_Control',
+    'TUNGCHIAHUI_OBSERVABILITY_BACKUP_MAX_AGE_SECONDS=86400',
+    'TUNGCHIAHUI_OBSERVABILITY_DISK_CRITICAL_PERCENT=99',
+    'TUNGCHIAHUI_OBSERVABILITY_INTERVAL_SECONDS=10',
+    'TUNGCHIAHUI_OBSERVABILITY_JOB_MAX_AGE_SECONDS=3600',
+    'TUNGCHIAHUI_OBSERVABILITY_LATENCY_WARNING_MS=10000',
+    'TUNGCHIAHUI_OBSERVABILITY_ORIGIN_HOSTNAME=localhost',
+    'TUNGCHIAHUI_OBSERVABILITY_ORIGIN_IPV6_REQUIRED=false',
+    'TUNGCHIAHUI_OBSERVABILITY_ORIGIN_SERVER_NAME=ddns.tungchiahui.cn',
+    'TUNGCHIAHUI_OBSERVABILITY_ORIGIN_URL=http://openresty:8082/api/ready',
+    'TUNGCHIAHUI_OBSERVABILITY_PUBLIC_ASSET_PATH=/api/assets/monitoring/health.svg',
+    'TUNGCHIAHUI_OBSERVABILITY_PUBLIC_SERVER_NAME=www.tungchiahui.cn',
+    'TUNGCHIAHUI_OBSERVABILITY_PUBLIC_URL=http://openresty:8082/',
+    'TUNGCHIAHUI_OBSERVABILITY_RESTORE_DRILL_MAX_AGE_SECONDS=86400',
+    `TUNGCHIAHUI_OBSERVABILITY_RESTORE_DRILL_TIMESTAMP=${new Date().toISOString()}`,
+    'OBSERVABILITY_ALERT_WEBHOOK_URL=',
+    'OBSERVABILITY_ALERT_WEBHOOK_BEARER_TOKEN=',
     `CONTROL_OPERATOR_KEYS_JSON=${operatorKeys}`,
     `CONTROL_GITHUB_OIDC_POLICY_JSON=${githubPolicy}`,
     'ASSET_S3_ENDPOINT=https://s3.example.invalid',
@@ -318,8 +355,16 @@ function createProductionEnv() {
     'DEPLOYMENT_REGISTRY_TOKEN=phase15-registry-token-value',
     `PGBOUNCER_USERLIST_BASE64=${Buffer.from(pgbouncerUserlist).toString('base64')}`,
   ].join('\n')
-  writeFileSync(productionEnvPath, `${env}\n`, { mode: 0o600 })
-  writeFileSync(targetProductionEnvPath, `${env}\n`, { mode: 0o600 })
+  writeFileSync(
+    productionEnvPath,
+    `${env}\nTUNGCHIAHUI_ORIGIN_BIND_ADDRESS=127.0.0.1\nTUNGCHIAHUI_ORIGIN_PORT=${String(input.PHASE12_ORIGIN_PORT)}\n`,
+    { mode: 0o600 },
+  )
+  writeFileSync(
+    targetProductionEnvPath,
+    `${env}\nTUNGCHIAHUI_ORIGIN_BIND_ADDRESS=::1\nTUNGCHIAHUI_ORIGIN_PORT=${String(input.PHASE17_TARGET_ORIGIN_PORT)}\n`,
+    { mode: 0o600 },
+  )
   return {
     secretSentinels: [
       testPassword,
@@ -410,6 +455,14 @@ function buildImages() {
       .regex(/^127\.0\.0\.1:[0-9]+\/tungchiahui-web@sha256:[a-f0-9]{64}$/)
       .parse(repositoryDigest)
       .split('@')[1] ?? ''
+  for (const [source, target] of [
+    [webImage, initialWebImage],
+    [serviceImage, initialServiceImage],
+    [recoveryImage, initialRecoveryImage],
+    [postgresImage, initialPostgresImage],
+  ] as const) {
+    execute('docker', ['tag', source, target])
+  }
 }
 
 function verifyImageSecurity() {
@@ -509,7 +562,7 @@ function runProvision() {
       tungchiahui_data_root: dataRoot,
       tungchiahui_deployment_article_path: '/blog/phase-3-seed',
       tungchiahui_deployment_asset_path: '/docs/ros2/core/index.html',
-      tungchiahui_deployment_sha: input.PHASE12_GIT_SHA,
+      tungchiahui_deployment_sha: initialSha,
       tungchiahui_deployment_backup_max_age_seconds: '86400',
       tungchiahui_deployment_image_repository: registryRepository,
       tungchiahui_deployment_search_query: 'ROS2_Control',
@@ -531,14 +584,14 @@ function runProvision() {
       tungchiahui_observability_public_url: 'http://openresty:8082/',
       tungchiahui_observability_restore_drill_max_age_seconds: '86400',
       tungchiahui_observability_restore_drill_timestamp: new Date().toISOString(),
-      tungchiahui_postgres_image: postgresImage,
+      tungchiahui_postgres_image: initialPostgresImage,
       tungchiahui_production_env_file: productionEnvPath,
-      tungchiahui_recovery_image: recoveryImage,
+      tungchiahui_recovery_image: initialRecoveryImage,
       tungchiahui_repository_root: '/workspace',
       tungchiahui_search_polling_enabled: 'false',
       tungchiahui_secret_root: secretRoot,
-      tungchiahui_service_image: serviceImage,
-      tungchiahui_web_image: webImage,
+      tungchiahui_service_image: initialServiceImage,
+      tungchiahui_web_image: initialWebImage,
     }),
   )
   const command = [
@@ -1447,7 +1500,7 @@ async function verifyBlueGreenDeployment() {
   )
   const rollbackVersion = publicVersion()
   expect(
-    rollbackVersion.gitSha === input.PHASE12_GIT_SHA && rollbackVersion.slot === 'blue',
+    rollbackVersion.gitSha === initialSha && rollbackVersion.slot === 'blue',
     'Rollback did not switch to the retained blue image',
   )
 
@@ -1467,7 +1520,7 @@ async function verifyBlueGreenDeployment() {
   expect(rejected.status === 'failed', 'Missing immutable image was not rejected')
   const failureVersion = publicVersion()
   expect(
-    failureVersion.gitSha === input.PHASE12_GIT_SHA && failureVersion.slot === 'blue',
+    failureVersion.gitSha === initialSha && failureVersion.slot === 'blue',
     'Failed inactive deployment changed the active public release',
   )
   const retainedGreen = z
@@ -1517,7 +1570,7 @@ async function verifyBlueGreenDeployment() {
     )
     const stillActive = publicVersion()
     expect(
-      stillActive.gitSha === input.PHASE12_GIT_SHA && stillActive.slot === 'blue',
+      stillActive.gitSha === initialSha && stillActive.slot === 'blue',
       'PostgreSQL dependency failure changed the active public release',
     )
   } finally {

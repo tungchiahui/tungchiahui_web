@@ -1,10 +1,19 @@
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 import {
   createPostgresScramVerifier,
   parsePgbouncerScramUserlist,
   verifyPostgresScramVerifier,
 } from '../../src/database/postgres-scram'
+import {
+  exportProductionConfiguration,
+  restoreProductionConfiguration,
+} from '../../tools/production/config-backup'
 import { createProductionEnvironmentContentsFromLegacySopsDocument } from '../../tools/production/convert-legacy-sops-to-env'
+import { analyzeServiceEnvironment } from '../../tools/production/doctor'
 import {
   createProductionEnvironmentContents,
   validateProductionEnvironmentContents,
@@ -18,7 +27,100 @@ const legacyDeployOidcPolicy = JSON.stringify([
   { workflowRef: 'tungchiahui/tungchiahui_web/.github/workflows/deploy.yml@refs/heads/main' },
 ])
 
+const productionConfigurationLines = [
+  'TUNGCHIAHUI_BACKUP_REPLICATION_CONCURRENCY=8',
+  'TUNGCHIAHUI_CONTENT_POLLING_ENABLED=true',
+  'TUNGCHIAHUI_SEARCH_POLLING_ENABLED=true',
+  'TUNGCHIAHUI_CONTROL_RATE_LIMIT_PER_MINUTE=120',
+  'TUNGCHIAHUI_DEPLOYMENT_ARTICLE_PATH=/blog/representative',
+  'TUNGCHIAHUI_DEPLOYMENT_ASSET_PATH=/docs/representative.html',
+  'TUNGCHIAHUI_DEPLOYMENT_BACKUP_MAX_AGE_SECONDS=172800',
+  'TUNGCHIAHUI_DEPLOYMENT_IMAGE_REPOSITORY=ghcr.io/tungchiahui/tungchiahui_web',
+  'TUNGCHIAHUI_DEPLOYMENT_SEARCH_QUERY=ROS2_Control',
+  'TUNGCHIAHUI_ORIGIN_BIND_ADDRESS=127.0.0.1',
+  'TUNGCHIAHUI_ORIGIN_PORT=3100',
+  'TUNGCHIAHUI_OBSERVABILITY_BACKUP_MAX_AGE_SECONDS=172800',
+  'TUNGCHIAHUI_OBSERVABILITY_DISK_CRITICAL_PERCENT=90',
+  'TUNGCHIAHUI_OBSERVABILITY_INTERVAL_SECONDS=30',
+  'TUNGCHIAHUI_OBSERVABILITY_JOB_MAX_AGE_SECONDS=900',
+  'TUNGCHIAHUI_OBSERVABILITY_LATENCY_WARNING_MS=2000',
+  'TUNGCHIAHUI_OBSERVABILITY_ORIGIN_HOSTNAME=ddns.tungchiahui.cn',
+  'TUNGCHIAHUI_OBSERVABILITY_ORIGIN_IPV6_REQUIRED=true',
+  'TUNGCHIAHUI_OBSERVABILITY_ORIGIN_SERVER_NAME=ddns.tungchiahui.cn',
+  'TUNGCHIAHUI_OBSERVABILITY_ORIGIN_URL=https://ddns.tungchiahui.cn:8443/api/ready',
+  'TUNGCHIAHUI_OBSERVABILITY_PUBLIC_ASSET_PATH=/api/assets/monitoring/health.svg',
+  'TUNGCHIAHUI_OBSERVABILITY_PUBLIC_SERVER_NAME=www.tungchiahui.cn',
+  'TUNGCHIAHUI_OBSERVABILITY_PUBLIC_URL=https://www.tungchiahui.cn/',
+  'TUNGCHIAHUI_OBSERVABILITY_RESTORE_DRILL_MAX_AGE_SECONDS=2678400',
+  'TUNGCHIAHUI_OBSERVABILITY_RESTORE_DRILL_TIMESTAMP=2026-09-01T00:00:00.000Z',
+] as const
+
 describe('production secret initialization', () => {
+  it('exports and restores a validated env without reusing the production backup recipient', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'production-config-backup-'))
+    try {
+      const productionRecipient = `age1${'p'.repeat(58)}`
+      const recoveryRecipient = `age1${'r'.repeat(58)}`
+      const contents = createProductionEnvironmentContents('AGE-SECRET-KEY-1EXAMPLE', {
+        crv: 'Ed25519',
+        kty: 'OKP',
+        x: 'test-public-key-material',
+      })
+        .replace('REPLACE_WITH_LAST_RESTORE_DRILL_TIMESTAMP', '2026-09-01T00:00:00.000Z')
+        .replace('https://REPLACE_WITH_ASSET_S3_ENDPOINT', 'https://assets.example.test')
+        .replace('REPLACE_WITH_ASSET_BUCKET', 'assets')
+        .replace('REPLACE_WITH_READ_ONLY_ASSET_ACCESS_KEY', 'asset-access')
+        .replace('REPLACE_WITH_READ_ONLY_ASSET_SECRET_KEY', 'asset-secret')
+        .replace('age1REPLACE_WITH_BACKUP_PUBLIC_RECIPIENT', productionRecipient)
+        .replace(
+          'https://REPLACE_WITH_SAME_ALIST_ENDPOINT_AS_ASSET_S3',
+          'https://alist.example.test',
+        )
+        .replace('REPLACE_WITH_SAME_ALIST_BUCKET_AS_ASSET_S3', 'backups')
+        .replace('REPLACE_WITH_SAME_ALIST_ACCESS_KEY_AS_ASSET_S3', 'backup-access')
+        .replace('REPLACE_WITH_SAME_ALIST_SECRET_KEY_AS_ASSET_S3', 'backup-secret')
+        .replace('https://REPLACE_WITH_OFFSITE_S3_ENDPOINT', 'https://offsite.example.test')
+        .replace('REPLACE_WITH_OFFSITE_BACKUP_BUCKET', 'offsite-backups')
+        .replace('REPLACE_WITH_OFFSITE_BACKUP_ACCESS_KEY', 'offsite-access')
+        .replace('REPLACE_WITH_OFFSITE_BACKUP_SECRET_KEY', 'offsite-secret')
+        .replace('REPLACE_WITH_GHCR_USERNAME', 'registry-user')
+        .replace('REPLACE_WITH_GHCR_PACKAGE_READ_TOKEN', 'registry-token-value')
+      const envFile = join(directory, '.env')
+      const encryptedFile = join(directory, 'production.env.age')
+      const identityFile = join(directory, 'recovery-identity.txt')
+      const restoredFile = join(directory, 'restored.env')
+      writeFileSync(envFile, contents, { mode: 0o600 })
+      writeFileSync(identityFile, 'offline identity', { mode: 0o600 })
+
+      expect(() =>
+        exportProductionConfiguration(
+          { envFile, outputFile: encryptedFile, recipient: productionRecipient },
+          () => Buffer.from('must not be called'),
+        ),
+      ).toThrow('must use a recovery recipient')
+      exportProductionConfiguration(
+        { envFile, outputFile: encryptedFile, recipient: recoveryRecipient },
+        () => Buffer.from('encrypted production configuration'),
+      )
+      restoreProductionConfiguration(
+        { identityFile, inputFile: encryptedFile, outputFile: restoredFile },
+        () => Buffer.from(contents),
+      )
+
+      expect(readFileSync(restoredFile, 'utf8')).toBe(contents)
+      expect(statSync(encryptedFile).mode & 0o777).toBe(0o600)
+      expect(statSync(restoredFile).mode & 0o777).toBe(0o600)
+      expect(() =>
+        restoreProductionConfiguration(
+          { identityFile, inputFile: encryptedFile, outputFile: restoredFile },
+          () => Buffer.from(contents),
+        ),
+      ).toThrow('Refusing to overwrite')
+    } finally {
+      rmSync(directory, { force: true, recursive: true })
+    }
+  })
+
   it('creates a PostgreSQL-compatible SCRAM-SHA-256 verifier without exposing the password', () => {
     const verifier = createPostgresScramVerifier(
       'a-production-password-that-must-not-appear',
@@ -95,6 +197,7 @@ describe('production secret initialization', () => {
       'DEPLOYMENT_REGISTRY_USERNAME=owner',
       'DEPLOYMENT_REGISTRY_TOKEN=deployment-registry-token-value',
       `PGBOUNCER_USERLIST_BASE64=${Buffer.from(`"worker" "${verifier}"`).toString('base64')}`,
+      ...productionConfigurationLines,
     ].join('\n')
 
     expect(() => validateProductionEnvironmentContents(env)).toThrow(
@@ -113,6 +216,34 @@ describe('production secret initialization', () => {
         ),
       ),
     ).toThrow('must authorize release.yml')
+    expect(() => validateProductionEnvironmentContents(`${valid}\nPOSTGRES_DB=duplicate`)).toThrow(
+      'duplicate key: POSTGRES_DB',
+    )
+    expect(() =>
+      validateProductionEnvironmentContents(`${valid}\nUNKNOWN_PRODUCTION_KEY=value`),
+    ).toThrow()
+  })
+
+  it('detects stale and over-broad live service environments without exposing values', () => {
+    const production = {
+      CONTROL_API_DATABASE_URL: 'postgresql://control-secret',
+      POSTGRES_PASSWORD: 'bootstrap-secret',
+      WEB_DATABASE_URL: 'postgresql://web-secret',
+    }
+    const configured = {
+      DATABASE_URL: '$' + '{WEB_DATABASE_URL:?required}',
+      SITE_RUNTIME_MODE: 'production',
+    }
+    expect(
+      analyzeServiceEnvironment('web-blue', configured, production, [
+        'DATABASE_URL=postgresql://stale-web-secret',
+        'POSTGRES_PASSWORD=bootstrap-secret',
+        'SITE_RUNTIME_MODE=production',
+      ]),
+    ).toEqual([
+      { key: 'POSTGRES_PASSWORD', kind: 'disallowed-production-key', service: 'web-blue' },
+      { key: 'DATABASE_URL', kind: 'stale-value', service: 'web-blue' },
+    ])
   })
 
   it('converts the retired SOPS document shape into one validated production env', () => {

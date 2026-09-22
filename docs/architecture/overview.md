@@ -215,7 +215,9 @@ Endpoint 进入当前 Active Slot；Worker 不直接绑定 Blue 或 Green。Publ
 Blue/Green Upstream Selection 和 Path Ownership；外层代理不直接指向任一 Next.js Slot。
 
 Host-local `.env` 是唯一人工配置源，但只供 Compose 插值。各容器的 Runtime Environment 必须
-显式 Allowlist；普通 Blue/Green Adapter 只把 Web 所需的最小变量传入候选 Slot。
+显式 Allowlist；普通 Blue/Green Adapter 只把 Web 所需的最小变量传入候选 Slot。Ansible 只提供
+Bootstrap/Host Fact/动态 Release Identity，不得另存或覆盖 Owner-managed Production Policy；
+`production doctor` 负责检查磁盘配置、派生文件和 Live Container 的收敛状态（ADR 0024）。
 
 ### PgBouncer
 

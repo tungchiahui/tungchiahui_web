@@ -145,6 +145,17 @@ GitHub Actions 和 Human Operator 必须调用同一套底层 Production Control
 
 Web Application Repository 的 `push to main` 在 `release.yml` 的 CI Quality Gates 全部通过后自动构建 Git-SHA-tagged Immutable Image Set，并调用该统一实现。`./site deploy` 只提供人工触发、重试或指定版本。Content Repository Push 只通过 reusable workflow 调用 `./site content sync`，不触发 Next.js Build/Blue-Green；Translation 仍只允许显式 typed `workflow_dispatch`。
 
+生产配置边界使用以下命令；它们都不得打印配置值：
+
+```text
+./site production doctor
+./site production secrets validate [--env-file <path>]
+./site production secrets export --recipient <offline-age-recipient> --output <file.age>
+./site production secrets restore --identity <offline-age-identity> --input <file.age>
+```
+
+Doctor 检查运行时越权/旧值；Export 必须使用独立异地 Recipient；Restore 拒绝覆盖现有目标。
+
 ## Break-glass
 
 当 EdgeOne/OpenResty/`control-api` 本身不可用时，CLI 可以提供显式的 Break-glass Option，通过稳定 Ansible Inventory/SSH Alias 到达目标 Host。精确 Flag 由实现确定，但契约必须：

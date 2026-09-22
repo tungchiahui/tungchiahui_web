@@ -44,3 +44,4 @@ ADR 是不可变的历史记录。
 - `0021-owner-browser-sessions.md`
 - `0022-single-host-production-env.md`
 - `0023-scoped-production-runtime-configuration.md`
+- `0024-production-config-convergence-and-parallel-release.md`
