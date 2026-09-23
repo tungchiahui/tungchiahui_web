@@ -553,4 +553,15 @@ changing the Green container. Final `production doctor` reported `healthy`: two 
 Public `/api/version`, `/api/health` and `/api/ready` returned the new Green release and ready
 PostgreSQL dependency.
 
+The first automatic activation run for follow-up commit `04cb24e` (`35837087797`) again passed all
+quality groups and published all four immutable images, but its deployment client exited in eight
+seconds before any `/api/ops/*` request or authentication event reached production OpenResty,
+`control-api` or the protected Control Audit. Production therefore remained safely on Green
+`b8054dd`, with no incomplete operation or slot mutation. The shared control client now performs at
+most three bounded attempts for transport failures and `408`/`425`/`429`/`5xx` responses, but only
+for GET or POST requests carrying an Idempotency Key; every retry creates a fresh bound Nonce.
+Authentication/Policy denials and non-idempotent POST requests remain single-attempt, fail-closed
+operations. A subsequent pushed Main Release is still required to verify this transient-path repair
+from a GitHub-hosted runner.
+
 本阶段上下文已沉淀，可以授权/开启下一阶段。

@@ -53,6 +53,9 @@ returns the original failure without executing Docker again. Use the corrected c
 explicit retry; do not delete or rewrite failed operations to make a historical run green.
 
 GitHub Actions 和 `./site deploy` 向同一个独立 `control-api` 完成认证，执行相同 Policy，并调用同一个底层 Deployment Engine；不得维护 CI/Manual 两套实现。
+控制客户端只会对 GET 或具有 Idempotency Key 的请求重试瞬时网络错误以及
+`408`/`425`/`429`/`5xx` 响应，最多三次并为每次尝试重新绑定认证 Nonce。认证拒绝、
+Policy Denial 和没有 Idempotency Key 的 POST 不得重试，避免把网络恢复机制变成重复副作用。
 
 `release.yml` 只接受 `main` push 或显式 `workflow_dispatch`。完整 Quality Gate 按静态/Build、Unit、
 Production Infrastructure/Recovery、Integration/E2E、Migration 并行执行，再由稳定的

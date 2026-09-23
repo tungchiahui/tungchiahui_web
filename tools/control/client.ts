@@ -7,6 +7,8 @@ import { canonicalOperatorRequest } from '../../src/control-plane/auth'
 import { createLocalOperatorHeaders } from '../dev/control-auth-fixture'
 
 const oidcTokenResponseSchema = z.object({ value: z.string().min(1) }).passthrough()
+const retryableHttpStatuses = new Set([408, 425, 429, 500, 502, 503, 504])
+const maximumRequestAttempts = 3
 const privateJwkSchema = z
   .object({
     crv: z.literal('Ed25519'),
@@ -28,16 +30,84 @@ function boundHeaders(body: Uint8Array, purpose: string) {
   }
 }
 
+class TransientControlRequestError extends Error {
+  override readonly name = 'TransientControlRequestError'
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : 'unknown transport failure'
+}
+
+function isTransientFetchFailure(error: unknown) {
+  return (
+    error instanceof TypeError ||
+    (error instanceof DOMException && ['AbortError', 'TimeoutError'].includes(error.name))
+  )
+}
+
+async function fetchControlBoundary(
+  url: URL,
+  request: RequestInit,
+  boundary: 'Control API' | 'GitHub OIDC token',
+) {
+  try {
+    const response = await fetch(url, request)
+    if (retryableHttpStatuses.has(response.status)) {
+      await response.body?.cancel()
+      throw new TransientControlRequestError(`${boundary} returned HTTP ${response.status}`)
+    }
+    return response
+  } catch (error: unknown) {
+    if (error instanceof TransientControlRequestError) throw error
+    if (isTransientFetchFailure(error)) {
+      throw new TransientControlRequestError(`${boundary} transport failed: ${errorMessage(error)}`)
+    }
+    throw error
+  }
+}
+
+async function boundedRetry<T>(
+  operation: () => Promise<T>,
+  description: string,
+  retryAllowed: boolean,
+) {
+  for (let attempt = 1; attempt <= maximumRequestAttempts; attempt += 1) {
+    try {
+      return await operation()
+    } catch (error: unknown) {
+      if (
+        !retryAllowed ||
+        !(error instanceof TransientControlRequestError) ||
+        attempt === maximumRequestAttempts
+      ) {
+        if (error instanceof TransientControlRequestError) {
+          throw new Error(
+            `${description} failed after ${attempt} ${attempt === 1 ? 'attempt' : 'attempts'}: ${error.message}`,
+            { cause: error },
+          )
+        }
+        throw error
+      }
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, attempt * 1_000))
+    }
+  }
+  throw new Error(`${description} exhausted its retry policy`)
+}
+
 async function githubBearerToken() {
   const requestUrl = process.env.ACTIONS_ID_TOKEN_REQUEST_URL
   const requestToken = process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN
   if (!requestUrl || !requestToken) return null
   const url = new URL(requestUrl)
   url.searchParams.set('audience', 'tungchiahui-control-api')
-  const response = await fetch(url, {
-    headers: { authorization: `Bearer ${requestToken}` },
-    signal: AbortSignal.timeout(10_000),
-  })
+  const response = await fetchControlBoundary(
+    url,
+    {
+      headers: { authorization: `Bearer ${requestToken}` },
+      signal: AbortSignal.timeout(10_000),
+    },
+    'GitHub OIDC token',
+  )
   if (!response.ok) throw new Error(`GitHub OIDC token request returned HTTP ${response.status}`)
   return oidcTokenResponseSchema.parse((await response.json()) as unknown).value
 }
@@ -101,19 +171,26 @@ export async function controlRequest(
 ) {
   const method = options.method ?? 'GET'
   const body = Buffer.from(options.body === undefined ? '' : JSON.stringify(options.body))
-  const headers = new Headers(await authenticationHeaders(method, path, body, options.purpose))
-  if (options.body !== undefined) headers.set('content-type', 'application/json')
-  if (options.idempotencyKey) headers.set('idempotency-key', options.idempotencyKey)
-  const request: RequestInit = { headers, method, signal: AbortSignal.timeout(30_000) }
-  if (body.length > 0) request.body = body
-  const response = await fetch(new URL(path, baseUrl()), request)
-  const text = await response.text()
-  const payload = text.length === 0 ? null : (JSON.parse(text) as unknown)
-  if (!response.ok) {
-    const code = z.object({ error: z.string() }).safeParse(payload)
-    throw new Error(
-      `Control API returned HTTP ${response.status}: ${code.success ? code.data.error : 'invalid response'}`,
-    )
-  }
-  return payload
+  const retryAllowed = method === 'GET' || options.idempotencyKey !== undefined
+  return boundedRetry(
+    async () => {
+      const headers = new Headers(await authenticationHeaders(method, path, body, options.purpose))
+      if (options.body !== undefined) headers.set('content-type', 'application/json')
+      if (options.idempotencyKey) headers.set('idempotency-key', options.idempotencyKey)
+      const request: RequestInit = { headers, method, signal: AbortSignal.timeout(30_000) }
+      if (body.length > 0) request.body = body
+      const response = await fetchControlBoundary(new URL(path, baseUrl()), request, 'Control API')
+      const text = await response.text()
+      const payload = text.length === 0 ? null : (JSON.parse(text) as unknown)
+      if (!response.ok) {
+        const code = z.object({ error: z.string() }).safeParse(payload)
+        throw new Error(
+          `Control API returned HTTP ${response.status}: ${code.success ? code.data.error : 'invalid response'}`,
+        )
+      }
+      return payload
+    },
+    `Control request ${method} ${path}`,
+    retryAllowed,
+  )
 }
