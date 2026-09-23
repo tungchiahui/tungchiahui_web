@@ -528,4 +528,29 @@ all four digests before the existing OIDC shared-control-plane deployment. No `l
 production credential in Actions, or gate relaxation was introduced. Exact duration remains dependent
 on hosted-runner cold start and the slowest full gate; five minutes is not treated as a safety promise.
 
+Production activation completed on 2026-09-23. Main Release run `35691242718` passed all five
+parallel quality groups and published the four immutable images for `b8054dd`; its total duration was
+17m14s, with the 12m02s infrastructure/recovery group as the critical path. The final release job was
+red only because the intentionally disabled `PRODUCTION_DEPLOYMENT_ENABLED` variable skipped the
+deployment job. Image builds themselves completed in parallel/overlap: Service 1m59s, PostgreSQL
+1m55s, Recovery 3m32s and the Service-Digest-bound Web build 2m29s.
+
+The authorized scoped Ansible reconciliation then applied the strict 74-key host-local `.env`, ran
+the idempotent migration journal, and replaced `control-api`, `content-worker`, `observability-agent`
+and `deploy-agent` with `b8054dd` while both Web container IDs and Blue traffic remained unchanged.
+The production host already uses Docker Engine/Compose from Docker's Debian repository, so its
+checked-in inventory now disables distribution package replacement. A new `production-owner-v2`
+operator public key was added to the canonical `.env`; its mode-0600 private JWK exists only on the
+new development computer, while the v1 public key remains valid for the old computer.
+
+The first audited deployment operation failed closed before slot mutation on a transient Docker pull
+timeout. After an exact-Digest pull using a temporary Docker credential directory, a new operation
+`ad3af3da-fce1-4219-b89e-a218be3f874b` completed at `deployment-verified`, cut traffic from Blue
+`f2f82369` to Green `b8054dd`, and passed migration, readiness and smoke checks. The now-inactive Blue
+slot was then recreated from its retained exact Digest through the reviewed Compose allowlist without
+changing the Green container. Final `production doctor` reported `healthy`: two derived secrets,
+74 configuration keys, all nine runtime services, and no disallowed or stale environment entries.
+Public `/api/version`, `/api/health` and `/api/ready` returned the new Green release and ready
+PostgreSQL dependency.
+
 本阶段上下文已沉淀，可以授权/开启下一阶段。

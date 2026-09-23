@@ -252,6 +252,7 @@ describe('Phase 12 production foundation policy', () => {
     )
     expect(inventorySource).toContain('ansible_host: Debian')
     expect(inventorySource).toContain('ansible_user: tungchiahui')
+    expect(inventorySource).toContain('tungchiahui_install_packages: false')
     expect(inventorySource).not.toContain('tungchiahui_content_polling_enabled')
     expect(inventorySource).not.toContain('tungchiahui_search_polling_enabled')
     expect(inventorySource).not.toMatch(/ansible_host:\s*(?:\d{1,3}\.){3}\d{1,3}/)

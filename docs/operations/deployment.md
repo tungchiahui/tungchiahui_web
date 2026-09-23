@@ -171,6 +171,9 @@ this fix needs the following ordered bootstrap through existing mechanisms:
    images/SHAs, gateway settings, backup evidence and the canonical host-local `.env`; never copy
    disposable test values or fabricate freshness. The role recreates the migration runner, applies
    journaled pending migrations, and reconciles control-api/content-worker/observability-agent/deploy-agent.
+   The checked-in production inventory keeps `tungchiahui_install_packages=false` because this host
+   uses Docker Engine and Compose from Docker's Debian repository; scoped reconciliation must not
+   replace them with distribution packages.
    Do not use `./site provision`
    as a substitute: its queued server-migration request is not this scoped Ansible execution.
 3. Verify all independent-service health and image revisions, actual host Docker socket GID, signed
