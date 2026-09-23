@@ -2,6 +2,7 @@ import { createAccount } from './account/create'
 import { createContentSync } from './content/control-client'
 import { createDeployment, createRollback, readDeploymentStatus } from './deployment/control-client'
 import { resetDevelopmentStack, startDevelopmentStack, stopDevelopmentStack } from './dev/runtime'
+import { runRetentionCleanup } from './maintenance/control-client'
 import {
   exportProductionConfiguration,
   restoreProductionConfiguration,
@@ -83,6 +84,12 @@ Recovery:
   backup status
   restore <backup-id-or-ISO-time> --environment <environment> --confirm RESTORE-<ENV> --reason <text>
   restore ... --break-glass --inventory-host <stable-ssh-alias>
+
+Maintenance:
+  cleanup retention
+            Create and wait for an exact production dry-run plan
+  cleanup retention --execute --confirm RETENTION-CLEANUP-PRODUCTION [--reason <text>]
+            Re-plan, fail closed on drift, then delete only approved retained resources
 
 Translation:
   translate pending|changed|all --dry-run
@@ -177,6 +184,9 @@ async function main() {
       return 0
     case 'production-secrets-validate':
       validateProductionSecrets(command.envFile)
+      return 0
+    case 'retention-cleanup':
+      console.log(JSON.stringify(await runRetentionCleanup(command), null, 2))
       return 0
     case 'rollback-create': {
       console.log(JSON.stringify(await createRollback(command.reason), null, 2))

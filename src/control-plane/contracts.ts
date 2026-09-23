@@ -92,6 +92,24 @@ const infrastructureTargetSchemas = {
       .strict(),
     z
       .object({
+        action: z.literal('retention-cleanup'),
+        environment: environmentSchema,
+        evaluatedAt: z.iso.datetime({ offset: true }),
+        mode: z.literal('plan'),
+      })
+      .strict(),
+    z
+      .object({
+        action: z.literal('retention-cleanup'),
+        confirmation: z.literal('RETENTION-CLEANUP-PRODUCTION'),
+        environment: z.literal('production'),
+        evaluatedAt: z.iso.datetime({ offset: true }),
+        mode: z.literal('execute'),
+        planSha256: sha256Schema,
+      })
+      .strict(),
+    z
+      .object({
         environment: environmentSchema,
         recoveryKind: z.enum(['control-state', 'database', 'host']),
       })

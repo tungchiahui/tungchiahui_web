@@ -22,6 +22,8 @@ import {
   listRecoveryBackups,
   readControlState,
   reconcileInfrastructureOperations,
+  recordRecoveryBackup,
+  retireRecoveryBackup,
   startInfrastructureOperation,
 } from '../../src/control-plane/control-state'
 import { deploymentAttemptIdentity } from '../../tools/deployment/control-client'
@@ -116,11 +118,11 @@ describe('control-state SQLite engine', () => {
       incompleteOperations: 0,
       initializedAt: '2026-08-23T00:00:00.000Z',
       journalMode: 'wal',
-      schemaVersion: 7,
+      schemaVersion: 8,
       synchronous: 2,
     })
     checkpointControlState(path)
-    expect(readControlState(path).schemaVersion).toBe(7)
+    expect(readControlState(path).schemaVersion).toBe(8)
   })
 
   it('refuses to reuse state from another environment', () => {
@@ -136,7 +138,7 @@ describe('control-state SQLite engine', () => {
     const summary = initializeControlState(path, 'production')
 
     expect(summary.environment).toBe('production')
-    expect(summary.schemaVersion).toBe(7)
+    expect(summary.schemaVersion).toBe(8)
   })
 
   it('invalidates pre-dual-replica backup records during the Version 7 migration', () => {
@@ -223,6 +225,68 @@ describe('control-state SQLite engine', () => {
     expect(() =>
       createInfrastructureOperation(path, restoreRequest('other'), actor, 'restore:test:001'),
     ).toThrow(ControlStateConflictError)
+  })
+
+  it('persists cleanup plans and retires deleted recovery generations under the active lease', () => {
+    const path = statePath()
+    initializeControlState(path, 'test')
+    recordRecoveryBackup(path, {
+      backupId: '20260101-000000F',
+      backupType: 'full',
+      completedAt: '2026-01-01T00:00:01.000Z',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      manifestSha256: 'a'.repeat(64),
+      measuredBytes: 1,
+      measuredSeconds: 1,
+      offsiteReplicaStatus: 'fresh',
+      primaryReplicaStatus: 'fresh',
+      repositoryGeneration: '20260101-000000F',
+      stanza: 'tungchiahui',
+      valid: true,
+      walArchiveMax: '000000010000000000000001',
+    })
+    const created = createInfrastructureOperation(
+      path,
+      {
+        operationType: 'recovery',
+        reason: 'test retention cleanup',
+        target: {
+          action: 'retention-cleanup',
+          confirmation: 'RETENTION-CLEANUP-PRODUCTION',
+          environment: 'production',
+          evaluatedAt: '2026-09-23T00:00:00.000Z',
+          mode: 'execute',
+          planSha256: 'b'.repeat(64),
+        },
+      },
+      actor,
+      'retention:test:001',
+    ).operation
+    const claimed = claimNextInfrastructureOperation(path, 'deploy-agent:recovery', 30)
+    if (!claimed) throw new Error('Expected retention cleanup claim')
+    const lease = { fencingToken: claimed.fencingToken, leaseOwner: 'deploy-agent:recovery' }
+    startInfrastructureOperation(path, created.id, lease)
+    const retired = retireRecoveryBackup(
+      path,
+      '20260101-000000F',
+      created.id,
+      lease,
+      'b'.repeat(64),
+    )
+    expect(retired.retiredAt).not.toBeNull()
+    expect(retired.valid).toBe(false)
+    expect(listRecoveryBackups(path)).toEqual([])
+    expect(() => recordRecoveryBackup(path, { ...retired, retiredAt: null })).toThrow(
+      'Retired recovery backup records cannot be rewritten',
+    )
+    finishInfrastructureOperation(path, created.id, lease, {
+      phase: 'recovery-verified',
+      result: { planSha256: 'b'.repeat(64) },
+      status: 'completed',
+    })
+    expect(getInfrastructureOperation(path, created.id)?.result).toEqual({
+      planSha256: 'b'.repeat(64),
+    })
   })
 
   it('serializes competing claims, fences expired leases and reconciles after restart', async () => {

@@ -20,7 +20,7 @@ import {
   infrastructureOperationTypeSchema,
 } from './contracts'
 
-const CONTROL_STATE_SCHEMA_VERSION = 7
+const CONTROL_STATE_SCHEMA_VERSION = 8
 
 const controlStateSummarySchema = z.object({
   environment: z.enum(['local', 'test', 'production']),
@@ -45,6 +45,7 @@ const infrastructureOperationRowSchema = z.object({
   phase: z.string(),
   reason: z.string(),
   requested_at: z.string(),
+  result_json: z.string().nullable(),
   status: infrastructureOperationStatusSchema,
   target_json: z.string(),
   updated_at: z.string(),
@@ -68,7 +69,7 @@ export type ControlStateSummary = Readonly<{
   incompleteOperations: number
   initializedAt: string
   journalMode: 'wal'
-  schemaVersion: 7
+  schemaVersion: 8
   synchronous: 2
 }>
 
@@ -86,6 +87,7 @@ export type InfrastructureOperation = Readonly<{
   phase: string
   reason: string
   requestedAt: string
+  result: Readonly<Record<string, unknown>> | null
   status: z.infer<typeof infrastructureOperationStatusSchema>
   target: Readonly<Record<string, unknown>>
   updatedAt: string
@@ -113,6 +115,7 @@ const backupRecordSchema = z.object({
   primary_replica_status: z.enum(['fresh', 'failed', 'pending']),
   r2_replica_status: z.enum(['fresh', 'failed', 'pending']),
   repository_generation: z.string().min(1),
+  retired_at: z.string().nullable(),
   stanza: z.string().min(1),
   valid: z.union([z.literal(0), z.literal(1)]),
   wal_archive_max: z.string().nullable(),
@@ -129,6 +132,7 @@ export type RecoveryBackupRecord = Readonly<{
   offsiteReplicaStatus: 'failed' | 'fresh' | 'pending'
   primaryReplicaStatus: 'failed' | 'fresh' | 'pending'
   repositoryGeneration: string
+  retiredAt?: string | null
   stanza: string
   valid: boolean
   walArchiveMax: string | null
@@ -144,7 +148,7 @@ export type ControlStateSnapshotEvidence = Readonly<{
   integrity: 'ok'
   lastSha: string | null
   previousSlot: 'blue' | 'green' | 'none'
-  schemaVersion: 7
+  schemaVersion: 8
 }>
 
 const deploymentRuntimeStateRowSchema = z.object({
@@ -340,6 +344,17 @@ const migrations = [
     `,
     version: 7,
   },
+  {
+    sql: `
+      ALTER TABLE infrastructure_operations ADD COLUMN result_json TEXT
+        CHECK (result_json IS NULL OR (json_valid(result_json) AND json_type(result_json) = 'object'));
+      ALTER TABLE recovery_backup_records ADD COLUMN retired_at TEXT;
+      CREATE INDEX recovery_backup_active_freshness_idx
+        ON recovery_backup_records (completed_at DESC, backup_id)
+        WHERE retired_at IS NULL;
+    `,
+    version: 8,
+  },
 ] as const
 
 function openControlState(path: string) {
@@ -519,7 +534,9 @@ export function readControlObservabilitySnapshot(path: string, now = new Date())
     const latestBackup = database
       .prepare(
         `SELECT completed_at, primary_replica_status, offsite_replica_status, valid, wal_archive_max
-         FROM recovery_backup_records ORDER BY completed_at DESC, backup_id DESC LIMIT 1`,
+         FROM recovery_backup_records
+         WHERE retired_at IS NULL
+         ORDER BY completed_at DESC, backup_id DESC LIMIT 1`,
       )
       .get()
     const backup = latestBackup
@@ -614,6 +631,10 @@ function mapOperation(row: unknown): InfrastructureOperation {
     phase: parsed.phase,
     reason: parsed.reason,
     requestedAt: parsed.requested_at,
+    result:
+      parsed.result_json === null
+        ? null
+        : z.record(z.string(), z.unknown()).parse(JSON.parse(parsed.result_json) as unknown),
     status: parsed.status,
     target: z.record(z.string(), z.unknown()).parse(JSON.parse(parsed.target_json) as unknown),
     updatedAt: parsed.updated_at,
@@ -1364,6 +1385,7 @@ export function finishInfrastructureOperation(
   result: Readonly<{
     errorSummary?: string | null
     phase: string
+    result?: Readonly<Record<string, unknown>> | null
     status: 'completed' | 'failed'
   }>,
   now = new Date(),
@@ -1377,6 +1399,10 @@ export function finishInfrastructureOperation(
     .max(2_000)
     .nullable()
     .parse(result.errorSummary ?? null)
+  const resultValue = z
+    .record(z.string(), z.unknown())
+    .nullable()
+    .parse(result.result ?? null)
   const database = openControlState(path)
   try {
     return transaction(database, () => {
@@ -1390,7 +1416,7 @@ export function finishInfrastructureOperation(
       database
         .prepare(
           `UPDATE infrastructure_operations
-           SET status = ?, phase = ?, error_summary = ?, finished_at = ?, lease_owner = NULL,
+           SET status = ?, phase = ?, error_summary = ?, result_json = ?, finished_at = ?, lease_owner = NULL,
                lease_expires_at = NULL, updated_at = ?
            WHERE id = ? AND lease_owner = ? AND fencing_token = ?`,
         )
@@ -1398,6 +1424,7 @@ export function finishInfrastructureOperation(
           status,
           phase,
           errorSummary,
+          resultValue === null ? null : JSON.stringify(resultValue),
           timestamp,
           timestamp,
           operation.id,
@@ -1534,6 +1561,7 @@ function mapBackupRecord(row: unknown): RecoveryBackupRecord {
     offsiteReplicaStatus: parsed.offsite_replica_status,
     primaryReplicaStatus: parsed.primary_replica_status,
     repositoryGeneration: parsed.repository_generation,
+    retiredAt: parsed.retired_at,
     stanza: parsed.stanza,
     valid: parsed.valid === 1,
     walArchiveMax: parsed.wal_archive_max,
@@ -1553,6 +1581,7 @@ export function recordRecoveryBackup(path: string, record: RecoveryBackupRecord)
       offsiteReplicaStatus: z.enum(['fresh', 'failed', 'pending']),
       primaryReplicaStatus: z.enum(['fresh', 'failed', 'pending']),
       repositoryGeneration: z.string().min(1).max(200),
+      retiredAt: z.null().optional(),
       stanza: z.string().min(1).max(100),
       valid: z.boolean(),
       walArchiveMax: z.string().min(1).max(200).nullable(),
@@ -1562,7 +1591,7 @@ export function recordRecoveryBackup(path: string, record: RecoveryBackupRecord)
   const database = openControlState(path)
   try {
     transaction(database, () => {
-      database
+      const write = database
         .prepare(
           `INSERT INTO recovery_backup_records
             (backup_id, backup_type, stanza, repository_generation, manifest_sha256,
@@ -1576,7 +1605,8 @@ export function recordRecoveryBackup(path: string, record: RecoveryBackupRecord)
              valid = excluded.valid,
              measured_seconds = excluded.measured_seconds,
              measured_bytes = excluded.measured_bytes,
-             completed_at = excluded.completed_at`,
+             completed_at = excluded.completed_at
+           WHERE recovery_backup_records.retired_at IS NULL`,
         )
         .run(
           validated.backupId,
@@ -1594,6 +1624,9 @@ export function recordRecoveryBackup(path: string, record: RecoveryBackupRecord)
           validated.createdAt,
           validated.completedAt,
         )
+      if (write.changes !== 1) {
+        throw new ControlStateConflictError('Retired recovery backup records cannot be rewritten')
+      }
       appendAudit(database, {
         actorId: 'deploy-agent:recovery',
         createdAt: validated.completedAt,
@@ -1615,12 +1648,13 @@ export function recordRecoveryBackup(path: string, record: RecoveryBackupRecord)
 }
 
 export function listRecoveryBackups(path: string, limit = 20) {
-  const parsedLimit = z.number().int().min(1).max(100).parse(limit)
+  const parsedLimit = z.number().int().min(1).max(10_000).parse(limit)
   const database = openControlState(path)
   try {
     return database
       .prepare(
         `SELECT * FROM recovery_backup_records
+         WHERE retired_at IS NULL
          ORDER BY completed_at DESC, backup_id DESC
          LIMIT ?`,
       )
@@ -1631,11 +1665,70 @@ export function listRecoveryBackups(path: string, limit = 20) {
   }
 }
 
+export function retireRecoveryBackup(
+  path: string,
+  backupId: string,
+  operationId: string,
+  lease: LeaseIdentity,
+  planSha256: string,
+  now = new Date(),
+) {
+  const parsedBackupId = z.string().min(1).max(200).parse(backupId)
+  const parsedPlanSha256 = z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .parse(planSha256)
+  const database = openControlState(path)
+  try {
+    return transaction(database, () => {
+      const operation = mapOperation(
+        database
+          .prepare('SELECT * FROM infrastructure_operations WHERE id = ?')
+          .get(z.uuid().parse(operationId)),
+      )
+      requireActiveLease(operation, lease, now, ['running'])
+      const record = mapBackupRecord(
+        database
+          .prepare('SELECT * FROM recovery_backup_records WHERE backup_id = ?')
+          .get(parsedBackupId),
+      )
+      if (record.retiredAt !== null) return record
+      const timestamp = now.toISOString()
+      database
+        .prepare(
+          `UPDATE recovery_backup_records
+           SET valid = 0, retired_at = ?
+           WHERE backup_id = ? AND retired_at IS NULL`,
+        )
+        .run(timestamp, parsedBackupId)
+      appendAudit(database, {
+        actorId: lease.leaseOwner,
+        createdAt: timestamp,
+        details: {
+          backupId: parsedBackupId,
+          planSha256: parsedPlanSha256,
+          repositoryGeneration: record.repositoryGeneration,
+        },
+        eventType: 'recovery_backup_retired',
+        operationId: operation.id,
+        outcome: 'succeeded',
+      })
+      return mapBackupRecord(
+        database
+          .prepare('SELECT * FROM recovery_backup_records WHERE backup_id = ?')
+          .get(parsedBackupId),
+      )
+    })
+  } finally {
+    database.close()
+  }
+}
+
 export function getRecoveryBackup(path: string, backupId: string) {
   const database = openControlState(path)
   try {
     const row = database
-      .prepare('SELECT * FROM recovery_backup_records WHERE backup_id = ?')
+      .prepare('SELECT * FROM recovery_backup_records WHERE backup_id = ? AND retired_at IS NULL')
       .get(z.string().min(1).max(200).parse(backupId))
     return row ? mapBackupRecord(row) : null
   } finally {

@@ -345,4 +345,15 @@ describe('Phase 12 production foundation policy', () => {
     expect(productionRoleSource).toContain('when: tungchiahui_manage_backup_schedule | bool')
     expect(recoveryDockerfileSource).toContain('dist/recovery-scheduler.cjs')
   })
+
+  it('defines the owner-gated audited weekly retention schedule', () => {
+    expect(productionRoleDefaultsSource).toContain('tungchiahui_manage_maintenance_schedule: false')
+    expect(productionRoleDefaultsSource).toContain(
+      'tungchiahui_maintenance_schedule_enabled: false',
+    )
+    expect(productionRoleSource).toContain('OnCalendar=Sun *-*-* 06:30:00 Asia/Hong_Kong')
+    expect(productionRoleSource).toContain('node dist/retention-scheduler.cjs')
+    expect(productionRoleSource).toContain('when: tungchiahui_manage_maintenance_schedule | bool')
+    expect(recoveryDockerfileSource).toContain('dist/retention-scheduler.cjs')
+  })
 })

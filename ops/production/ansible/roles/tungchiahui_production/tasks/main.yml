@@ -603,6 +603,52 @@
     state: "{{ 'started' if tungchiahui_backup_schedule_enabled | bool else 'stopped' }}"
   when: tungchiahui_manage_backup_schedule | bool
 
+- name: Install the audited weekly retention cleanup service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/tungchiahui-retention-cleanup.service
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Plan and execute the audited Tungchiahui retention cleanup
+      Requires=docker.service
+      After=docker.service tungchiahui-backup.service
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/bin/docker exec {{ tungchiahui_compose_project_name }}-deploy-agent-1 node dist/retention-scheduler.cjs
+      TimeoutStartSec=3700
+  when: tungchiahui_manage_maintenance_schedule | bool
+
+- name: Install the Sunday 06:30 Asia Hong Kong retention timer
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/tungchiahui-retention-cleanup.timer
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Run Tungchiahui retention cleanup after the weekly Full backup window
+
+      [Timer]
+      OnCalendar=Sun *-*-* 06:30:00 Asia/Hong_Kong
+      Persistent=true
+      AccuracySec=1min
+      RandomizedDelaySec=0
+
+      [Install]
+      WantedBy=timers.target
+  when: tungchiahui_manage_maintenance_schedule | bool
+
+- name: Apply the explicitly selected weekly retention schedule state
+  ansible.builtin.systemd_service:
+    name: tungchiahui-retention-cleanup.timer
+    daemon_reload: true
+    enabled: "{{ tungchiahui_maintenance_schedule_enabled | bool }}"
+    state: "{{ 'started' if tungchiahui_maintenance_schedule_enabled | bool else 'stopped' }}"
+  when: tungchiahui_manage_maintenance_schedule | bool
+
 - name: Prepare the stopped least-privilege migration runner for deploy-agent
   ansible.builtin.command:
     argv:

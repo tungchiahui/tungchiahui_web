@@ -13,7 +13,7 @@ import {
   deploymentReleaseSchema,
 } from './engine'
 
-type DockerMethod = 'DELETE' | 'GET' | 'POST'
+export type DockerMethod = 'DELETE' | 'GET' | 'POST'
 
 const dockerContainerSchema = z.object({
   Config: z.object({
@@ -128,7 +128,7 @@ export function replaceContainerLabels(
   }
 }
 
-function requestJson(
+export function requestDockerJson(
   socketPath: string,
   method: DockerMethod,
   path: string,
@@ -184,7 +184,7 @@ async function requireDocker(
   body?: unknown,
   headers?: Readonly<Record<string, string>>,
 ) {
-  const response = await requestJson(socketPath, method, path, body, headers)
+  const response = await requestDockerJson(socketPath, method, path, body, headers)
   if (!accepted.includes(response.status)) {
     throw new Error(`Docker rejected ${method} ${path} with HTTP ${String(response.status)}`)
   }
@@ -314,7 +314,7 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
     const repository = this.configuration.DEPLOYMENT_IMAGE_REPOSITORY
     let serviceDigest: string | undefined
     if (repository !== undefined) {
-      const webInspection = await requestJson(
+      const webInspection = await requestDockerJson(
         this.socketPath,
         'GET',
         `/images/${encodeURIComponent(this.imageReference(release))}/json`,
@@ -339,14 +339,14 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
     // paired migration bundle. Offline fixtures retain their prepared local image identity.
     const reference =
       repository === undefined ? container.Image : `${repository}-service@${serviceDigest}`
-    let inspection = await requestJson(
+    let inspection = await requestDockerJson(
       this.socketPath,
       'GET',
       `/images/${encodeURIComponent(reference)}/json`,
     )
     if (inspection.status === 404 && repository !== undefined) {
       await this.pullImage(reference)
-      inspection = await requestJson(
+      inspection = await requestDockerJson(
         this.socketPath,
         'GET',
         `/images/${encodeURIComponent(reference)}/json`,
@@ -390,7 +390,7 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
 
   async cleanupFailedCandidate(release: DeploymentRelease) {
     const name = this.containerName(release.slot)
-    const inspection = await requestJson(
+    const inspection = await requestDockerJson(
       this.socketPath,
       'GET',
       `/containers/${encodeURIComponent(name)}/json`,
@@ -438,7 +438,7 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
     const targetName = this.containerName(release.slot)
     const templateName =
       (
-        await requestJson(
+        await requestDockerJson(
           this.socketPath,
           'GET',
           `/containers/${encodeURIComponent(targetName)}/json`,
@@ -447,7 +447,7 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
         ? targetName
         : this.containerName(release.slot === 'blue' ? 'green' : 'blue')
     const template = await this.inspectContainer(templateName)
-    const existing = await requestJson(
+    const existing = await requestDockerJson(
       this.socketPath,
       'GET',
       `/containers/${encodeURIComponent(targetName)}/json`,
@@ -594,7 +594,7 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
       const state = await this.inspectContainer(name)
       if (!state.State.Running) {
         if (state.State.ExitCode !== 0) {
-          const logs = await requestJson(
+          const logs = await requestDockerJson(
             this.socketPath,
             'GET',
             `/containers/${encodeURIComponent(name)}/logs?stdout=1&stderr=1&tail=20`,
@@ -694,14 +694,14 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
 
   private async inspectValidatedImage(release: DeploymentRelease) {
     const reference = this.imageReference(release)
-    let inspection = await requestJson(
+    let inspection = await requestDockerJson(
       this.socketPath,
       'GET',
       `/images/${encodeURIComponent(reference)}/json`,
     )
     if (inspection.status === 404 && this.configuration.DEPLOYMENT_IMAGE_REPOSITORY !== undefined) {
       await this.pullImage(reference)
-      inspection = await requestJson(
+      inspection = await requestDockerJson(
         this.socketPath,
         'GET',
         `/images/${encodeURIComponent(reference)}/json`,

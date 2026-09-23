@@ -174,6 +174,7 @@ GitHub Actions 的手动 `workflow_dispatch` 可以触发同一个 Translation J
 - Provider-neutral off-site Backup S3 replica (currently Cloudflare R2)
 - SQLite as host-local control-plane recovery state only
 - Renovate for Dependency Update PR automation
+- Audited retention cleanup for recovery generations, project Docker images and GHCR releases
 
 实际实现中必须固定 Patch Version 和 Container Digest。Renovate 自动创建可 Review 的 Dependency Update PR 并同步维护 `pnpm-lock.yaml`；所有升级通过现有 CI Quality Gates。Core Major Update 默认不自动 Merge，Security Update 提高优先级，生产仍不默认跟踪 Beta/Canary 或 `latest` Tag。
 
@@ -290,6 +291,7 @@ Operator 不需要记忆底层 Docker、PostgreSQL、OpenResty、Ansible、Backu
 ./site translate
 ./site deploy
 ./site rollback
+./site cleanup retention
 ./site backup
 ./site restore
 ./site provision

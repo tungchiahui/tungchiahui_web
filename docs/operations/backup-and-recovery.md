@@ -60,8 +60,23 @@ Retention 基线由 `ops/production/pgbackrest.conf` 固定：保留 2 个 Full�
 R2；它不创建新的 pgBackRest Backup，也不更新原 Backup 的数据完成时间。AList 失败时 R2 不会被
 写入。每端结构化结果分别报告 Transfer、Verification 和 Total Seconds。
 
-本地 pgBackRest Expire 不会删除 AList/R2 的 Immutable Generation。当前远程对象不隐式清理；
-AList 删除也不传播到 R2。任何远程清理都必须先列出精确 Generation/Object 集合并取得独立批准。
+本地 pgBackRest Expire 不会删除 AList/R2 的 Immutable Generation。ADR 0025 在 Owner 明确批准后
+增加独立的审计清理：只处理 `backups/database-backups/<generation>/`，保留 90 天且至少保留最新
+4 条双副本已验证 Full Chain。普通 Asset、`asset-backups/`、Control-state Artifact 和未知 R2-only
+对象不属于该删除路径。存在其他未完成 Restore/Recovery，或已验证 Full Chain 少于 4 条时，远端
+删除 Fail Closed。
+
+人工入口默认只产生精确对象和 Docker Image 清单：
+
+```text
+./site cleanup retention
+./site cleanup retention --execute --confirm RETENTION-CLEANUP-PRODUCTION --reason "..."
+```
+
+Plan 固定 Evaluation Time，并以 SHA-256 绑定完整清单；Execute 会重新读取 AList、R2、Docker 与
+Control-state，Digest 不一致即拒绝。两端 Generation 为空后只把 SQLite Recovery Record 标记为
+Retired，保留原始测量与 Audit。每周日 06:30 Asia/Hong_Kong Timer 在 Full Backup Window 之后通过
+同一 SQLite/Deploy-agent Engine 依次 Plan/Execute，不在 Backup 成功路径内传播删除。
 
 `backup status` 从 host-local Control-state SQLite 读取 Backup ID/Type、WAL Max、Measured Bytes/Seconds、Manifest Hash 和两端 Replica Freshness，因此 Production PostgreSQL Down 时仍可查询。
 

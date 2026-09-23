@@ -1,0 +1,56 @@
+name: Retention Maintenance
+
+on:
+  schedule:
+    - cron: '30 23 * * 6'
+  workflow_dispatch:
+    inputs:
+      execute:
+        description: Delete the exact versions selected by the retention plan
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: production-retention-maintenance
+  cancel-in-progress: false
+
+jobs:
+  ghcr-retention:
+    name: ghcr-retention
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@008330803749db0355799c700092d9a85fd074e9 # v6.0.9
+        with:
+          version: 11.23.0
+          run_install: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Plan GHCR retention
+        if: github.event_name == 'workflow_dispatch' && inputs.execute != true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: pnpm exec tsx tools/maintenance/ghcr-retention.ts
+
+      - name: Plan and execute GHCR retention
+        if: github.event_name == 'schedule' || inputs.execute == true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: pnpm exec tsx tools/maintenance/ghcr-retention.ts --execute --confirm GHCR-RETENTION-CLEANUP

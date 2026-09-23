@@ -64,6 +64,7 @@ Renovate 不得绕过 PR 直接修改 `main`。所有升级 PR 通过现有 CI Q
 - pgBackRest
 - SQLite，仅用于 host-local Control-plane Recovery State
 - Renovate
+- Audited Retention Engine（AList/R2 与 Host Docker 由 deploy-agent；GHCR 由最小权限 GitHub Actions）
 
 ### Production Container Baseline
 
@@ -77,6 +78,8 @@ Renovate 不得绕过 PR 直接修改 `main`。所有升级 PR 通过现有 CI Q
 - `content-worker` 与 `control-api` 无 Docker Socket；仅 `deploy-agent` 获得最小必要 Docker/Host 权限
 
 SQLite 是 ADR 0015 定义的专用 Control-plane State Mechanism，不得用于 Content、Translation、Search 或普通 Application Runtime Data。
+Control-state Schema 8 允许基础设施 Operation 保存经过 Validation 的结果清单，并以 Retired
+标记保留已经按 ADR 0025 删除的 Recovery Generation 历史；它不改变 SQLite 的受限职责。
 
 ### 本地 S3 模拟
 

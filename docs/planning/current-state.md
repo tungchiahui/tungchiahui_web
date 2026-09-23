@@ -386,6 +386,30 @@ Biome warnings in bookmark-workspace.tsx remain; no new warning was added. The i
 committed on main only; there is no new GitHub Actions result until an authorized push/dispatch.
 本阶段上下文已沉淀，可以授权/开启下一阶段。
 
+## 19. Audited retention cleanup — 2026-09-23
+
+Owner approved the exact cleanup policy: AList/R2 database recovery generations keep 90 days and at
+least four verified Full chains; host Docker preserves every container reference, Current/Previous/
+Pending and the newest five project release SHAs; GHCR preserves the newest twenty releases and all
+versions younger than thirty days. ADR 0025 supersedes ADR 0019 only where remote deletion had been
+deferred pending this approval.
+
+The implementation uses a deterministic dry-run plan with an Evaluation Time and SHA-256. Production
+execution must recompute the same plan and refuses drift. AList/R2 scope is only
+`backups/database-backups/<generation>/`; assets, asset manifests, Control-state artifacts and unknown
+R2-only objects remain untouched. Successful two-replica deletion retires the Recovery Record in
+Control-state Schema 8 while preserving audit evidence. Docker cleanup remains inside `deploy-agent`,
+never performs a global prune, and cannot delete containers, volumes or build cache. GHCR uses a
+separate `maintenance.yml` workflow with only `contents: read` and `packages: write`; unknown,
+untagged and multi-tagged versions fail closed.
+
+The host timer contract is Sunday 06:30 Asia/Hong_Kong after the Full-backup window; GHCR is Sunday
+07:30. The first Production invocation must remain a manual `./site cleanup retention` dry-run, with
+its exact plan reviewed before `--execute --confirm RETENTION-CLEANUP-PRODUCTION`. Activation evidence,
+actual deletion counts and timer state must be appended here after the reviewed release is live.
+
+本阶段上下文已沉淀，可以授权/开启下一阶段。
+
 ## 15. Protected GitHub OIDC mismatch diagnostics — 2026-09-20
 
 Runs `35042695623` and `35047154653` did not build or deploy the diagnostic change: the first failed

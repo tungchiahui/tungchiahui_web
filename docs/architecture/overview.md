@@ -230,6 +230,7 @@ zh-CN Markdown authority  -> GitHub
 Runtime content authority -> PostgreSQL materialized state
 Static assets authority   -> AList S3
 Production backup copy    -> local encrypted repository + AList Primary + R2 Off-site
+Retention maintenance     -> audited plan hash -> deploy-agent exact AList/R2 + project-image delete
 Application authority     -> Git repository + immutable image
 Infrastructure recovery   -> host-local control-state SQLite + immutable artifacts
 ```

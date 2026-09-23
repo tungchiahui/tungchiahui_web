@@ -45,3 +45,4 @@ ADR 是不可变的历史记录。
 - `0022-single-host-production-env.md`
 - `0023-scoped-production-runtime-configuration.md`
 - `0024-production-config-convergence-and-parallel-release.md`
+- `0025-audited-retention-cleanup.md`

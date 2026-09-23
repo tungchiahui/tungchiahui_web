@@ -22,7 +22,7 @@ export const encryptedControlStateArtifactSchema = z
     encryptedSha256: z.string().regex(/^[a-f0-9]{64}$/),
     environment: z.enum(['local', 'test', 'production']),
     objectKey: z.string().min(1),
-    schemaVersion: z.literal(7),
+    schemaVersion: z.literal(8),
     snapshotId: z.uuid(),
     version: z.literal(1),
   })

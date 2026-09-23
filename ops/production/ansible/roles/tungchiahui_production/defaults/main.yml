@@ -2,6 +2,8 @@
 tungchiahui_compose_project_name: tungchiahui-production
 tungchiahui_backup_schedule_enabled: false
 tungchiahui_manage_backup_schedule: false
+tungchiahui_maintenance_schedule_enabled: false
+tungchiahui_manage_maintenance_schedule: false
 tungchiahui_config_root: /etc/tungchiahui
 tungchiahui_data_root: /var/lib/tungchiahui
 tungchiahui_deployment_sha: ""

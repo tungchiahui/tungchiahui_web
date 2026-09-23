@@ -8,12 +8,18 @@ import {
   initializeControlState,
   listInfrastructureOperations,
   listRecoveryBackups,
+  readDeploymentState,
   requeueDeploymentOperationForReconciliation,
+  retireRecoveryBackup,
   startInfrastructureOperation,
 } from '../../src/control-plane/control-state'
 import { parseDeploymentConfiguration } from '../../src/deployment/configuration'
 import { DockerDeploymentPlatform } from '../../src/deployment/docker-platform'
 import { executeDeploymentOperation } from '../../src/deployment/engine'
+import {
+  createRetentionCleanupPlan,
+  executeRetentionCleanup,
+} from '../../src/maintenance/retention'
 import { apiSecurityHeaders } from '../../src/observability/security'
 import { safeErrorAttributes } from '../../src/observability/telemetry'
 import { parseRecoveryConfiguration } from '../../src/recovery/configuration'
@@ -106,6 +112,7 @@ async function executeClaimedRecovery() {
   }
   startInfrastructureOperation(configuration.CONTROL_STATE_PATH, claimed.id, lease)
   try {
+    let operationResult: Readonly<Record<string, unknown>> | null = null
     if (claimed.operationType === 'recovery') {
       if (claimed.target.action === 'backup') {
         const target = z
@@ -151,6 +158,63 @@ async function executeClaimedRecovery() {
             primary: result.primary,
           }),
         )
+      } else if (claimed.target.action === 'retention-cleanup') {
+        const target = z
+          .discriminatedUnion('mode', [
+            z
+              .object({
+                action: z.literal('retention-cleanup'),
+                environment: z.literal('production'),
+                evaluatedAt: z.iso.datetime({ offset: true }),
+                mode: z.literal('plan'),
+              })
+              .strict(),
+            z
+              .object({
+                action: z.literal('retention-cleanup'),
+                confirmation: z.literal('RETENTION-CLEANUP-PRODUCTION'),
+                environment: z.literal('production'),
+                evaluatedAt: z.iso.datetime({ offset: true }),
+                mode: z.literal('execute'),
+                planSha256: z.string().regex(/^[a-f0-9]{64}$/),
+              })
+              .strict(),
+          ])
+          .parse(claimed.target)
+        const runtime = readDeploymentState(configuration.CONTROL_STATE_PATH)
+        const plan = await createRetentionCleanupPlan({
+          backups: listRecoveryBackups(configuration.CONTROL_STATE_PATH, 10_000),
+          deployment,
+          dockerSocketPath: configuration.DOCKER_SOCKET_PATH,
+          evaluatedAt: new Date(target.evaluatedAt),
+          operations: listInfrastructureOperations(configuration.CONTROL_STATE_PATH),
+          recovery,
+          runtimeReleaseShas: [runtime.currentSha, runtime.lastSha, runtime.pendingSha].flatMap(
+            (sha) => (sha === null ? [] : [sha]),
+          ),
+        })
+        if (target.mode === 'execute') {
+          if (plan.planSha256 !== target.planSha256) {
+            throw new Error('Retention cleanup plan changed after approval; execution refused')
+          }
+          const result = await executeRetentionCleanup(
+            plan,
+            recovery,
+            configuration.DOCKER_SOCKET_PATH,
+          )
+          for (const backup of plan.backup.delete) {
+            retireRecoveryBackup(
+              configuration.CONTROL_STATE_PATH,
+              backup.backupId,
+              claimed.id,
+              lease,
+              plan.planSha256,
+            )
+          }
+          operationResult = Object.freeze({ executed: true, plan, summary: result })
+        } else {
+          operationResult = Object.freeze({ executed: false, plan })
+        }
       } else {
         throw new Error('Recovery operation is not implemented by the Phase 13 engine')
       }
@@ -172,6 +236,7 @@ async function executeClaimedRecovery() {
     }
     finishInfrastructureOperation(configuration.CONTROL_STATE_PATH, claimed.id, lease, {
       phase: 'recovery-verified',
+      result: operationResult,
       status: 'completed',
     })
   } catch (error: unknown) {

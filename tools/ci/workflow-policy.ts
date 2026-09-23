@@ -186,6 +186,26 @@ export function analyzeWorkflowPolicies(root: string): readonly WorkflowPolicyIs
   const release = workflow(root, 'release.yml')
   const content = workflow(root, 'content-sync.yml')
   const translation = workflow(root, 'translation.yml')
+  const maintenance = workflow(root, 'maintenance.yml')
+
+  const maintenanceTriggers = Object.keys(maintenance.parsed.on).toSorted()
+  if (JSON.stringify(maintenanceTriggers) !== JSON.stringify(['schedule', 'workflow_dispatch'])) {
+    issues.push({ file: 'maintenance.yml', message: 'Retention Maintenance triggers changed' })
+  }
+  verifyPinnedActions(issues, 'maintenance.yml', maintenance.source)
+  requireFragments(issues, 'maintenance.yml', maintenance.source, [
+    "cron: '30 23 * * 6'",
+    'packages: write',
+    'group: production-retention-maintenance',
+    'cancel-in-progress: false',
+    'tools/maintenance/ghcr-retention.ts --execute --confirm GHCR-RETENTION-CLEANUP',
+  ])
+  rejectFragments(issues, 'maintenance.yml', maintenance.source, [
+    'id-token: write',
+    'secrets.',
+    '/var/run/docker.sock',
+    './site deploy',
+  ])
 
   const releaseTriggers = Object.keys(release.parsed.on).toSorted()
   if (JSON.stringify(releaseTriggers) !== JSON.stringify(['push', 'workflow_dispatch'])) {

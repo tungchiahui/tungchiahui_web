@@ -32,6 +32,11 @@ export type SiteCommand =
     }>
   | Readonly<{ kind: 'check' }>
   | Readonly<{
+      execute: boolean
+      kind: 'retention-cleanup'
+      reason: string
+    }>
+  | Readonly<{
       gitSha?: string
       imageDigest?: string
       kind: 'deployment-create'
@@ -132,6 +137,43 @@ export function parseSiteCommand(arguments_: readonly string[]): SiteCommand {
         'account create requires --username and --database-url (or CONTROL_API_DATABASE_URL)',
       )
     return Object.freeze({ databaseUrl, kind: 'account-create', role, username })
+  }
+
+  if (arguments_[0] === 'cleanup' && arguments_[1] === 'retention') {
+    let execute = false
+    let confirmed = false
+    let reason = 'manual production retention cleanup'
+    let index = 2
+    while (index < arguments_.length) {
+      const argument = arguments_[index]
+      if (argument === '--execute') {
+        execute = true
+        index += 1
+        continue
+      }
+      if (argument === '--confirm') {
+        confirmed = arguments_[index + 1] === 'RETENTION-CLEANUP-PRODUCTION'
+        index += 2
+        continue
+      }
+      if (argument === '--reason') {
+        reason = z
+          .string()
+          .trim()
+          .min(1)
+          .max(1_000)
+          .parse(arguments_[index + 1])
+        index += 2
+        continue
+      }
+      throw new SiteUsageError(`Unknown retention cleanup argument: ${String(argument)}`)
+    }
+    if (execute && !confirmed) {
+      throw new SiteUsageError(
+        'Retention cleanup execution requires --confirm RETENTION-CLEANUP-PRODUCTION',
+      )
+    }
+    return Object.freeze({ execute, kind: 'retention-cleanup', reason })
   }
 
   if (arguments_[0] === 'production' && arguments_[1] === 'secrets' && arguments_[2] === 'init') {
