@@ -411,8 +411,15 @@ release SHAs remained protected; no global Docker prune was used.
 The first two manual GHCR dry-runs exposed that the boolean `workflow_dispatch` input was compared
 through the typed `inputs` context in a form that caused both retention steps to be skipped while the
 job still appeared successful. The workflow now compares the canonical event input string explicitly,
-and workflow policy validation pins both the dry-run and execute predicates. A fresh successful
-dry-run and execution are required after this correction before GHCR cleanup is considered activated.
+and workflow policy validation pins both the dry-run and execute predicates. Corrected dry-run
+`35875759232` scanned all four packages, selected zero versions, protected the newest twenty release
+SHAs plus every version younger than thirty days, and produced plan
+`39e597ef7e2467da99c7f38d4922ba20787b0567763076f22b1a897c9b906c1b`. Execute run
+`35875925747` then completed with `executed: true`, zero deletions and plan
+`2d271d315b5b15415671b56cf63494960660ad0bac31b129bd32dd7b83b62440`, proving the scheduled workflow's
+read/write package authorization and execution branch. A final host dry-run selected zero backup
+records and zero Docker images, confirming the first cleanup converged without exposing a protected
+resource.
 
 本阶段上下文已沉淀，可以授权/开启下一阶段。
 
