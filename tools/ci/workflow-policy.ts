@@ -198,6 +198,8 @@ export function analyzeWorkflowPolicies(root: string): readonly WorkflowPolicyIs
     'packages: write',
     'group: production-retention-maintenance',
     'cancel-in-progress: false',
+    "github.event.inputs.execute != 'true'",
+    "github.event.inputs.execute == 'true'",
     'tools/maintenance/ghcr-retention.ts --execute --confirm GHCR-RETENTION-CLEANUP',
   ])
   rejectFragments(issues, 'maintenance.yml', maintenance.source, [

@@ -386,6 +386,36 @@ Biome warnings in bookmark-workspace.tsx remain; no new warning was added. The i
 committed on main only; there is no new GitHub Actions result until an authorized push/dispatch.
 本阶段上下文已沉淀，可以授权/开启下一阶段。
 
+## 20. Audited retention activation — 2026-09-23
+
+ADR 0025 is active in production. The control-state schema is version 8, and the independent
+`control-api`, `content-worker`, `observability-agent` and `deploy-agent` services run the immutable
+`bd53ffb` release. The weekly host-local retention timer is enabled for Sunday 06:30 Asia/Hong_Kong.
+Main Release run `35868231601` passed every quality group and published all four immutable images.
+Its GitHub-hosted deployment request received an edge HTTP 554 before creating an operation, so the
+same exact Web digest was retried through the shared audited Control Plane. A transient GHCR pull
+failure occurred before slot mutation; after the exact digest was downloaded, operation
+`51b5a9d5-4183-4022-a597-0686a85b022e` completed at `deployment-verified`, switched traffic to Green
+`bd53ffb`, and public version, health and readiness checks passed.
+
+The first production retention dry-run produced plan
+`75a60f1b9dd3ab93a16fff656b9fa45b2f45af2f4beabe0cbcf3ef55d55d449c`. Backup deletion was blocked
+closed because only three verified Full chains existed, below the policy minimum of four; therefore
+no AList/R2 recovery object or control record was selected. The immediate execution re-planned the
+same deletion set and locked plan
+`e9b73c3cf33c3aa9419be10442e881bbc70f2f8ca815ac6ea87d69ddeca4d4af`; audited operation
+`30d7ab91-7a51-47da-a451-e2dcde32fa9a` completed with zero backup records and 26 old project Docker
+images deleted. Current container references, active/previous/pending releases and the newest five
+release SHAs remained protected; no global Docker prune was used.
+
+The first two manual GHCR dry-runs exposed that the boolean `workflow_dispatch` input was compared
+through the typed `inputs` context in a form that caused both retention steps to be skipped while the
+job still appeared successful. The workflow now compares the canonical event input string explicitly,
+and workflow policy validation pins both the dry-run and execute predicates. A fresh successful
+dry-run and execution are required after this correction before GHCR cleanup is considered activated.
+
+本阶段上下文已沉淀，可以授权/开启下一阶段。
+
 ## 19. Audited retention cleanup — 2026-09-23
 
 Owner approved the exact cleanup policy: AList/R2 database recovery generations keep 90 days and at

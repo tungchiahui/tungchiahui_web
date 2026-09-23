@@ -44,13 +44,13 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Plan GHCR retention
-        if: github.event_name == 'workflow_dispatch' && inputs.execute != true
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.execute != 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: pnpm exec tsx tools/maintenance/ghcr-retention.ts
 
       - name: Plan and execute GHCR retention
-        if: github.event_name == 'schedule' || inputs.execute == true
+        if: github.event_name == 'schedule' || github.event.inputs.execute == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: pnpm exec tsx tools/maintenance/ghcr-retention.ts --execute --confirm GHCR-RETENTION-CLEANUP
