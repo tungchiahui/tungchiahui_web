@@ -84,4 +84,30 @@ describe('control client transient retry boundary', () => {
     await expect(request).resolves.toEqual({ operation: { id: 'operation-id' } })
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
+
+  it('retries an EdgeOne origin TLS failure with the same deployment idempotency key', async () => {
+    vi.useFakeTimers()
+    useLocalControlApi()
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response('', { status: 525 }))
+      .mockResolvedValueOnce(Response.json({ operation: { id: 'operation-id' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const request = controlRequest('/api/ops/deployments', {
+      body: { target: 'candidate' },
+      idempotencyKey: 'unit-deployment-525',
+      method: 'POST',
+      purpose: 'unit-deployment',
+    })
+    await vi.runAllTimersAsync()
+
+    await expect(request).resolves.toEqual({ operation: { id: 'operation-id' } })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const firstHeaders = new Headers(fetchMock.mock.calls[0]?.[1]?.headers)
+    const secondHeaders = new Headers(fetchMock.mock.calls[1]?.[1]?.headers)
+    expect(firstHeaders.get('idempotency-key')).toBe('unit-deployment-525')
+    expect(secondHeaders.get('idempotency-key')).toBe('unit-deployment-525')
+    expect(firstHeaders.get('x-ops-nonce')).not.toBe(secondHeaders.get('x-ops-nonce'))
+  })
 })
