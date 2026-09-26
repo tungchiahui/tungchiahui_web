@@ -7,7 +7,7 @@ import { canonicalOperatorRequest } from '../../src/control-plane/auth'
 import { createLocalOperatorHeaders } from '../dev/control-auth-fixture'
 
 const oidcTokenResponseSchema = z.object({ value: z.string().min(1) }).passthrough()
-const retryableHttpStatuses = new Set([408, 425, 429, 500, 502, 503, 504, 525])
+const retryableHttpStatuses = new Set([408, 425, 429, 500, 502, 503, 504, 525, 554])
 const maximumRequestAttempts = 3
 const privateJwkSchema = z
   .object({
