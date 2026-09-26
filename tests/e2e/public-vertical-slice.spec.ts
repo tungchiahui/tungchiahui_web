@@ -61,6 +61,57 @@ test('renders homepage and PostgreSQL-backed Blog/Wiki surfaces in both zh-CN ro
   await expect(page.getByText('正文匹配').first()).toBeVisible()
 })
 
+test('aligns homepage previews and start search while article code follows the theme', async ({
+  page,
+}) => {
+  await page.setViewportSize({ height: 900, width: 1440 })
+  await page.goto('/')
+  const panels = await page.locator('.home-latest-panel').all()
+  expect(panels).toHaveLength(2)
+  const blogRows = await panels[0]?.locator('.home-latest-items > li').all()
+  const wikiRows = await panels[1]?.locator('.home-latest-items > details').all()
+  for (let index = 0; index < Math.min(blogRows?.length ?? 0, wikiRows?.length ?? 0); index++) {
+    const blogBox = await blogRows?.[index]?.boundingBox()
+    const wikiBox = await wikiRows?.[index]?.boundingBox()
+    expect(Math.abs((blogBox?.y ?? 0) - (wikiBox?.y ?? 0))).toBeLessThan(2)
+    expect(Math.abs((blogBox?.height ?? 0) - (wikiBox?.height ?? 0))).toBeLessThan(2)
+  }
+  const actionColors = await page
+    .locator('.home-actions a')
+    .evaluateAll((links) => links.map((link) => getComputedStyle(link).backgroundColor))
+  expect(actionColors[0]).not.toBe(actionColors[1])
+
+  await page.goto('/start')
+  const clockBox = await page.locator('.start-clock').boundingBox()
+  const searchBox = await page.locator('.start-search').boundingBox()
+  const submitBox = await page.locator('.start-search-submit').boundingBox()
+  expect(clockBox?.y ?? 900).toBeLessThan(270)
+  expect(
+    Math.abs(
+      (searchBox?.y ?? 0) +
+        (searchBox?.height ?? 0) / 2 -
+        ((submitBox?.y ?? 0) + (submitBox?.height ?? 0) / 2),
+    ),
+  ).toBeLessThan(2)
+
+  await page.goto('/wiki/2023-10-05-cplusplus-jiao-xue/0200-c-kai-fa-huan-jing-da-jian-yu-ce-shi')
+  await page.getByRole('button', { name: '主题模式' }).click()
+  await page.getByRole('menuitemradio', { name: '浅色模式' }).click()
+  const lightBackground = await page
+    .locator('.code-block pre')
+    .first()
+    .evaluate((element) => getComputedStyle(element).backgroundColor)
+  await page.getByRole('button', { name: '主题模式' }).click()
+  await page.getByRole('menuitemradio', { name: '深色模式' }).click()
+  const darkBackground = await page
+    .locator('.code-block pre')
+    .first()
+    .evaluate((element) => getComputedStyle(element).backgroundColor)
+  expect(lightBackground).not.toBe(darkBackground)
+  expect(lightBackground).toMatch(/^rgb\(2[0-5]\d, 2[0-5]\d, 2[0-5]\d\)$/)
+  expect(darkBackground).toMatch(/^rgb\([0-9]{1,2}, [0-9]{1,2}, [0-9]{1,2}\)$/)
+})
+
 test('routes all approved locales, preserves logical switching and exposes content state', async ({
   page,
 }) => {

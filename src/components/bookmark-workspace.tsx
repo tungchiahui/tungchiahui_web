@@ -376,7 +376,11 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
             placeholder={t('searchPlaceholder')}
             value={query}
           />
-          <Button aria-label={t('search')} type="submit">
+          <Button
+            aria-label={t('search')}
+            className="start-search-submit size-11 p-0"
+            type="submit"
+          >
             <Search size={18} />
           </Button>
           {showOptions && options.length ? (

@@ -298,33 +298,61 @@
 
   .code-block {
     @apply relative mt-5 min-w-0 max-w-full overflow-hidden rounded-lg border shadow-sm;
-    border-color: #334155;
-    background: #0d1526;
+    border-color: #cbd5e1;
+    background: #f6f8fa;
   }
 
   .code-block pre {
     @apply mt-0 rounded-none border-0 p-4 shadow-none;
-    background-color: var(--shiki-dark-bg, #0d1526);
-    color: #e2e8f0;
+    background-color: var(--shiki-light-bg, #f6f8fa);
+    color: #1f2328;
   }
 
   :where(.prose-site .code-block .shiki),
   :where(.prose-site .code-block .shiki span) {
-    color: var(--shiki-dark, #e2e8f0);
+    color: var(--shiki-light, #1f2328);
   }
 
   .code-toolbar {
     @apply flex min-h-10 items-center justify-between gap-4 border-b px-3;
+    border-color: #cbd5e1;
+    background: #e8eef5;
+  }
+
+  .code-language {
+    @apply font-mono font-medium text-[0.75rem] text-slate-700 uppercase tracking-wide;
+  }
+
+  .code-copy-button {
+    @apply min-h-7 rounded-md border border-slate-300 bg-white px-2.5 py-1 font-semibold text-slate-700 text-xs transition hover:border-blue-500 hover:bg-blue-600 hover:text-white focus-visible:outline-2 focus-visible:outline-blue-500 focus-visible:outline-offset-2;
+  }
+
+  .dark .code-block {
+    border-color: #334155;
+    background: #0d1526;
+  }
+
+  .dark .code-block pre {
+    background-color: var(--shiki-dark-bg, #0d1526);
+    color: #e2e8f0;
+  }
+
+  :where(.dark .prose-site .code-block .shiki),
+  :where(.dark .prose-site .code-block .shiki span) {
+    color: var(--shiki-dark, #e2e8f0);
+  }
+
+  .dark .code-toolbar {
     border-color: #334155;
     background: #1e293b;
   }
 
-  .code-language {
-    @apply font-mono font-medium text-[0.75rem] text-slate-200 uppercase tracking-wide;
+  .dark .code-language {
+    @apply text-slate-200;
   }
 
-  .code-copy-button {
-    @apply min-h-7 rounded-md border border-slate-600 bg-slate-950/70 px-2.5 py-1 font-semibold text-slate-100 text-xs transition hover:border-blue-400 hover:bg-blue-500 hover:text-white focus-visible:outline-2 focus-visible:outline-blue-400 focus-visible:outline-offset-2;
+  .dark .code-copy-button {
+    @apply border-slate-600 bg-slate-950/70 text-slate-100 hover:border-blue-400 hover:bg-blue-500 focus-visible:outline-blue-400;
   }
 
   .image-preview {
@@ -364,11 +392,23 @@
   }
 
   .home-actions a {
-    @apply inline-flex min-h-11 items-center gap-2 rounded-xl border border-primary/25 bg-primary px-4 font-bold text-primary-foreground shadow-sm transition hover:-translate-y-0.5 hover:shadow-md;
+    @apply inline-flex min-h-11 items-center gap-2 rounded-xl border px-4 font-bold shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2;
   }
 
-  .home-actions a:nth-child(n + 2) {
-    @apply bg-background/80 text-primary;
+  .home-actions a[data-home-action="blog"] {
+    @apply border-orange-700 bg-orange-700 text-white focus-visible:outline-orange-700;
+  }
+
+  .home-actions a[data-home-action="wiki"] {
+    @apply border-primary bg-primary text-primary-foreground focus-visible:outline-primary;
+  }
+
+  .home-actions a[data-home-action="more"] {
+    @apply border-primary/25 bg-background/80 text-primary focus-visible:outline-primary;
+  }
+
+  .dark .home-actions a[data-home-action="blog"] {
+    @apply border-orange-400 bg-orange-400 text-orange-950 focus-visible:outline-orange-400;
   }
 
   .home-tags {
@@ -464,6 +504,31 @@
 
   .home-latest-grid {
     @apply grid gap-6 lg:grid-cols-2;
+  }
+
+  .home-latest-panel {
+    @apply flex flex-col;
+  }
+
+  .home-latest-items {
+    @apply grid flex-1 gap-3;
+    grid-auto-rows: minmax(6.5rem, 1fr);
+  }
+
+  .home-latest-items > li,
+  .home-latest-items > li > a,
+  :where(.home-latest-items > details:not([open])) {
+    height: 100%;
+  }
+
+  :where(.home-latest-items > details:not([open]) > summary) {
+    min-height: 100%;
+  }
+
+  @media (min-width: 64rem) {
+    .home-latest-items {
+      grid-template-rows: repeat(5, minmax(6.5rem, 1fr));
+    }
   }
 
   .site-brand-mark,
@@ -1254,6 +1319,13 @@
 .start-search > button {
   padding-inline: 0.9rem;
 }
+.start-search > .start-search-submit {
+  align-self: center;
+  justify-self: end;
+  margin-inline: 0.35rem;
+  padding: 0;
+  border-radius: 0.75rem;
+}
 .start-search > input {
   min-width: 0;
   padding: 0.95rem 0.5rem;
@@ -1428,7 +1500,9 @@
   backdrop-filter: blur(10px);
 }
 .start-workspace.is-simple .start-content {
-  align-content: center;
+  align-content: start;
+  padding-top: clamp(3.75rem, 15vh, 11rem);
+  row-gap: 1.5rem;
 }
 .start-workspace.is-simple .start-toolbar {
   position: absolute;

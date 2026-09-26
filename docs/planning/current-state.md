@@ -626,3 +626,12 @@ operations. A subsequent pushed Main Release is still required to verify this tr
 from a GitHub-hosted runner.
 
 本阶段上下文已沉淀，可以授权/开启下一阶段。
+
+## 19. Homepage, Start and article theme polish — 2026-09-26
+
+The Start clock and search now begin in the upper part of the viewport in simple mode, and the
+search submit button is vertically centered. Homepage Blog and Wiki previews share desktop row
+heights; the Blog action uses orange, the Wiki action uses the primary blue, and the More action
+remains outlined. The shared Blog/Wiki article reader now renders Shiki code blocks, language bars
+and copy controls in the selected light or dark theme. Earlier Phase 18 notes describing an
+always-dark code frame record the previous visual decision, which this Owner request supersedes.

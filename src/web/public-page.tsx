@@ -203,9 +203,9 @@ async function HomePage({ context }: Readonly<{ context: PublicRouteContext }>) 
   const wikiGroups = latestWikiDocumentGroups(wikis)
   const trafficLabels = makeTrafficLabels(t)
   const actions = [
-    { href: '/blog', icon: Newspaper, label: t('homepageActionBlog') },
-    { href: '/wiki', icon: BookOpen, label: t('homepageActionWiki') },
-    { href: '/more', icon: ArrowRight, label: t('homepageActionMore') },
+    { href: '/blog', icon: Newspaper, label: t('homepageActionBlog'), variant: 'blog' },
+    { href: '/wiki', icon: BookOpen, label: t('homepageActionWiki'), variant: 'wiki' },
+    { href: '/more', icon: ArrowRight, label: t('homepageActionMore'), variant: 'more' },
   ] as const
   const tags = [
     t('homepageTagTechnology'),
@@ -253,8 +253,8 @@ async function HomePage({ context }: Readonly<{ context: PublicRouteContext }>) 
           <h1>{t('homepageTitle')}</h1>
           <p className="home-summary">{t('homepageDescription')}</p>
           <div className="home-actions">
-            {actions.map(({ href, icon: Icon, label }) => (
-              <Link href={withLocalePrefix(href, context)} key={href}>
+            {actions.map(({ href, icon: Icon, label, variant }) => (
+              <Link data-home-action={variant} href={withLocalePrefix(href, context)} key={href}>
                 <Icon aria-hidden size={17} />
                 <span>{label}</span>
               </Link>
@@ -318,7 +318,7 @@ async function HomePage({ context }: Readonly<{ context: PublicRouteContext }>) 
             </Link>
           </div>
           {blogs.length ? (
-            <ul className="grid gap-3">
+            <ul className="home-latest-items">
               {blogs.slice(0, 5).map((document) => (
                 <CardLink context={context} document={document} key={document.id} />
               ))}
@@ -339,7 +339,7 @@ async function HomePage({ context }: Readonly<{ context: PublicRouteContext }>) 
             </Link>
           </div>
           {wikiGroups.length ? (
-            <div className="grid gap-3">
+            <div className="home-latest-items">
               {wikiGroups.map((group) => (
                 <WikiDocumentCard
                   context={context}
