@@ -10,7 +10,7 @@
 
 ## 1. 新会话读取顺序
 
-### 2026-10-01：Tech V3 / Daily Protection 工作交接
+### 2026-10-01：Tech V3 / Daily Protection 兼容发布
 
 基于 main `cd5b3507167a87a4343b7c7f236c980f639ea09f`，已实现数据库文档驱动 Tech Roadmap、
 UUID/CAS/四 Locale、结构编辑/归档/恢复/永久删除、导入导出 Envelope，以及统一每日
@@ -46,8 +46,8 @@ Fresh Verified Backup，否则拒绝。独立 Control API 仍需 scoped reconcil
   S3Mock 7-case Contract 和 13 项浏览器 E2E；V2/V3 双版本读取且 Tech 编辑暂时只读。
 
 本阶段上下文已沉淀，可以授权/开启下一阶段。下一步是按上述两次正常发布顺序处理生产升级；
-此交接不构成发布授权。当前改动仍在工作区，未执行生产部署、生产恢复、Timer 操作、
-Git commit/push 或 PR merge。
+此交接不构成发布授权。Owner 已授权发布。本次 Commit 是临时兼容版本：Migration Journal/Policy 截止 0008，
+V2/V3 双版本可读，Tech 编辑暂时只读；最终 V3 Migration/可编辑版本需随后独立发布。
 
 1. `AGENTS.md`、`README.md`、本文件；
 2. `docs/planning/implementation-plan.md` 中的 Current Phase；
