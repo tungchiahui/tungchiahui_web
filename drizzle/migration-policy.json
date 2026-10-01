@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "migrations": [
     {
       "tag": "0000_phase3_core",
@@ -73,5 +72,6 @@
       "reason": "Adds unified owner/user accounts, account sessions, and per-account Start datasets; clears obsolete owner browser sessions without deleting public tracker data.",
       "recovery": "Retain additive tables during blue-green rollback. Recreate an owner account explicitly with the account CLI after rollback or restore; no production credentials are stored in the repository."
     }
-  ]
+  ],
+  "schemaVersion": 1
 }

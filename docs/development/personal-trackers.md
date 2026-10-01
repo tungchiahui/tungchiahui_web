@@ -14,7 +14,8 @@ same local baseline's `app/pages/weight-loss.vue`, `app/data/weight-loss.ts` and
 
 The technical catalog contains 10 stages, 46 tasks and 231 subtasks. Stable IDs, goals, technology
 tags, acceptance text, allocation and milestones are preserved. Progress/status/notes, automatic
-totals, stage switching, expandable tasks, JSON import/export, clearing and saving are restored.
+totals, stage switching, expandable tasks, JSON import/export and saving are restored. Tech V3
+stores the complete roadmap in PostgreSQL; the frozen source catalog is a migration/test fixture.
 
 Weight tracking retains the 2026-06-11 through 2027-02-04 plan, 35 weekly slots, 18 milestones,
 target ranges, existing personal execution templates, four optional metric fields, notes, trend
@@ -33,14 +34,53 @@ to the same independent control-api; production has no such rewrite and uses Ope
 
 Click **登录**, enter the local password, and edit either tracker. Switching between the two pages
 retains the session. Logout revokes it server-side. A session also expires after 12 hours. There
-is no separate edit toggle, public registration, remembered-device setting, or password-reset page.
+is a separate **编辑路线图** mode for structure editing. Normal mode edits progress/status/notes.
 
 The client serializes automatic saves after 900ms of inactivity. Server validation covers data
-shape/ranges, known technical task keys, unique weight dates, and `expectedRevision`. A 409 pauses
+shape/ranges, roadmap UUID references, unique weight dates, and `expectedRevision`. A 409 pauses
 saving rather than overwriting another device. A failed save preserves the visible draft and,
 where browser storage is available, stores it in this tab's new `personal-draft-v1:*` namespace.
 Old Blob/localStorage records are never read. JSON import is validated and previewed before it
-replaces records; weight CSV merges matching planned dates after validation. Export before clearing.
+replaces the complete Tech document; weight CSV merges matching planned dates after validation.
+Tech export/import uses `{ format: "tungchiahui-tech-roadmap", schemaVersion: 3, exportedAt, payload }`.
+Imports require validation, preview and confirmation before the same CAS save. Draft export uses
+the same envelope. Tech has no whole-document clear button.
+
+## Roadmap editing and staged upgrade
+
+All three levels support add/edit/up/down/archive/restore. Tasks move between Stages and Subtasks
+between Tasks without changing UUID or records. Permanent deletion is available for archived items
+with confirmation and removes descendant records. Public totals exclude archived parents and children;
+empty sets have zero progress. Dynamic `{ zhCN, en? }` content uses OpenCC for HK/TW and zhCN fallback
+for empty/missing English; fixed controls use next-intl.
+
+Migration 0009 cannot run while the active/rollback image only understands V2. Prepare a separate
+compatibility release using the pinned runtime:
+
+```bash
+pnpm exec tsx tools/database/prepare-tech-v3-bridge.ts /absolute/new/bridge-source
+```
+
+The generator copies Git-visible source into a new directory, keeps the journal through 0008,
+enables V2/V3 public reads and legacy V2 writes, and disables Tech editing in that temporary UI.
+It never upgrades V2 in an HTTP request. Review/test the generated source, publish its own immutable
+Git-SHA images and deploy it through the existing blue-green path. Reconcile its independent
+control-api through the scoped service procedure before cutover. Retain this compatible image
+as the rollback target for the final release.
+
+Publish/deploy the final release normally after bridge validation. Migration requires a fresh
+verified backup and the inspected active image's `cn.tungchiahui.tech-payload-versions` label to
+include V3. Deploy-agent passes that verified evidence to the migration runner. Disposable tests
+supply compatibility evidence explicitly. Reconcile the final control-api after migration before
+enabling editing. Rollback to the bridge retains V3 data and provides read-only Tech UI; return
+to the final release to edit. Never roll back to the original V2-only image after backfill.
+Scoped independent-service reconciliation uses `--control-schema` and applies only the reviewed
+control/account schema through 0008. It verifies already-applied journal hashes without executing
+0009. The deployment engine removes that scope from its immutable migration runner and supplies
+the verified backup/compatibility evidence for the application backfill. Rollback runs no migration;
+it checks the retained target image's V3-read label and existing health/smoke gates, so a stale backup
+does not prevent returning to the already compatible retained slot.
+Production release/service reconciliation/backup/restore require their existing authorization.
 
 ## Production activation after explicit authorization
 

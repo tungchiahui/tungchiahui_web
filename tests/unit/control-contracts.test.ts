@@ -4,6 +4,7 @@ import {
   ownerDatasetUpdateSchema,
   serviceIdentityContracts,
 } from '../../src/control-plane/contracts'
+import { migrateLegacyTechPayload } from '../../src/personal/legacy-migration'
 
 describe('control-plane contracts', () => {
   it('validates the exact tech-footprint payload shape', () => {
@@ -11,7 +12,7 @@ describe('control-plane contracts', () => {
       ownerDatasetUpdateSchema.parse({
         datasetKey: 'tech_footprint',
         expectedRevision: 3,
-        payload: {
+        payload: migrateLegacyTechPayload({
           records: {
             'y1a/cpp-linux/cpp': {
               note: 'Review RAII',
@@ -21,7 +22,7 @@ describe('control-plane contracts', () => {
             },
           },
           version: 2,
-        },
+        }),
       }),
     ).toBeTruthy()
     expect(() =>
@@ -37,7 +38,8 @@ describe('control-plane contracts', () => {
               updatedAt: 'not-a-date',
             },
           },
-          version: 2,
+          roadmap: { stages: [] },
+          version: 3,
         },
       }),
     ).toThrow()

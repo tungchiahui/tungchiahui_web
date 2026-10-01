@@ -15,7 +15,11 @@ export const sessionStatusSchema = z.object({
     .nullable()
     .optional(),
 })
-export const emptyTechPayload: TechPayload = { version: 2, records: {} }
+export const emptyTechPayload: TechPayload = {
+  version: 3,
+  roadmap: { stages: [], milestones: [] },
+  records: {},
+}
 export const emptyWeightPayload: WeightPayload = { version: 2, records: [] }
 
 export function datasetResponseSchema<T>(payload: z.ZodType<T>) {

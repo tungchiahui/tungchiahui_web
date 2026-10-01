@@ -11,6 +11,7 @@ import {
   techFootprintPayloadSchema,
   updateTechRecord,
 } from '../../src/personal/contracts'
+import { migrateLegacyTechPayload } from '../../src/personal/legacy-migration'
 import { roadmap, techRecordKeys } from '../../src/personal/roadmap'
 import { exportWeightCsv, importWeightCsv } from '../../src/personal/weight-csv'
 import { createWeeklyRecords } from '../../src/personal/weight-plan'
@@ -39,7 +40,9 @@ describe('personal tracker contracts', () => {
     expect(doing.progress).toBe(99)
     expect(updateTechRecord(doing, { progress: 0 }).status).toBe('todo')
     expect(
-      techFootprintPayloadSchema.parse({ version: 2, records: { 'y1a/stm32/pid': doing } }),
+      techFootprintPayloadSchema.parse(
+        migrateLegacyTechPayload({ version: 2, records: { 'y1a/stm32/pid': doing } }),
+      ),
     ).toBeTruthy()
   })
   it('round-trips quoted CSV notes and prevents spreadsheet formula execution', () => {

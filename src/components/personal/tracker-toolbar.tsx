@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl'
 import { useRef, useState } from 'react'
 import type { z } from 'zod'
 import { Button } from '@/components/ui/button'
+import { createRoadmapExchange, roadmapExchangeSchema } from '@/personal/exchange'
 import type { useOwnerDataset } from './use-owner-dataset'
 
 export const fieldClass =
@@ -28,6 +29,9 @@ export function TrackerToolbar<T>({
   filename,
   importCsv,
   exportCsv,
+  exportEnvelope = false,
+  importEnvelope = false,
+  disableClear = false,
 }: {
   store: ReturnType<typeof useOwnerDataset<T>>
   schema: z.ZodType<T>
@@ -35,6 +39,9 @@ export function TrackerToolbar<T>({
   filename: string
   importCsv?: (text: string, current: T) => T
   exportCsv?: (current: T) => string
+  exportEnvelope?: boolean
+  importEnvelope?: boolean
+  disableClear?: boolean
 }) {
   const t = useTranslations('Personal')
   const [open, setOpen] = useState(false)
@@ -47,13 +54,17 @@ export function TrackerToolbar<T>({
   const importing = async (file: File | undefined) => {
     if (!file) return
     try {
-      if (file.size > 1024 * 1024) throw new Error('file_too_large')
+      if (file.size > (importEnvelope ? 4 * 1024 * 1024 : 1024 * 1024))
+        throw new Error('file_too_large')
       const text = await file.text()
       const value: unknown =
         file.name.toLowerCase().endsWith('.csv') && importCsv
           ? importCsv(text, store.payload)
           : JSON.parse(text)
-      setPendingImport(schema.parse(value))
+      const payload = importEnvelope
+        ? roadmapExchangeSchema(schema).parse(value).payload
+        : schema.parse(value)
+      setPendingImport(payload)
       setError('')
     } catch {
       setError(t('importFailed'))
@@ -107,7 +118,11 @@ export function TrackerToolbar<T>({
           <Button
             onClick={() =>
               downloadFile(
-                JSON.stringify(store.payload, null, 2),
+                JSON.stringify(
+                  exportEnvelope ? createRoadmapExchange(store.payload) : store.payload,
+                  null,
+                  2,
+                ),
                 `${filename}.json`,
                 'application/json',
               )
@@ -124,15 +139,17 @@ export function TrackerToolbar<T>({
               {t('exportCsv')}
             </Button>
           )}
-          <Button
-            disabled={store.state === 'saving'}
-            className="bg-red-600 text-white hover:bg-red-700"
-            onClick={() => {
-              if (window.confirm(t('clearConfirm'))) store.change(empty)
-            }}
-          >
-            {t('clear')}
-          </Button>
+          {!disableClear && (
+            <Button
+              disabled={store.state === 'saving'}
+              className="bg-red-600 text-white hover:bg-red-700"
+              onClick={() => {
+                if (window.confirm(t('clearConfirm'))) store.change(empty)
+              }}
+            >
+              {t('clear')}
+            </Button>
+          )}
           <input
             ref={input}
             type="file"
@@ -156,7 +173,11 @@ export function TrackerToolbar<T>({
           <Button
             onClick={() =>
               downloadFile(
-                JSON.stringify(store.payload, null, 2),
+                JSON.stringify(
+                  exportEnvelope ? createRoadmapExchange(store.payload) : store.payload,
+                  null,
+                  2,
+                ),
                 `${filename}-draft.json`,
                 'application/json',
               )

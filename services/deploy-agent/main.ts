@@ -3,12 +3,15 @@ import { createServer, request as httpRequest, type ServerResponse } from 'node:
 import { z } from 'zod'
 import { serviceIdentityContracts } from '../../src/control-plane/contracts'
 import {
+  checkpointDailyProtectionOperation,
   claimNextInfrastructureOperation,
   finishInfrastructureOperation,
+  heartbeatInfrastructureOperation,
   initializeControlState,
   listInfrastructureOperations,
   listRecoveryBackups,
   readDeploymentState,
+  requeueDailyProtectionOperation,
   requeueDeploymentOperationForReconciliation,
   retireRecoveryBackup,
   startInfrastructureOperation,
@@ -23,6 +26,10 @@ import {
 import { apiSecurityHeaders } from '../../src/observability/security'
 import { safeErrorAttributes } from '../../src/observability/telemetry'
 import { parseRecoveryConfiguration } from '../../src/recovery/configuration'
+import {
+  createDailyProtectionServices,
+  runDailyProtection,
+} from '../../src/recovery/daily-protection'
 import {
   executeControlStateBackup,
   executeDatabaseBackup,
@@ -111,10 +118,64 @@ async function executeClaimedRecovery() {
     leaseOwner: 'deploy-agent:recovery',
   }
   startInfrastructureOperation(configuration.CONTROL_STATE_PATH, claimed.id, lease)
+  let operationResult: Readonly<Record<string, unknown>> | null = claimed.result
+  let heartbeatError: unknown
+  const renewLease = () => {
+    if (heartbeatError) throw heartbeatError
+    heartbeatInfrastructureOperation(configuration.CONTROL_STATE_PATH, claimed.id, lease, 3_600)
+  }
+  const heartbeat =
+    claimed.target.action === 'daily-protection'
+      ? setInterval(() => {
+          try {
+            renewLease()
+          } catch (error: unknown) {
+            heartbeatError = error
+          }
+        }, 30_000)
+      : undefined
   try {
-    let operationResult: Readonly<Record<string, unknown>> | null = null
     if (claimed.operationType === 'recovery') {
-      if (claimed.target.action === 'backup') {
+      if (claimed.target.action === 'daily-protection') {
+        const target = z
+          .object({
+            action: z.literal('daily-protection'),
+            databaseBackupType: z.enum(['full', 'diff']),
+            date: z.iso.date(),
+            environment: z.literal('production'),
+          })
+          .strict()
+          .parse(claimed.target)
+        operationResult = await runDailyProtection(
+          {
+            date: target.date,
+            databaseBackupType: target.databaseBackupType,
+            environment: target.environment,
+          },
+          claimed.result,
+          createDailyProtectionServices(recovery, process.env),
+          (progress) => {
+            renewLease()
+            operationResult = progress
+            checkpointDailyProtectionOperation(
+              configuration.CONTROL_STATE_PATH,
+              claimed.id,
+              lease,
+              progress.failedComponent
+                ? `${progress.failedComponent}-failed`
+                : progress.manifestKey
+                  ? 'manifest-verified'
+                  : progress.assets
+                    ? 'assets-verified'
+                    : progress.controlState
+                      ? 'control-state-verified'
+                      : 'database-verified',
+              progress,
+            )
+          },
+          renewLease,
+        )
+      } else if (claimed.target.action === 'backup') {
         const target = z
           .object({
             action: z.literal('backup'),
@@ -244,6 +305,7 @@ async function executeClaimedRecovery() {
     finishInfrastructureOperation(configuration.CONTROL_STATE_PATH, claimed.id, lease, {
       errorSummary: message,
       phase: 'recovery-failed',
+      result: operationResult,
       status: 'failed',
     })
     console.error(
@@ -253,6 +315,8 @@ async function executeClaimedRecovery() {
         operationId: claimed.id,
       }),
     )
+  } finally {
+    if (heartbeat) clearInterval(heartbeat)
   }
   return true
 }
@@ -318,6 +382,16 @@ function reconcileInterruptedDeployments() {
   return interrupted.length
 }
 
+function reconcileInterruptedDailyProtection() {
+  const interrupted = listInfrastructureOperations(configuration.CONTROL_STATE_PATH, {
+    operationTypes: ['recovery'],
+    statuses: ['needs-attention'],
+  }).filter((operation) => operation.target.action === 'daily-protection')
+  for (const operation of interrupted)
+    requeueDailyProtectionOperation(configuration.CONTROL_STATE_PATH, operation.id)
+  return interrupted.length
+}
+
 let polling = false
 let pollTimer: NodeJS.Timeout | undefined
 async function poll() {
@@ -325,6 +399,7 @@ async function poll() {
   polling = true
   try {
     reconcileInterruptedDeployments()
+    reconcileInterruptedDailyProtection()
     while (true) {
       const recovered =
         configuration.RECOVERY_POLLING_ENABLED === 'true' ? await executeClaimedRecovery() : false

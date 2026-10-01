@@ -7,6 +7,7 @@ import {
   ownerDatasetWriteSchema,
 } from '../domain/persistence'
 import { locales } from '../i18n/locales'
+import { migrateLegacyTechPayload } from '../personal/legacy-migration'
 import { SearchIndexRepository } from '../search/repository'
 import { defaultStartPayload } from '../start/contracts'
 import { createDatabaseClient } from './client'
@@ -177,7 +178,7 @@ export async function seedDevelopmentDatabase(connectionString: string) {
   })
   const techFootprint = ownerDatasetWriteSchema.parse({
     datasetKey: 'tech_footprint',
-    payload: { records: {}, version: 2 },
+    payload: migrateLegacyTechPayload({ version: 2, records: {} }),
     revision: 0,
     updatedBy: 'phase3-seed',
   })

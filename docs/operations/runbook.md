@@ -211,7 +211,7 @@ Credential Scope 与轮换顺序见 `credential-rotation.md`。保留被影响�
 When only reviewed `control-api` code or its host-local runtime configuration changes, run the
 production Ansible role with `tungchiahui_manage_stack=false` and
 `tungchiahui_reconcile_control_api=true`. This scoped reconciliation validates the host-local
-`/etc/tungchiahui/.env`, refreshes derived PgBouncer/age runtime files, applies reviewed additive migrations through the versioned migration runner,
+`/etc/tungchiahui/.env`, refreshes derived PgBouncer/age runtime files, applies the reviewed control/account schema through 0008 using the versioned migration runner's `--control-schema` scope,
 prepares that stopped runner for the next deployment, and recreates and waits for the reviewed
 independent-service unit. Before any migration or service change, every scoped retry compares the
 current Compose/OpenResty fingerprint with the last successfully applied fingerprint. A mismatch
@@ -279,6 +279,14 @@ Break-glass 仅替换请求到达路径，不替换 Recovery Engine：它必须�
 
 只有同时满足以下证据才把 Backup 视为有效：pgBackRest `check`/`verify` 成功、WAL Max 已记录、AList Primary `BACKUP_S3_*` 与 R2 Off-site `BACKUP_OFFSITE_S3_*` 均为 `fresh`、两端 Manifest/逐对象 SHA-256 读回一致。任一检查失败会保留失败记录但 `valid=false`，不得用于自动 Restore 选择。写入顺序固定为 Local -> AList 完整验证 -> 从 AList 镜像 R2；AList 失败时不得触碰 R2。只有 Primary 已 Fresh 时才可用 `retry-offsite` 单独重试 R2，该命令不会新建 pgBackRest Backup。
 
-Production 定时器固定在 `03:05 Asia/Hong_Kong`，周日 Full、其余日期 Differential，并以日期构造稳定幂等键。Provision 默认不安装也不启用该 Timer；安装或启用都必须先取得 Owner 对精确 Production 操作的批准。pgBackRest 每次成功 Backup 后自动执行本地 Expire；远端 Generation 不自动删除，AList Delete 不传播到 R2。
+Production 定时器固定在 `03:05 Asia/Hong_Kong`，周日 Full、其余日期 Differential，以 `scheduled-daily-protection:production:<date>` 创建一个 Recovery Operation。按 Database → encrypted Control-state → Asset Mirror → verified Daily Manifest 执行，SQLite result/phase 保留完成组件与失败组件。Assets 失败时数据库仍 valid；重跑同日 Scheduler 复用原 Operation。旧 Timer 单元名保留，已有当天旧 Backup Operation 不重复补跑。Provision 默认不安装/启用，原启用授权边界不变。pgBackRest 自动执行本地 Expire；每日流程不删除远端对象，独立审计清理遵守 ADR 0025。具体重试/恢复见 backup-and-recovery 和 ADR 0026。
+
+Tech V3 上线先执行 personal-trackers 文档的兼容版本发布，再执行最终 Migration 0009 与发布。
+Scoped Control API reconciliation 不执行 0009；该数据转换只属于经新鲜可恢复备份和兼容版本校验的应用部署。
+回滚不执行 Migration，必须验证目标 Image 可读 V3 并通过保留 Slot 与 Smoke 检查；无需新建备份。
+部署前检查 Current Image 的 `cn.tungchiahui.tech-payload-versions` 包含 3、Fresh Verified Backup、
+独立 Control API 版本及 retained bridge SHA/digest。最终切换后验证匿名只读、Owner 编辑/保存、
+移动后 Records 保留、409 草稿、四 Locale 和 390px 页面。迁移后不能回滚到原 V2-only Image；
+兼容版本可读 V3，回滚时 Tech UI 为只读，数据库文档保留。生产恢复仍需独立授权及 verifier rotation。
 
 Production Restore Drill 必须另行获得明确授权；自动 `test:recovery` 只操作 Disposable Target。Control-state 恢复前必须验证 age Ciphertext Hash、SQLite Integrity/Foreign Key、Schema Version、Environment 和 Audit Digest。

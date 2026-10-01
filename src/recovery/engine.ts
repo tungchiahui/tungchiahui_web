@@ -37,13 +37,14 @@ import {
 export async function executeDatabaseBackup(
   configuration: RecoveryConfiguration,
   backupType: 'diff' | 'full' | 'incr',
+  options: Readonly<{ includeControlState?: boolean; reuseCompletedDate?: string }> = {},
 ) {
   const started = performance.now()
   const pgBackRest = {
     configPath: configuration.pgBackRestConfigPath,
     stanza: configuration.stanza,
   }
-  const backup = runPgBackRestBackup(pgBackRest, backupType)
+  const backup = runPgBackRestBackup(pgBackRest, backupType, options.reuseCompletedDate)
   checkPgBackRest(pgBackRest)
   const generation = `${backup.backupId}-${randomUUID()}`
   const manifest = createRepositoryManifest(
@@ -115,7 +116,8 @@ export async function executeDatabaseBackup(
       `Backup completed locally but replica verification failed: ${failures.join('; ')}`,
     )
   }
-  const controlState = await executeControlStateBackup(configuration)
+  const controlState =
+    options.includeControlState === false ? null : await executeControlStateBackup(configuration)
   return Object.freeze({
     backup: record,
     controlState,

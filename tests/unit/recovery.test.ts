@@ -178,12 +178,12 @@ describe('Phase 13 recovery boundary', () => {
 
   it('schedules weekly full and daily differential backups idempotently at the control boundary', () => {
     expect(scheduledBackupRequest(new Date('2026-09-06T19:05:00.000Z'))).toMatchObject({
-      idempotencyKey: 'scheduled-backup:production:2026-09-07',
-      request: { target: { backupType: 'diff' } },
+      idempotencyKey: 'scheduled-daily-protection:production:2026-09-07',
+      request: { target: { databaseBackupType: 'diff' } },
     })
     expect(scheduledBackupRequest(new Date('2026-09-12T19:05:00.000Z'))).toMatchObject({
-      idempotencyKey: 'scheduled-backup:production:2026-09-13',
-      request: { target: { backupType: 'full' } },
+      idempotencyKey: 'scheduled-daily-protection:production:2026-09-13',
+      request: { target: { databaseBackupType: 'full' } },
     })
 
     const path = join(temporaryDirectory(), 'scheduled-control.db')
@@ -192,7 +192,7 @@ describe('Phase 13 recovery boundary', () => {
     expect(enqueueScheduledBackup(path, now).created).toBe(true)
     expect(enqueueScheduledBackup(path, now).created).toBe(false)
     expect(listControlAuditEvents(path).map((event) => event.actorId)).toEqual([
-      'service:production-backup-scheduler',
+      'service:production-daily-protection-scheduler',
     ])
   })
 

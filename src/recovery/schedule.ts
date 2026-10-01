@@ -5,7 +5,11 @@ import {
   actorIdentitySchema,
   infrastructureOperationRequestSchema,
 } from '../control-plane/contracts'
-import { createInfrastructureOperation } from '../control-plane/control-state'
+import {
+  createInfrastructureOperation,
+  listInfrastructureOperations,
+  requeueDailyProtectionOperation,
+} from '../control-plane/control-state'
 
 export const productionBackupSchedule = Object.freeze({
   dailyAt: '03:05',
@@ -15,7 +19,7 @@ export const productionBackupSchedule = Object.freeze({
 
 const schedulerActor = actorIdentitySchema.parse({
   capabilities: ['infrastructure-operation:create'],
-  id: 'service:production-backup-scheduler',
+  id: 'service:production-daily-protection-scheduler',
   kind: 'service',
 })
 
@@ -40,14 +44,20 @@ function localDateParts(now: Date) {
 
 export function scheduledBackupRequest(now = new Date()) {
   const local = localDateParts(now)
-  const backupType = local.weekday === productionBackupSchedule.fullWeekday ? 'full' : 'diff'
+  const databaseBackupType =
+    local.weekday === productionBackupSchedule.fullWeekday ? 'full' : 'diff'
   const request: InfrastructureOperationRequest = infrastructureOperationRequestSchema.parse({
     operationType: 'recovery',
-    reason: `Scheduled ${backupType} backup for ${local.date} ${productionBackupSchedule.timeZone}`,
-    target: { action: 'backup', backupType, environment: 'production' },
+    reason: `Scheduled daily protection for ${local.date} ${productionBackupSchedule.timeZone}`,
+    target: {
+      action: 'daily-protection',
+      databaseBackupType,
+      date: local.date,
+      environment: 'production',
+    },
   })
   return Object.freeze({
-    idempotencyKey: `scheduled-backup:production:${local.date}`,
+    idempotencyKey: `scheduled-daily-protection:production:${local.date}`,
     localDate: local.date,
     request,
   })
@@ -55,6 +65,20 @@ export function scheduledBackupRequest(now = new Date()) {
 
 export function enqueueScheduledBackup(controlStatePath: string, now = new Date()) {
   const scheduled = scheduledBackupRequest(now)
+  const existing = listInfrastructureOperations(controlStatePath).find(
+    (operation) =>
+      operation.idempotencyKey === scheduled.idempotencyKey ||
+      operation.idempotencyKey === `scheduled-backup:production:${scheduled.localDate}`,
+  )
+  if (existing?.target.action === 'daily-protection') {
+    return Object.freeze({
+      created: false,
+      operation: ['failed', 'needs-attention'].includes(existing.status)
+        ? requeueDailyProtectionOperation(controlStatePath, existing.id, now)
+        : existing,
+    })
+  }
+  if (existing) return Object.freeze({ created: false, operation: existing })
   return createInfrastructureOperation(
     controlStatePath,
     scheduled.request,

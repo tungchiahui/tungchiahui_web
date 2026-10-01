@@ -14,9 +14,9 @@ initializeControlState(configuration.CONTROL_STATE_PATH, 'production')
 const result = enqueueScheduledBackup(configuration.CONTROL_STATE_PATH)
 console.log(
   JSON.stringify({
-    backupType: result.operation.target.backupType,
+    databaseBackupType: result.operation.target.databaseBackupType,
     created: result.created,
-    event: 'scheduled_backup_enqueued',
+    event: 'scheduled_daily_protection_enqueued',
     operationId: result.operation.id,
     schedule: productionBackupSchedule,
   }),

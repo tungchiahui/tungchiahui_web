@@ -40,12 +40,17 @@ export type DeploymentSmokeEvidence = Readonly<{
 }>
 
 export interface DeploymentPlatform {
+  verifyTechV3MigrationCompatibility?(release?: DeploymentRelease): Promise<boolean>
   cleanupFailedCandidate(release: DeploymentRelease): Promise<void>
   inspectActiveRelease(): Promise<DeploymentRelease>
   inspectTrafficSlot(): Promise<DeploymentSlot>
   prepareCandidate(release: DeploymentRelease): Promise<void>
   runMigrations(
-    input: Readonly<{ hasFreshRecoverableBackup: boolean; target: DeploymentRelease }>,
+    input: Readonly<{
+      hasFreshRecoverableBackup: boolean
+      hasTechV3CompatiblePreviousRelease?: boolean
+      target: DeploymentRelease
+    }>,
   ): Promise<void>
   smokeRelease(release: DeploymentRelease): Promise<DeploymentSmokeEvidence>
   smokePublicEntry(release: DeploymentRelease): Promise<DeploymentSmokeEvidence>
@@ -225,6 +230,11 @@ export async function executeDeploymentOperation(
       validateMigrationPolicy(options.migrationPolicyPath, options.journalPath, {
         allowContract: false,
         hasFreshRecoverableBackup: freshBackup,
+        applyMigrations: operation.operationType === 'deploy',
+        hasTechV3CompatiblePreviousRelease:
+          (await platform.verifyTechV3MigrationCompatibility?.(
+            operation.operationType === 'rollback' ? target : undefined,
+          )) ?? false,
       })
       advance('preflight-complete', {
         freshRecoverableBackup: freshBackup,
@@ -252,6 +262,8 @@ export async function executeDeploymentOperation(
       if (phase < phaseIndex('migration-complete')) {
         await platform.runMigrations({
           hasFreshRecoverableBackup: freshBackup,
+          hasTechV3CompatiblePreviousRelease:
+            (await platform.verifyTechV3MigrationCompatibility?.()) ?? false,
           target,
         })
         advance('migration-complete')

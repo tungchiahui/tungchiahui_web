@@ -96,18 +96,40 @@ export function readPgBackRestInfo(configuration: PgBackRestCommandConfiguration
 export function runPgBackRestBackup(
   configuration: PgBackRestCommandConfiguration,
   backupType: z.infer<typeof backupTypeSchema>,
+  reuseCompletedDate?: string,
 ) {
   const type = backupTypeSchema.parse(backupType)
-  runPgBackRest(configuration, [`--type=${type}`, '--start-fast', 'backup'])
+  const reusable =
+    reuseCompletedDate === undefined
+      ? undefined
+      : readPgBackRestInfo(configuration)
+          .find(
+            (candidate) => candidate.name === configuration.stanza && candidate.status.code === 0,
+          )
+          ?.backup.filter(
+            (candidate) =>
+              candidate.type === type &&
+              [candidate.timestamp.start, candidate.timestamp.stop].some(
+                (timestamp) =>
+                  new Intl.DateTimeFormat('en-CA', {
+                    timeZone: 'Asia/Hong_Kong',
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                  }).format(new Date(timestamp * 1_000)) === z.iso.date().parse(reuseCompletedDate),
+              ),
+          )
+          .sort((left, right) => right.timestamp.stop - left.timestamp.stop)[0]
+  if (!reusable) runPgBackRest(configuration, [`--type=${type}`, '--start-fast', 'backup'])
   const stanza = readPgBackRestInfo(configuration).find(
     (candidate) => candidate.name === configuration.stanza,
   )
   if (stanza?.status.code !== 0) {
     throw new Error('pgBackRest did not report a healthy configured stanza')
   }
-  const backup = [...stanza.backup].sort(
-    (left, right) => right.timestamp.stop - left.timestamp.stop,
-  )[0]
+  const backup =
+    reusable ??
+    [...stanza.backup].sort((left, right) => right.timestamp.stop - left.timestamp.stop)[0]
   if (!backup || backup.type !== type) {
     throw new Error(`pgBackRest did not report the completed ${type} backup`)
   }

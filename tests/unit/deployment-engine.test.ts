@@ -57,6 +57,25 @@ const smoke: DeploymentSmokeEvidence = {
   version: 'pass',
 }
 
+function freshBackup() {
+  const now = new Date().toISOString()
+  return {
+    backupId: 'verified-fixture',
+    backupType: 'full' as const,
+    createdAt: now,
+    completedAt: now,
+    manifestSha256: 'c'.repeat(64),
+    measuredBytes: 1,
+    measuredSeconds: 1,
+    offsiteReplicaStatus: 'fresh' as const,
+    primaryReplicaStatus: 'fresh' as const,
+    repositoryGeneration: 'fixture-generation',
+    stanza: 'tungchiahui',
+    valid: true,
+    walArchiveMax: '000000010000000000000001',
+  }
+}
+
 afterEach(() => {
   for (const directory of directories.splice(0)) rmSync(directory, { force: true, recursive: true })
 })
@@ -70,6 +89,10 @@ function statePath() {
 }
 
 class FakePlatform implements DeploymentPlatform {
+  techV3Compatible = true
+  async verifyTechV3MigrationCompatibility() {
+    return this.techV3Compatible
+  }
   activeRelease = blue
   trafficSlot: 'blue' | 'green' = 'blue'
   readonly calls: string[] = []
@@ -173,7 +196,7 @@ describe('Phase 14 shared deployment engine', () => {
     await executeDeploymentOperation(
       deployment.operation,
       deployment.lease,
-      [],
+      [freshBackup()],
       platform,
       options(path),
     )
@@ -223,7 +246,7 @@ describe('Phase 14 shared deployment engine', () => {
         executeDeploymentOperation(
           deployment.operation,
           deployment.lease,
-          [],
+          [freshBackup()],
           platform,
           options(path),
         ),
@@ -243,7 +266,7 @@ describe('Phase 14 shared deployment engine', () => {
       executeDeploymentOperation(
         deployment.operation,
         deployment.lease,
-        [],
+        [freshBackup()],
         platform,
         options(path),
       ),
@@ -265,7 +288,7 @@ describe('Phase 14 shared deployment engine', () => {
     await executeDeploymentOperation(
       deployment.operation,
       deployment.lease,
-      [],
+      [freshBackup()],
       platform,
       options(path),
     )
@@ -280,7 +303,13 @@ describe('Phase 14 shared deployment engine', () => {
       slot: 'blue',
     })
     platform.calls.splice(0)
-    await executeDeploymentOperation(next.operation, next.lease, [], platform, options(path))
+    await executeDeploymentOperation(
+      next.operation,
+      next.lease,
+      [freshBackup()],
+      platform,
+      options(path),
+    )
     expect(platform.calls).toContain('prepare:blue')
     expect(platform.calls).toContain('switch:blue')
     expect(readDeploymentState(path)).toMatchObject({
@@ -340,7 +369,13 @@ describe('Phase 14 shared deployment engine', () => {
     const path = statePath()
     const platform = new FakePlatform()
     const first = startOperation(path, 'deploy')
-    await executeDeploymentOperation(first.operation, first.lease, [], platform, options(path))
+    await executeDeploymentOperation(
+      first.operation,
+      first.lease,
+      [freshBackup()],
+      platform,
+      options(path),
+    )
     finishInfrastructureOperation(path, first.operation.id, first.lease, {
       phase: 'deployment-verified',
       status: 'completed',
@@ -354,7 +389,13 @@ describe('Phase 14 shared deployment engine', () => {
     platform.calls.splice(0)
     platform.failAt = 'validate-migration-image'
     await expect(
-      executeDeploymentOperation(next.operation, next.lease, [], platform, options(path)),
+      executeDeploymentOperation(
+        next.operation,
+        next.lease,
+        [freshBackup()],
+        platform,
+        options(path),
+      ),
     ).rejects.toThrow('validate-migration-image')
     expect(platform.calls).toEqual([
       'inspect-active',
@@ -438,7 +479,14 @@ describe('Phase 14 shared deployment engine', () => {
       }
       const running = startInfrastructureOperation(path, claimed.id, lease, resumedAt)
       expect(running.phase).toBe(persistedPhase)
-      await executeDeploymentOperation(running, lease, [], platform, options(path), resumedAt)
+      await executeDeploymentOperation(
+        running,
+        lease,
+        [freshBackup()],
+        platform,
+        options(path),
+        resumedAt,
+      )
 
       expect(platform.calls.includes('validate-image:green')).toBe(expectsValidation)
       expect(platform.calls.includes('migrate')).toBe(expectsMigration)
@@ -509,7 +557,14 @@ describe('Phase 14 shared deployment engine', () => {
     }
     const running = startInfrastructureOperation(path, claimed.id, lease, resumedAt)
     platform.calls.splice(0)
-    await executeDeploymentOperation(running, lease, [], platform, options(path), resumedAt)
+    await executeDeploymentOperation(
+      running,
+      lease,
+      [freshBackup()],
+      platform,
+      options(path),
+      resumedAt,
+    )
 
     expect(platform.calls).toEqual(['inspect-active', 'post-smoke:green'])
     expect(readDeploymentState(path)).toMatchObject({

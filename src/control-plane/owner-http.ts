@@ -1,5 +1,4 @@
 import { z } from 'zod'
-import { techRecordKeySet } from '../personal/roadmap'
 import type { ApplicationJobRepository } from './application-jobs'
 import type { ControlApiConfiguration } from './configuration'
 import { type ActorIdentity, ownerDatasetUpdateSchema } from './contracts'
@@ -131,12 +130,6 @@ export function createOwnerHttpHandler(
       .strict()
       .parse(input)
     const update = ownerDatasetUpdateSchema.parse({ ...updateBody, datasetKey })
-    if (
-      update.datasetKey === 'tech_footprint' &&
-      !Object.keys(update.payload.records).every((key) => techRecordKeySet.has(key))
-    ) {
-      return response(400, { error: 'unknown_roadmap_task' })
-    }
     const saved = await datasets.updateOwnerDataset(update, browserOwner)
     return response(200, { dataset: { payload: saved.payload, revision: saved.revision } })
   }

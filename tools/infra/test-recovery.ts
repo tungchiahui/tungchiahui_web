@@ -3,6 +3,9 @@ import { chmodSync, chownSync, existsSync, mkdirSync, writeFileSync } from 'node
 import { join } from 'node:path'
 
 import { z } from 'zod'
+import { techFootprintPayloadSchema } from '../../src/personal/contracts'
+import { legacyRecordIdMap, migrateLegacyTechPayload } from '../../src/personal/legacy-migration'
+import { dailyProtectionProgressSchema } from '../../src/recovery/daily-protection'
 import { parseS3ConnectionConfiguration } from '../../src/storage/contracts'
 import { S3ObjectStorageAdapter } from '../../src/storage/s3-adapter'
 
@@ -187,6 +190,14 @@ function recoveryEnvironment(backupPort: number) {
     'offsite-backup-only-secret',
     'BACKUP_OFFSITE_S3_FORCE_PATH_STYLE',
     'true',
+    'ASSET_S3_ENDPOINT',
+    `http://127.0.0.1:${String(backupPort)}`,
+    'ASSET_S3_BUCKET',
+    'phase13-primary',
+    'ASSET_S3_ACCESS_KEY_ID',
+    'asset-read-only-access',
+    'ASSET_S3_SECRET_ACCESS_KEY',
+    'asset-read-only-secret',
   ].flatMap((value, index, values) =>
     index % 2 === 0 ? ['--env', `${value}=${values[index + 1]}`] : [],
   )
@@ -194,7 +205,7 @@ function recoveryEnvironment(backupPort: number) {
 
 function runRecovery(
   backupPort: number,
-  action: 'backup' | 'control-state-restore' | 'offsite-retry' | 'restore',
+  action: 'backup' | 'control-state-restore' | 'offsite-retry' | 'restore' | 'daily-protection',
   argument: string,
   allowFailure = false,
 ) {
@@ -356,6 +367,36 @@ async function main() {
     psql(
       "CREATE SCHEMA app; CREATE TABLE app.schema_marker(version integer PRIMARY KEY); INSERT INTO app.schema_marker VALUES (6); CREATE TABLE app.recovery_fixture(value text PRIMARY KEY); INSERT INTO app.recovery_fixture VALUES ('base');",
     )
+    const migratedTech = migrateLegacyTechPayload({
+      version: 2,
+      records: {
+        'y1a/cpp-linux/cpp': {
+          status: 'doing',
+          progress: 65,
+          note: 'PITR retained note',
+          updatedAt: '2026-09-26T00:00:00.000Z',
+        },
+      },
+    })
+    const representativeStage = migratedTech.roadmap.stages[0]
+    const representativeTask = representativeStage?.tasks[0]
+    const representativeSubtask = representativeTask?.subtasks[0]
+    if (!representativeStage || !representativeTask || !representativeSubtask)
+      throw new Error('Tech V3 recovery fixture is incomplete')
+    const techFixture = techFootprintPayloadSchema.parse({
+      ...migratedTech,
+      roadmap: {
+        stages: [
+          {
+            ...representativeStage,
+            tasks: [{ ...representativeTask, subtasks: [representativeSubtask] }],
+          },
+        ],
+      },
+    })
+    const techJson = JSON.stringify(techFixture).replaceAll("'", "''")
+    psql(`CREATE TABLE app.owner_managed_datasets (dataset_key text PRIMARY KEY, payload jsonb NOT NULL, revision integer NOT NULL);
+      INSERT INTO app.owner_managed_datasets VALUES ('tech_footprint', '${techJson}'::jsonb, 7);`)
     const full = backupResultSchema.parse(runRecovery(backupPort, 'backup', 'full'))
     await removeOffsiteBackupGeneration(backupPort, full.backup.repositoryGeneration)
     const offsiteRetry = z
@@ -378,6 +419,35 @@ async function main() {
     psql('SELECT pg_sleep(1.2)')
     psql("INSERT INTO app.recovery_fixture VALUES ('after-target'); SELECT pg_switch_wal();")
     const differential = backupResultSchema.parse(runRecovery(backupPort, 'backup', 'diff'))
+    const dailyInput = {
+      date: new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Hong_Kong',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(new Date()),
+      databaseBackupType: 'diff',
+    }
+    const daily = dailyProtectionProgressSchema.parse(
+      runRecovery(backupPort, 'daily-protection', JSON.stringify(dailyInput)),
+    )
+    expect(
+      daily.database?.backupId === differential.backup.backupId,
+      'Daily protection created a duplicate database backup',
+    )
+    expect(
+      Boolean(daily.controlState && daily.assets && daily.manifestSha256),
+      'Daily protection did not verify all components',
+    )
+    const dailyReplay = dailyProtectionProgressSchema.parse(
+      runRecovery(backupPort, 'daily-protection', JSON.stringify({ ...dailyInput, prior: daily })),
+    )
+    expect(
+      dailyReplay.database?.backupId === daily.database?.backupId &&
+        dailyReplay.assets?.manifestKey === daily.assets?.manifestKey &&
+        dailyReplay.controlState?.objectKey === daily.controlState?.objectKey,
+      'Daily protection replay repeated a completed component',
+    )
     psql("INSERT INTO app.recovery_fixture VALUES ('incremental-later'); SELECT pg_switch_wal();")
     const incremental = backupResultSchema.parse(runRecovery(backupPort, 'backup', 'incr'))
     docker(['stop', '--time', '30', postgresName])
@@ -431,6 +501,41 @@ async function main() {
     expect(values.includes('before-target'), 'Pre-target row is missing after PITR')
     expect(!values.includes('after-target'), 'Post-target row survived PITR')
     expect(!values.includes('incremental-later'), 'Later incremental row survived PITR')
+    const restoredTech = techFootprintPayloadSchema.parse(
+      JSON.parse(
+        psql(
+          "SELECT payload::text FROM app.owner_managed_datasets WHERE dataset_key = 'tech_footprint'",
+        ),
+      ) as unknown,
+    )
+    const restoredTasks = restoredTech.roadmap.stages.flatMap((stage) => stage.tasks)
+    const restoredSubtasks = restoredTasks.flatMap((task) => task.subtasks)
+    const restoredIds = [
+      ...restoredTech.roadmap.stages.map((stage) => stage.id),
+      ...restoredTasks.map((task) => task.id),
+      ...restoredSubtasks.map((subtask) => subtask.id),
+    ]
+    expect(
+      restoredTech.version === 3 &&
+        restoredTech.roadmap.stages.length > 0 &&
+        restoredTasks.length > 0 &&
+        restoredSubtasks.length > 0 &&
+        new Set(restoredIds).size === restoredIds.length,
+      'Tech V3 hierarchy was not recovered consistently',
+    )
+    expect(
+      restoredTasks[0]?.title.zhCN === representativeTask.title.zhCN,
+      'Representative Tech task title changed during PITR',
+    )
+    const techRecord = restoredTech.records[legacyRecordIdMap['y1a/cpp-linux/cpp'] ?? '']
+    expect(
+      techRecord?.progress === 65 &&
+        techRecord.note === 'PITR retained note' &&
+        psql(
+          "SELECT revision FROM app.owner_managed_datasets WHERE dataset_key = 'tech_footprint'",
+        ) === '7',
+      'Tech progress, note, or revision was not recovered',
+    )
 
     const controlState = incremental.controlState
     const restoredControl = z.record(z.string(), z.unknown()).parse(
@@ -459,6 +564,8 @@ async function main() {
         postgresDownRestore: 'pass',
         replicas: 'primary-and-offsite-fresh-with-offsite-fallback-restore',
         representativeApplicationRead: 'pass',
+        techRoadmapV3Restore: 'pass',
+        dailyProtectionVerifiedComponentsAndReplay: 'pass',
         restoreSeconds,
         status: 'pass',
       }),

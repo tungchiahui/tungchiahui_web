@@ -226,12 +226,16 @@ weight_loss
 
 字段包括 `dataset_key`、JSONB `payload`、单调 `revision`、`updated_at` 和 `updated_by`。Phase 4 已在独立 Control API 写边界实现具体 Zod Schema，并使用 `expectedRevision` 做 Compare-and-swap：
 
-- `tech_footprint` Payload 固定为 `{ version: 2, records }`。`records` Key 是 `semester/task/subtask` 三段 Slug；Value 包含 `status: todo | doing | done`、`progress: 0..100`、`note` 与带 Offset 的 `updatedAt`，Status 与 Progress 必须一致。
+- `tech_footprint` Payload 为 `{ version: 3, roadmap: { stages }, records }`。Stage → Task → Subtask 定义、双语标题、目标、验收标准、日期、技术栈、分配比例及归档时间全部属于 PostgreSQL 文档。三个层级使用全局唯一 UUID，`records` 以 Subtask UUID 关联 `status: todo | doing | done`、`progress: 0..100`、`note`、带 Offset 的 `updatedAt`。移动和排序不更换 UUID。
 - `weight_loss` Payload 固定为 `{ version: 2, records }`。Record Date 必须唯一，并保留 Legacy 的 String-valued Optional Metric：`weight` 35–250、`bodyFat` 2–70、`muscleMass` 10–100、`waist` 40–200；空字符串表示未填写。`targetMin`/`targetMax` 是 35–250 的 Number 且 Min 不得大于 Max，另含 `date` 与 `note`。
 
 这些 Shape 来自 Phase 0 Artifact 无法回答后的定点只读 Legacy Baseline Commit `d33e9ee5f90a266207f9f9658a47031eafdb981a` 检查；未扫描或修改旧仓库。`revision` 属于 PostgreSQL Row Envelope，不重复嵌入 Payload。该表不授权把其他业务数据作为任意 Blob 写入。
 
 ## Phase 3 物理边界
+
+V3 统一 Zod 边界：标题 zhCN 非空，描述 zhCN 必填（保留既有空验收标准）；文本最多 500 字符、备注 10,000、stack 最多 32 项且每项 100 字符；最多 30 Stage、每 Stage 100 Task、总计 500 Task，每 Task 100 Subtask、总计 2,000 Subtask；Payload UTF-8 最多 900,000 bytes。position 为非负整数，allocation 之和为 100，records 引用必须存在，status/progress 必须一致。归档保留定义与 Records；永久删除才级联移除 Records。额外 `roadmap.milestones` 保存既有 11 项关键里程碑（最多 100 项），省略时默认空数组，可随完整文档导入导出；阶段 milestone 仍可在线编辑。
+
+Migration 0009 锁定单 Row，用冻结的 10/46/231 定义和确定性 UUID 映射在事务内迁移旧 Slug Records、revision 加一。未知 Key 拒绝迁移；重复执行 V3 不改变 revision。生产先发布 V2/V3 兼容版本；Migration Policy 与 Deploy-agent 检查前一版本的 V3 兼容能力。详见 ADR 0026 和 personal-trackers。最终 Runtime 不导入静态 Roadmap 白名单。
 
 | Schema / Store | Phase 3 内容 | 明确排除 |
 | --- | --- | --- |

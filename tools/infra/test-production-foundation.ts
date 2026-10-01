@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process'
 import { generateKeyPairSync } from 'node:crypto'
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { parseEnv } from 'node:util'
 
 import { stringify } from 'yaml'
 import { z } from 'zod'
@@ -15,7 +16,9 @@ import {
   initializeControlState,
   inspectControlStateSnapshot,
   listControlAuditEvents,
+  listRecoveryBackups,
   readDeploymentState,
+  recordRecoveryBackup,
   restoreControlStateSnapshot,
   startInfrastructureOperation,
 } from '../../src/control-plane/control-state'
@@ -66,6 +69,7 @@ const dataRoot = join(input.PHASE12_HOST_ROOT, 'var')
 const secretRoot = join(input.PHASE12_HOST_ROOT, 'run', 'secrets')
 const workRoot = join(input.PHASE12_HOST_ROOT, 'work')
 const identityPath = join(workRoot, 'age-identity.txt')
+const migrationBackupS3 = `${projectName}-migration-backup-s3`
 const productionEnvPath = join(configRoot, '.env')
 const inventoryPath = join(workRoot, 'inventory.yml')
 const variablesPath = join(workRoot, 'variables.json')
@@ -1329,6 +1333,106 @@ async function initializeDeploymentFixture(workerPassword: string) {
   }
 }
 
+// A data backfill needs genuine recovery evidence even in the disposable deployment gate.
+// Use the same pgBackRest/replication engine with local S3Mock, then import its verified record.
+async function prepareVerifiedMigrationBackup() {
+  const environment = parseEnv(readFileSync(productionEnvPath, 'utf8'))
+  const postgres = compose(['ps', '--quiet', 'postgres']).stdout.trim()
+  compose([
+    'exec',
+    '--no-TTY',
+    'postgres',
+    'pgbackrest',
+    '--config=/etc/pgbackrest/pgbackrest.conf',
+    '--stanza=tungchiahui',
+    'stanza-create',
+  ])
+  execute('docker', [
+    'run',
+    '--detach',
+    '--name',
+    migrationBackupS3,
+    '--publish',
+    '127.0.0.1::9090',
+    '--env',
+    'COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS=migration-primary,migration-offsite',
+    'adobe/s3mock:5.1.0@sha256:65cf60155a2e235fe7d5bf6c633747d6fc7ed93f9f5a6727d86470026b83c2a2',
+  ])
+  const port = execute('docker', ['port', migrationBackupS3, '9090'])
+    .stdout.trim()
+    .split(':')
+    .at(-1)
+  const endpoint = `http://127.0.0.1:${z.coerce.number().int().positive().parse(port)}`
+  const deadline = Date.now() + 60_000
+  let ready = false
+  while (Date.now() < deadline) {
+    try {
+      ready = (await fetch(`${endpoint}/migration-primary`)).ok
+    } catch {
+      /* wait for disposable S3Mock */
+    }
+    if (ready) break
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 500))
+  }
+  expect(ready, 'Migration backup S3Mock did not become ready')
+  const fixtureState = join(workRoot, 'migration-backup-state')
+  const fixtureWork = join(workRoot, 'migration-backup-work')
+  for (const path of [fixtureState, fixtureWork]) {
+    mkdirSync(path, { recursive: true, mode: 0o770 })
+    execute('chown', ['70:10050', path])
+  }
+  const backupEnvironment: Record<string, string> = {
+    SITE_RUNTIME_MODE: 'test',
+    PGBACKREST_REPO1_CIPHER_PASS: z.string().min(1).parse(environment.PGBACKREST_REPO1_CIPHER_PASS),
+    BACKUP_AGE_RECIPIENT: z.string().startsWith('age1').parse(environment.BACKUP_AGE_RECIPIENT),
+    BACKUP_AGE_IDENTITY_PATH: '/run/secrets/backup-age-identity.txt',
+    BACKUP_LOCAL_REPOSITORY_PATH: '/var/lib/pgbackrest',
+    BACKUP_PGBACKREST_CONFIG_PATH: '/etc/pgbackrest/pgbackrest.conf',
+    BACKUP_PGBACKREST_STANZA: 'tungchiahui',
+    BACKUP_POSTGRES_DATA_PATH: '/var/lib/postgresql/18/docker',
+    BACKUP_WORK_DIRECTORY: '/backup-work',
+    CONTROL_STATE_PATH: '/control-state/control.db',
+    BACKUP_S3_ENDPOINT: endpoint,
+    BACKUP_S3_BUCKET: 'migration-primary',
+    BACKUP_S3_ACCESS_KEY_ID: 'migration-primary-access',
+    BACKUP_S3_SECRET_ACCESS_KEY: 'migration-primary-secret',
+    BACKUP_S3_FORCE_PATH_STYLE: 'true',
+    BACKUP_OFFSITE_S3_ENDPOINT: endpoint,
+    BACKUP_OFFSITE_S3_BUCKET: 'migration-offsite',
+    BACKUP_OFFSITE_S3_ACCESS_KEY_ID: 'migration-offsite-access',
+    BACKUP_OFFSITE_S3_SECRET_ACCESS_KEY: 'migration-offsite-secret',
+    BACKUP_OFFSITE_S3_FORCE_PATH_STYLE: 'true',
+  }
+  execute('docker', [
+    'run',
+    '--rm',
+    '--network',
+    'host',
+    '--volumes-from',
+    postgres,
+    '--mount',
+    `type=bind,source=${fixtureState},target=/control-state`,
+    '--mount',
+    `type=bind,source=${fixtureWork},target=/backup-work`,
+    '--mount',
+    `type=bind,source=${secretRoot}/backup-age-identity.txt,target=/run/secrets/backup-age-identity.txt,readonly`,
+    ...Object.entries(backupEnvironment).flatMap(([key, value]) => ['--env', `${key}=${value}`]),
+    recoveryImage,
+    'node',
+    'dist/recovery-drill.cjs',
+    'backup',
+    'full',
+  ])
+  const verified = listRecoveryBackups(join(fixtureState, 'control.db'))[0]
+  expect(
+    verified?.valid === true &&
+      verified.primaryReplicaStatus === 'fresh' &&
+      verified.offsiteReplicaStatus === 'fresh',
+    'Migration backup did not verify both complete replicas',
+  )
+  recordRecoveryBackup(join(dataRoot, 'control-state/control.db'), verified)
+}
+
 const operationResponseSchema = z.object({
   operation: z
     .object({ errorSummary: z.string().nullable().optional(), id: z.uuid(), status: z.string() })
@@ -2047,6 +2151,7 @@ async function main() {
     inspectHardening()
     verifyDatabaseRoleBindings(productionEnv.workerPassword)
     await initializeDeploymentFixture(productionEnv.workerPassword)
+    await prepareVerifiedMigrationBackup()
     await verifyBlueGreenDeployment()
     await verifyRoutingAndIpFamilies()
     await verifySecurityAndLoad()
@@ -2085,6 +2190,7 @@ async function main() {
     targetCompose(['--profile', 'deployment', 'down', '--volumes', '--remove-orphans'], true)
     compose(['--profile', 'deployment', 'down', '--volumes', '--remove-orphans'], true)
     execute('docker', ['rm', '--force', registryContainer], { allowFailure: true })
+    execute('docker', ['rm', '--force', migrationBackupS3], { allowFailure: true })
     execute(
       'chown',
       [

@@ -2,8 +2,11 @@ import 'server-only'
 
 import { and, asc, desc, eq, sql } from 'drizzle-orm'
 import { z } from 'zod'
-
-import { techFootprintPayloadSchema, weightLossPayloadSchema } from '../control-plane/contracts'
+import {
+  legacyTechFootprintPayloadSchema,
+  techFootprintPayloadSchema,
+  weightLossPayloadSchema,
+} from '../control-plane/contracts'
 import { createDatabaseClient } from '../database/client'
 import {
   contentAliases,
@@ -12,6 +15,7 @@ import {
   ownerManagedDatasets,
 } from '../database/schema'
 import type { AppLocale } from '../i18n/locales'
+import { migrateLegacyTechPayload } from '../personal/legacy-migration'
 
 const publicDocumentSchema = z.object({
   contentLocaleState: z.enum(['converted', 'fallback', 'mixed', 'source', 'translated']),
@@ -225,7 +229,11 @@ export class PublicContentRepository {
       if (!row) return undefined
       const payload =
         datasetKey === 'tech_footprint'
-          ? techFootprintPayloadSchema.parse(row.payload)
+          ? techFootprintPayloadSchema.parse(
+              row.payload.version === 2
+                ? migrateLegacyTechPayload(legacyTechFootprintPayloadSchema.parse(row.payload))
+                : row.payload,
+            )
           : weightLossPayloadSchema.parse(row.payload)
       return Object.freeze({
         payload,
