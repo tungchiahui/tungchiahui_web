@@ -22,6 +22,7 @@ import {
   PRIMARY_CDN_RECONNECT_DELAYS,
   primaryCdnReconnectUrl,
 } from '@/music/recovery'
+import { migrateLegacyTechPayload } from '@/personal/legacy-migration'
 import { normalizeBingBackgrounds } from '@/start/backgrounds'
 import {
   AboutInformationPage,
@@ -192,7 +193,7 @@ describe('Phase 18 More and music compatibility', () => {
         <TechTracker
           initial={{
             revision: 2,
-            payload: {
+            payload: migrateLegacyTechPayload({
               version: 2,
               records: {
                 'y1a/cpp-linux/cpp': {
@@ -202,7 +203,7 @@ describe('Phase 18 More and music compatibility', () => {
                   updatedAt: '2026-09-08T00:00:00.000Z',
                 },
               },
-            },
+            }),
           }}
         />
       </NextIntlClientProvider>,

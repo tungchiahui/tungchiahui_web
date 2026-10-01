@@ -11,6 +11,8 @@ import { createDatabaseClient } from '../../src/database/client'
 import { runPostgresMigrations } from '../../src/database/migrate'
 import { documents } from '../../src/database/schema'
 import { seedDevelopmentDatabase } from '../../src/database/seed'
+import { techFootprintPayloadSchema } from '../../src/personal/contracts'
+import { legacyRecordIdMap } from '../../src/personal/legacy-migration'
 import { assertDockerPrerequisites, ComposeProject } from '../dev/compose'
 
 const journalSchema = z.object({
@@ -44,7 +46,11 @@ function databaseUrl(port: number, database = 'tungchiahui') {
   return `postgresql://tungchiahui:local-only-postgres@127.0.0.1:${port}/${database}`
 }
 
-function stagePreviousMigrationFixture(repositoryRoot: string, temporaryRoot: string) {
+function stagePreviousMigrationFixture(
+  repositoryRoot: string,
+  temporaryRoot: string,
+  throughMigration?: string,
+) {
   const fixture = previousFixtureSchema.parse(
     JSON.parse(
       readFileSync(resolve(repositoryRoot, 'tests/fixtures/database/previous-schema.json'), 'utf8'),
@@ -60,13 +66,18 @@ function stagePreviousMigrationFixture(repositoryRoot: string, temporaryRoot: st
       readFileSync(resolve(repositoryRoot, 'drizzle/migration-policy.json'), 'utf8'),
     ) as unknown,
   )
-  const fixtureIndex = journal.entries.findIndex((entry) => entry.tag === fixture.throughMigration)
+  const fixtureIndex = journal.entries.findIndex(
+    (entry) => entry.tag === (throughMigration ?? fixture.throughMigration),
+  )
 
   if (fixtureIndex < 0) {
     throw new Error('Previous-schema fixture references an unknown migration')
   }
 
-  const migrationsDirectory = resolve(temporaryRoot, 'previous-migrations')
+  const migrationsDirectory = resolve(
+    temporaryRoot,
+    throughMigration ? `through-${throughMigration}` : 'previous-migrations',
+  )
   const metadataDirectory = resolve(migrationsDirectory, 'meta')
   mkdirSync(metadataDirectory, { recursive: true })
   const entries = journal.entries.slice(0, fixtureIndex + 1)
@@ -391,14 +402,34 @@ async function run() {
       ) as unknown,
     ).entries.length
 
-    const clean = await runPostgresMigrations(cleanUrl, { repositoryRoot })
+    const controlSchema = await runPostgresMigrations(cleanUrl, {
+      repositoryRoot,
+      scope: 'control-schema',
+    })
+    if (controlSchema.migrationCount !== 9)
+      throw new Error('Control-service bootstrap exceeded its schema scope')
+    const clean = await runPostgresMigrations(cleanUrl, {
+      repositoryRoot,
+      hasFreshRecoverableBackup: true,
+      hasTechV3CompatiblePreviousRelease: true,
+    })
     if (clean.migrationCount !== expectedMigrationCount) {
       throw new Error('Empty database did not reach the latest migration')
     }
-    const repeated = await runPostgresMigrations(cleanUrl, { repositoryRoot })
+    const repeated = await runPostgresMigrations(cleanUrl, {
+      repositoryRoot,
+      hasFreshRecoverableBackup: true,
+      hasTechV3CompatiblePreviousRelease: true,
+    })
     if (repeated.migrationCount !== clean.migrationCount) {
       throw new Error('Repeated migration changed the applied migration count')
     }
+    const reconciledControlSchema = await runPostgresMigrations(cleanUrl, {
+      repositoryRoot,
+      scope: 'control-schema',
+    })
+    if (reconciledControlSchema.migrationCount !== clean.migrationCount)
+      throw new Error('Control-service reconcile changed application migrations')
     await assertPgBouncerDrizzleCompatibility(databaseUrl(pgbouncerPort))
     await assertDatabaseConstraints(cleanUrl)
     await assertSearchMigration(cleanUrl)
@@ -409,8 +440,108 @@ async function run() {
     await admin.connect()
     try {
       await admin.query('CREATE DATABASE tungchiahui_previous')
+      await admin.query('CREATE DATABASE tungchiahui_tech_v2')
     } finally {
       await admin.end()
+    }
+
+    if (expectedMigrationCount >= 10) {
+      const techV2 = stagePreviousMigrationFixture(
+        repositoryRoot,
+        temporaryRoot,
+        '0008_accounts_and_start_data',
+      )
+      const techV2Url = databaseUrl(postgresPort, 'tungchiahui_tech_v2')
+      await runPostgresMigrations(techV2Url, {
+        repositoryRoot,
+        migrationsDirectory: techV2.migrationsDirectory,
+        policyPath: techV2.policyPath,
+      })
+      const techClient = new Client({ connectionString: techV2Url })
+      await techClient.connect()
+      try {
+        await techClient.query(
+          'UPDATE app.owner_managed_datasets SET payload = \'{"version":2,"records":{"unknown/legacy/id":{}}}\'::jsonb WHERE dataset_key = \'tech_footprint\'',
+        )
+        let rejectedUnknown = false
+        try {
+          await runPostgresMigrations(techV2Url, {
+            repositoryRoot,
+            hasFreshRecoverableBackup: true,
+            hasTechV3CompatiblePreviousRelease: true,
+          })
+        } catch {
+          rejectedUnknown = true
+        }
+        const failedBackfill = await techClient.query<{
+          version: string
+          revision: number
+          count: string
+        }>(
+          "SELECT payload->>'version' AS version, revision::integer AS revision, (SELECT count(*) FROM drizzle.__drizzle_migrations)::text AS count FROM app.owner_managed_datasets WHERE dataset_key = 'tech_footprint'",
+        )
+        if (
+          !rejectedUnknown ||
+          failedBackfill.rows[0]?.version !== '2' ||
+          failedBackfill.rows[0].revision !== 0 ||
+          failedBackfill.rows[0].count !== '9'
+        )
+          throw new Error('Rejected V2 backfill changed the original data or migration journal')
+        const oldRecord = {
+          status: 'doing',
+          progress: 45,
+          note: 'Preserved across migration',
+          updatedAt: '2026-09-26T00:00:00.000Z',
+        }
+        await techClient.query(
+          `UPDATE app.owner_managed_datasets SET payload = $1::jsonb WHERE dataset_key = 'tech_footprint'`,
+          [JSON.stringify({ version: 2, records: { 'y1a/cpp-linux/cpp': oldRecord } })],
+        )
+        await runPostgresMigrations(techV2Url, {
+          repositoryRoot,
+          hasFreshRecoverableBackup: true,
+          hasTechV3CompatiblePreviousRelease: true,
+        })
+        const migrated = await techClient.query<{ payload: unknown; revision: number }>(
+          `SELECT payload, revision::integer AS revision FROM app.owner_managed_datasets WHERE dataset_key = 'tech_footprint'`,
+        )
+        const row = migrated.rows[0]
+        if (!row) throw new Error('Migrated Tech dataset is missing')
+        const payload = techFootprintPayloadSchema.parse(row.payload)
+        await techClient.query(
+          readFileSync(resolve(repositoryRoot, 'drizzle/0009_tech_footprint_v3.sql'), 'utf8'),
+        )
+        const replay = await techClient.query<{ payload: unknown; revision: number }>(
+          "SELECT payload, revision::integer AS revision FROM app.owner_managed_datasets WHERE dataset_key = 'tech_footprint'",
+        )
+        if (
+          JSON.stringify(replay.rows[0]?.payload) !== JSON.stringify(row.payload) ||
+          replay.rows[0]?.revision !== row.revision
+        )
+          throw new Error('V3 backfill replay modified a migrated document')
+        const stages = payload.roadmap.stages
+        const tasks = stages.flatMap((stage) => stage.tasks)
+        const subtasks = tasks.flatMap((task) => task.subtasks)
+        if (
+          stages.length !== 10 ||
+          tasks.length !== 46 ||
+          subtasks.length !== 231 ||
+          row.revision !== 1 ||
+          payload.records[legacyRecordIdMap['y1a/cpp-linux/cpp'] ?? '']?.progress !==
+            oldRecord.progress ||
+          payload.records[legacyRecordIdMap['y1a/cpp-linux/cpp'] ?? '']?.status !==
+            oldRecord.status ||
+          payload.records[legacyRecordIdMap['y1a/cpp-linux/cpp'] ?? '']?.note !== oldRecord.note ||
+          payload.records[legacyRecordIdMap['y1a/cpp-linux/cpp'] ?? '']?.updatedAt !==
+            oldRecord.updatedAt
+        ) {
+          throw new Error(
+            `V2 to V3 Tech migration lost inventory, revision, or execution data (${stages.length}/${tasks.length}/${subtasks.length}, revision ${row.revision})`,
+          )
+        }
+      } finally {
+        await techClient.end()
+      }
     }
 
     const previous = stagePreviousMigrationFixture(repositoryRoot, temporaryRoot)
@@ -438,7 +569,11 @@ async function run() {
     } finally {
       await previousClient.end()
     }
-    await runPostgresMigrations(previousUrl, { repositoryRoot })
+    await runPostgresMigrations(previousUrl, {
+      repositoryRoot,
+      hasFreshRecoverableBackup: true,
+      hasTechV3CompatiblePreviousRelease: true,
+    })
     const upgradedClient = new Client({ connectionString: previousUrl })
     await upgradedClient.connect()
     try {
@@ -478,7 +613,11 @@ async function run() {
       await driftClient.query('ALTER TABLE app.start_datasets RENAME TO start_datasets_missing')
       let rejected = false
       try {
-        await runPostgresMigrations(previousUrl, { repositoryRoot })
+        await runPostgresMigrations(previousUrl, {
+          repositoryRoot,
+          hasFreshRecoverableBackup: true,
+          hasTechV3CompatiblePreviousRelease: true,
+        })
       } catch (error) {
         if (
           !(error instanceof Error) ||

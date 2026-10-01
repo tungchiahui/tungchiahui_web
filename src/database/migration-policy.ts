@@ -10,6 +10,7 @@ const migrationPolicySchema = z.object({
       changeKind: z.enum(['expand', 'contract']),
       risk: z.enum(['low', 'medium', 'high']),
       requiresFreshRecoverableBackup: z.boolean(),
+      requiresTechV3CompatiblePreviousRelease: z.boolean().default(false),
       reason: z.string().min(1),
       recovery: z.string().min(1),
     }),
@@ -23,6 +24,9 @@ const migrationJournalSchema = z.object({
 export type MigrationPolicyOptions = Readonly<{
   allowContract: boolean
   hasFreshRecoverableBackup: boolean
+  hasTechV3CompatiblePreviousRelease?: boolean
+  throughMigration?: string
+  applyMigrations?: boolean
 }>
 
 export function validateMigrationPolicy(
@@ -43,15 +47,32 @@ export function validateMigrationPolicy(
     throw new Error('Migration policy must cover every Drizzle migration in journal order')
   }
 
-  for (const migration of policy.migrations) {
+  const lastIndex = options.throughMigration
+    ? policyTags.indexOf(options.throughMigration)
+    : policyTags.length - 1
+  if (lastIndex < 0) throw new Error('Migration scope references an unknown migration')
+  const selected = { ...policy, migrations: policy.migrations.slice(0, lastIndex + 1) }
+  for (const migration of selected.migrations) {
+    if (
+      migration.requiresTechV3CompatiblePreviousRelease &&
+      !options.hasTechV3CompatiblePreviousRelease
+    ) {
+      throw new Error(
+        `Migration requires a V3-compatible active/rollback release: ${migration.tag}`,
+      )
+    }
     if (migration.changeKind === 'contract' && !options.allowContract) {
       throw new Error(`Contract migration requires a later-release authorization: ${migration.tag}`)
     }
 
-    if (migration.requiresFreshRecoverableBackup && !options.hasFreshRecoverableBackup) {
+    if (
+      migration.requiresFreshRecoverableBackup &&
+      options.applyMigrations !== false &&
+      !options.hasFreshRecoverableBackup
+    ) {
       throw new Error(`Migration requires a fresh recoverable backup: ${migration.tag}`)
     }
   }
 
-  return policy
+  return selected
 }

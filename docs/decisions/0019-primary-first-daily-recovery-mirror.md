@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-09-07
+- Partial supersession: ADR 0026 将普通 Asset Mirror 纳入统一每日 Protection；其他决定保留（Remote Retention 另见 ADR 0025）。
 - Supersedes: ADR 0018 的并行 Recovery Replication 与未定义 Schedule；保留 ADR 0018 的 Provider、Namespace、Encryption、Restore Priority 和 Asset Preserve-delete 决策
 
 ## Context

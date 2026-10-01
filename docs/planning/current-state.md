@@ -2,13 +2,52 @@
 
 > Status: Phase 0–18 completed
 > Current Phase: Website V2 Production Completion
-> Handoff audit date: 2026-09-13
+> Handoff audit date: 2026-10-01
 
 本文件是新 Claude Code/Codex 会话的简洁交接入口。它索引当前实际状态和容易遗漏的实施事实，不替代 `AGENTS.md`、Accepted ADR、架构规范或 `implementation-plan.md`。
 
 维护规则：每个 Phase 完成时，Agent 自动复核并沉淀后续实施所需事实；完成沉淀只表示下一 Phase 依赖可供 Owner 评估，不授权 Agent 自动继续。
 
 ## 1. 新会话读取顺序
+
+### 2026-10-01：Tech V3 / Daily Protection 工作交接
+
+基于 main `cd5b3507167a87a4343b7c7f236c980f639ea09f`，已实现数据库文档驱动 Tech Roadmap、
+UUID/CAS/四 Locale、结构编辑/归档/恢复/永久删除、导入导出 Envelope，以及统一每日
+Database → Control-state → Assets → verified Daily Manifest。旧 10 Stage / 46 Task /
+231 Subtask、11 项关键里程碑与双语内容迁入冻结 Migration 0009。运行时移除静态任务白名单。
+ADR 0026 仅部分 Supersede ADR 0019 的 Asset 调度限制；Retentions、PITR、授权和双副本门禁保留。
+
+发布必须分两步：`tools/database/prepare-tech-v3-bridge.ts` 生成 through-0008 的临时兼容版本，
+先按普通 CI/Immutable Image/Blue-green 路径发布，保留为最终版本的 Rollback Target；之后
+0009 Backfill 与最终发布。Migration Policy/Deploy-agent 要求 Active Image 声明 V3 可读和
+Fresh Verified Backup，否则拒绝。独立 Control API 仍需 scoped reconciliation。详见
+`docs/development/personal-trackers.md`。不要把当前最终版直接部署到 V2-only Active Slot。
+
+完整验证发现 main 固定 Next.js 16.3.3 的 Critical Advisory，已更新稳定补丁 16.3.8、锁文件及
+精确版本的 minimum-release-age 安全补丁例外。该更新没有改变框架/Runtime 选择。
+最终验证已完成（2026-10-01）：
+
+- 完整 `./site check`：Format/Lint、Source/Workflow Policy、Drizzle、Typecheck、Renovate、Build、
+  SBOM/Critical Vulnerability Gate 全部通过。
+- 完整 `./site test`：42 个 Unit Test File / 240 Test、Production-foundation、Recovery、
+  S3Mock 7-case Contract、14 项 Public/Owner E2E、10 个 PostgreSQL Migration 全部通过。
+- Production-foundation 使用真实、隔离的 pgBackRest/AList-compatible/R2-compatible 双副本
+  Verified Backup 满足 Migration Gate；保留 Blue-green、故障隔离、安全、无重建 Rollback 等验证。
+- Recovery 使用隔离 PostgreSQL/S3Mock 执行 Full/Diff/Incr、WAL/PITR、双副本 Restore、
+  加密 Control-state Restore；新增 Tech V3 层级/UUID/标题/进度/备注/revision 恢复验证和
+  Daily Protection 真实组件/同日重放验证均通过。组件失败/Resume/Manifest Integrity/Fencing
+  另有 Unit Test。没有以 Asset 失败否定已验证 Database Backup。
+- E2E 覆盖桌面结构编辑、键盘新增、自动保存后重载、导入预览/确认/导出回环、390px Touch
+  归档/恢复/二次确认永久删除，以及原有 Auth/Origin/CAS 409/Draft/Public-readonly 边界。
+  手机编辑画面已人工检查。
+- 指定非生产 AList `TEST` Bucket 的 8-case S3 Contract 通过，测试对象清理完成。
+- 生成的临时兼容版本另通过 Format、Typecheck、42 File / 240 Unit Test、Production Build、
+  S3Mock 7-case Contract 和 13 项浏览器 E2E；V2/V3 双版本读取且 Tech 编辑暂时只读。
+
+本阶段上下文已沉淀，可以授权/开启下一阶段。下一步是按上述两次正常发布顺序处理生产升级；
+此交接不构成发布授权。当前改动仍在工作区，未执行生产部署、生产恢复、Timer 操作、
+Git commit/push 或 PR merge。
 
 1. `AGENTS.md`、`README.md`、本文件；
 2. `docs/planning/implementation-plan.md` 中的 Current Phase；

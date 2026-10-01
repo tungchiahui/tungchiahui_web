@@ -7,11 +7,43 @@ import { describe, expect, it } from 'vitest'
 import { validateMigrationPolicy } from '../../src/database/migration-policy'
 
 describe('migration policy', () => {
+  it('limits control-service reconciliation to its reviewed additive schema', () => {
+    const policy = validateMigrationPolicy(
+      'drizzle/migration-policy.json',
+      'drizzle/meta/_journal.json',
+      {
+        allowContract: false,
+        hasFreshRecoverableBackup: false,
+        throughMigration: '0008_accounts_and_start_data',
+      },
+    )
+    expect(policy.migrations.at(-1)?.tag).toBe('0008_accounts_and_start_data')
+    expect(policy.migrations).toHaveLength(9)
+    expect(() =>
+      validateMigrationPolicy('drizzle/migration-policy.json', 'drizzle/meta/_journal.json', {
+        allowContract: false,
+        hasFreshRecoverableBackup: false,
+        throughMigration: 'unknown',
+      }),
+    ).toThrow('unknown migration')
+  })
+  it('keeps the bridge migration set compatible with V2-only releases', () => {
+    expect(() =>
+      validateMigrationPolicy('drizzle/migration-policy.json', 'drizzle/meta/_journal.json', {
+        allowContract: false,
+        hasFreshRecoverableBackup: true,
+      }),
+    ).not.toThrow()
+  })
   it('covers every checked-in migration through Phase 18 and permits the expand set', () => {
     const policy = validateMigrationPolicy(
       'drizzle/migration-policy.json',
       'drizzle/meta/_journal.json',
-      { allowContract: false, hasFreshRecoverableBackup: false },
+      {
+        allowContract: false,
+        hasFreshRecoverableBackup: true,
+        hasTechV3CompatiblePreviousRelease: true,
+      },
     )
 
     expect(policy.migrations).toHaveLength(9)

@@ -39,7 +39,30 @@ AList v3 的 `ListObjectsV2` 可能为查询的 Repository Prefix 返回重复�
 
 Retention 基线由 `ops/production/pgbackrest.conf` 固定：保留 2 个 Full、Differential Retention Count 4，以及对应 2 个 Full 范围内的 WAL。pgBackRest 在每次成功 Backup 后自动执行 Expire；没有独立的每日本地清理 Timer。Production Timer 安装后仍默认关闭，Owner 明确启用才会每天 03:05 Asia/Hong_Kong 创建幂等 Operation：周日 Full、其余日期 Differential。每次 Backup 后执行 pgBackRest `check` + `verify`，再按 AList Primary -> R2 Mirror 顺序验证副本。
 
-## Backup Command
+## 统一每日 Protection（ADR 0026）
+
+原 `tungchiahui-backup.timer`/service 保留名称和 03:05 调度。新调度只创建一个 host-local SQLite
+`daily-protection` Operation，同日稳定 Key 为 `scheduled-daily-protection:production:YYYY-MM-DD`。
+已有旧 Key 的当天 Operation 会阻止升级补跑；Persistent 补跑使用实际执行的 Hong Kong 日期。
+安装/启用的现有授权边界不变；不会建立第二个 Timer。
+
+Deploy-agent 顺序执行 Database → Control-state → Assets → Daily Manifest。数据库继续
+pgBackRest/check/verify 和 AList/R2 逐对象完整验证。Control-state 继续 age Snapshot 双副本。
+Assets 直接调用现有 Mirror Service，保留 R2-only 对象，无 DELETE。最终 Manifest 写入两端
+`backups/daily-manifests/<date>.json` 并 GET 校验 SHA-256；当前不自动清理这些小文件。
+
+失败 Operation 的 `result` 保留已完成组件，`phase`/`failedComponent` 指明故障。Assets/Manifest
+失败不会让已 verified 的数据库变成 invalid。再次调用同一天 Scheduler 会重新排队原失败
+Operation；进程中断的 needs-attention 每日任务由 Agent 对同一 Operation 恢复。完成组件复用，
+缺失组件重试；已完成的数据库不再执行 pgBackRest。Primary fresh 而 Offsite failed 时走现有
+Offsite Retry；Primary 失败或写记录前中断，则从本地当天完成的 Label 重新验证/复制。
+
+恢复仍是 AList 优先、R2 fallback、pgBackRest/PITR；Tech V3 随数据库恢复，不增加专用 Handler。
+Drill 验证层级、UUID 完整性、代表性 Task 标题/进度/备注/revision。数据库恢复后先保持 Owner
+登录关闭并 rotate verifier，再启用登录。独立手动 Asset Backup/Database Backup 命令仍可用于
+诊断和明确重试，不构成另一个定时调度入口。
+
+## 手动 Backup Command
 
 ```bash
 ./site backup --environment production --type full --reason "scheduled full backup"

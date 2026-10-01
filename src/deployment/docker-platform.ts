@@ -222,6 +222,22 @@ function requestHttp(url: URL) {
 }
 
 export class DockerDeploymentPlatform implements DeploymentPlatform {
+  async verifyTechV3MigrationCompatibility(retainedRelease?: DeploymentRelease) {
+    const release = retainedRelease ?? (await this.inspectActiveRelease())
+    const container = await this.inspectContainer(this.containerName(release.slot))
+    const image = dockerImageSchema.parse(
+      await requireDocker(
+        this.socketPath,
+        'GET',
+        `/images/${encodeURIComponent(container.Image)}/json`,
+        [200],
+      ),
+    )
+    return (
+      image.Config.Labels?.['cn.tungchiahui.tech-payload-versions']?.split(',').includes('3') ===
+      true
+    )
+  }
   private migrationImage: Readonly<{
     digest: string
     image: z.infer<typeof dockerImageSchema>
@@ -523,7 +539,11 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
   }
 
   async runMigrations(
-    input: Readonly<{ hasFreshRecoverableBackup: boolean; target: DeploymentRelease }>,
+    input: Readonly<{
+      hasFreshRecoverableBackup: boolean
+      hasTechV3CompatiblePreviousRelease?: boolean
+      target: DeploymentRelease
+    }>,
   ) {
     const validatedMigration = this.migrationImage
     if (
@@ -544,10 +564,13 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
       [204],
     )
     const environment = (container.Config.Env ?? []).filter(
-      (entry) => !entry.startsWith('DEPLOYMENT_HAS_FRESH_RECOVERABLE_BACKUP='),
+      (entry) =>
+        !entry.startsWith('DEPLOYMENT_HAS_FRESH_RECOVERABLE_BACKUP=') &&
+        !entry.startsWith('DEPLOYMENT_TECH_V3_COMPATIBLE_PREVIOUS_RELEASE='),
     )
     environment.push(
       `DEPLOYMENT_HAS_FRESH_RECOVERABLE_BACKUP=${String(input.hasFreshRecoverableBackup)}`,
+      `DEPLOYMENT_TECH_V3_COMPATIBLE_PREVIOUS_RELEASE=${String(input.hasTechV3CompatiblePreviousRelease ?? false)}`,
     )
     const endpointConfig = Object.fromEntries(
       Object.entries(container.NetworkSettings.Networks).map(([network, endpoint]) => [
@@ -561,7 +584,7 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
       `/containers/create?name=${encodeURIComponent(name)}`,
       [201],
       {
-        Cmd: container.Config.Cmd ?? undefined,
+        Cmd: (container.Config.Cmd ?? []).filter((argument) => argument !== '--control-schema'),
         Entrypoint: container.Config.Entrypoint ?? undefined,
         Env: environment,
         HostConfig: {

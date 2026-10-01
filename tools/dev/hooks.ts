@@ -13,6 +13,9 @@ export function databaseUrl(compose: ComposeProject, service: 'postgres' | 'pgbo
 
 export async function runInfrastructureHooks(repositoryRoot: string, compose: ComposeProject) {
   const migrationResult = await runPostgresMigrations(databaseUrl(compose, 'postgres'), {
+    // Disposable local database: there is no production recovery state to protect.
+    hasFreshRecoverableBackup: true,
+    hasTechV3CompatiblePreviousRelease: true,
     repositoryRoot,
   })
   const seedResult = await seedDevelopmentDatabase(databaseUrl(compose, 'pgbouncer'))

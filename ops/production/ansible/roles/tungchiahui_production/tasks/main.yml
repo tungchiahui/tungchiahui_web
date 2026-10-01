@@ -557,7 +557,7 @@
     - not (tungchiahui_manage_stack | bool)
     - tungchiahui_reconcile_control_api | bool
 
-- name: Install the audited daily backup scheduler service
+- name: Install the audited daily protection scheduler service
   ansible.builtin.copy:
     dest: /etc/systemd/system/tungchiahui-backup.service
     owner: root
@@ -565,7 +565,7 @@
     mode: "0644"
     content: |
       [Unit]
-      Description=Enqueue the audited Tungchiahui production backup
+      Description=Enqueue the audited Tungchiahui daily protection operation
       Requires=docker.service
       After=docker.service
 
@@ -575,7 +575,7 @@
       TimeoutStartSec=60
   when: tungchiahui_manage_backup_schedule | bool
 
-- name: Install the 03:05 Asia Hong Kong daily backup timer
+- name: Install the 03:05 Asia Hong Kong daily protection timer
   ansible.builtin.copy:
     dest: /etc/systemd/system/tungchiahui-backup.timer
     owner: root
@@ -583,7 +583,7 @@
     mode: "0644"
     content: |
       [Unit]
-      Description=Run the Tungchiahui production backup near 03:00 daily
+      Description=Run Tungchiahui daily protection at 03:05
 
       [Timer]
       OnCalendar=*-*-* 03:05:00 Asia/Hong_Kong

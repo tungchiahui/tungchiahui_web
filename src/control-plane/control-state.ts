@@ -1090,6 +1090,96 @@ export function updateInfrastructureOperationPhase(
   }
 }
 
+export function checkpointDailyProtectionOperation(
+  path: string,
+  id: string,
+  lease: LeaseIdentity,
+  phase: string,
+  result: Readonly<Record<string, unknown>>,
+  now = new Date(),
+) {
+  const validatedPhase = z.string().trim().min(1).max(200).parse(phase)
+  const validatedResult = z.record(z.string(), z.unknown()).parse(result)
+  const database = openControlState(path)
+  try {
+    return transaction(database, () => {
+      const operation = mapOperation(
+        database
+          .prepare('SELECT * FROM infrastructure_operations WHERE id = ?')
+          .get(z.uuid().parse(id)),
+      )
+      requireActiveLease(operation, lease, now, ['running'])
+      if (operation.target.action !== 'daily-protection')
+        throw new ControlStateConflictError(
+          'Only daily protection can checkpoint component results',
+        )
+      const timestamp = now.toISOString()
+      database
+        .prepare(`UPDATE infrastructure_operations SET phase = ?, result_json = ?, updated_at = ?
+        WHERE id = ? AND status = 'running' AND lease_owner = ? AND fencing_token = ?`)
+        .run(
+          validatedPhase,
+          JSON.stringify(validatedResult),
+          timestamp,
+          operation.id,
+          lease.leaseOwner,
+          lease.fencingToken,
+        )
+      appendAudit(database, {
+        actorId: lease.leaseOwner,
+        createdAt: timestamp,
+        details: { phase: validatedPhase, fencingToken: lease.fencingToken },
+        eventType: 'daily_protection_component_checkpoint',
+        operationId: operation.id,
+        outcome: 'accepted',
+      })
+      return mapOperation(
+        database.prepare('SELECT * FROM infrastructure_operations WHERE id = ?').get(operation.id),
+      )
+    })
+  } finally {
+    database.close()
+  }
+}
+
+export function requeueDailyProtectionOperation(path: string, id: string, now = new Date()) {
+  const database = openControlState(path)
+  try {
+    return transaction(database, () => {
+      const operation = mapOperation(
+        database
+          .prepare('SELECT * FROM infrastructure_operations WHERE id = ?')
+          .get(z.uuid().parse(id)),
+      )
+      if (
+        operation.target.action !== 'daily-protection' ||
+        !['failed', 'needs-attention'].includes(operation.status)
+      )
+        throw new ControlStateConflictError(
+          'Only failed or interrupted daily protection can resume',
+        )
+      const timestamp = now.toISOString()
+      database
+        .prepare(`UPDATE infrastructure_operations SET status = 'queued', phase = 'resume-queued',
+        error_summary = NULL, finished_at = NULL, updated_at = ? WHERE id = ?`)
+        .run(timestamp, operation.id)
+      appendAudit(database, {
+        actorId: 'deploy-agent:daily-protection-resume',
+        createdAt: timestamp,
+        details: { previousStatus: operation.status },
+        eventType: 'daily_protection_requeued',
+        operationId: operation.id,
+        outcome: 'accepted',
+      })
+      return mapOperation(
+        database.prepare('SELECT * FROM infrastructure_operations WHERE id = ?').get(operation.id),
+      )
+    })
+  } finally {
+    database.close()
+  }
+}
+
 export function requeueDeploymentOperationForReconciliation(
   path: string,
   id: string,

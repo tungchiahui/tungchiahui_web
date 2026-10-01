@@ -85,7 +85,7 @@ describe('Docker migration image identity', () => {
           response.end(
             JSON.stringify({
               Config: {
-                Cmd: ['node', 'dist/database-migrate.cjs'],
+                Cmd: ['node', 'dist/database-migrate.cjs', '--control-schema'],
                 Entrypoint: null,
                 Env: ['DEPLOYMENT_HAS_FRESH_RECOVERABLE_BACKUP=false'],
                 Image: 'service:mutable-tag',
@@ -230,7 +230,10 @@ describe('Docker migration image identity', () => {
         } else {
           await migration
           expect(JSON.parse(createdBody)).toMatchObject({
-            Env: ['DEPLOYMENT_HAS_FRESH_RECOVERABLE_BACKUP=true'],
+            Env: [
+              'DEPLOYMENT_HAS_FRESH_RECOVERABLE_BACKUP=true',
+              'DEPLOYMENT_TECH_V3_COMPATIBLE_PREVIOUS_RELEASE=false',
+            ],
             HostConfig: { CapDrop: ['ALL'], ReadonlyRootfs: true },
             Image: targetImageId,
           })

@@ -1,9 +1,11 @@
-import { readFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 import { readMigrationFiles } from 'drizzle-orm/migrator'
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { migrate } from 'drizzle-orm/node-postgres/migrator'
 import { Client } from 'pg'
+import { z } from 'zod'
 
 import { parseDatabaseConnectionConfig } from './config'
 import { validateMigrationPolicy } from './migration-policy'
@@ -12,9 +14,11 @@ export type MigrationRunOptions = Readonly<{
   allowContract?: boolean
   bootstrapRoles?: boolean
   hasFreshRecoverableBackup?: boolean
+  hasTechV3CompatiblePreviousRelease?: boolean
   migrationsDirectory?: string
   policyPath?: string
   repositoryRoot: string
+  scope?: 'application' | 'control-schema'
 }>
 
 export async function runPostgresMigrations(
@@ -42,6 +46,10 @@ export async function runPostgresMigrations(
   const policy = validateMigrationPolicy(policyPath, journalPath, {
     allowContract: options.allowContract ?? false,
     hasFreshRecoverableBackup: options.hasFreshRecoverableBackup ?? false,
+    hasTechV3CompatiblePreviousRelease: options.hasTechV3CompatiblePreviousRelease ?? false,
+    ...(options.scope === 'control-schema'
+      ? { throughMigration: '0008_accounts_and_start_data' }
+      : {}),
   })
   const client = new Client({
     application_name: configuration.applicationName,
@@ -51,12 +59,34 @@ export async function runPostgresMigrations(
   })
 
   await client.connect()
+  let scopedDirectory: string | null = null
   try {
     await client.query("SELECT pg_advisory_lock(hashtext('tungchiahui-schema-migration'))")
     if (rolesSql !== null) await client.query(rolesSql)
     await client.query('SET ROLE site_migrator')
+    if (options.scope === 'control-schema') {
+      scopedDirectory = mkdtempSync(resolve(tmpdir(), 'site-control-schema-'))
+      mkdirSync(resolve(scopedDirectory, 'meta'))
+      const journal = z
+        .object({ entries: z.array(z.object({ tag: z.string() }).passthrough()) })
+        .passthrough()
+        .parse(JSON.parse(readFileSync(journalPath, 'utf8')) as unknown)
+      const tags = new Set(policy.migrations.map((entry) => entry.tag))
+      writeFileSync(
+        resolve(scopedDirectory, 'meta/_journal.json'),
+        JSON.stringify({
+          ...journal,
+          entries: journal.entries.filter((entry) => tags.has(entry.tag)),
+        }),
+      )
+      for (const entry of policy.migrations)
+        copyFileSync(
+          resolve(migrationsDirectory, `${entry.tag}.sql`),
+          resolve(scopedDirectory, `${entry.tag}.sql`),
+        )
+    }
     await migrate(drizzle({ client }), {
-      migrationsFolder: migrationsDirectory,
+      migrationsFolder: scopedDirectory ?? migrationsDirectory,
       migrationsSchema: 'drizzle',
       migrationsTable: '__drizzle_migrations',
     })
@@ -69,13 +99,17 @@ export async function runPostgresMigrations(
     const expectedMigrations = readMigrationFiles({ migrationsFolder: migrationsDirectory })
     const count = result.rows.length
 
-    if (count !== policy.migrations.length || count !== expectedMigrations.length) {
+    if (
+      count < policy.migrations.length ||
+      count > expectedMigrations.length ||
+      (options.scope !== 'control-schema' && count !== expectedMigrations.length)
+    ) {
       throw new Error(
         `Migration journal mismatch: expected ${policy.migrations.length}, database has ${count}`,
       )
     }
 
-    for (const [index, expected] of expectedMigrations.entries()) {
+    for (const [index, expected] of expectedMigrations.slice(0, count).entries()) {
       const applied = result.rows[index]
       if (
         applied?.hash !== expected?.hash ||
@@ -102,6 +136,7 @@ export async function runPostgresMigrations(
 
     return Object.freeze({ migrationCount: count })
   } finally {
+    if (scopedDirectory !== null) rmSync(scopedDirectory, { recursive: true, force: true })
     try {
       await client.query('RESET ROLE')
       await client.query("SELECT pg_advisory_unlock(hashtext('tungchiahui-schema-migration'))")

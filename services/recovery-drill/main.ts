@@ -4,6 +4,11 @@ import { initializeControlState } from '../../src/control-plane/control-state'
 import { safeErrorAttributes } from '../../src/observability/telemetry'
 import { parseRecoveryConfiguration } from '../../src/recovery/configuration'
 import {
+  createDailyProtectionServices,
+  dailyProtectionProgressSchema,
+  runDailyProtection,
+} from '../../src/recovery/daily-protection'
+import {
   executeDatabaseBackup,
   executeDatabaseRestore,
   executeOffsiteReplicaRetry,
@@ -13,12 +18,35 @@ import {
 const configuration = parseRecoveryConfiguration(process.env)
 initializeControlState(configuration.controlStatePath, configuration.mode)
 const action = z
-  .enum(['backup', 'restore', 'control-state-restore', 'offsite-retry'])
+  .enum(['backup', 'restore', 'control-state-restore', 'offsite-retry', 'daily-protection'])
   .parse(process.argv[2])
 
 async function main() {
   let result: unknown
   switch (action) {
+    case 'daily-protection': {
+      if (configuration.mode !== 'test')
+        throw new Error('Daily protection drill requires a disposable test environment')
+      const input = z
+        .object({
+          date: z.iso.date(),
+          databaseBackupType: z.enum(['full', 'diff']),
+          prior: dailyProtectionProgressSchema.optional(),
+        })
+        .strict()
+        .parse(JSON.parse(z.string().min(2).parse(process.argv[3])) as unknown)
+      result = await runDailyProtection(
+        {
+          date: input.date,
+          databaseBackupType: input.databaseBackupType,
+          environment: 'production',
+        },
+        input.prior,
+        createDailyProtectionServices(configuration, process.env),
+        () => {},
+      )
+      break
+    }
     case 'backup':
       result = await executeDatabaseBackup(
         configuration,
