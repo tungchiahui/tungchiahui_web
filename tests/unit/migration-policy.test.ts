@@ -27,13 +27,13 @@ describe('migration policy', () => {
       }),
     ).toThrow('unknown migration')
   })
-  it('keeps the bridge migration set compatible with V2-only releases', () => {
+  it('blocks V3 backfill while the previous application cannot read V3', () => {
     expect(() =>
       validateMigrationPolicy('drizzle/migration-policy.json', 'drizzle/meta/_journal.json', {
         allowContract: false,
         hasFreshRecoverableBackup: true,
       }),
-    ).not.toThrow()
+    ).toThrow('V3-compatible')
   })
   it('covers every checked-in migration through Phase 18 and permits the expand set', () => {
     const policy = validateMigrationPolicy(
@@ -46,7 +46,7 @@ describe('migration policy', () => {
       },
     )
 
-    expect(policy.migrations).toHaveLength(9)
+    expect(policy.migrations).toHaveLength(10)
     expect(policy.migrations.every((migration) => migration.changeKind === 'expand')).toBe(true)
   })
 

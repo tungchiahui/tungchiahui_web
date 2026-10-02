@@ -24,8 +24,7 @@ export function TechTracker({ initial }: { initial: DatasetSnapshot<TechPayload>
   const edit = useTranslations('TechEdit')
   const copy = useTranslations('Roadmap')
   const locale = useLocale() as AppLocale
-  const datasetStore = useOwnerDataset('tech_footprint', techFootprintPayloadSchema, initial)
-  const store = { ...datasetStore, authenticated: false, enabled: false }
+  const store = useOwnerDataset('tech_footprint', techFootprintPayloadSchema, initial)
   const [stageId, setStageId] = useState<string | null>(null)
   const [editing, setEditing] = useState(false)
   const stages = store.payload.roadmap.stages

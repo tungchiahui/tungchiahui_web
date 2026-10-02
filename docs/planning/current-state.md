@@ -2,7 +2,7 @@
 
 > Status: Phase 0–18 completed
 > Current Phase: Website V2 Production Completion
-> Handoff audit date: 2026-10-01
+> Handoff audit date: 2026-10-02
 
 本文件是新 Claude Code/Codex 会话的简洁交接入口。它索引当前实际状态和容易遗漏的实施事实，不替代 `AGENTS.md`、Accepted ADR、架构规范或 `implementation-plan.md`。
 
@@ -10,7 +10,7 @@
 
 ## 1. 新会话读取顺序
 
-### 2026-10-01：Tech V3 / Daily Protection 兼容发布
+### 2026-10-01：Tech V3 / Daily Protection 工作交接
 
 基于 main `cd5b3507167a87a4343b7c7f236c980f639ea09f`，已实现数据库文档驱动 Tech Roadmap、
 UUID/CAS/四 Locale、结构编辑/归档/恢复/永久删除、导入导出 Envelope，以及统一每日
@@ -46,8 +46,37 @@ Fresh Verified Backup，否则拒绝。独立 Control API 仍需 scoped reconcil
   S3Mock 7-case Contract 和 13 项浏览器 E2E；V2/V3 双版本读取且 Tech 编辑暂时只读。
 
 本阶段上下文已沉淀，可以授权/开启下一阶段。下一步是按上述两次正常发布顺序处理生产升级；
-此交接不构成发布授权。Owner 已授权发布。本次 Commit 是临时兼容版本：Migration Journal/Policy 截止 0008，
-V2/V3 双版本可读，Tech 编辑暂时只读；最终 V3 Migration/可编辑版本需随后独立发布。
+此交接不构成发布授权。Owner 已明确授权生产发布；兼容版本已完成上线，最终 V3 发布正在按两步流程进行。
+未执行生产恢复。
+
+### 2026-10-02：兼容版本已生产上线，最终 V3 发布准备
+
+Owner 已明确授权发布及生产 Ansible 提权。PR #28 合并为
+`e5362d80c54d8540387b93526b5147bd94cac3ab`，Main Release `36874166741` 第二次 Attempt
+已全部 success。首次 Attempt 的五组 Quality 与四镜像均成功，只因 Bootstrap 暂停自动部署而
+将最后的 release-result 标为 failure；独立服务升级后恢复 `PRODUCTION_DEPLOYMENT_ENABLED=true`，
+仅重跑原 Deployment Job 及其最终验证，已经完成真实蓝绿发布，未修改或降低 CI 完成门禁。
+
+- 四个 OCI Revision 均精确匹配该 SHA；Web Digest
+  `sha256:27a5662b9b494af4513e9505b8089382293a31552d7809f93785df10e3f374ba`，
+  `cn.tungchiahui.tech-payload-versions=2,3`。
+- 使用仓库既有 scoped Ansible：第一次 `changed=7, failed=0`，复跑 `changed=0, failed=0`。
+  `control-api/content-worker/observability-agent/deploy-agent` 已更新为兼容 SHA；原两个 Web
+  Container ID/Creation Time 在该步骤保持不变。Migration Scope 截止 0008，不执行 V3 Backfill。
+- Blue-green 于 `2026-10-02T07:03:57.860Z` 切到 Green；Public Version/Health/Ready 返回
+  兼容 SHA、`ok`、PostgreSQL `ready`。SQLite Schema 8、未完成 Operation 0。
+- 单一 Daily Protection Timer 已安装并保持 enabled；下一次为 2026-10-03 03:05
+  Asia/Hong_Kong，升级没有重新补跑 2026-10-02 已完成的旧 Scheduled Backup。
+- 最新 `20260926-190514F_20261001-190514D` Backup 于 `2026-10-01T19:28:45.810Z`
+  完成，Primary/Offsite fresh、valid=true，满足当前 129600 秒 Migration Gate。
+- 迁移前只读核对：Tech V2、revision=2、1 个执行记录。下一步必须通过正常 main CI 发布最终
+  V3 版本；保持本兼容 Green 为回滚目标，迁移后核对 10/46/231、11 里程碑、记录完整性及
+  revision，然后 scoped reconcile 最终独立服务，不得回滚到原 V2-only Image。
+
+本机 Operator private JWK 对应生产登记的 `production-owner-v1`；不要用 v2 Key ID 与该
+文件配对。SSH 使用 Inventory `Debian`，不得持久保存数字公网地址。Ansible 仅使用一次
+KDE 输入后保留在进程内存中的 Become Password；密码未进入文件、参数、聊天或日志。
+本轮发布授权持续有效，无需再次确认。生产恢复与破坏性测试不在本次发布范围内。
 
 1. `AGENTS.md`、`README.md`、本文件；
 2. `docs/planning/implementation-plan.md` 中的 Current Phase；
