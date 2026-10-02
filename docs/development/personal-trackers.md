@@ -138,6 +138,31 @@ disposable container before recreating only the gateway; DELETE then reached `co
 returned 200. PR #26 makes this behavior permanent by using that same validate-then-recreate path.
 Both Web Slot container IDs remained unchanged during recovery.
 
+## Tech V3 production activation (2026-10-02)
+
+The owner explicitly authorized publication and scoped Ansible activation. Bridge PR #28
+(`e5362d80c54d8540387b93526b5147bd94cac3ab`, Main Release `36874166741`) completed first.
+Final PR #29 (`d6b76b2fa403309e2d79173f968b040b6c77dcec`, Main Release `36977259952`) then
+passed every quality/image/deployment gate and cut over at `2026-10-02T07:30:46.735Z`.
+Migration 0009 changed Tech V2/revision 2 to V3/revision 3 and retained the existing execution
+record's status, progress, note and updatedAt exactly. Production has 10 stages, 46 tasks,
+231 subtasks and 11 milestones; the formal V3 schema, UUID uniqueness and references passed.
+
+The independent services were activated with the final images through the existing scoped
+Ansible path (`changed=1`, then `changed=0`, both `failed=0`). Both Web container identities
+were preserved during this step. Public reads, all four locales at 390px, health/readiness,
+anonymous read-only behavior and signed Operator state passed. No production test records
+or diagnostic login sessions were created; authenticated CRUD/CAS/Origin/expiry coverage was
+verified by the final release's disposable E2E suite. The retained bridge was the initial
+rollback target; every subsequent release must likewise retain a V3-compatible previous slot.
+Do not select the original V2-only image after migration.
+
+The single daily protection timer remains enabled for 03:05 Asia/Hong_Kong; its next execution
+is 2026-10-03. Installation did not replay the already completed 2026-10-02 backup. The first
+upgraded production Daily Manifest is due at that scheduled execution. No production restore
+or extra database backup was run during activation. See `docs/planning/current-state.md` for
+the immutable activation evidence and `docs/operations/backup-and-recovery.md` for recovery policy.
+
 ## Acceptance and gates
 
 - Public visitors cannot edit through UI or API; logging in immediately enables both pages.

@@ -46,10 +46,10 @@ Fresh Verified Backup，否则拒绝。独立 Control API 仍需 scoped reconcil
   S3Mock 7-case Contract 和 13 项浏览器 E2E；V2/V3 双版本读取且 Tech 编辑暂时只读。
 
 本阶段上下文已沉淀，可以授权/开启下一阶段。下一步是按上述两次正常发布顺序处理生产升级；
-此交接不构成发布授权。Owner 已明确授权生产发布；兼容版本已完成上线，最终 V3 发布正在按两步流程进行。
+此交接不构成发布授权。Owner 随后明确授权生产发布；两步升级及独立服务激活均已完成，证据见下方 2026-10-02 最终发布记录。
 未执行生产恢复。
 
-### 2026-10-02：兼容版本已生产上线，最终 V3 发布准备
+### 2026-10-02：兼容版本生产上线记录
 
 Owner 已明确授权发布及生产 Ansible 提权。PR #28 合并为
 `e5362d80c54d8540387b93526b5147bd94cac3ab`，Main Release `36874166741` 第二次 Attempt
@@ -69,9 +69,42 @@ Owner 已明确授权发布及生产 Ansible 提权。PR #28 合并为
   Asia/Hong_Kong，升级没有重新补跑 2026-10-02 已完成的旧 Scheduled Backup。
 - 最新 `20260926-190514F_20261001-190514D` Backup 于 `2026-10-01T19:28:45.810Z`
   完成，Primary/Offsite fresh、valid=true，满足当前 129600 秒 Migration Gate。
-- 迁移前只读核对：Tech V2、revision=2、1 个执行记录。下一步必须通过正常 main CI 发布最终
-  V3 版本；保持本兼容 Green 为回滚目标，迁移后核对 10/46/231、11 里程碑、记录完整性及
-  revision，然后 scoped reconcile 最终独立服务，不得回滚到原 V2-only Image。
+- 迁移前只读核对：Tech V2、revision=2、1 个执行记录。随后最终版已通过正常 main CI 发布，
+  数据与独立服务结果见下一节。0009 后不得回滚到原 V2-only Image。
+
+### 2026-10-02：Tech V3 与统一 Daily Protection 生产激活完成
+
+PR #29 合并为 `d6b76b2fa403309e2d79173f968b040b6c77dcec`。Main Release `36977259952`
+的五组 Quality、四镜像、共享 Blue-green Deployment 和最终 Release Gate 均为 success。
+Web OCI 声明 `cn.tungchiahui.tech-payload-versions=3`，四镜像 Revision 均匹配该 SHA。
+
+- 首次最终版于 `2026-10-02T07:30:46.735Z` 切换到 Blue，Web Digest 为
+  `sha256:975dc20761918e92f736d8d7ef0b97b2fc470a1750357733666f5e3b6ffe3772`。
+  当时保留兼容 Green `e5362d80c54d8540387b93526b5147bd94cac3ab` 为 Previous Slot。
+  后续正常发布仍须保留一个 V3-compatible Previous Slot；不能使用 V2-only 版本回滚。
+- Production PostgreSQL 已由不可变 Migration Runner 应用 0009；Journal 共 10 项。
+  只读验证：version=3、revision=3、10 Stage / 46 Task / 231 Subtask、11 Milestone、1 Record。
+  所有 UUID 唯一且 Record 引用有效；使用正式 V3 Zod Schema 再次验证成功。迁移前后的原
+  Record `status/progress/note/updatedAt` 逐字段完全相同，没有清空或重写 Owner 执行数据。
+- 最终独立服务使用既有 scoped Ansible 激活：`control-api/content-worker/observability-agent`
+  使用 final Service Image，`deploy-agent` 使用 final Recovery Image。第一次 `changed=1`，
+  第二次 `changed=0`，两次 `failed=0`。两个 Web Container ID/Creation Time 保持不变。
+  PostgreSQL Image 仍为既有 `93287c38f16bcbe70b1291b82b06e82b23e4ae95`，没有原地升级数据库。
+- Public Version/Health/Ready 均为 200，返回 final SHA、`ok`、PostgreSQL `ready`。
+  四 Locale 的 Tech 页面均 200；390px 浏览器检查无横向溢出，匿名 Progress 仍 disabled。
+  公开 Dataset 为 no-store / V3 / revision=3；独立 Account Session Endpoint 正常。
+  Signed Operator Status：SQLite Schema 8、未完成 Operation 0、无 Pending Deployment。
+- 单一 `tungchiahui-backup.timer` 为 active/enabled，下一次为 2026-10-03 03:05
+  Asia/Hong_Kong；Last Trigger 仍是 2026-10-02 03:05:13，升级没有重复创建当天备份。
+  首次升级后的 Production Daily Manifest 将在该次计划运行产生；当前只完成安装与调度验证，
+  没有提前执行生产 Daily Protection，也没有执行 Production Restore。完整组件、失败恢复、
+  同日重放和 Manifest Read-back 由已通过的隔离 Recovery/Infrastructure CI 验证。
+
+以上是该功能首次生产激活的不可变证据，后续仅文档发布仍走正常 main CI 与 Blue-green 路径。
+Owner 登录后即可使用在线路线图编辑；Production 写入功能已由同版本的隔离 E2E 验证，
+此次线上核对没有创建测试 Todo、诊断 Session 或额外数据库备份。
+
+本阶段上下文已沉淀，可以授权/开启下一阶段。该说明不授权新的 Phase 或 Production Restore。
 
 本机 Operator private JWK 对应生产登记的 `production-owner-v1`；不要用 v2 Key ID 与该
 文件配对。SSH 使用 Inventory `Debian`，不得持久保存数字公网地址。Ansible 仅使用一次
