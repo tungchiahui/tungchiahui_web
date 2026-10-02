@@ -184,21 +184,6 @@ export class ApplicationJobRepository {
     try {
       return await this.#client.database.transaction(async (transaction) => {
         await transaction.execute(sql`SET LOCAL ROLE site_control_api`)
-        if (update.datasetKey === 'tech_footprint') {
-          const current = (
-            await transaction
-              .select()
-              .from(ownerManagedDatasets)
-              .where(eq(ownerManagedDatasets.datasetKey, 'tech_footprint'))
-              .for('update')
-          )[0]
-          if (
-            !current ||
-            current.revision !== update.expectedRevision ||
-            current.payload.version !== update.payload.version
-          )
-            throw new OwnerDatasetRevisionConflictError(current?.revision ?? null)
-        }
         const updated = (
           await transaction
             .update(ownerManagedDatasets)

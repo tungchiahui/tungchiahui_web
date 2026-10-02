@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 
 import { z } from 'zod'
+import { migrateLegacyTechPayload } from '../../src/personal/legacy-migration'
 import { S3ObjectStorageAdapter } from '../../src/storage/s3-adapter'
 import { verifyPhase5Ingestion } from '../content/test-ingestion'
 import { verifyPhase10CacheInvalidation, verifyPhase10Search } from '../search/test-search'
@@ -181,8 +182,8 @@ async function verifyApplicationJobBoundary(controlApiUrl: URL) {
   }
 
   const datasetBody = {
-    expectedRevision: 0,
-    payload: {
+    expectedRevision: 1,
+    payload: migrateLegacyTechPayload({
       records: {
         'y1a/cpp-linux/cpp': {
           note: 'Phase 4 validated record',
@@ -192,7 +193,7 @@ async function verifyApplicationJobBoundary(controlApiUrl: URL) {
         },
       },
       version: 2,
-    },
+    }),
   }
   const dataset = await signedFetch(controlApiUrl, '/api/ops/datasets/tech_footprint', {
     body: datasetBody,

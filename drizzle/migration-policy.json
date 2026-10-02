@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "migrations": [
     {
       "tag": "0000_phase3_core",
@@ -71,7 +72,15 @@
       "requiresFreshRecoverableBackup": false,
       "reason": "Adds unified owner/user accounts, account sessions, and per-account Start datasets; clears obsolete owner browser sessions without deleting public tracker data.",
       "recovery": "Retain additive tables during blue-green rollback. Recreate an owner account explicitly with the account CLI after rollback or restore; no production credentials are stored in the repository."
+    },
+    {
+      "tag": "0009_tech_footprint_v3",
+      "changeKind": "expand",
+      "risk": "medium",
+      "requiresFreshRecoverableBackup": true,
+      "requiresTechV3CompatiblePreviousRelease": true,
+      "reason": "Atomically replaces the immutable V2 Tech definition with a versioned V3 document and maps every legacy record to a deterministic stable UUID, preserving progress, status, note and update time.",
+      "recovery": "Deploy and verify the generated V2/V3 compatibility bridge first. The active slot must advertise V3-read compatibility before this backfill can run; retain that bridge as the rollback slot. PostgreSQL transaction failure leaves V2 and its revision intact."
     }
-  ],
-  "schemaVersion": 1
+  ]
 }
