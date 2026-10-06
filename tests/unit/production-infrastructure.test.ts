@@ -6,26 +6,12 @@ import { parse } from 'yaml'
 import { z } from 'zod'
 
 import { parseControlApiConfiguration } from '../../src/control-plane/configuration'
+import { provisionRequestSchema } from '../../src/host-release/contracts'
+import { schedulerTimer, schedulerUnit } from '../../src/host-release/provision'
 import { browserSecurityHeaders } from '../../src/observability/security'
 
 const composeSource = readFileSync(resolve('ops/production/compose.yaml'), 'utf8')
 const openRestySource = readFileSync(resolve('ops/production/openresty.conf'), 'utf8')
-const inventorySource = readFileSync(
-  resolve('ops/production/ansible/inventory/production.yml'),
-  'utf8',
-)
-const productionRoleSource = readFileSync(
-  resolve('ops/production/ansible/roles/tungchiahui_production/tasks/main.yml'),
-  'utf8',
-)
-const productionHandlersSource = readFileSync(
-  resolve('ops/production/ansible/roles/tungchiahui_production/handlers/main.yml'),
-  'utf8',
-)
-const productionRoleDefaultsSource = readFileSync(
-  resolve('ops/production/ansible/roles/tungchiahui_production/defaults/main.yml'),
-  'utf8',
-)
 const productionEnvironmentExampleSource = readFileSync(
   resolve('ops/production/secrets/.env.example'),
   'utf8',
@@ -250,12 +236,6 @@ describe('Phase 12 production foundation policy', () => {
     expect(compose.services['observability-agent']?.environment?.OBSERVABILITY_WEB_URL).toBe(
       'http://openresty:8082/api/ready',
     )
-    expect(inventorySource).toContain('ansible_host: Debian')
-    expect(inventorySource).toContain('ansible_user: tungchiahui')
-    expect(inventorySource).toContain('tungchiahui_install_packages: false')
-    expect(inventorySource).not.toContain('tungchiahui_content_polling_enabled')
-    expect(inventorySource).not.toContain('tungchiahui_search_polling_enabled')
-    expect(inventorySource).not.toMatch(/ansible_host:\s*(?:\d{1,3}\.){3}\d{1,3}/)
     expect(composeSource).not.toContain('S3_CONTRACT_')
     expect(composeSource).toContain(
       'DEPLOYMENT_ARTICLE_PATH: ${TUNGCHIAHUI_DEPLOYMENT_ARTICLE_PATH:',
@@ -267,49 +247,6 @@ describe('Phase 12 production foundation policy', () => {
     expect(productionEnvironmentExampleSource).toContain('TUNGCHIAHUI_DEPLOYMENT_ARTICLE_PATH')
     expect(productionEnvironmentExampleSource).toContain('TUNGCHIAHUI_DEPLOYMENT_ASSET_PATH')
     expect(productionEnvironmentExampleSource).toContain('TUNGCHIAHUI_DEPLOYMENT_SEARCH_QUERY')
-    expect(productionRoleSource).toContain('Reconcile validated OpenResty configuration')
-    expect(productionRoleSource).toContain(
-      'Schedule missing OpenResty convergence for scoped control-plane reconciliation',
-    )
-    expect(productionRoleSource).toContain(
-      'Apply pending OpenResty convergence before scoped service changes',
-    )
-    expect(productionRoleSource).toContain('ansible.builtin.meta: flush_handlers')
-    expect(productionRoleSource).toContain('openresty-topology.sha256')
-    expect(productionHandlersSource).toContain('Record the applied OpenResty topology fingerprint')
-    expect(
-      productionRoleSource.indexOf(
-        'Apply pending OpenResty convergence before scoped service changes',
-      ),
-    ).toBeLessThan(
-      productionRoleSource.indexOf(
-        'Prepare the scoped migration runner for the control API release',
-      ),
-    )
-    expect(productionRoleSource).toContain(
-      'Reconcile the independent service release as one reviewed unit',
-    )
-    expect(productionRoleSource).toContain(
-      'until: tungchiahui_scoped_migration_runner_prepare.rc == 0',
-    )
-    expect(productionRoleSource).toContain('until: tungchiahui_control_api_up.rc == 0')
-    for (const service of [
-      'control-api',
-      'content-worker',
-      'observability-agent',
-      'deploy-agent',
-    ]) {
-      expect(productionRoleSource).toContain(`      - ${service}`)
-    }
-    expect(productionHandlersSource).toContain('--force-recreate')
-    expect(productionHandlersSource).toContain('--env-file')
-    expect(productionHandlersSource).toContain('--entrypoint')
-    expect(productionRoleSource).toContain('replica: offsite-backup-s3')
-    expect(productionRoleSource).not.toContain('primary-s3-and-r2')
-    expect(productionRoleSource).toContain('schema: 3')
-    expect(productionRoleSource).toContain('PGBOUNCER_USERLIST_BASE64')
-    expect(productionRoleSource).toContain('BACKUP_AGE_IDENTITY_BASE64')
-    expect(productionRoleSource).not.toContain('sops, --decrypt')
   })
 
   it('requires externally supplied production authentication policy', () => {
@@ -330,30 +267,39 @@ describe('Phase 12 production foundation policy', () => {
   })
 
   it('defines the owner-gated 03:05 production backup schedule', () => {
-    expect(productionRoleDefaultsSource).toContain('tungchiahui_manage_backup_schedule: false')
-    expect(productionRoleDefaultsSource).toContain('tungchiahui_backup_schedule_enabled: false')
-    expect(productionRoleDefaultsSource).not.toContain('tungchiahui_backup_replication_concurrency')
+    const request = provisionRequestSchema.parse({
+      settings: {},
+      sourceRoot: '/release',
+      sha: 'a'.repeat(40),
+      webImage: `ghcr.io/example/web:${'a'.repeat(40)}`,
+      webDigest: `sha256:${'b'.repeat(64)}`,
+      serviceImage: `ghcr.io/example/web-service:${'a'.repeat(40)}`,
+      recoveryImage: `ghcr.io/example/web-recovery:${'a'.repeat(40)}`,
+      postgresImage: `ghcr.io/example/postgres:${'a'.repeat(40)}`,
+      mode: 'bootstrap',
+    })
+    expect(request.backupScheduleEnabled).toBe(false)
     expect(productionEnvironmentExampleSource).toContain(
       'TUNGCHIAHUI_BACKUP_REPLICATION_CONCURRENCY=8',
     )
     expect(composeSource).toContain(
       'BACKUP_REPLICATION_CONCURRENCY: $' + '{TUNGCHIAHUI_BACKUP_REPLICATION_CONCURRENCY:-8}',
     )
-    expect(productionRoleSource).toContain('OnCalendar=*-*-* 03:05:00 Asia/Hong_Kong')
-    expect(productionRoleSource).toContain('Persistent=true')
-    expect(productionRoleSource).toContain('node dist/recovery-scheduler.cjs')
-    expect(productionRoleSource).toContain('when: tungchiahui_manage_backup_schedule | bool')
+    expect(schedulerTimer('backup')).toContain('OnCalendar=*-*-* 03:05:00 Asia/Hong_Kong')
+    expect(schedulerTimer('backup')).toContain('Persistent=true')
+    expect(schedulerUnit('tungchiahui-production', 'backup')).toContain(
+      'node dist/recovery-scheduler.cjs',
+    )
     expect(recoveryDockerfileSource).toContain('dist/recovery-scheduler.cjs')
   })
 
   it('defines the owner-gated audited weekly retention schedule', () => {
-    expect(productionRoleDefaultsSource).toContain('tungchiahui_manage_maintenance_schedule: false')
-    expect(productionRoleDefaultsSource).toContain(
-      'tungchiahui_maintenance_schedule_enabled: false',
+    expect(schedulerTimer('retention-cleanup')).toContain(
+      'OnCalendar=Sun *-*-* 06:30:00 Asia/Hong_Kong',
     )
-    expect(productionRoleSource).toContain('OnCalendar=Sun *-*-* 06:30:00 Asia/Hong_Kong')
-    expect(productionRoleSource).toContain('node dist/retention-scheduler.cjs')
-    expect(productionRoleSource).toContain('when: tungchiahui_manage_maintenance_schedule | bool')
+    expect(schedulerUnit('tungchiahui-production', 'retention-cleanup')).toContain(
+      'node dist/retention-scheduler.cjs',
+    )
     expect(recoveryDockerfileSource).toContain('dist/retention-scheduler.cjs')
   })
 })

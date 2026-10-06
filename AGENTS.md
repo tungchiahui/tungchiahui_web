@@ -27,7 +27,6 @@
 - Docker: `Dockerfile`
 - Docker Compose: YAML
 - OpenResty/Nginx: native config
-- Ansible: YAML
 - Markdown: `.md`
 - shell: 仅在不可避免时使用非常薄的 Bootstrap Wrapper
 
@@ -290,6 +289,8 @@ Production Docker 必须：
 - 仅向 `deploy-agent` 授予完成部署所需的最小 Docker/Host 权限
 
 `content-worker` 不得获得 Docker Socket。
+
+ADR 0027 的服务器 TypeScript Host Adapter 属于 `deploy-agent` 部署执行边界；由服务器 systemd 托管，只执行固定部署职责。日常 main 发布不得依赖开发电脑上的 Ansible、SSH 或 sudo。
 
 ## 13. 备份
 

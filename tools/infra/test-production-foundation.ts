@@ -1,10 +1,9 @@
-import { spawnSync } from 'node:child_process'
+import { type ChildProcess, spawn, spawnSync } from 'node:child_process'
 import { generateKeyPairSync } from 'node:crypto'
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { parseEnv } from 'node:util'
 
-import { stringify } from 'yaml'
 import { z } from 'zod'
 import type { ActorIdentity } from '../../src/control-plane/contracts'
 import {
@@ -24,6 +23,21 @@ import {
 } from '../../src/control-plane/control-state'
 import { createPostgresScramVerifier } from '../../src/database/postgres-scram'
 import { seedDevelopmentDatabase } from '../../src/database/seed'
+import { extractHostGeneration, hostGenerationDirectory } from '../../src/host-release/artifacts'
+import { hostSettingsSchema } from '../../src/host-release/contracts'
+import { captureHostConvergence, hostControlPath } from '../../src/host-release/coordinator'
+import { provisionHost } from '../../src/host-release/provision'
+import {
+  acquireHostExecutor,
+  checkpointHostRelease,
+  commitHostGeneration,
+  initializeHostReleaseState,
+  readHostCheckpoint,
+  readHostRuntime,
+  recordHostBootstrapBaseline,
+  releaseHostExecutor,
+  stageHostGeneration,
+} from '../../src/host-release/state'
 import { SearchIndexRepository } from '../../src/search/repository'
 import {
   executeServerMigrationOperation,
@@ -51,6 +65,10 @@ const registryRepository = `127.0.0.1:${String(input.PHASE15_REGISTRY_PORT)}/tun
 const registryTag = `${registryRepository}:${input.PHASE12_GIT_SHA}`
 let registryDigest = ''
 let serviceRegistryDigest = ''
+let recoveryRegistryDigest = ''
+let initialRegistryDigest = ''
+let initialServiceRegistryDigest = ''
+let initialRecoveryRegistryDigest = ''
 const initialSha = input.PHASE12_GIT_SHA === 'a'.repeat(40) ? 'b'.repeat(40) : 'a'.repeat(40)
 const webImage = `tungchiahui-web:${input.PHASE12_GIT_SHA}`
 const serviceImage = `tungchiahui-services:${input.PHASE12_GIT_SHA}`
@@ -66,22 +84,18 @@ const trivyImage =
   'aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969'
 const configRoot = join(input.PHASE12_HOST_ROOT, 'etc')
 const dataRoot = join(input.PHASE12_HOST_ROOT, 'var')
-const secretRoot = join(input.PHASE12_HOST_ROOT, 'run', 'secrets')
+const secretRoot = join(configRoot, 'secrets')
 const workRoot = join(input.PHASE12_HOST_ROOT, 'work')
 const identityPath = join(workRoot, 'age-identity.txt')
 const migrationBackupS3 = `${projectName}-migration-backup-s3`
 const productionEnvPath = join(configRoot, '.env')
-const inventoryPath = join(workRoot, 'inventory.yml')
-const variablesPath = join(workRoot, 'variables.json')
 const targetProjectName = `tungchiahui-phase17-target-${process.pid}`
 const targetRoot = join(input.PHASE12_HOST_ROOT, 'phase17-target')
 const targetConfigRoot = join(targetRoot, 'etc')
 const targetDataRoot = join(targetRoot, 'var')
-const targetSecretRoot = join(targetRoot, 'run', 'secrets')
+const targetSecretRoot = join(targetConfigRoot, 'secrets')
 const targetWorkRoot = join(targetRoot, 'work')
 const targetProductionEnvPath = join(targetConfigRoot, '.env')
-const targetInventoryPath = join(targetWorkRoot, 'inventory.yml')
-const targetVariablesPath = join(targetWorkRoot, 'variables.json')
 
 for (const directory of [configRoot, dataRoot, secretRoot, workRoot]) {
   mkdirSync(directory, { mode: 0o755, recursive: true })
@@ -161,6 +175,8 @@ function composeEnvironment() {
     TUNGCHIAHUI_SECRET_DIRECTORY: secretRoot,
     TUNGCHIAHUI_SERVICE_IMAGE: initialServiceImage,
     TUNGCHIAHUI_WEB_BLUE_IMAGE: initialWebImage,
+    TUNGCHIAHUI_WEB_BLUE_DIGEST: initialRegistryDigest,
+    TUNGCHIAHUI_WEB_GREEN_DIGEST: initialRegistryDigest,
     TUNGCHIAHUI_WEB_GREEN_IMAGE: initialWebImage,
   }
 }
@@ -208,6 +224,8 @@ function targetComposeEnvironment() {
     TUNGCHIAHUI_RECOVERY_IMAGE: recoveryImage,
     TUNGCHIAHUI_SERVICE_IMAGE: serviceImage,
     TUNGCHIAHUI_WEB_BLUE_IMAGE: webImage,
+    TUNGCHIAHUI_WEB_BLUE_DIGEST: registryDigest,
+    TUNGCHIAHUI_WEB_GREEN_DIGEST: registryDigest,
     TUNGCHIAHUI_WEB_GREEN_IMAGE: webImage,
   }
 }
@@ -265,6 +283,20 @@ function createProductionEnv() {
       ref: 'refs/heads/main',
       repository: 'tungchiahui/tungchiahui_web',
       workflowRef: 'tungchiahui/tungchiahui_web/.github/workflows/translation.yml@refs/heads/main',
+    },
+    {
+      audience: 'tungchiahui-control-api',
+      capabilities: [
+        'status:read',
+        'infrastructure-operation:create',
+        'infrastructure-operation:read',
+      ],
+      environment: 'production',
+      issuer: 'https://token.actions.githubusercontent.com',
+      jwksUrl: 'https://token.actions.githubusercontent.com/.well-known/jwks',
+      ref: 'refs/heads/main',
+      repository: 'tungchiahui/tungchiahui_web',
+      workflowRef: 'tungchiahui/tungchiahui_web/.github/workflows/release.yml@refs/heads/main',
     },
   ])
   const testPassword = 'phase12-disposable-password'
@@ -432,12 +464,31 @@ function buildImages() {
     recoveryImage,
     '.',
   ])
+  const recoveryRegistryTag = `${registryRepository}-recovery:${input.PHASE12_GIT_SHA}`
+  execute('docker', ['tag', recoveryImage, recoveryRegistryTag])
+  execute('docker', ['push', recoveryRegistryTag])
+  recoveryRegistryDigest = z
+    .string()
+    .regex(/^sha256:[a-f0-9]{64}$/)
+    .parse(
+      execute('docker', [
+        'image',
+        'inspect',
+        '--format',
+        '{{(index .RepoDigests 0)}}',
+        recoveryRegistryTag,
+      ])
+        .stdout.trim()
+        .split('@')[1],
+    )
   execute('docker', [
     'build',
     '--build-arg',
     `SITE_DEPLOYMENT_SHA=${input.PHASE12_GIT_SHA}`,
     '--build-arg',
     `SITE_SERVICE_IMAGE_DIGEST=${serviceRegistryDigest}`,
+    '--build-arg',
+    `SITE_RECOVERY_IMAGE_DIGEST=${recoveryRegistryDigest}`,
     '--file',
     'ops/production/images/web.Dockerfile',
     '--tag',
@@ -459,14 +510,35 @@ function buildImages() {
       .regex(/^127\.0\.0\.1:[0-9]+\/tungchiahui-web@sha256:[a-f0-9]{64}$/)
       .parse(repositoryDigest)
       .split('@')[1] ?? ''
-  for (const [source, target] of [
-    [webImage, initialWebImage],
-    [serviceImage, initialServiceImage],
-    [recoveryImage, initialRecoveryImage],
-    [postgresImage, initialPostgresImage],
+  for (const [source, target, suffix] of [
+    [serviceImage, initialServiceImage, 'service'],
+    [recoveryImage, initialRecoveryImage, 'recovery'],
+    [webImage, initialWebImage, 'web'],
   ] as const) {
-    execute('docker', ['tag', source, target])
+    const root = join(workRoot, `initial-${suffix}`)
+    mkdirSync(root, { recursive: true })
+    const file = join(root, 'Dockerfile')
+    writeFileSync(
+      file,
+      `FROM ${source}\nLABEL org.opencontainers.image.revision=${initialSha}\n${suffix === 'web' ? `LABEL cn.tungchiahui.release.service-digest=${initialServiceRegistryDigest} cn.tungchiahui.release.recovery-digest=${initialRecoveryRegistryDigest}\n` : ''}`,
+    )
+    execute('docker', ['build', '--file', file, '--tag', target, root])
+    const registry = `${registryRepository}${suffix === 'web' ? '' : `-${suffix}`}:${initialSha}`
+    execute('docker', ['tag', target, registry])
+    execute('docker', ['push', registry])
+    const digest = z
+      .string()
+      .regex(/^sha256:[a-f0-9]{64}$/)
+      .parse(
+        execute('docker', ['image', 'inspect', '--format', '{{(index .RepoDigests 0)}}', registry])
+          .stdout.trim()
+          .split('@')[1],
+      )
+    if (suffix === 'service') initialServiceRegistryDigest = digest
+    else if (suffix === 'recovery') initialRecoveryRegistryDigest = digest
+    else initialRegistryDigest = digest
   }
+  execute('docker', ['tag', postgresImage, initialPostgresImage])
 }
 
 function verifyImageSecurity() {
@@ -491,6 +563,10 @@ function verifyImageSecurity() {
       `${cacheRoot}:/root/.cache`,
       trivyImage,
       'image',
+      '--db-repository',
+      'ghcr.io/aquasecurity/trivy-db:2',
+      '--db-repository',
+      'mirror.gcr.io/aquasec/trivy-db:2',
       '--scanners',
       'vuln,secret',
       '--severity',
@@ -538,190 +614,60 @@ function startRegistry() {
 }
 
 function runProvision() {
-  writeFileSync(
-    inventoryPath,
-    stringify({
-      all: {
-        children: {
-          production_origins: {
-            hosts: {
-              production_like_origin: {
-                ansible_connection: 'local',
-                ansible_host: 'phase12-production-like-origin',
-                ansible_python_interpreter: '/usr/local/bin/python',
-              },
-            },
-          },
-        },
-      },
-    }),
-  )
-  writeFileSync(
-    variablesPath,
-    JSON.stringify({
-      tungchiahui_compose_project_name: projectName,
-      tungchiahui_config_root: configRoot,
-      tungchiahui_content_polling_enabled: 'false',
-      tungchiahui_control_rate_limit_per_minute: '1000',
-      tungchiahui_data_root: dataRoot,
-      tungchiahui_deployment_article_path: '/blog/phase-3-seed',
-      tungchiahui_deployment_asset_path: '/docs/ros2/core/index.html',
-      tungchiahui_deployment_sha: initialSha,
-      tungchiahui_deployment_backup_max_age_seconds: '86400',
-      tungchiahui_deployment_image_repository: registryRepository,
-      tungchiahui_deployment_search_query: 'ROS2_Control',
-      tungchiahui_install_packages: false,
-      tungchiahui_manage_stack: true,
-      tungchiahui_origin_bind_address: '127.0.0.1',
-      tungchiahui_origin_port: String(input.PHASE12_ORIGIN_PORT),
-      tungchiahui_observability_backup_max_age_seconds: '86400',
-      tungchiahui_observability_disk_critical_percent: '99',
-      tungchiahui_observability_interval_seconds: '10',
-      tungchiahui_observability_job_max_age_seconds: '3600',
-      tungchiahui_observability_latency_warning_ms: '10000',
-      tungchiahui_observability_origin_hostname: 'localhost',
-      tungchiahui_observability_origin_ipv6_required: 'false',
-      tungchiahui_observability_origin_server_name: 'ddns.tungchiahui.cn',
-      tungchiahui_observability_origin_url: 'http://openresty:8082/api/ready',
-      tungchiahui_observability_public_asset_path: '/api/assets/monitoring/health.svg',
-      tungchiahui_observability_public_server_name: 'www.tungchiahui.cn',
-      tungchiahui_observability_public_url: 'http://openresty:8082/',
-      tungchiahui_observability_restore_drill_max_age_seconds: '86400',
-      tungchiahui_observability_restore_drill_timestamp: new Date().toISOString(),
-      tungchiahui_postgres_image: initialPostgresImage,
-      tungchiahui_production_env_file: productionEnvPath,
-      tungchiahui_recovery_image: initialRecoveryImage,
-      tungchiahui_repository_root: '/workspace',
-      tungchiahui_search_polling_enabled: 'false',
-      tungchiahui_secret_root: secretRoot,
-      tungchiahui_service_image: initialServiceImage,
-      tungchiahui_web_image: initialWebImage,
-    }),
-  )
-  const command = [
-    '-i',
-    inventoryPath,
-    'ops/production/ansible/playbooks/provision.yml',
-    '--extra-vars',
-    `@${variablesPath}`,
-  ]
-  const environment = {
-    ANSIBLE_CONFIG: resolve('ops/production/ansible/ansible.cfg'),
+  const request = {
+    settings: hostSettingsSchema.parse({ configRoot, dataRoot, projectName, manageSystemd: false }),
+    sourceRoot: '/workspace',
+    sha: initialSha,
+    webImage: initialWebImage,
+    webDigest: initialRegistryDigest,
+    serviceImage: initialServiceImage,
+    recoveryImage: initialRecoveryImage,
+    postgresImage: initialPostgresImage,
+    mode: 'bootstrap' as const,
+    deploymentPollingEnabled: true,
+    backupScheduleEnabled: false,
+    maintenanceScheduleEnabled: false,
   }
-  const first = execute('ansible-playbook', command, { environment })
-  expect(/changed=[1-9][0-9]*/.test(first.stdout), 'Initial provision did not report changes')
-  const second = execute('ansible-playbook', command, { environment })
-  expect(
-    /changed=0\b/.test(second.stdout),
-    `Second provision was not idempotent:\n${second.stdout}`,
-  )
-
+  expect(provisionHost(request).changed > 0, 'Initial host bootstrap did not report changes')
+  expect(provisionHost(request).changed === 0, 'Repeated host bootstrap was not idempotent')
   const blueBefore = compose(['ps', '--quiet', 'web-blue']).stdout.trim()
   const greenBefore = compose(['ps', '--quiet', 'web-green']).stdout.trim()
   compose(['stop', 'control-api'])
-  const scopedCommand = [
-    ...command,
-    '--extra-vars',
-    JSON.stringify({
-      tungchiahui_manage_stack: false,
-      tungchiahui_reconcile_control_api: true,
-    }),
-  ]
-  const scoped = execute('ansible-playbook', scopedCommand, { environment })
+  const scoped = { ...request, mode: 'services' as const }
   expect(
-    /changed=[1-9][0-9]*/.test(scoped.stdout),
-    'Scoped control-api reconciliation did not start the stopped service',
+    provisionHost(scoped).changed > 0,
+    'Scoped host convergence did not start the stopped service',
   )
   expect(
     compose(['ps', '--quiet', 'web-blue']).stdout.trim() === blueBefore &&
       compose(['ps', '--quiet', 'web-green']).stdout.trim() === greenBefore,
-    'Scoped control-api reconciliation replaced a web slot',
+    'Scoped convergence replaced a Web slot',
   )
-  const scopedRepeated = execute('ansible-playbook', scopedCommand, { environment })
-  expect(
-    /changed=0\b/.test(scopedRepeated.stdout),
-    `Repeated scoped control-api reconciliation was not idempotent:\n${scopedRepeated.stdout}`,
-  )
+  expect(provisionHost(scoped).changed === 0, 'Repeated scoped host convergence was not idempotent')
 }
 
 function runMigrationTargetProvision() {
-  writeFileSync(
-    targetInventoryPath,
-    stringify({
-      all: {
-        children: {
-          production_origins: {
-            hosts: {
-              phase17_nonproduction_target: {
-                ansible_connection: 'local',
-                ansible_host: 'phase17-nonproduction-target',
-                ansible_python_interpreter: '/usr/local/bin/python',
-              },
-            },
-          },
-        },
-      },
+  const request = {
+    settings: hostSettingsSchema.parse({
+      configRoot: targetConfigRoot,
+      dataRoot: targetDataRoot,
+      projectName: targetProjectName,
+      manageSystemd: false,
     }),
-  )
-  writeFileSync(
-    targetVariablesPath,
-    JSON.stringify({
-      tungchiahui_compose_project_name: targetProjectName,
-      tungchiahui_config_root: targetConfigRoot,
-      tungchiahui_content_polling_enabled: 'false',
-      tungchiahui_control_rate_limit_per_minute: '1000',
-      tungchiahui_data_root: targetDataRoot,
-      tungchiahui_deployment_article_path: '/blog/phase-3-seed',
-      tungchiahui_deployment_asset_path: '/docs/ros2/core/index.html',
-      tungchiahui_deployment_sha: input.PHASE12_GIT_SHA,
-      tungchiahui_deployment_backup_max_age_seconds: '86400',
-      tungchiahui_deployment_image_repository: registryRepository,
-      tungchiahui_deployment_search_query: 'ROS2_Control',
-      tungchiahui_install_packages: false,
-      tungchiahui_manage_stack: true,
-      tungchiahui_origin_bind_address: '::1',
-      tungchiahui_origin_port: String(input.PHASE17_TARGET_ORIGIN_PORT),
-      tungchiahui_observability_backup_max_age_seconds: '86400',
-      tungchiahui_observability_disk_critical_percent: '99',
-      tungchiahui_observability_interval_seconds: '10',
-      tungchiahui_observability_job_max_age_seconds: '3600',
-      tungchiahui_observability_latency_warning_ms: '10000',
-      tungchiahui_observability_origin_hostname: 'localhost',
-      tungchiahui_observability_origin_ipv6_required: 'false',
-      tungchiahui_observability_origin_server_name: 'ddns.tungchiahui.cn',
-      tungchiahui_observability_origin_url: 'http://openresty:8082/api/ready',
-      tungchiahui_observability_public_asset_path: '/api/assets/monitoring/health.svg',
-      tungchiahui_observability_public_server_name: 'www.tungchiahui.cn',
-      tungchiahui_observability_public_url: 'http://openresty:8082/',
-      tungchiahui_observability_restore_drill_max_age_seconds: '86400',
-      tungchiahui_observability_restore_drill_timestamp: new Date().toISOString(),
-      tungchiahui_postgres_image: postgresImage,
-      tungchiahui_production_env_file: targetProductionEnvPath,
-      tungchiahui_recovery_image: recoveryImage,
-      tungchiahui_repository_root: '/workspace',
-      tungchiahui_search_polling_enabled: 'false',
-      tungchiahui_secret_root: targetSecretRoot,
-      tungchiahui_service_image: serviceImage,
-      tungchiahui_web_image: webImage,
-    }),
-  )
-  const command = [
-    '-i',
-    targetInventoryPath,
-    'ops/production/ansible/playbooks/provision.yml',
-    '--extra-vars',
-    `@${targetVariablesPath}`,
-  ]
-  const environment = {
-    ANSIBLE_CONFIG: resolve('ops/production/ansible/ansible.cfg'),
+    sourceRoot: '/workspace',
+    sha: input.PHASE12_GIT_SHA,
+    webImage,
+    webDigest: registryDigest,
+    serviceImage,
+    recoveryImage,
+    postgresImage,
+    mode: 'bootstrap' as const,
+    deploymentPollingEnabled: true,
+    backupScheduleEnabled: false,
+    maintenanceScheduleEnabled: false,
   }
-  const first = execute('ansible-playbook', command, { environment })
-  expect(/changed=[1-9][0-9]*/.test(first.stdout), 'Migration target provision reported no changes')
-  const second = execute('ansible-playbook', command, { environment })
-  expect(
-    /changed=0\b/.test(second.stdout),
-    `Migration target provision was not idempotent:\n${second.stdout}`,
-  )
+  expect(provisionHost(request).changed > 0, 'Migration target host bootstrap reported no changes')
+  expect(provisionHost(request).changed === 0, 'Migration target host bootstrap was not idempotent')
 }
 
 function inspectHardening() {
@@ -1455,6 +1401,250 @@ async function waitForOperation(id: string) {
   throw new Error(`Deployment operation ${id} timed out`)
 }
 
+async function verifyCompleteServerReleases() {
+  const settings = hostSettingsSchema.parse({
+    configRoot,
+    dataRoot,
+    projectName,
+    manageSystemd: false,
+  })
+  const path = hostControlPath(settings)
+  const initial = {
+    sha: initialSha,
+    webDigest: initialRegistryDigest,
+    serviceDigest: initialServiceRegistryDigest,
+    recoveryDigest: initialRecoveryRegistryDigest,
+  }
+  const candidate = {
+    sha: input.PHASE12_GIT_SHA,
+    webDigest: registryDigest,
+    serviceDigest: serviceRegistryDigest,
+    recoveryDigest: recoveryRegistryDigest,
+  }
+  initializeHostReleaseState(path)
+  extractHostGeneration(settings, registryRepository, initial)
+  stageHostGeneration(path, initial)
+  commitHostGeneration(path, initial.sha)
+  process.env.SITE_CONTROL_API_URL = `http://127.0.0.1:${String(input.PHASE12_ORIGIN_PORT)}`
+  const postgresBefore = compose(['ps', '--quiet', 'postgres']).stdout.trim()
+  const settingsPath = join(workRoot, 'host-settings.json')
+  writeFileSync(settingsPath, JSON.stringify(settings), { mode: 0o600 })
+  let supervisorEvents = ''
+  let supervisor: ChildProcess | undefined
+  const start = () => {
+    const current = readHostRuntime(path).current_sha
+    if (!current) throw new Error('Missing installed host executor')
+    const directory = hostGenerationDirectory(settings, current)
+    const child = spawn(
+      join(directory, 'node'),
+      [join(directory, 'release-supervisor.cjs'), settingsPath],
+      { stdio: ['ignore', 'pipe', 'pipe'], detached: true },
+    )
+    child.stdout?.on('data', (chunk: Buffer) => {
+      supervisorEvents = (supervisorEvents + chunk.toString('utf8')).slice(-16_000)
+    })
+    child.stderr?.on('data', (chunk: Buffer) => {
+      supervisorEvents = (supervisorEvents + chunk.toString('utf8')).slice(-16_000)
+    })
+    supervisor = child
+  }
+  const stop = async (signal: NodeJS.Signals = 'SIGTERM') => {
+    const child = supervisor
+    supervisor = undefined
+    if (!child?.pid || child.exitCode !== null) return
+    const exited = new Promise<void>((resolveExit) => child.once('exit', () => resolveExit()))
+    process.kill(-child.pid, signal)
+    await exited
+  }
+  const request = async (key: string) =>
+    operationResponseSchema.parse(
+      await controlRequest('/api/ops/deployments', {
+        body: {
+          gitSha: candidate.sha,
+          imageDigest: candidate.webDigest,
+          reason: 'Server complete release verification',
+        },
+        idempotencyKey: key,
+        method: 'POST',
+        purpose: key,
+      }),
+    ).operation
+  const serviceShas = () =>
+    ['control-api', 'content-worker', 'deploy-agent', 'observability-agent'].map((service) =>
+      execute('docker', [
+        'inspect',
+        '--format',
+        '{{index .Config.Labels "org.opencontainers.image.revision"}}',
+        `${projectName}-${service}-1`,
+      ]).stdout.trim(),
+    )
+  const legacyBefore = captureHostConvergence(settings)
+  try {
+    start()
+    compose(['up', '--detach', '--no-deps', '--wait', 'deploy-agent'], false, {
+      TUNGCHIAHUI_DEPLOYMENT_POLLING_ENABLED: 'false',
+    })
+    const created = await request('server-complete-release-001')
+    // Simulate a whole executor unit exiting during its first durable phase.
+    const deadline = Date.now() + 60_000
+    while (!readHostCheckpoint(path, created.id) && Date.now() < deadline)
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 50))
+    expect(
+      Boolean(readHostCheckpoint(path, created.id)),
+      'Host executor never checkpointed its job',
+    )
+    await stop('SIGKILL')
+    start()
+    const deployed = await waitForOperation(created.id)
+    expect(
+      deployed.status === 'completed',
+      `Server restart did not complete the release: ${JSON.stringify(deployed)}`,
+    )
+    expect(
+      serviceShas().every((sha) => sha === candidate.sha),
+      'Complete release left an independent service at an old SHA',
+    )
+    extractHostGeneration(settings, registryRepository, candidate)
+    expect(
+      readHostRuntime(path).current_sha === candidate.sha,
+      'Host execution code did not switch to its verified generation',
+    )
+    expect(
+      compose(['ps', '--quiet', 'postgres']).stdout.trim() === postgresBefore,
+      'Ordinary release replaced PostgreSQL',
+    )
+    const rollback = operationResponseSchema.parse(
+      await controlRequest('/api/ops/rollbacks', {
+        body: { reason: 'Whole server rollback verification' },
+        idempotencyKey: 'server-complete-rollback-001',
+        method: 'POST',
+        purpose: 'server-complete-rollback',
+      }),
+    )
+    const rolledBack = await waitForOperation(rollback.operation.id)
+    expect(
+      rolledBack.status === 'completed',
+      `Whole server rollback failed: ${JSON.stringify(rolledBack)}; ${supervisorEvents}`,
+    )
+    expect(
+      serviceShas().every((sha) => sha === initial.sha) &&
+        readHostRuntime(path).current_sha === initial.sha,
+      'Whole rollback did not restore independent services and executor',
+    )
+    await stop()
+
+    // Persist a prepared operation, then corrupt only its candidate startup artifact.
+    // Restart must use the healthy current generation, replay the job, and compensate on failed probe.
+    const failed = await request('server-bad-executor-001')
+    const fixtureOwner = 'deploy-agent:host:crash-fixture'
+    expect(acquireHostExecutor(path, fixtureOwner), 'Fixture could not acquire stopped supervisor')
+    const claimed = claimNextInfrastructureOperation(path, fixtureOwner, 3600, new Date(), [
+      'deploy',
+    ])
+    if (!claimed || claimed.id !== failed.id)
+      throw new Error('Missing failed executor fixture claim')
+    const lease = { leaseOwner: fixtureOwner, fencingToken: claimed.fencingToken }
+    startInfrastructureOperation(path, claimed.id, lease)
+    extractHostGeneration(settings, registryRepository, candidate)
+    checkpointHostRelease(
+      path,
+      claimed.id,
+      lease,
+      candidate,
+      captureHostConvergence(settings),
+      'prepared',
+    )
+    writeFileSync(
+      join(hostGenerationDirectory(settings, candidate.sha), 'host-coordinator.cjs'),
+      'process.exit(41)\n',
+    )
+    releaseHostExecutor(path, fixtureOwner)
+    start()
+    const rejected = await waitForOperation(failed.id)
+    expect(
+      rejected.status === 'failed' &&
+        getInfrastructureOperation(path, failed.id)?.phase === 'host-release-reverted',
+      'Bad candidate startup did not restore previous services',
+    )
+    expect(
+      publicVersion().gitSha === initial.sha && serviceShas().every((sha) => sha === initial.sha),
+      'Failed startup left new Web or independent services active',
+    )
+    expect(
+      compose(['ps', '--quiet', 'postgres']).stdout.trim() === postgresBefore,
+      'Compensation replaced PostgreSQL',
+    )
+    const retried = await request('server-complete-release-retry-001')
+    expect(
+      (await waitForOperation(retried.id)).status === 'completed',
+      'Clean immutable candidate could not recover after failed startup',
+    )
+    expect(
+      serviceShas().every((sha) => sha === candidate.sha),
+      'Retry did not complete independent-service upgrade',
+    )
+
+    const bootstrap = createInfrastructureOperation(
+      path,
+      {
+        operationType: 'server-migration',
+        reason: 'Verify pre-bootstrap application rollback',
+        target: { action: 'provision-only', inventoryHost: 'ddns.tungchiahui.cn' },
+      },
+      {
+        id: 'server-console:bootstrap',
+        kind: 'operator',
+        capabilities: ['infrastructure-operation:create', 'infrastructure-operation:read'],
+      },
+      'host-bootstrap:legacy-fixture',
+    ).operation
+    const owner = 'deploy-agent:bootstrap:legacy-fixture'
+    const bootstrapClaim = claimNextInfrastructureOperation(path, owner, 3600, new Date(), [
+      'server-migration',
+    ])
+    if (!bootstrapClaim || bootstrapClaim.id !== bootstrap.id)
+      throw new Error('Missing exclusive bootstrap fixture')
+    const bootstrapLease = { leaseOwner: owner, fencingToken: bootstrapClaim.fencingToken }
+    startInfrastructureOperation(path, bootstrap.id, bootstrapLease)
+    recordHostBootstrapBaseline(
+      path,
+      { ...legacyBefore, hostSha: null, hostPreviousSha: null },
+      bootstrap.id,
+      bootstrapLease,
+    )
+    finishInfrastructureOperation(path, bootstrap.id, bootstrapLease, {
+      status: 'completed',
+      phase: 'host-bootstrap-verified',
+    })
+    const baseline = operationResponseSchema.parse(
+      await controlRequest('/api/ops/rollbacks', {
+        body: { reason: 'Verify the retained pre-bootstrap Web slot' },
+        idempotencyKey: 'server-bootstrap-baseline-rollback-001',
+        method: 'POST',
+        purpose: 'server-bootstrap-baseline',
+      }),
+    )
+    const baselineResult = await waitForOperation(baseline.operation.id)
+    expect(
+      baselineResult.status === 'completed',
+      `Pre-bootstrap Web rollback failed: ${JSON.stringify(baselineResult)}; ${supervisorEvents}`,
+    )
+    expect(
+      publicVersion().gitSha === initial.sha &&
+        serviceShas().every((sha) => sha === candidate.sha) &&
+        readHostRuntime(path).current_sha === candidate.sha,
+      'Pre-bootstrap rollback removed the installed execution layer or failed to restore the old Web slot',
+    )
+  } finally {
+    await stop()
+    // The following foundation probes exercise the standalone container executor. Restore
+    // that fixture's polling mode after stopping the host supervisor for this test scope.
+    compose(['up', '--detach', '--no-deps', '--wait', 'deploy-agent'], false, {
+      TUNGCHIAHUI_DEPLOYMENT_POLLING_ENABLED: 'true',
+    })
+  }
+}
+
 function publicVersion() {
   const port = String(input.PHASE12_ORIGIN_PORT)
   return z
@@ -2153,14 +2343,17 @@ async function main() {
     await initializeDeploymentFixture(productionEnv.workerPassword)
     await prepareVerifiedMigrationBackup()
     await verifyBlueGreenDeployment()
+    await verifyCompleteServerReleases()
     await verifyRoutingAndIpFamilies()
     await verifySecurityAndLoad()
     const migrationReadiness = await verifyServerMigrationRehearsal()
     verifyNoSecretLeakage(productionEnv.secretSentinels)
     console.log(
       JSON.stringify({
-        ansibleIdempotency: 'pass',
+        hostBootstrapIdempotency: 'pass',
         blueGreenDeployment: 'pass',
+        wholeServerReleaseAndRollback: 'pass',
+        executorRestartAndStartupFailure: 'pass',
         containerHardening: 'pass',
         databaseRoleSeparation: 'pass',
         immutableImageFailureIsolation: 'pass',

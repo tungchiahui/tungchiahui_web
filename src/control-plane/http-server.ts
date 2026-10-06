@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 
 import { z } from 'zod'
 
+import { readHostExecutorStatus } from '../host-release/state'
 import { apiSecurityHeaders } from '../observability/security'
 import {
   emitTelemetry,
@@ -471,7 +472,8 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
               applicationJobs: availability,
               controlState: readControlState(configuration.statePath),
               deployment: readDeploymentState(configuration.statePath),
-              deployAgent: configuration.mode === 'production' ? 'phase-14' : 'fake',
+              deployAgent: configuration.mode === 'production' ? 'server-release' : 'fake',
+              hostExecutor: readHostExecutorStatus(configuration.statePath),
               identityContracts: serviceIdentityContracts,
               mode: configuration.mode,
               productionOperations: configuration.mode === 'production',
@@ -509,7 +511,10 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
             actor,
             idempotencyKey,
           )
-          sendJson(response, { body: result, status: result.created ? 202 : 200 })
+          sendJson(response, {
+            body: { ...result, mode: configuration.mode },
+            status: result.created ? 202 : 200,
+          })
           return
         }
         case 'rollback-create': {

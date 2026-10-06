@@ -23,7 +23,9 @@ const productionSources = [
   'ops/production/compose.yaml',
   'ops/production/openresty.conf',
   ...walkFiles(resolve('ops/production/images')),
-  ...walkFiles(resolve('ops/production/ansible')),
+  ...walkFiles(resolve('src/host-release')),
+  ...walkFiles(resolve('services/host-coordinator')),
+  ...walkFiles(resolve('services/release-supervisor')),
 ]
 const forbiddenProductionPatterns = [
   /-----BEGIN [A-Z ]*PRIVATE KEY-----/u,

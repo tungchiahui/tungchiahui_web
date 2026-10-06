@@ -37,7 +37,7 @@ TRANSLATION_API_KEY
 ```text
 .env.example
 ops/production/compose.yaml
-ops/production/ansible/inventory/production.yml
+src/host-release/contracts.ts
 ```
 
 这些文件只包含 Variable Name 和安全的默认非 Secret 值。
@@ -80,7 +80,7 @@ S3、R2 Off-site Backup S3、GHCR 外部凭据和可选 `OWNER_PASSWORD_HASH` �
 `CONTENT_WORKER_DATABASE_URL`、`DATABASE_MIGRATE_URL` 和 `DATABASE_ADMIN_URL`。Compose 在各服务边界映射成该服务实际读取的 `DATABASE_URL`，避免因为单文件而让所有服务共用同一个 DB Login。
 
 PgBouncer userlist 与 backup age identity 仍需要文件形态；`.env` 中保存
-`PGBOUNCER_USERLIST_BASE64` 和 `BACKUP_AGE_IDENTITY_BASE64`，Ansible 在生产主机上解码到
+`PGBOUNCER_USERLIST_BASE64` 和 `BACKUP_AGE_IDENTITY_BASE64`，TypeScript Host Adapter 在生产主机上解码到
 `/etc/tungchiahui/secrets` 下的受限派生 runtime 文件。`deploy-agent` 在 Blue/Green 部署期间只用
 自身显式获得的 Web Runtime Allowlist 创建候选 Web Slot；不得继承 Template Container 中的
 未知或过期环境变量。修改主机 `.env` 后，应通过既有 provisioning/reconcile 重启受影响服务再

@@ -54,6 +54,14 @@ export type SiteCommand =
       kind: 'production-doctor'
       projectName: string
     }>
+  | Readonly<{
+      kind: 'production-bootstrap'
+      sha: string
+      digest: string
+      configRoot: string
+      dataRoot: string
+      projectName: string
+    }>
   | Readonly<{ kind: 'production-secrets-init'; outputFile: string }>
   | Readonly<{
       envFile: string
@@ -192,6 +200,45 @@ export function parseSiteCommand(arguments_: readonly string[]): SiteCommand {
       throw new SiteUsageError(`Unknown production secrets init argument: ${String(argument)}`)
     }
     return Object.freeze({ kind: 'production-secrets-init', outputFile })
+  }
+
+  if (arguments_[0] === 'production' && arguments_[1] === 'bootstrap') {
+    let sha = '',
+      digest = '',
+      configRoot = '/etc/tungchiahui',
+      dataRoot = '/var/lib/tungchiahui',
+      projectName = 'tungchiahui-production'
+    for (let index = 2; index < arguments_.length; index += 2) {
+      const value = z
+        .string()
+        .min(1)
+        .parse(arguments_[index + 1])
+      const argument = arguments_[index]
+      if (argument === '--sha')
+        sha = z
+          .string()
+          .regex(/^[a-f0-9]{40}$/)
+          .parse(value)
+      else if (argument === '--web-digest')
+        digest = z
+          .string()
+          .regex(/^sha256:[a-f0-9]{64}$/)
+          .parse(value)
+      else if (argument === '--config-root') configRoot = value
+      else if (argument === '--data-root') dataRoot = value
+      else if (argument === '--project-name') projectName = value
+      else throw new SiteUsageError(`Unknown server bootstrap argument: ${String(argument)}`)
+    }
+    if (!sha || !digest)
+      throw new SiteUsageError('production bootstrap requires --sha and --web-digest')
+    return Object.freeze({
+      kind: 'production-bootstrap',
+      sha,
+      digest,
+      configRoot,
+      dataRoot,
+      projectName,
+    })
   }
 
   if (arguments_[0] === 'production' && arguments_[1] === 'doctor') {

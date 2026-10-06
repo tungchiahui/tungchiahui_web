@@ -19,7 +19,7 @@ Phase 17 的 Disposable Platform Adapter 通过同一 Engine 执行完整迁移�
 
 ## 稳定身份
 
-Durable Target 只接受以字母开头的 DNS Hostname、SSH Config Alias 或 Ansible Inventory Hostname。CLI、Control API Contract 和 Engine 都拒绝数字 IP 作为 Target Identity。
+Durable Target 只接受以字母开头的 DNS Hostname、SSH Config Alias 或授权 Hostname。CLI、Control API Contract 和 Engine 都拒绝数字 IP 作为 Target Identity。
 
 全新机器的首次 Enrollment 可能临时使用 Bootstrap Address，但该值不得进入 Application、CI、CLI 默认配置、Operation Target 或长期 Inventory。Production Origin Contract 始终是：
 
@@ -63,7 +63,7 @@ Controlled promotion
 
 1. 确认变更授权、稳定 Target Identity、维护窗口和回退责任人。
 2. 确认最新 Backup 是有效的：pgBackRest/WAL、Off-site Replica 与 Restore Evidence 均满足 Policy。
-3. 使用版本化 Ansible、精确 Git SHA/Digest Image 和 Host-local `/etc/tungchiahui/.env` Provision Target；连续运行两次，第二次必须 `changed=0`。
+3. 使用版本化 TypeScript Host Adapter、精确 Git SHA/Digest Image 和 Host-local `/etc/tungchiahui/.env` Provision Target；连续运行两次，第二次必须 `changed=0`。
 4. 验证 Target Non-root、Read-only Root Filesystem、Drop-all Capability、Storage Ownership、Control-state Directory 和 IPv6 Reachability。
 5. 从 Source PostgreSQL 创建 Physical Base Backup 与 Replication Slot，启动 Target Standby。
 6. 验证 `pg_is_in_recovery()`、Streaming State、Replication Lag 和代表性新增 Row。

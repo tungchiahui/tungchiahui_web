@@ -1,5 +1,9 @@
 # Personal trackers: UI, login and verification
 
+> 历史阶段记录：其中 Ansible/SOPS 或手工独立服务发布步骤已被 ADR 0022/0027 替代。
+> 当前操作入口见 [服务器发布与初始化](../operations/server-release.md)，不得执行已移除的 Playbook。
+
+
 ## Scope and source
 
 Owner authorization on 2026-09-12: discard legacy Blob records, start fresh, implement a minimal

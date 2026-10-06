@@ -19,6 +19,7 @@ import {
 import { parseDeploymentConfiguration } from '../../src/deployment/configuration'
 import { DockerDeploymentPlatform } from '../../src/deployment/docker-platform'
 import { executeDeploymentOperation } from '../../src/deployment/engine'
+import { readHostExecutorStatus } from '../../src/host-release/state'
 import {
   createRetentionCleanupPlan,
   executeRetentionCleanup,
@@ -398,7 +399,7 @@ async function poll() {
   if (polling) return
   polling = true
   try {
-    reconcileInterruptedDeployments()
+    if (deployment.DEPLOYMENT_POLLING_ENABLED === 'true') reconcileInterruptedDeployments()
     reconcileInterruptedDailyProtection()
     while (true) {
       const recovered =
@@ -427,7 +428,13 @@ const server = createServer(async (request, response) => {
   }
   if (request.url === '/health' || request.url === '/capabilities') {
     const dockerReady = await pingDocker()
-    sendJson(response, dockerReady ? 200 : 503, {
+    const hostExecutor = readHostExecutorStatus(configuration.CONTROL_STATE_PATH)
+    const healthy =
+      dockerReady &&
+      (deployment.DEPLOYMENT_POLLING_ENABLED === 'true' ||
+        !hostExecutor.installed ||
+        hostExecutor.healthy)
+    sendJson(response, healthy ? 200 : 503, {
       allowedDockerRequests: [
         'GET /_ping',
         'GET /containers/<declared>/json',
@@ -444,12 +451,13 @@ const server = createServer(async (request, response) => {
       contract: serviceIdentityContracts['deploy-agent'],
       deploymentEngine: 'phase-14-shared-blue-green',
       dockerReady,
+      hostExecutor,
       mode: configuration.SITE_RUNTIME_MODE,
       productionOperations: true,
       recoveryEngine: 'phase-13',
       recoveryOperations: true,
       service: 'deploy-agent',
-      status: dockerReady ? 'ok' : 'degraded',
+      status: healthy ? 'ok' : 'degraded',
     })
     return
   }

@@ -9,6 +9,7 @@ const digestSchema = z.string().regex(/^sha256:[a-f0-9]{64}$/)
 const gitShaSchema = z.string().regex(/^[a-f0-9]{40}$/)
 const imageRepositorySchema = z.string().regex(/^[a-z0-9.-]+(?::[0-9]{2,5})?\/[a-z0-9._/-]+$/)
 const operationEnvelopeSchema = z.object({
+  mode: z.enum(['production', 'local', 'test']).optional(),
   operation: z
     .object({ errorSummary: z.string().nullable().optional(), id: z.uuid(), status: z.string() })
     .passthrough(),
@@ -90,7 +91,42 @@ export function resolveDeploymentImageDigest(
   )
 }
 
-async function waitForDeployment(operationId: string) {
+export function validateCompleteRelease(
+  operation: unknown,
+  sha: string,
+  digest: string,
+  mode: 'production' | 'local' | 'test' = 'production',
+) {
+  switch (mode) {
+    case 'production':
+      z.object({
+        result: z.object({
+          hostRelease: z.object({
+            sha: z.literal(sha),
+            webDigest: z.literal(digest),
+            serviceDigest: digestSchema,
+            recoveryDigest: digestSchema,
+            status: z.literal('converged'),
+          }),
+        }),
+      }).parse(operation)
+      return
+    case 'local':
+    case 'test':
+      return
+    default: {
+      const unreachable: never = mode
+      throw new Error(`Unsupported deployment mode: ${String(unreachable)}`)
+    }
+  }
+}
+
+async function waitForDeployment(
+  operationId: string,
+  sha: string,
+  digest: string,
+  mode: 'production' | 'local' | 'test',
+) {
   const timeoutMilliseconds = z.coerce
     .number()
     .int()
@@ -105,7 +141,10 @@ async function waitForDeployment(operationId: string) {
         purpose: `deployment-wait-${operationId}`,
       }),
     )
-    if (result.operation.status === 'completed') return result
+    if (result.operation.status === 'completed') {
+      validateCompleteRelease(result.operation, sha, digest, mode)
+      return result
+    }
     if (['failed', 'cancelled', 'needs-attention'].includes(result.operation.status)) {
       throw new Error(
         `Deployment operation ${operationId} ended in ${result.operation.status}: ${result.operation.errorSummary ?? 'no error summary'}`,
@@ -143,7 +182,14 @@ export async function createDeployment(
       purpose: 'deployment-create',
     }),
   )
-  return input.wait === true ? waitForDeployment(created.operation.id) : created
+  return input.wait === true
+    ? waitForDeployment(
+        created.operation.id,
+        gitSha,
+        imageDigest,
+        process.env.GITHUB_ACTIONS === 'true' ? 'production' : (created.mode ?? 'production'),
+      )
+    : created
 }
 
 export function deploymentAttemptIdentity(

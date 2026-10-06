@@ -58,7 +58,7 @@ Renovate 不得绕过 PR 直接修改 `main`。所有升级 PR 通过现有 CI Q
 - Docker
 - Docker Compose
 - OpenResty
-- Ansible
+- 服务器 TypeScript Host Adapter + systemd（ADR 0027）
 - Host-local Production `.env` + Service-scoped Runtime Injection（ADR 0023）
 - age（Backup/Control-state Artifact Encryption）
 - pgBackRest

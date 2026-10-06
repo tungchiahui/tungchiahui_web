@@ -1,5 +1,7 @@
 # ADR 0023：单一生产配置源与服务级注入边界
 
+> 手工服务收敛职责已由 ADR 0027 的服务器 TypeScript Host Adapter 替代。
+
 ## Status
 
 Accepted

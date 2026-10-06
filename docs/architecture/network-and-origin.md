@@ -79,13 +79,13 @@ PRODUCTION_HOST=<numeric-public-ip>
 - Project CLI Default
 - EdgeOne Logical Architecture Documentation
 - Deployment State
-- Normal Ansible Inventory
+- Normal Host Configuration
 
 使用：
 
 - DNS Hostname
 - SSH Alias
-- Inventory Hostname
+- Authorized Hostname
 - Docker DNS Service Name
 
 只有在尚未拥有 Hostname 的临时 Bootstrap 场景中才可以使用数字 IP。

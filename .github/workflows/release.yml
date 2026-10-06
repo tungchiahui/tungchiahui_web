@@ -348,7 +348,7 @@ jobs:
 
   build-web:
     name: build-web
-    needs: [resolve-release, build-service]
+    needs: [resolve-release, build-service, build-recovery]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -382,6 +382,7 @@ jobs:
           build-args: |
             SITE_DEPLOYMENT_SHA=${{ needs.resolve-release.outputs.git_sha }}
             SITE_SERVICE_IMAGE_DIGEST=${{ needs.build-service.outputs.image_digest }}
+            SITE_RECOVERY_IMAGE_DIGEST=${{ needs.build-recovery.outputs.image_digest }}
           cache-from: type=gha,scope=production-web
           cache-to: type=gha,mode=max,scope=production-web
 

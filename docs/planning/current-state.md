@@ -736,3 +736,36 @@ heights; the Blog action uses orange, the Wiki action uses the primary blue, and
 remains outlined. The shared Blog/Wiki article reader now renders Shiki code blocks, language bars
 and copy controls in the selected light or dark theme. Earlier Phase 18 notes describing an
 always-dark code frame record the previous visual decision, which this Owner request supersedes.
+
+
+## 2026-10-06：服务器完整发布与移除 Ansible（实施中）
+
+Owner 已授权 ADR 0027：开发机只负责开发/推送；服务器执行完整发布。工作分支
+`codex/server-managed-releases`。已替换 Ansible Runtime/Playbook/测试调用为 TypeScript
+Host Adapter；Web Manifest 增加 Recovery Digest；新增独立 Host Supervisor/Coordinator，
+共用 Core Schema 8、追加 Host Component Journal 1 和原蓝绿 Engine。首次生产接入需
+服务器管理员安装；未安装前不得声称生产已经采用该路径。
+
+本地已通过 247 项单元测试、完整 Static/Type/Build/Security Gate、10 项 Migration、
+Integration 与 14 项关键 E2E、7 项 S3Mock Contract。完整 Production-foundation 通过
+整套服务升级/回退、执行器中断接续、候选启动失败补偿、首次迁移的旧 Web 回退、控制面
+与 PG 故障隔离、真实物理迁移演练、SBOM/Critical 扫描与安全/负载 Gate。完整 Recovery
+通过 Full/Diff/Incr、WAL/PITR、强制 Off-site 回退、部分恢复重试、Tech V3 与 Daily
+Protection Replay；新增 Host Generation/Digest 状态随一致快照恢复。测试证据位于
+Gitignored `.local/server-release-validation/`。
+
+Bootstrap 必须记录原 Web 的 Registry Manifest Digest，不能把 Docker Image Config ID
+当作可 Pull 的版本身份。首次旧 Web 没有完整新 Manifest 时保留已安装控制/恢复/Host 层，
+结果明确为 `retained-web-restored`；后续整套回退要求完整同 SHA/Digest Manifest。
+Core Schema 8 不变，Host Component Journal 1 及首次管理员基线同库备份/恢复。
+稳定 Supervisor Protocol 1 不随普通发布重启；每次发布替换工作 Coordinator 与容器服务。
+
+生产首次接入尚未执行，不能声称日常发布路径已经激活。最后一次成功生产查询是
+2026-10-06：主版本 `6a4499ad02a6dbb3aa7d1ed65876221a5bed3a5d`，Green Active、
+Blue Previous，无未完成 Operation；最新 Diff Backup `20261003-190514F_20261005-190514D`
+于 UTC 2026-10-05 19:27:58 完成，valid，Primary/Off-site 均 Fresh。原先开发电脑的
+明文 DNS 返回错误 Origin IPv4，导致家庭 WireGuard 连接失败；Owner 请求检查桌面配置后，
+改用加密 DNS、对异常 Public DNS 答案使用独立加密解析，并以完整域名刷新隧道 Endpoint，
+SSH/公开 Health/签名 Status 与 Backup Status 已恢复。不持久保存家庭公网数字 IP。
+发布前先临时关闭 `PRODUCTION_DEPLOYMENT_ENABLED`，发布新镜像并完成服务器一次管理员
+接入，验证后恢复开关并重跑 Main Deploy Job。操作说明：`docs/operations/server-release.md`。

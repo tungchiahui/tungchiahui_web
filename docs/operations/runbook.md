@@ -208,23 +208,9 @@ Credential Scope 与轮换顺序见 `credential-rotation.md`。保留被影响�
 
 ## Control-plane Connectivity
 
-When only reviewed `control-api` code or its host-local runtime configuration changes, run the
-production Ansible role with `tungchiahui_manage_stack=false` and
-`tungchiahui_reconcile_control_api=true`. This scoped reconciliation validates the host-local
-`/etc/tungchiahui/.env`, refreshes derived PgBouncer/age runtime files, applies the reviewed control/account schema through 0008 using the versioned migration runner's `--control-schema` scope,
-prepares that stopped runner for the next deployment, and recreates and waits for the reviewed
-independent-service unit. Before any migration or service change, every scoped retry compares the
-current Compose/OpenResty fingerprint with the last successfully applied fingerprint. A mismatch
-validates the on-disk configuration in a disposable container and recreates only the gateway, even
-when Ansible copied the file during an earlier failed attempt. The success marker is written only
-after recreation, so a failed run cannot consume its change notification and leave the running
-gateway on stale config; repeated successful reconciliation remains a zero-change operation.
-Image preparation and independent-service reconciliation use bounded retries for transient registry
-or network failures; migration execution itself is not blindly retried. Recreating the gateway is
-required because the read-only single-file bind mount retains the old inode after Ansible's atomic
-copy; a process reload would still read the old file. Both Web Slot container IDs must remain
-unchanged. Do not use full-stack reconciliation for a control-only activation because it can replace
-the inactive Web rollback target.
+main 发布会自动收敛独立 control-api/content-worker/observability-agent/deploy-agent 和固定配置。
+首次接入、服务器管理员维护与中断恢复见 [服务器发布与初始化](server-release.md)。
+配置更新不替换保留 Web Slot；完整结果必须包含服务与执行器健康验证。
 
 正常 Remote Control Path：
 
@@ -252,7 +238,7 @@ OpenResty 必须把 `/api/ops/*` 直接路由到独立 `control-api`，而不是
 正常而 `https://ddns.tungchiahui.cn:8443` 异常时，检查 1Panel 站点、证书和转发 Header；
 两者都异常时再检查 V2 Compose、Active Slot 和 Control State。不要把回环入口发布到 LAN/WAN。
 
-如果 EdgeOne/OpenResty/`control-api` 也不可用，使用文档化的显式 Break-glass Mode，通过稳定 Ansible Inventory/SSH Alias 调用同一个 Recovery Engine。要求 Environment、Target、Reason、Confirmation 和 Audit；不得临时发明无审计的 Root Script。
+如果 EdgeOne/OpenResty/`control-api` 也不可用，使用文档化的显式 Break-glass Mode，通过授权服务器控制台/稳定 Host Identity 调用同一个 Recovery Engine。要求 Environment、Target、Reason、Confirmation 和 Audit；不得临时发明无审计的 Root Script。
 
 ```bash
 ./site restore <backup-id-or-ISO-time> \

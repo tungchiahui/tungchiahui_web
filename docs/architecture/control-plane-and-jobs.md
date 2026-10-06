@@ -186,7 +186,7 @@ Manual GitHub Workflow 和本地 `./site translate` 都调用该 Control API。W
 
 `control-api` 将 Infrastructure Operation 写入 SQLite，`deploy-agent` 从同一状态库 Claim 并调用统一 Deployment/Recovery Engine。Production PostgreSQL 不可用时，`./site restore` 仍可创建、查询并推进 Restore Operation。
 
-如果 EdgeOne/OpenResty/`control-api` 本身不可用，授权 Operator 可以通过稳定 Ansible Inventory/SSH Host Alias 使用显式 Break-glass Mode。Break-glass 必须：
+如果 EdgeOne/OpenResty/`control-api` 本身不可用，授权 Operator 可以通过授权服务器控制台/稳定 SSH Host Alias 使用显式 Break-glass Mode。Break-glass 必须：
 
 - 调用同一个 Deployment/Recovery Engine，而不是维护第二套实现
 - 使用同一个 SQLite State/Lock/Audit Model
