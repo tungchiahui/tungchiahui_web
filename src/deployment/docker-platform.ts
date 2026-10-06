@@ -134,9 +134,25 @@ export function requestDockerJson(
   path: string,
   body?: unknown,
   additionalHeaders: Readonly<Record<string, string>> = {},
+  options: Readonly<{
+    inactivityTimeoutMilliseconds?: number
+    deadlineMilliseconds?: number
+  }> = {},
 ) {
+  const timeouts = z
+    .object({
+      inactivityTimeoutMilliseconds: z.number().int().min(1).max(1_200_000).default(30_000),
+      deadlineMilliseconds: z.number().int().min(1).max(1_200_000).optional(),
+    })
+    .strict()
+    .parse(options)
   return new Promise<Readonly<{ body: unknown; status: number }>>(
     (resolveRequest, rejectRequest) => {
+      let deadline: ReturnType<typeof setTimeout> | undefined
+      const fail = (error: Error) => {
+        if (deadline) clearTimeout(deadline)
+        rejectRequest(error)
+      }
       const encoded = body === undefined ? null : Buffer.from(JSON.stringify(body))
       const request = httpRequest(
         {
@@ -149,12 +165,14 @@ export function requestDockerJson(
           method,
           path,
           socketPath,
-          timeout: 30_000,
+          timeout: timeouts.inactivityTimeoutMilliseconds,
         },
         (response) => {
           const chunks: Buffer[] = []
           response.on('data', (chunk: Buffer) => chunks.push(chunk))
+          response.once('error', fail)
           response.once('end', () => {
+            if (deadline) clearTimeout(deadline)
             const text = Buffer.concat(chunks).toString('utf8')
             let payload: unknown = null
             if (text.length > 0) {
@@ -168,8 +186,13 @@ export function requestDockerJson(
           })
         },
       )
-      request.once('error', rejectRequest)
+      request.once('error', fail)
       request.once('timeout', () => request.destroy(new Error('Docker request timed out')))
+      if (timeouts.deadlineMilliseconds !== undefined)
+        deadline = setTimeout(
+          () => request.destroy(new Error('Docker request deadline exceeded')),
+          timeouts.deadlineMilliseconds,
+        )
       if (encoded) request.write(encoded)
       request.end()
     },

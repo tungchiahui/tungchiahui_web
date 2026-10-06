@@ -44,6 +44,9 @@ export async function pullHostImage(
     `/images/create?fromImage=${encodeURIComponent(reference)}`,
     undefined,
     { 'x-registry-auth': authentication },
+    // Registry authentication/manifest resolution can be quiet before pull progress starts.
+    // Keep ordinary Docker/health calls at 30 seconds; bound each artifact pull separately.
+    { inactivityTimeoutMilliseconds: 120_000, deadlineMilliseconds: 600_000 },
   )
   if (result.status !== 200) throw new Error('Registry rejected an immutable release image')
   const events =

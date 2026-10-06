@@ -68,6 +68,12 @@ root-only 临时目录后调用：
 Bootstrap Protocol 1；它从 SQLite 的当前 Generation 启动工作代码，升级工作代码不会终止
 正在执行的发布。Bootstrap Protocol/systemd 沙箱或操作系统依赖升级属于服务器控制台维护。
 
+镜像仓库认证与 Manifest 获取可能暂时没有进度数据。Host Artifact Pull 使用独立的
+120 秒静默等待窗口，并以 10 分钟总时限终止持续无结果的拉取；普通 Docker 操作仍使用
+原 30 秒窗口。等待时限不影响镜像 SHA/Digest 校验、Health/Readiness、Smoke 或 Cutover
+门禁。获取失败发生在持久 Convergence Checkpoint 之前时，Operation 明确为
+`host-release-rejected`，生产运行版本保持可用，可通过同一 Control Plane 重试。
+
 普通 main 发布保持当前 PostgreSQL Image。改变 PostgreSQL/pgBackRest 的宿主挂载配置需要
 明确的服务器维护与 Recovery Validation，普通发布会拒绝此类变更。数据库 Expand Migration
 仍走原有 Fresh Backup、Blue/Green Compatibility 与 Migration Policy 门禁。
