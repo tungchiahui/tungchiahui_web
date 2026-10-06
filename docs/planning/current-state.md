@@ -797,3 +797,17 @@ SSH/公开 Health/签名 Status 与 Backup Status 已恢复。不持久保存家
   SSH 或 sudo。首次接入的临时镜像容器、临时凭据目录、安装 Node/CJS 和 Wrapper 已清理。
 - 该记录是首次接入的不可变证据；后续文档与代码提交继续正常 main 自动完整发布，不需要
   重复 Bootstrap。稳定 Supervisor Protocol 1、数据库/主机配置维护和灾难恢复边界不变。
+
+### 冷镜像获取的超时修复
+
+PR #32 / main `8666b88760f77b450189fda907f911842609ca73` 的 Main Release
+`37437934703` 已通过全部 Quality 与 Image Build；服务器 Operation
+`282adff4-2195-406a-838c-ffcda7188ede` 于 UTC 2026-10-06 09:07:47 在
+`resolve-artifacts` 被安全拒绝。Host Journal 尚无 Convergence Checkpoint，运行中的 Web、
+独立服务与 Host Generation 均保持已验收的 `4371de1...`。服务器结构化日志确认原因是
+`Docker request timed out`：普通操作的 30 秒静默超时不适合冷 Registry Pull。
+
+修复为 Host Artifact Pull 单独使用 120 秒静默窗口和 10 分钟总时限。新增真实 Unix Socket
+测试覆盖静默后成功、静默超时、持续进度仍受总时限约束。普通 Docker/Health/Smoke 与
+Immutable SHA/Digest 门禁保持原策略。源码修复及生产激活验证进行中，最终状态以随后
+Main CI 与生产 Status 为准。
