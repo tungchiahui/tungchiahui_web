@@ -738,7 +738,7 @@ and copy controls in the selected light or dark theme. Earlier Phase 18 notes de
 always-dark code frame record the previous visual decision, which this Owner request supersedes.
 
 
-## 2026-10-06：服务器完整发布与移除 Ansible（实施中）
+## 2026-10-06：服务器完整发布与移除 Ansible（已激活）
 
 Owner 已授权 ADR 0027：开发机只负责开发/推送；服务器执行完整发布。工作分支
 `codex/server-managed-releases`。已替换 Ansible Runtime/Playbook/测试调用为 TypeScript
@@ -760,12 +760,40 @@ Bootstrap 必须记录原 Web 的 Registry Manifest Digest，不能把 Docker Im
 Core Schema 8 不变，Host Component Journal 1 及首次管理员基线同库备份/恢复。
 稳定 Supervisor Protocol 1 不随普通发布重启；每次发布替换工作 Coordinator 与容器服务。
 
-生产首次接入尚未执行，不能声称日常发布路径已经激活。最后一次成功生产查询是
+生产接入前的成功查询是
 2026-10-06：主版本 `6a4499ad02a6dbb3aa7d1ed65876221a5bed3a5d`，Green Active、
 Blue Previous，无未完成 Operation；最新 Diff Backup `20261003-190514F_20261005-190514D`
 于 UTC 2026-10-05 19:27:58 完成，valid，Primary/Off-site 均 Fresh。原先开发电脑的
 明文 DNS 返回错误 Origin IPv4，导致家庭 WireGuard 连接失败；Owner 请求检查桌面配置后，
 改用加密 DNS、对异常 Public DNS 答案使用独立加密解析，并以完整域名刷新隧道 Endpoint，
 SSH/公开 Health/签名 Status 与 Backup Status 已恢复。不持久保存家庭公网数字 IP。
-发布前先临时关闭 `PRODUCTION_DEPLOYMENT_ENABLED`，发布新镜像并完成服务器一次管理员
-接入，验证后恢复开关并重跑 Main Deploy Job。操作说明：`docs/operations/server-release.md`。
+首次接入及发布已完成，操作说明：`docs/operations/server-release.md`。
+
+### 首次生产接入与完整发布证据
+
+- PR #31 / main `4371de1abb88ec72e7ded2bea298bcb2f5df83ee`。
+- Main Release `37430688844`：Attempt 1 全部 Quality Gates 与四镜像成功；首次接入期间
+  `PRODUCTION_DEPLOYMENT_ENABLED=false`，Deploy 被跳过，最终结果按政策失败。安装完成后
+  恢复开关为 true，仅重跑原 Deploy Job，保留已发布的精确 Digest；Attempt 2 全部 success。
+- 服务器管理员从审核的 Recovery Image 提取 Debian Node/Bootstrap CJS，调用同一
+  Bootstrap Engine。初次冷镜像拉取期间发生中断，残留 Bootstrap Operation
+  `5a9598f0-7e6a-4e04-8e11-f4fc31feddfc` 在确认进程已退出且没有 Convergence Checkpoint
+  后被管理员审计 Fence；原记录保留。预拉取审核的 Web/Service/Recovery Image 后重试成功。
+  没有删除失败历史、修改 `.env` 或业务数据。
+- 连续两次 Bootstrap 均 ready；第二次 Web、PostgreSQL 和四个独立服务的 Container ID
+  完全不变，稳定 Supervisor Unit 未重启，两个原 Timer 仍 enabled/active。
+- Web 于 UTC `2026-10-06T08:34:55.180Z` 切到 Blue；Current SHA 为 `4371de1...`，
+  Previous Green 保留 `6a4499ad...`。Web Digest
+  `sha256:cec20bfaea1ee170caf1b3f2532e350b5ce4fa2bb770611c04188f494719a056`，
+  Service Digest `sha256:c4297757ee55d8a6302244d3b6ebd502ffc3098d1dbbf6ad2dc2358f9727181e`，
+  Recovery Digest `sha256:9b62a5734c9ae2bac25a67cc6ada67fbfe3475dd54ba4193f396926053355bf6`。
+- Host Executor installed/healthy，Current SHA 同为 `4371de1...`；四个独立服务同 SHA，
+  Production `hostRelease.status=converged` 已通过 GitHub Client 的完整证据校验。
+  PostgreSQL 仍为原 Container
+  `cc9ef2189f0baecf4d7815623fa59c0c92f38273bcf5a8ef3e74d748669e9873`、Image
+  `ghcr.io/tungchiahui/tungchiahui_web-postgres:93287c38f16bcbe70b1291b82b06e82b23e4ae95`。
+- 管理员 SSH 已在 GitHub Deploy 启动前退出，服务器独立完成 Operation；Status 无未完成
+  Operation。后续正常 main Push 使用 CI/OIDC 与该服务器执行器，不需要开发机 Ansible、
+  SSH 或 sudo。首次接入的临时镜像容器、临时凭据目录、安装 Node/CJS 和 Wrapper 已清理。
+- 该记录是首次接入的不可变证据；后续文档与代码提交继续正常 main 自动完整发布，不需要
+  重复 Bootstrap。稳定 Supervisor Protocol 1、数据库/主机配置维护和灾难恢复边界不变。
