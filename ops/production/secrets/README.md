@@ -31,7 +31,7 @@ deployment OIDC policy from `deploy.yml` to `release.yml` and base64-encodes the
 backup age file-shaped secrets.
 
 `PGBOUNCER_USERLIST_BASE64` and `BACKUP_AGE_IDENTITY_BASE64` are base64-encoded because PgBouncer
-and age need file-shaped inputs. The Ansible role decodes those two values into restricted derived
+and age need file-shaped inputs. The server TypeScript Host Adapter decodes those two values into restricted derived
 runtime files under `/etc/tungchiahui/secrets`; the `.env` remains the only manually managed secret
 file.
 

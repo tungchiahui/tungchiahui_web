@@ -3,6 +3,14 @@ import { chmodSync, chownSync, existsSync, mkdirSync, writeFileSync } from 'node
 import { join } from 'node:path'
 
 import { z } from 'zod'
+import { initializeControlState } from '../../src/control-plane/control-state'
+import {
+  commitHostGeneration,
+  initializeHostReleaseState,
+  readHostGeneration,
+  readHostRuntime,
+  stageHostGeneration,
+} from '../../src/host-release/state'
 import { techFootprintPayloadSchema } from '../../src/personal/contracts'
 import { legacyRecordIdMap, migrateLegacyTechPayload } from '../../src/personal/legacy-migration'
 import { dailyProtectionProgressSchema } from '../../src/recovery/daily-protection'
@@ -293,6 +301,20 @@ async function removePrimaryReplica(backupPort: number) {
 }
 
 async function main() {
+  const hostRelease = {
+    sha: input.PHASE13_GIT_SHA,
+    webDigest: `sha256:${'a'.repeat(64)}`,
+    serviceDigest: `sha256:${'b'.repeat(64)}`,
+    recoveryDigest: `sha256:${'c'.repeat(64)}`,
+  }
+  const controlDatabase = join(controlStatePath, 'control.db')
+  initializeControlState(controlDatabase, 'test')
+  initializeHostReleaseState(controlDatabase)
+  stageHostGeneration(controlDatabase, hostRelease)
+  commitHostGeneration(controlDatabase, hostRelease.sha)
+  chownSync(controlDatabase, 70, 10050)
+  chmodSync(controlDatabase, 0o660)
+
   execute('age-keygen', ['--output', ageIdentityPath])
   chmodSync(ageIdentityPath, 0o640)
   chownSync(ageIdentityPath, 70, 10050)
@@ -551,6 +573,17 @@ async function main() {
       restoredControl.auditDigest === controlState.artifact.auditDigest,
       'Control-state audit continuity was not preserved',
     )
+    expect(
+      readHostRuntime(join(controlStatePath, 'restored-control.db')).current_sha ===
+        hostRelease.sha,
+      'Encrypted offsite restore lost the server release generation',
+    )
+    expect(
+      JSON.stringify(
+        readHostGeneration(join(controlStatePath, 'restored-control.db'), hostRelease.sha),
+      ) === JSON.stringify(hostRelease),
+      'Encrypted restore changed immutable host release digests',
+    )
     expect(full.backup.valid, 'Full backup was not marked valid')
 
     console.log(
@@ -558,6 +591,7 @@ async function main() {
         backupPolicy: ['full', 'diff', 'incr'],
         backupMeasurements: [full.backup, differential.backup, incremental.backup],
         controlState: 'encrypted-snapshot-restored',
+        hostReleaseRecovery: 'generation-preserved',
         pitrTarget: targetTime,
         partialRestoreRetry: 'pass',
         offsiteOnlyRetry: 'pass',

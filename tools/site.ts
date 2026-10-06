@@ -1,3 +1,5 @@
+import { activateHostExecutor } from '../src/host-release/bootstrap'
+import { hostSettingsSchema } from '../src/host-release/contracts'
 import { createAccount } from './account/create'
 import { createContentSync } from './content/control-client'
 import { createDeployment, createRollback, readDeploymentStatus } from './deployment/control-client'
@@ -56,6 +58,7 @@ Deployment:
   rollback [--reason <text>]
 
 Production setup:
+  production bootstrap --sha <sha> --web-digest <digest> [--config-root /etc/tungchiahui]
   production doctor [--env-file /etc/tungchiahui/.env]
                     [--compose-file /etc/tungchiahui/compose.yaml]
                     [--project-name tungchiahui-production]
@@ -163,6 +166,17 @@ async function main() {
       return 0
     case 'help':
       console.log(usage)
+      return 0
+    case 'production-bootstrap':
+      await activateHostExecutor(
+        hostSettingsSchema.parse({
+          configRoot: command.configRoot,
+          dataRoot: command.dataRoot,
+          projectName: command.projectName,
+        }),
+        command.sha,
+        command.digest,
+      )
       return 0
     case 'production-doctor':
       console.log(

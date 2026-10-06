@@ -129,7 +129,11 @@ async function authenticationHeaders(
       'x-ops-timestamp': String(bound.timestamp),
     })
   }
-  if (target.hostname === '127.0.0.1' || target.hostname === 'localhost') {
+  if (
+    (target.hostname === '127.0.0.1' || target.hostname === 'localhost') &&
+    process.env.SITE_OPERATOR_KEY_ID === undefined &&
+    process.env.SITE_OPERATOR_PRIVATE_KEY_PATH === undefined
+  ) {
     return createLocalOperatorHeaders(method, path, body, {
       nonce: bound.nonce,
       timestamp: bound.timestamp,

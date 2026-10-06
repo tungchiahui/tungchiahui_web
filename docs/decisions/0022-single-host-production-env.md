@@ -1,5 +1,8 @@
 # ADR 0022：生产使用单一 Host-local 明文 Env 文件
 
+> Ansible/手工服务收敛职责已由 ADR 0027 的服务器 TypeScript Host Adapter 替代。
+
+
 ## Status
 
 Superseded by [ADR 0023](./0023-scoped-production-runtime-configuration.md)

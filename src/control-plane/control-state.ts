@@ -886,6 +886,16 @@ export function claimNextInfrastructureOperation(
   const database = openControlState(path)
   try {
     return transaction(database, () => {
+      // Host release execution and container recovery execution share one host capability.
+      // Serialize their claims inside the same transaction, including different operation types.
+      if (
+        database
+          .prepare(
+            "SELECT id FROM infrastructure_operations WHERE status IN ('claimed', 'running') LIMIT 1",
+          )
+          .get()
+      )
+        return null
       const row =
         allowed === null
           ? database

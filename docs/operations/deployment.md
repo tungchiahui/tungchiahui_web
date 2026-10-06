@@ -60,16 +60,16 @@ Policy Denial 和没有 Idempotency Key 的 POST 不得重试，避免把网络�
 `release.yml` 只接受 `main` push 或显式 `workflow_dispatch`。完整 Quality Gate 按静态/Build、Unit、
 Production Infrastructure/Recovery、Integration/E2E、Migration 并行执行，再由稳定的
 `quality-gate` Fail-closed 汇总。Gate 全部成功后，PostgreSQL、Recovery、Service 镜像并行使用
-Buildx/GitHub Cache 构建，Web 镜像在精确 Service Digest 可用后构建；四个 Digest 汇总成
+Buildx/GitHub Cache 构建，Web 镜像在精确 Service/Recovery Digest 可用后构建；四个 Digest 汇总成
 Immutable Release Manifest 后才能部署。Web Manifest Digest 仍是 Blue/Green Deployment Identity，
-Web Image Label 同时绑定精确 Service Image Digest。自动 Push 在部署前必须确认目标 SHA 仍是
+Web Image Label 同时绑定精确 Service/Recovery Image Digest。自动 Push 在部署前必须确认目标 SHA 仍是
 `origin/main`，落后的并发 Release 不得切流；最终 Result Job 要求 Build 和 Deploy 都成功。Deploy
 Job 只持有 Repository Read 与 OIDC，进入受保护的 `production` Environment，并由单一
 non-cancelling Concurrency Group 序列化。Workflow 不持有 Production DB、AI Provider、Host
 Login、Origin Pull Credential、生产 `.env` 或 Docker Socket。
 
-Production 主机上的手工 Secret/Policy Source 只有部署根目录 `/etc/tungchiahui/.env`。Ansible
-Inventory 只提供主机事实和本次不可变 Release Identity，不得覆盖其中的 Polling、Probe、Rate
+Production 主机上的手工 Secret/Policy Source 只有部署根目录 `/etc/tungchiahui/.env`。服务器
+TypeScript Host Adapter 只提供主机事实和本次不可变 Release Identity，不得覆盖其中的 Polling、Probe、Rate
 Limit、Ingress 或 Smoke Policy。Compose CLI 通过
 `--env-file` 使用该 `0600` 文件做变量插值，但不得把整份文件注入容器。每个 Service 的
 `environment` 是显式 Allowlist；`deploy-agent` 只获得部署/恢复配置与创建 Web Slot 所需的 Web
@@ -91,12 +91,10 @@ https://www.tungchiahui.cn/api/ops/deployments
 
 ### Independent service release boundary
 
-Publishing the four images does not upgrade all running services. The shared engine updates the
-inactive Web slot and the one-shot migration runner. `control-api`, `content-worker`,
-`observability-agent` and `deploy-agent` remain independent provisioned services; changes to their
-APIs or execution code require a reviewed scoped rollout. A successful Web deployment is not
-evidence that new independent-service code is running. Verify their image revisions and health in
-addition to the public Web version.
+完整发布由服务器 Host Adapter 自动更新 Web、固定配置、四个独立服务和 Host Coordinator。
+同一 SHA/Digest 的完整结果才可标记 Operation Completed；详见
+[服务器发布与初始化](server-release.md)。初次接入需要一次服务器管理员安装，后续 main
+发布由服务器接续，不依赖开发电脑。
 
 For normal releases, the engine validates the requested Web Digest, reads its
 `cn.tungchiahui.release.service-digest` Label and resolves
@@ -118,21 +116,8 @@ evidence from the shared engine. A newer target migration therefore cannot bypas
 because the long-running deploy-agent bundles an older journal. Applied migrations remain applied;
 0008 is not replayed and existing accounts are preserved. No schema migration is added by this fix.
 
-The scoped reconciliation path now recreates the stopped migration runner before applying SQL and
-updates `control-api`, `content-worker`, `observability-agent` and `deploy-agent` as one reviewed
-independent-service unit through the same Compose project, without touching either Web slot.
-Each scoped attempt compares the current Compose/OpenResty fingerprint with a success marker and
-converges a mismatch before migration. The marker is written only after validated recreation, so a
-failure after an atomic config copy cannot consume the only handler notification and leave the
-running gateway on stale config; a successful repeat remains a zero-change operation. Image
-preparation and service reconciliation have bounded retries for transient registry/TLS failures;
-migration execution remains journaled and is not blindly retried.
-Reconcile the reviewed service/recovery image explicitly, then validate schema journal/hash, all
-service health/image revisions, account API and Operator status before claiming activation is
-complete. A successful Web deployment by itself is still not evidence that independent services
-are current.
-The 2026-09-14 incident and rollout evidence are recorded in `docs/planning/current-state.md`
-section 12.
+固定配置与独立服务通过 TypeScript scoped convergence 更新，不替换其他 Web Slot 或 PostgreSQL。
+配置指纹仅在验证并重新创建对应 Gateway 后写入；失败重试不会丢失配置变更通知。
 
 GitHub OIDC policy denials keep the HTTP response generic. After signature, issuer, audience and
 claim-shape validation, the independent `control-api` records only the allowlisted
@@ -152,47 +137,16 @@ compensate for a verification-network failure.
 This diagnostic has the same independent-service release boundary as every other `control-api`
 change. If the running service predates it, repeating `workflow_dispatch` cannot create the new
 evidence. First let the reviewed `main` push pass Quality and publish the exact service image; then,
-only after explicit production authorization, use the existing scoped reconciliation path to replace
+only after explicit production authorization, use the server-managed release path to replace
 the independent-service unit without touching either Web slot. Trigger one new dispatch, inspect the protected audit
 through the authorized host path, and compare all five claims before changing policy. Never copy the
 claim details into an Actions artifact, client response or ordinary log, and never relax repository,
 `refs/heads/main`, `production` Environment or reviewed workflow identity speculatively.
 
-### One-time activation of the automatic migration-image resolver
+### 服务器执行器首次接入
 
-The already running 2026-09-15 agent (`89c17113`) does not contain this resolver. Do not assume a
-push can upgrade the agent that must execute that very deployment. The first release containing
-this fix needs the following ordered bootstrap through existing mechanisms:
-
-1. Before the authorized push, record and temporarily set repository Actions variable
-   `PRODUCTION_DEPLOYMENT_ENABLED=false`. Push the reviewed commit; wait for Quality and all four
-   SHA images to succeed. Deployment must be skipped, rather than sent to the old agent.
-2. Verify the service/recovery image digests and OCI revision against that exact SHA. With no
-   executing infrastructure operation, use the existing approved host inventory and complete
-   production Ansible variables, changing only the reviewed image identities and scoped flags
-   `tungchiahui_manage_stack=false`, `tungchiahui_reconcile_control_api=true`. Preserve actual Web
-   images/SHAs, gateway settings, backup evidence and the canonical host-local `.env`; never copy
-   disposable test values or fabricate freshness. The role recreates the migration runner, applies
-   journaled pending migrations, and reconciles control-api/content-worker/observability-agent/deploy-agent.
-   The checked-in production inventory keeps `tungchiahui_install_packages=false` because this host
-   uses Docker Engine and Compose from Docker's Debian repository; scoped reconciliation must not
-   replace them with distribution packages.
-   Do not use `./site provision`
-   as a substitute: its queued server-migration request is not this scoped Ansible execution.
-3. Verify all independent-service health and image revisions, actual host Docker socket GID, signed
-   Operator status, internal active-slot revalidation, unchanged Web container IDs, and account
-   session/login/read/logout. Keep the socket mount `:ro`.
-4. Restore the activation variable and use the corrected `./site deploy <sha> --wait` client (or a
-   new explicit workflow dispatch) to execute and verify the shared blue-green deployment. Do not
-   rerun the historical release-only-idempotency client or rewrite failed operation records.
-
-This is a one-time agent activation for the resolver. Subsequent ordinary Web/schema releases use
-the paired target migration image automatically. Future changes to independent service code still
-need their own scoped rollout. If bootstrap validation fails, leave Web traffic unchanged and
-restore the previously recorded independent service images; do not undo applied expand migrations.
-The disposable production-foundation gate exercises the same scoped Ansible path and separately
-verifies missing/wrong migration image rejection, stale-runner replacement via registry pull,
-account preservation, blue-green cutover and no-rebuild rollback.
+旧的 scoped Ansible 接入流程已由 ADR 0027 替代。使用
+[服务器发布与初始化](server-release.md) 的完整步骤，保留原备份、Web Slot 和 PostgreSQL。
 
 ## 共享主机入口
 

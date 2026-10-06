@@ -9,6 +9,8 @@ RUN pnpm install --frozen-lockfile
 
 FROM node-dependencies AS node-build
 COPY services ./services
+COPY tools/production ./tools/production
+COPY ops/production ./ops/production
 COPY drizzle/migration-policy.json ./drizzle/migration-policy.json
 COPY drizzle/meta/_journal.json ./drizzle/meta/_journal.json
 COPY src ./src
@@ -18,7 +20,11 @@ RUN mkdir -p /workspace/dist \
   && pnpm exec esbuild services/recovery-drill/main.ts --bundle --format=cjs --platform=node --target=node24 --outfile=dist/recovery-drill.cjs \
   && pnpm exec esbuild services/recovery-break-glass/main.ts --bundle --format=cjs --platform=node --target=node24 --outfile=dist/recovery-break-glass.cjs \
   && pnpm exec esbuild services/recovery-scheduler/main.ts --bundle --format=cjs --platform=node --target=node24 --outfile=dist/recovery-scheduler.cjs \
-  && pnpm exec esbuild services/retention-scheduler/main.ts --bundle --format=cjs --platform=node --target=node24 --outfile=dist/retention-scheduler.cjs
+  && pnpm exec esbuild services/retention-scheduler/main.ts --bundle --format=cjs --platform=node --target=node24 --outfile=dist/retention-scheduler.cjs \
+  && pnpm exec esbuild services/release-job/main.ts --bundle --format=cjs --platform=node --target=node24 --outfile=dist/release-job.cjs \
+  && pnpm exec esbuild services/host-coordinator/main.ts --bundle --format=cjs --platform=node --target=node24 --outfile=dist/host-coordinator.cjs \
+  && pnpm exec esbuild services/release-supervisor/main.ts --bundle --format=cjs --platform=node --target=node24 --outfile=dist/release-supervisor.cjs \
+  && pnpm exec esbuild services/host-bootstrap/main.ts --bundle --format=cjs --platform=node --target=node24 --outfile=dist/host-bootstrap.cjs
 
 FROM node:24.19.0-alpine3.23@sha256:244cc2b53f46f9e876304391d17682b0ddae9ac33491f4857e25e35a36ba7995 AS pgbackrest-build
 
@@ -58,6 +64,10 @@ COPY --from=age-build /out/age /usr/local/bin/age
 COPY --from=pgbackrest-build /tmp/pgbackrest-build/src/pgbackrest /usr/local/bin/pgbackrest
 COPY --from=node-build --chown=70:10050 /workspace/dist ./dist
 COPY --from=node-build --chown=70:10050 /workspace/drizzle ./deployment/drizzle
+
+COPY --from=node-build /usr/local/bin/node /app/host/node
+COPY --from=node-build /workspace/dist/host-coordinator.cjs /workspace/dist/release-supervisor.cjs /workspace/dist/host-bootstrap.cjs /app/host/
+COPY --from=node-build /workspace/ops/production/compose.yaml /workspace/ops/production/openresty.conf /workspace/ops/production/pgbouncer.ini /workspace/ops/production/pgbackrest.conf /workspace/ops/production/active-slot.conf /app/host/ops/production/
 
 USER 70:10050
 CMD ["node", "dist/deploy-agent.cjs"]

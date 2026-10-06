@@ -30,6 +30,8 @@ const translationInvocation = './site "$' + '{arguments[@]}"'
 const workflowShaReference = 'ref: $' + '{{ github.workflow_sha }}'
 const serviceDigestReference =
   'SITE_SERVICE_IMAGE_DIGEST=$' + '{{ needs.build-service.outputs.image_digest }}'
+const recoveryDigestReference =
+  'SITE_RECOVERY_IMAGE_DIGEST=$' + '{{ needs.build-recovery.outputs.image_digest }}'
 const releaseShaBuildArgument =
   'SITE_DEPLOYMENT_SHA=$' + '{{ needs.resolve-release.outputs.git_sha }}'
 
@@ -120,6 +122,17 @@ function requireReleaseJobStructure(
       issues.push({ file: 'release.yml', message: `${name} must retain packages: write` })
     }
   }
+
+  const webBuild = requireJob('build-web')
+  if (
+    webBuild &&
+    JSON.stringify(normalizedNeeds(webBuild).toSorted()) !==
+      JSON.stringify(['resolve-release', 'build-service', 'build-recovery'].toSorted())
+  )
+    issues.push({
+      file: 'release.yml',
+      message: 'Web release must bind both reviewed Service and Recovery image digests',
+    })
 
   const build = requireJob('build')
   if (build) {
@@ -242,6 +255,7 @@ export function analyzeWorkflowPolicies(root: string): readonly WorkflowPolicyIs
     workflowShaReference,
     'SITE_CONTROL_API_URL: https://www.tungchiahui.cn',
     serviceDigestReference,
+    recoveryDigestReference,
     '### Immutable release manifest',
     'git rev-parse origin/main',
     './site deploy',

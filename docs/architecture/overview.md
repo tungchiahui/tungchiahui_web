@@ -199,6 +199,15 @@ Endpoint 进入当前 Active Slot；Worker 不直接绑定 Blue 或 Green。Publ
 
 `deploy-agent` 通过受限的 Control-state Volume 保存 Active/Previous Slot、Deployment SHA、Operation Phase、Lock/Lease 与 Audit Record。只有它获得完成部署/恢复所需的最小 Docker/Host 权限。
 
+ADR 0027 将部署执行边界扩展为服务器 systemd 托管的 TypeScript Host Adapter：
+稳定 Supervisor 领取 Deploy/Rollback，并启动 SHA/Digest 绑定的 Coordinator 与一次性
+deploy-agent worker。Worker 复用同一蓝绿 Engine，Host Adapter 收敛独立服务、固定配置、
+定时器和工作执行代码。常驻 deploy-agent 容器继续处理 Backup/Restore/Recovery；正常生产
+关闭它的 Deployment Polling。Core Schema 8 与同一 SQLite 内的 Host Component Journal 1
+共同保存互斥租约、收敛快照与版本状态；这些状态进入既有加密备份与恢复验证。
+日常 main 发布由 GitHub 与服务器完成，首次管理员接入见
+[`server-release.md`](../operations/server-release.md)。
+
 ### OpenResty
 
 职责：
@@ -215,7 +224,7 @@ Endpoint 进入当前 Active Slot；Worker 不直接绑定 Blue 或 Green。Publ
 Blue/Green Upstream Selection 和 Path Ownership；外层代理不直接指向任一 Next.js Slot。
 
 Host-local `.env` 是唯一人工配置源，但只供 Compose 插值。各容器的 Runtime Environment 必须
-显式 Allowlist；普通 Blue/Green Adapter 只把 Web 所需的最小变量传入候选 Slot。Ansible 只提供
+显式 Allowlist；普通 Blue/Green Adapter 只把 Web 所需的最小变量传入候选 Slot。服务器 TypeScript Host Adapter（ADR 0027）只提供
 Bootstrap/Host Fact/动态 Release Identity，不得另存或覆盖 Owner-managed Production Policy；
 `production doctor` 负责检查磁盘配置、派生文件和 Live Container 的收敛状态（ADR 0024）。
 

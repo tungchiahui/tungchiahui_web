@@ -85,7 +85,7 @@ Test Command 必须：
 
 Phase 2 已实现 Disposable Infrastructure Entry Point；Phase 3 已加入真实 Migration/Role/PgBouncer Suite 和真实 Migration/Seed Hook。Phase 6 已用真实 Playwright Suite 替换 Placeholder，覆盖 zh-CN Home/Blog/Wiki、Legacy Route、Markdown、S3Mock Asset、Special Page、Health/Ready/Version、404、Metadata 与 Client Secret Negative Scan。该 Suite 对共享的 Disposable Runtime/Cache 串行执行，并在任一失败时输出 Web Log 后清理全部资源。
 
-Phase 12 在 Unit 与 Disposable Application Integration 之间加入独立 Production-foundation Gate。它使用提交锁定的 Ansible/age/Compose Toolchain，在临时 Host Root 上生成真实单一生产 `.env`、派生 PgBouncer/age runtime 文件、构建 Git-SHA 标识的 Production Image、执行两次 Provision，并验证第二次 `changed=0`。同一 Gate 检查 Image History、Container User/Readonly/Capability/Socket、四个数据库登录身份、OpenResty Validation/Reload、IPv4+IPv6 和 Next Slots 全停后的独立 Control Route；只绑定临时本机端口，不承载 Public Traffic。
+Phase 12 在 Unit 与 Disposable Application Integration 之间加入独立 Production-foundation Gate。它使用提交锁定的 Node/age/Compose Toolchain 与 TypeScript Host Adapter，在临时 Host Root 上生成真实单一生产 `.env`、派生 PgBouncer/age runtime 文件、构建 Git-SHA 标识的 Production Image、执行两次 Provision，并验证第二次 `changed=0`。同一 Gate 检查 Image History、Container User/Readonly/Capability/Socket、四个数据库登录身份、OpenResty Validation/Reload、IPv4+IPv6 和 Next Slots 全停后的独立 Control Route；只绑定临时本机端口，不承载 Public Traffic。
 
 Phase 13 另加入 `test:recovery`：构建固定 pgBackRest 版本的 PostgreSQL/Recovery Image，启动一次性 PostgreSQL 和隔离 S3Mock，执行真实 Full/Differential/Incremental、WAL Archive、Off-site 副本逐对象校验、从异地副本重建 Repository、指定时间 PITR、Version/Schema/代表性应用读取，以及加密 Control-state SQLite Restore。所有 Destructive 操作都要求一次性 Target Marker；Gate 不读取生产 Credential，也不访问真实 AList/R2。
 
@@ -93,7 +93,7 @@ Phase 14 扩展 `test:infra`：在同一临时 Host Root 和 Hardened Compose �
 
 Phase 15 再把临时 OCI Registry 纳入 `test:infra`：Candidate 先以完整 Git SHA Label 推送，再从 Host Local Store 移除，强制 `deploy-agent` 只按 approved Repository + Registry Manifest Digest Pull，并验证 `RepoDigest` 与 OCI Revision。Workflow Policy Gate 解析 Release/Content/Translation 三条 Workflow，校验 Trigger、Environment、Concurrency、Permission、Pinned Action、共享 CLI 和 Forbidden Credential/Command；OIDC Unit 覆盖错误 Issuer/Audience/Repository/Ref/Environment/Workflow Claim 及 reusable `job_workflow_ref`。全部验证只使用 Production-like Local Resource，不调用 GitHub 或 Public Production Control API。
 
-Phase 17 在同一 `test:infra` 中 Provision 第二个隔离 Host Root，第二次 Ansible 必须 `changed=0`，并验证 Target Hardening。Gate 使用 PostgreSQL 18 Physical Base Backup/Streaming Slot，把 Base、Streaming、Final-WAL 三条唯一 Row 复制到 Target；在 Final LSN Catch-up 后停止 Source、Promote Target、验证 Application Ready/Target Write/Old-source Non-writing。Control-state 执行一致 Snapshot/Restore 与最终 Reconcile，核对 Active/Previous Identity、Operation Lease/Phase 和 Audit Digest；最终 Origin Probe 强制 AAAA-only。Unit Test 另注入 Promotion 前 Failure，证明安全 Abort 且不会 Promote。所有 Target、Certificate、Credential、Port 与 Registry 都是 Disposable，输出明确 `productionTraffic=false`。
+Phase 17 在同一 `test:infra` 中 Provision 第二个隔离 Host Root，第二次 Host Bootstrap 必须 `changed=0`，并验证 Target Hardening。Gate 使用 PostgreSQL 18 Physical Base Backup/Streaming Slot，把 Base、Streaming、Final-WAL 三条唯一 Row 复制到 Target；在 Final LSN Catch-up 后停止 Source、Promote Target、验证 Application Ready/Target Write/Old-source Non-writing。Control-state 执行一致 Snapshot/Restore 与最终 Reconcile，核对 Active/Previous Identity、Operation Lease/Phase 和 Audit Digest；最终 Origin Probe 强制 AAAA-only。Unit Test 另注入 Promotion 前 Failure，证明安全 Abort 且不会 Promote。所有 Target、Certificate、Credential、Port 与 Registry 都是 Disposable，输出明确 `productionTraffic=false`。
 
 ## Migration Test
 

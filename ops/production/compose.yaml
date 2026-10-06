@@ -234,6 +234,7 @@ services:
       ASSET_S3_SECRET_ACCESS_KEY: ${ASSET_S3_SECRET_ACCESS_KEY:?asset S3 secret is required}
       DATABASE_URL: ${WEB_DATABASE_URL:?web database URL is required}
       SITE_BASE_URL: ${SITE_BASE_URL:?site base URL is required}
+      SITE_DEPLOYMENT_IMAGE_DIGEST: ${TUNGCHIAHUI_WEB_BLUE_DIGEST:?blue manifest digest is required}
       SITE_DEPLOYMENT_SHA: ${TUNGCHIAHUI_BLUE_DEPLOYMENT_SHA:?blue Git SHA is required}
       SITE_REVALIDATION_SECRET: ${SITE_REVALIDATION_SECRET:?revalidation secret is required}
       SITE_RUNTIME_MODE: production
@@ -259,6 +260,7 @@ services:
       ASSET_S3_SECRET_ACCESS_KEY: ${ASSET_S3_SECRET_ACCESS_KEY:?asset S3 secret is required}
       DATABASE_URL: ${WEB_DATABASE_URL:?web database URL is required}
       SITE_BASE_URL: ${SITE_BASE_URL:?site base URL is required}
+      SITE_DEPLOYMENT_IMAGE_DIGEST: ${TUNGCHIAHUI_WEB_GREEN_DIGEST:?green manifest digest is required}
       SITE_DEPLOYMENT_SHA: ${TUNGCHIAHUI_GREEN_DEPLOYMENT_SHA:?green Git SHA is required}
       SITE_REVALIDATION_SECRET: ${SITE_REVALIDATION_SECRET:?revalidation secret is required}
       SITE_RUNTIME_MODE: production
@@ -322,7 +324,7 @@ services:
       DEPLOYMENT_MIGRATION_CONTAINER_NAME: ${TUNGCHIAHUI_MIGRATION_CONTAINER_NAME:?migration container name is required}
       DEPLOYMENT_MIGRATION_POLICY_PATH: /app/deployment/drizzle/migration-policy.json
       DEPLOYMENT_OPENRESTY_CONTAINER_NAME: ${TUNGCHIAHUI_OPENRESTY_CONTAINER_NAME:?OpenResty container name is required}
-      DEPLOYMENT_POLLING_ENABLED: "true"
+      DEPLOYMENT_POLLING_ENABLED: ${TUNGCHIAHUI_DEPLOYMENT_POLLING_ENABLED:-true}
       DEPLOYMENT_PUBLIC_ENTRY_URL: http://openresty:8082
       DEPLOYMENT_REGISTRY_TOKEN: ${DEPLOYMENT_REGISTRY_TOKEN:?deployment registry token is required}
       DEPLOYMENT_REGISTRY_USERNAME: ${DEPLOYMENT_REGISTRY_USERNAME:?deployment registry username is required}

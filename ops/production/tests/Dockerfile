@@ -8,6 +8,7 @@ COPY .npmrc package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY tsconfig.json ./tsconfig.json
 RUN pnpm install --frozen-lockfile
 COPY tools/infra ./tools/infra
+COPY tools/production ./tools/production
 COPY tools/control ./tools/control
 COPY tools/dev/control-auth-fixture.ts ./tools/dev/control-auth-fixture.ts
 COPY src ./src
@@ -15,7 +16,7 @@ COPY messages ./messages
 RUN pnpm exec esbuild tools/infra/test-production-foundation.ts --bundle --format=cjs --platform=node --target=node24 --outfile=/runner.cjs
 RUN pnpm exec esbuild tools/infra/test-recovery.ts --bundle --format=cjs --platform=node --target=node24 --outfile=/recovery-runner.cjs
 
-FROM python:3.12.13-slim-bookworm@sha256:4766d8b510c428e595d74b9cc5bbb2fae8e26316fffb4adc89908d79aacd58a2
+FROM node:24.19.0-bookworm-slim@sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03
 
 ARG AGE_SHA256=cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10
 ARG AGE_VERSION=1.3.2
@@ -25,7 +26,6 @@ ARG COMPOSE_VERSION=5.4.0
 RUN apt-get update \
   && apt-get install --yes --no-install-recommends ca-certificates curl docker.io openssl \
   && rm -rf /var/lib/apt/lists/* \
-  && pip install --no-cache-dir ansible-core==2.21.3 \
   && mkdir -p /usr/local/libexec/docker/cli-plugins \
   && curl --fail --location --silent --show-error \
     "https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-linux-x86_64" \

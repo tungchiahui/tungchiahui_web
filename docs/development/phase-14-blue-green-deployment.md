@@ -1,5 +1,9 @@
 # Phase 14 Shared Blue-Green Deployment
 
+> 历史阶段记录：其中 Ansible/SOPS 或手工独立服务发布步骤已被 ADR 0022/0027 替代。
+> 当前操作入口见 [服务器发布与初始化](../operations/server-release.md)，不得执行已移除的 Playbook。
+
+
 ## Scope and safety boundary
 
 Phase 14 replaces the recovery-only deployment stub with one auditable blue-green state machine. It operates only through the independent Control API, host-local SQLite and the existing least-privilege `deploy-agent`. The implementation does not enable a `main` branch production trigger, cut over the legacy production site, contact Production infrastructure, modify the legacy Nuxt repository, or create a second manual/CI deployment path.

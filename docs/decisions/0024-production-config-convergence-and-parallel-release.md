@@ -1,5 +1,8 @@
 # ADR 0024：生产配置收敛检查与并行发布门
 
+> Ansible/手工服务收敛职责已由 ADR 0027 的服务器 TypeScript Host Adapter 替代。
+
+
 ## Status
 
 Accepted

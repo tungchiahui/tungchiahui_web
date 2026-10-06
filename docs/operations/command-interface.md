@@ -158,7 +158,7 @@ Doctor 检查运行时越权/旧值；Export 必须使用独立异地 Recipient�
 
 ## Break-glass
 
-当 EdgeOne/OpenResty/`control-api` 本身不可用时，CLI 可以提供显式的 Break-glass Option，通过稳定 Ansible Inventory/SSH Alias 到达目标 Host。精确 Flag 由实现确定，但契约必须：
+当 EdgeOne/OpenResty/`control-api` 本身不可用时，CLI 可以提供显式的 Break-glass Option，通过授权服务器控制台/稳定 SSH Alias 到达目标 Host。精确 Flag 由实现确定，但契约必须：
 
 - 要求显式 Environment、Target、Reason 与 Confirmation
 - 调用与正常路径相同的 Deployment/Recovery Engine

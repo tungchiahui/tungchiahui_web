@@ -1,5 +1,9 @@
 # Phase 17 Planned Server Migration Readiness
 
+> 历史阶段记录：其中 Ansible/SOPS 或手工独立服务发布步骤已被 ADR 0022/0027 替代。
+> 当前操作入口见 [服务器发布与初始化](../operations/server-release.md)，不得执行已移除的 Playbook。
+
+
 ## 设计结果
 
 Phase 17 将既有 `server-migration` SQLite Operation 从占位 Contract 扩展为可审计的迁移状态机，并通过 `./site provision` 与 `./site migrate-server` 暴露稳定入口。Target 只接受 Hostname/SSH Alias/Inventory Hostname，CLI、Control API 与 Engine 三层均拒绝数字 IP。Active Server Migration 独占 Infrastructure-operation Window，避免与 Deploy、Rollback、Backup、Restore 或另一迁移并发改变同一基础设施。

@@ -1,9 +1,0 @@
-all:
-  children:
-    production_origins:
-      hosts:
-        production_origin:
-          ansible_host: Debian
-          ansible_user: tungchiahui
-          # Docker Engine/Compose come from Docker's Debian repository on this managed host.
-          tungchiahui_install_packages: false

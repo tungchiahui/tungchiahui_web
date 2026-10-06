@@ -167,7 +167,7 @@ GitHub Actions 的手动 `workflow_dispatch` 可以触发同一个 Translation J
 - Docker Compose
 - OpenResty
 - 单一 Host-local Production `.env` + Service-scoped Runtime Injection/Convergence（ADR 0023/0024）
-- Ansible
+- 服务器 TypeScript Host Adapter + systemd（ADR 0027）
 - pgBackRest + WAL/PITR
 - Adobe S3Mock for local S3 emulation
 - AList S3 for production static assets and an independent Primary Backup Bucket
@@ -279,7 +279,7 @@ pnpm install --frozen-lockfile
 
 ## 稳定的 Operator Interface
 
-Operator 不需要记忆底层 Docker、PostgreSQL、OpenResty、Ansible、Backup 或 Worker 命令。
+Operator 不需要记忆底层 Docker、PostgreSQL、OpenResty、Backup 或 Worker 命令。
 
 稳定入口为：
 
