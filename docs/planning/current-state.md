@@ -809,5 +809,30 @@ PR #32 / main `8666b88760f77b450189fda907f911842609ca73` 的 Main Release
 
 修复为 Host Artifact Pull 单独使用 120 秒静默窗口和 10 分钟总时限。新增真实 Unix Socket
 测试覆盖静默后成功、静默超时、持续进度仍受总时限约束。普通 Docker/Health/Smoke 与
-Immutable SHA/Digest 门禁保持原策略。源码修复及生产激活验证进行中，最终状态以随后
-Main CI 与生产 Status 为准。
+Immutable SHA/Digest 门禁保持原策略。PR #33 / main
+`14b7249b3fa80e02991ad86001d4272a6231af0d` 的本地全部 Gate 与 GitHub Quality/Image
+Gate 均通过，单元测试增加至 250 项。
+
+旧执行器不能自行获取该修复版本，故管理员完成一次修复接入。最初 SSH 下载连接被关闭，
+当时尚未创建 Bootstrap Operation；清理该次临时目录后，改为服务器 systemd 临时任务
+调用同一审核 Bootstrap。首个激活 Operation `3d5fcc02-2010-46fb-a039-21b290646a8a`
+在 Artifact 阶段失败，无 Host Checkpoint、没有改动运行服务。随后从审核源码构建的
+仅 Artifact 诊断调用在 184545 毫秒内成功获取并验证同一组不可变镜像；再次 Bootstrap
+成功。失败历史完整保留，没有跳过身份校验。临时任务、镜像提取容器、凭据目录及诊断/
+安装文件均已清理；管理员连接在 GitHub Deploy 开始前退出。
+
+Main Release `37444881720` Attempt 1 因修复期间关闭发布开关而跳过 Deploy；恢复开关后
+仅重跑原 Deploy Job，Attempt 2 全部 success。Operation
+`5338cd1f-5cfd-43d3-8b52-1c8928268825` 于 UTC `2026-10-06T10:25:01.068Z`
+完成，Web Green Active、Blue Previous 保留 `4371de1...`，完整证据为
+`hostRelease.status=converged`、Executor/Web/Service/Recovery 同 SHA `14b7249...`。
+Web Digest `sha256:77b001f30fa44599a00c0e511bbac7e7650108f220d568866cf34693b7e5fdb6`，
+Service Digest `sha256:01ebf8d70b4c506aab334cf70dfdb4ed39380c526ef8f3a7dd89cba965714374`，
+Recovery Digest `sha256:acc64c26e659151687e18f8c9d6117badad201a60803ab7c78ba841ec823011c`。
+生产 Status 无未完成 Operation；原 PostgreSQL Container/Image 未变化，备份仍 valid、
+Primary/Off-site Fresh，Backup 与 Retention-cleanup Timer 均 active/enabled。
+
+这些是首次接入与修复的历史证据；后续 main 提交继续走正常完整发布。不得把人工接入期间
+预先获取的镜像当作后续自动冷镜像发布的证据，也不得为重试重建同 SHA 的镜像集合。
+正常失败重试通过同一 Control API/Engine 或仅重跑保留原 Digest 的 Deploy Job 执行。
+实现、运行与故障处理上下文已沉淀至本文件、ADR 0027 和服务器发布 Runbook。
