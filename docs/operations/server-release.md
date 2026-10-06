@@ -32,6 +32,11 @@ Web 镜像同时绑定同一 SHA 的 Service 与 Recovery Digest。服务器先�
 
 记录并审核该 SHA 的 Web/Service/Recovery Digest。确认没有正在执行的 Infrastructure
 Operation、生产备份可恢复、两 Web Slot 和 PostgreSQL 的原始身份已保存。
+网络较慢的首次冷启动，应先在服务器使用其 Registry Read 身份预拉取上述三个精确
+Repository/Digest，再执行 Bootstrap；不得把开发机上的镜像或凭据当作正常发布依赖。
+下载过程中不要把尚未输出进度误判为死锁。Bootstrap 被中断后，先核对原 Operation、
+存活进程和持久 Checkpoint；确认进程已退出后按服务器控制台审计流程 Fence 原 Lease，
+再由同一入口 Reconcile/Requeue，保留中断与失败记录。
 在服务器管理员控制台执行：
 
 ```bash
