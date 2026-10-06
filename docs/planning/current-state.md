@@ -747,10 +747,12 @@ Host Adapter；Web Manifest 增加 Recovery Digest；新增独立 Host Superviso
 服务器管理员安装；未安装前不得声称生产已经采用该路径。
 
 本地已通过 247 项单元测试、完整 Static/Type/Build/Security Gate、10 项 Migration、
-Integration 与 14 项关键 E2E、7 项 S3Mock Contract。完整基础设施测试已通过整套服务升级/
-回退、执行器中断接续、候选启动失败补偿与首次迁移的旧 Web 回退；正在重跑其余基础设施
-Gate，之后执行覆盖 Host Journal 的完整备份恢复测试。测试证据位于 Gitignored
-`.local/server-release-validation/`，未完成的 Gate 不能视为通过。
+Integration 与 14 项关键 E2E、7 项 S3Mock Contract。完整 Production-foundation 通过
+整套服务升级/回退、执行器中断接续、候选启动失败补偿、首次迁移的旧 Web 回退、控制面
+与 PG 故障隔离、真实物理迁移演练、SBOM/Critical 扫描与安全/负载 Gate。完整 Recovery
+通过 Full/Diff/Incr、WAL/PITR、强制 Off-site 回退、部分恢复重试、Tech V3 与 Daily
+Protection Replay；新增 Host Generation/Digest 状态随一致快照恢复。测试证据位于
+Gitignored `.local/server-release-validation/`。
 
 Bootstrap 必须记录原 Web 的 Registry Manifest Digest，不能把 Docker Image Config ID
 当作可 Pull 的版本身份。首次旧 Web 没有完整新 Manifest 时保留已安装控制/恢复/Host 层，
@@ -759,9 +761,11 @@ Core Schema 8 不变，Host Component Journal 1 及首次管理员基线同库�
 稳定 Supervisor Protocol 1 不随普通发布重启；每次发布替换工作 Coordinator 与容器服务。
 
 生产首次接入尚未执行，不能声称日常发布路径已经激活。最后一次成功生产查询是
-2026-10-04：主版本 `6a4499ad02a6dbb3aa7d1ed65876221a5bed3a5d`，Green Active、
-Blue Previous，无未完成 Operation；最新 Full Backup `20261003-190514F` 为 valid，
-Primary/Off-site 均 Fresh。2026-10-06 开发电脑位于另一网段，旧内网 SSH 不可达，域名
-SSH 拒绝连接，公开控制入口 TLS 未连接成功；当前生产状态未重新验证。
+2026-10-06：主版本 `6a4499ad02a6dbb3aa7d1ed65876221a5bed3a5d`，Green Active、
+Blue Previous，无未完成 Operation；最新 Diff Backup `20261003-190514F_20261005-190514D`
+于 UTC 2026-10-05 19:27:58 完成，valid，Primary/Off-site 均 Fresh。原先开发电脑的
+明文 DNS 返回错误 Origin IPv4，导致家庭 WireGuard 连接失败；Owner 请求检查桌面配置后，
+改用加密 DNS、对异常 Public DNS 答案使用独立加密解析，并以完整域名刷新隧道 Endpoint，
+SSH/公开 Health/签名 Status 与 Backup Status 已恢复。不持久保存家庭公网数字 IP。
 发布前先临时关闭 `PRODUCTION_DEPLOYMENT_ENABLED`，发布新镜像并完成服务器一次管理员
 接入，验证后恢复开关并重跑 Main Deploy Job。操作说明：`docs/operations/server-release.md`。
