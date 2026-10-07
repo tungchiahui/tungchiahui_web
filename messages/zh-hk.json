@@ -318,6 +318,14 @@
       "copy": "複製地址",
       "copied": "已複製",
       "copyFailed": "複製失敗"
+    },
+    "blogIndex": {
+      "description": "把解決問題的過程寫下來，讓每一次探索都有跡可循。",
+      "entries": "篇實踐記錄",
+      "latest": "最新記錄",
+      "results": "找到 {count} 篇文章",
+      "query": "搜尋：{query}",
+      "clear": "查看全部"
     }
   },
   "Personal": {

@@ -1,7 +1,7 @@
 # TungChiaHui Website V2 — 工程文档
 
-> 状态：Phase 0–17 实现完成；等待 Owner 授权 Phase 18
-> 状态日期：2026-08-27
+> 状态：Phase 0–18 完成；Website V2 已生产上线
+> 状态日期：2026-10-07
 > 目的：在不继承旧实现技术债的前提下，将个人网站重建为一个可长期维护、生产级的 Next.js 系统。
 
 本仓库是一个**全新的实现**，不是在 Nuxt 项目中原地迁移。
@@ -243,6 +243,7 @@ pnpm install --frozen-lockfile
 - `docs/architecture/internationalization.md`
 - `docs/architecture/search.md`
 - `docs/architecture/caching.md`
+- `docs/architecture/public-seo.md`
 
 ### 开发
 
@@ -269,7 +270,7 @@ pnpm install --frozen-lockfile
 
 ### 当前实施状态
 
-- Phase 0–15 已完成；Phase 16 尚未开始，等待 Owner 明确授权。
+- Phase 0–18 已完成；当前增量工作与生产发布证据见 `current-state.md`。
 - `docs/planning/current-state.md` — 新会话开始当前 Phase 前的简洁交接入口。
 - `docs/planning/implementation-plan.md` — Phase 0–18 的硬 Gate、依赖与进度。
 

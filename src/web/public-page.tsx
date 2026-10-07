@@ -18,6 +18,7 @@ import { getTranslations } from 'next-intl/server'
 import type { ReactNode } from 'react'
 import { z } from 'zod'
 import { ArticleReader } from '@/components/article-reader'
+import { BlogIndex } from '@/components/blog-index'
 import { BookmarkWorkspace } from '@/components/bookmark-workspace'
 import { MoreDirectory } from '@/components/more-directory'
 import { MusicPage } from '@/components/music-page'
@@ -37,6 +38,7 @@ import {
   readCachedDocument,
   readCachedOwnerDataset,
 } from '@/server/cached-content'
+import { environment } from '@/server/environment'
 import type { PublicDocument } from '@/server/public-content'
 import {
   documentDate,
@@ -55,6 +57,7 @@ import {
   specialPageSlugSchema,
   withLocalePrefix,
 } from './routes'
+import { articleStructuredData, pageMetadata, serializeStructuredData } from './seo'
 import {
   AboutInformationPage,
   CvInformationPage,
@@ -83,11 +86,11 @@ function CardLink({
   return (
     <li>
       <Link
-        className="content-card block rounded-xl border bg-card p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-primary"
+        className="home-latest-blog-link"
         data-content-card={document.contentType}
         href={withLocalePrefix(document.routePath, context)}
       >
-        <h3 className="font-semibold text-lg">
+        <h3 title={localizeContentText(document.title, context.locale)}>
           {localizeContentText(document.title, context.locale)}
         </h3>
         {searchMatch ? (
@@ -96,7 +99,7 @@ function CardLink({
           </span>
         ) : null}
         {documentDate(document) ? (
-          <time className="mt-2 block text-muted-foreground text-sm">{documentDate(document)}</time>
+          <time className="home-latest-date">{documentDate(document)}</time>
         ) : null}
         {summary ? (
           <p className="mt-3 line-clamp-3 text-muted-foreground text-sm">
@@ -142,7 +145,9 @@ function WikiDocumentCard({
     <details className="wiki-document-card" data-wiki-document={variant} open={defaultOpen}>
       <summary>
         <span className="wiki-document-summary">
-          <strong>{localizeContentText(group.title, context.locale)}</strong>
+          <strong title={localizeContentText(group.title, context.locale)}>
+            {localizeContentText(group.title, context.locale)}
+          </strong>
           <span className="wiki-document-meta">
             {date ? <time>{date}</time> : null}
             <span>{labels.chapterCount}</span>
@@ -389,8 +394,8 @@ async function ContentList({
         return document ? [document] : []
       })
     : allDocuments
-  const title = contentType === 'blog' ? t('blogTitle') : t('wikiTitle')
-  const description = contentType === 'blog' ? t('blogDescription') : t('wikiDescription')
+  const title = t('wikiTitle')
+  const description = t('wikiDescription')
   const trafficLabels = makeTrafficLabels(t)
   const matchedContextLabels = {
     body: t('searchMatchBody'),
@@ -459,39 +464,14 @@ async function ContentList({
   }
 
   return (
-    <section className="content-index content-index-blog">
-      <header className="content-index-hero">
-        <span aria-hidden className="content-index-icon">
-          <Newspaper size={26} />
-        </span>
-        <span className="content-index-hero-copy">
-          <p>{t('blog')}</p>
-          <h1>{title}</h1>
-          <span>{description}</span>
-        </span>
-      </header>
-      <ContentSearch
-        action={withLocalePrefix('/blog', context)}
-        defaultValue={query}
-        label={t('filterBlog')}
-        submitLabel={t('searchSubmit')}
-      />
-      <ul className="mt-9 grid gap-4">
-        {documents.map((document) => (
-          <CardLink
-            context={context}
-            document={document}
-            key={document.id}
-            searchMatch={searchMatch(document)}
-            showSummary
-            trafficLabels={trafficLabels}
-          />
-        ))}
-      </ul>
-      {documents.length === 0 ? (
-        <p className="mt-9 rounded-xl border p-5 text-muted-foreground">{t('searchEmpty')}</p>
-      ) : null}
-    </section>
+    <BlogIndex
+      context={context}
+      documents={documents}
+      query={query}
+      total={allDocuments.length}
+      searchResults={searchResults}
+      trafficLabels={trafficLabels}
+    />
   )
 }
 
@@ -708,6 +688,21 @@ async function ArticlePage({
 
   return (
     <article className="mx-auto max-w-[100rem]" data-article-type={document.contentType}>
+      <script
+        type="application/ld+json"
+        // biome-ignore lint/security/noDangerouslySetInnerHtml: JSON is escaped to prevent closing the script element.
+        dangerouslySetInnerHTML={{
+          __html: serializeStructuredData(
+            articleStructuredData(
+              environment.siteBaseUrl,
+              document,
+              context.locale,
+              localizedTitle,
+              localizeContentText(documentSummary(document) ?? document.title, context.locale),
+            ),
+          ),
+        }}
+      />
       <header className="article-hero">
         <p className="font-medium text-primary text-sm uppercase">{t(document.contentType)}</p>
         <h1 className="mt-3 font-bold text-4xl tracking-tight sm:text-5xl">{localizedTitle}</h1>
@@ -856,47 +851,59 @@ export async function renderPublicPage(
 export async function publicPageMetadata(
   segments: readonly string[],
   locale: AppLocale,
+  searchParameters: Readonly<Record<string, string | string[] | undefined>> = {},
 ): Promise<Metadata> {
   const t = await getTranslations({ locale, namespace: 'Web' })
   const path = publicPath(segments)
+  const metadata = (title: string, description: string, document?: PublicDocument) =>
+    pageMetadata({
+      base: environment.siteBaseUrl,
+      path: document?.routePath ?? path,
+      locale,
+      title,
+      description,
+      siteName: t('siteName'),
+      noIndex:
+        path === '/search' ||
+        ((path === '/blog' || path === '/wiki') && searchParameters.q !== undefined),
+      ...(document ? { document } : {}),
+    })
   if (path.startsWith('/blog/') || path.startsWith('/wiki/')) {
     const document = await readCachedDocument(path, locale)
-    if (!document) return { title: t('notFoundTitle') }
-    const sourceDescription =
-      typeof document.rawFrontmatter.description === 'string'
-        ? document.rawFrontmatter.description
-        : document.title
+    if (!document) return { title: t('notFoundTitle'), robots: { index: false, follow: true } }
+    const sourceDescription = documentSummary(document) ?? document.title
     const description = localizeContentText(sourceDescription, locale)
     const title = localizeContentText(document.title, locale)
-    return { description, openGraph: { description, title }, title }
+    return metadata(title, description, document)
   }
-  if (path === '/blog') return { description: t('blogDescription'), title: t('blogTitle') }
-  if (path === '/wiki') return { description: t('wikiDescription'), title: t('wikiTitle') }
-  if (path === '/search') return { description: t('searchDescription'), title: t('searchTitle') }
+  if (path === '/') return metadata(t('metadataTitle'), t('metadataDescription'))
+  if (path === '/blog') return metadata(t('blogTitle'), t('blogIndex.description'))
+  if (path === '/wiki') return metadata(t('wikiTitle'), t('wikiDescription'))
+  if (path === '/search') return metadata(t('searchTitle'), t('searchDescription'))
   const special = specialPageSlugSchema.safeParse(segments.length === 1 ? segments[0] : undefined)
   if (special.success) {
     switch (special.data) {
       case 'about':
-        return { description: t('special.aboutDescription'), title: t('special.aboutTitle') }
+        return metadata(t('special.aboutTitle'), t('special.aboutDescription'))
       case 'cv':
-        return { description: t('special.cvDescription'), title: t('special.cvTitle') }
+        return metadata(t('special.cvTitle'), t('special.cvDescription'))
       case 'friend':
-        return { description: t('special.friendDescription'), title: t('special.friendTitle') }
+        return metadata(t('special.friendTitle'), t('special.friendDescription'))
       case 'more':
-        return { description: t('special.moreDescription'), title: t('special.moreTitle') }
+        return metadata(t('special.moreTitle'), t('special.moreDescription'))
       case 'music':
-        return { description: t('special.musicDescription'), title: t('special.musicTitle') }
+        return metadata(t('special.musicTitle'), t('special.musicDescription'))
       case 'mylogo':
-        return { description: t('special.mylogoDescription'), title: t('special.mylogoTitle') }
+        return metadata(t('special.mylogoTitle'), t('special.mylogoDescription'))
       case 'start':
-        return { description: t('special.startDescription'), title: t('special.startTitle') }
+        return metadata(t('special.startTitle'), t('special.startDescription'))
       case 'stats':
-        return { description: t('special.statsDescription'), title: t('special.statsTitle') }
+        return metadata(t('special.statsTitle'), t('special.statsDescription'))
       case 'tech-footprint':
-        return { description: t('special.techDescription'), title: t('special.techTitle') }
+        return metadata(t('special.techTitle'), t('special.techDescription'))
       case 'weight-loss':
-        return { description: t('special.weightDescription'), title: t('special.weightTitle') }
+        return metadata(t('special.weightTitle'), t('special.weightDescription'))
     }
   }
-  return { description: t('metadataDescription'), title: t('metadataTitle') }
+  return { title: t('notFoundTitle'), robots: { index: false, follow: true } }
 }

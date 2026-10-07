@@ -33,6 +33,7 @@ Content Ingestion 应尽量只使受影响的 Cache Key/Route 失效。
 | --- | --- | --- | --- | --- |
 | Article | Next.js Web | Canonical Route；`content:route:<route>` | 无任意 TTL | Change 的当前/旧 Route Tag 与 prefixed/unprefixed Path |
 | Blog/Wiki List | Next.js Web | Content Type；`content:list:<type>` | 无任意 TTL | 受影响 Content Type Tag 与 List Path |
+| Sitemap XML | Next.js Web | Request-time XML；复用 Blog/Wiki List Tag | 无独立 Route TTL | 同一签名内容失效 Hook；新增、移动、删除无需 Rebuild |
 | Homepage | Next.js Web | `/`、`/zh-cn` Route Cache | 无任意 TTL | 每次非空 Content Change 精确 Revalidate 两条 Home Path |
 | Owner Dataset | Next.js Web | Dataset Key | 无 Data Cache；HTTP no-store | ADR 0021：每次请求读取 PostgreSQL，写后下一次公开读取即为最新版本 |
 | Search Result | Next.js Web | Normalized Query + Locale + Limit；`search:locale:<locale>` | 无任意 TTL | Projection Transaction 成功后失效受影响 Locale Tag；Full Reindex 失效其请求 Locale |
@@ -54,6 +55,10 @@ Phase 6 Local `/api/assets/**` Gateway 只接受经过 Validation 的 Object Key
 ## UI/应用资源
 
 Next.js 生成的 Hashed Asset 可以使用长期 Immutable Cache。
+
+Public SEO、Canonical/Locale/Legacy URL、Sitemap 与日期事实的约定见
+[`public-seo.md`](public-seo.md)。品牌 OG PNG 静态生成；XML 与 robots 从经过 Validation 的
+Runtime `SITE_BASE_URL` 派生，禁止把 Build Host 或 Request Host 当作 Production Canonical。
 
 ## 缓存正确性
 

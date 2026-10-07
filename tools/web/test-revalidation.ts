@@ -77,6 +77,14 @@ async function readArticle(siteBaseUrl: URL) {
   return response.text()
 }
 
+async function readSitemap(siteBaseUrl: URL) {
+  const response = await fetch(new URL('/sitemap.xml', siteBaseUrl), {
+    signal: AbortSignal.timeout(30_000),
+  })
+  if (!response.ok) throw new Error(`Sitemap returned HTTP ${response.status}`)
+  return response.text()
+}
+
 export async function verifyPhase6Revalidation(connectionString: string, siteBaseUrl: URL) {
   const before = await readArticle(siteBaseUrl)
   if (!before.includes('Modified at commit B.')) {
@@ -136,6 +144,69 @@ export async function verifyPhase6Revalidation(connectionString: string, siteBas
         'Affected article did not update after content sync without an application rebuild',
       )
     }
+    const originalFiles = (await source.fetchSnapshot(sourceCommit)).files
+    const temporarySourcePath = 'content/posts/2026-08-01-Sitemap生命周期.md'
+    const oldRoute = '/blog/sitemap-lifecycle-fixture'
+    const movedRoute = '/blog/sitemap-moved-fixture'
+    const phases = [
+      {
+        commit: '7'.repeat(40),
+        route: oldRoute,
+        files: [
+          ...originalFiles,
+          {
+            path: temporarySourcePath,
+            contents: `---\ntitle: Sitemap lifecycle\npath: ${oldRoute}\n---\n\nA temporary integration fixture.`,
+          },
+        ],
+      },
+      {
+        commit: '8'.repeat(40),
+        route: movedRoute,
+        files: [
+          ...originalFiles,
+          {
+            path: temporarySourcePath,
+            contents: `---\ntitle: Sitemap lifecycle\npath: ${movedRoute}\n---\n\nA temporary integration fixture.`,
+          },
+        ],
+      },
+      { commit: '9'.repeat(40), route: undefined, files: originalFiles },
+    ] as const
+    const sitemapSource: ReadonlyContentSource = {
+      async fetchSnapshot(commit) {
+        const phase = phases.find((candidate) => candidate.commit === commit)
+        if (!phase) throw new Error('Unexpected sitemap fixture commit')
+        return { sourceCommit: commit, files: [...phase.files] }
+      },
+    }
+    const sitemapWorker = new ContentWorker({
+      contentSource: sitemapSource,
+      ingestion,
+      jobs,
+      retryDelayMilliseconds: 0,
+      workerId: 'seo-sitemap-worker',
+    })
+    await readSitemap(siteBaseUrl)
+    for (const phase of phases) {
+      await creator.createJob(
+        { jobType: 'content_sync', payload: { sourceCommit: phase.commit } },
+        actor,
+        `seo:sitemap:${phase.commit}`,
+      )
+      const synced = await sitemapWorker.runOnce()
+      if (!synced.claimed || !synced.completed)
+        throw new Error('Sitemap lifecycle ingestion did not complete')
+      const xml = await readSitemap(siteBaseUrl)
+      for (const route of [oldRoute, movedRoute]) {
+        if (xml.includes(`${route}</loc>`) !== (route === phase.route)) {
+          throw new Error(
+            'Sitemap did not reflect content addition, move or deletion without rebuilding',
+          )
+        }
+      }
+    }
+    console.log('Sitemap content addition/move/deletion and revalidation: PASS')
   } finally {
     await Promise.all([creator.close(), ingestion.close(), jobs.close(), search.close()])
   }

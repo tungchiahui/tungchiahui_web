@@ -10,9 +10,12 @@ type PageProperties = Readonly<{
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }>
 
-export async function generateMetadata({ params }: PageProperties): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+  searchParams,
+}: PageProperties): Promise<Metadata> {
   const route = parsePublicRoute((await params).path)
-  return publicPageMetadata(route.segments, route.context.locale)
+  return publicPageMetadata(route.segments, route.context.locale, await searchParams)
 }
 
 export default async function PublicRoutePage({ params, searchParams }: PageProperties) {

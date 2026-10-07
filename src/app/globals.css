@@ -465,8 +465,7 @@
     @apply top-1/2 left-1 -translate-y-1/2;
   }
 
-  .home-focus,
-  .home-latest-panel {
+  .home-focus {
     @apply rounded-[1.75rem] border bg-card p-5 shadow-sm sm:p-7;
   }
 
@@ -503,32 +502,31 @@
   }
 
   .home-latest-grid {
-    @apply grid gap-6 lg:grid-cols-2;
+    @apply grid items-start gap-4 lg:grid-cols-2;
   }
 
   .home-latest-panel {
-    @apply flex flex-col;
+    @apply min-w-0 rounded-2xl border bg-card p-4 sm:p-5;
   }
 
   .home-latest-items {
-    @apply grid flex-1 gap-3;
-    grid-auto-rows: minmax(6.5rem, 1fr);
+    @apply grid;
   }
 
-  .home-latest-items > li,
-  .home-latest-items > li > a,
-  :where(.home-latest-items > details:not([open])) {
-    height: 100%;
+  .home-latest-items > li {
+    @apply min-w-0 border-b last:border-b-0;
   }
 
-  :where(.home-latest-items > details:not([open]) > summary) {
-    min-height: 100%;
+  .home-latest-blog-link {
+    @apply block rounded-md py-2.5 transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2;
   }
 
-  @media (min-width: 64rem) {
-    .home-latest-items {
-      grid-template-rows: repeat(5, minmax(6.5rem, 1fr));
-    }
+  .home-latest-blog-link h3 {
+    @apply truncate font-semibold text-sm leading-5;
+  }
+
+  .home-latest-date {
+    @apply mt-1 block text-muted-foreground text-xs leading-4;
   }
 
   .site-brand-mark,
@@ -546,7 +544,7 @@
   }
 
   .home-panel-heading {
-    @apply mb-5 flex items-center justify-between gap-4;
+    @apply mb-1 flex items-center justify-between gap-3 border-b pb-3;
   }
 
   .home-panel-heading h2,
@@ -555,7 +553,7 @@
   }
 
   .home-panel-heading h2 {
-    @apply font-black text-2xl;
+    @apply font-semibold text-base;
   }
 
   .home-panel-heading h2 svg,
@@ -564,7 +562,7 @@
   }
 
   .home-panel-heading a {
-    @apply font-semibold text-sm hover:underline;
+    @apply shrink-0 font-medium text-xs hover:underline;
   }
 
   .content-index {
@@ -612,10 +610,6 @@
 
   .content-card:hover::before {
     @apply opacity-100;
-  }
-
-  .content-index-blog [data-content-card="blog"] {
-    @apply p-6 sm:p-7;
   }
 
   .content-index-blog [data-content-card="blog"] h3 {
@@ -709,19 +703,35 @@
   }
 
   [data-wiki-document="home"] {
-    @apply rounded-xl;
+    @apply rounded-none border-0 border-b bg-transparent bg-none shadow-none hover:border-border open:border-border open:shadow-none;
+  }
+
+  [data-wiki-document="home"]:last-child {
+    @apply border-b-0;
   }
 
   [data-wiki-document="home"] > summary {
-    @apply p-3;
+    @apply gap-3 px-0 py-2.5;
+  }
+
+  [data-wiki-document="home"] .wiki-document-summary {
+    @apply gap-1;
   }
 
   [data-wiki-document="home"] .wiki-document-summary > strong {
-    @apply text-base;
+    @apply truncate text-foreground text-sm leading-5;
+  }
+
+  [data-wiki-document="home"] .wiki-document-meta {
+    @apply gap-x-2 gap-y-0 leading-4;
   }
 
   [data-wiki-document="home"] .wiki-document-toggle {
-    @apply px-2.5 py-1.5 text-xs;
+    @apply border-0 bg-transparent px-1.5 py-1 font-medium text-primary text-xs;
+  }
+
+  [data-wiki-document="home"] .wiki-document-chapters {
+    @apply mx-0 mb-2 gap-0 pt-2;
   }
 }
 
@@ -738,6 +748,120 @@
 }
 
 @layer components {
+  .blog-journal {
+    @apply mx-auto max-w-4xl pb-6;
+  }
+
+  .blog-journal-header {
+    @apply flex flex-col justify-between gap-4 border-b pb-5 sm:flex-row sm:items-center sm:gap-8;
+  }
+
+  .blog-journal-heading {
+    @apply flex flex-wrap items-baseline gap-3;
+  }
+
+  .blog-journal-header h1 {
+    @apply font-bold text-2xl tracking-tight sm:text-3xl;
+  }
+
+  .blog-journal-count {
+    @apply text-muted-foreground text-xs;
+  }
+
+  .blog-journal-count strong {
+    @apply font-normal;
+  }
+
+  .blog-journal-description {
+    @apply mt-2 max-w-md text-muted-foreground text-sm leading-6;
+  }
+
+  .blog-journal-search {
+    @apply w-full shrink-0 sm:w-72;
+  }
+
+  .blog-journal-search form {
+    @apply flex items-center gap-2 rounded-lg border bg-card py-1 pr-1 pl-3 text-muted-foreground focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15;
+  }
+
+  .blog-journal-search input {
+    @apply min-w-0 flex-1 bg-transparent py-1.5 text-foreground text-sm outline-none;
+  }
+
+  .blog-journal-search button {
+    @apply grid size-9 shrink-0 place-items-center rounded-md text-primary transition hover:bg-primary/10;
+  }
+
+  .blog-query {
+    @apply flex flex-wrap items-center justify-between gap-2 border-b py-3 text-muted-foreground text-xs;
+    overflow-wrap: anywhere;
+  }
+
+  .blog-query p span {
+    @apply ml-3;
+  }
+
+  .blog-query a {
+    @apply shrink-0 text-primary underline underline-offset-4;
+  }
+
+  .blog-journal-grid {
+    @apply grid;
+  }
+
+  .blog-entry {
+    @apply min-w-0 border-b;
+  }
+
+  .blog-entry-link {
+    @apply grid gap-2 py-4 transition-colors focus-visible:rounded-md focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-4 sm:grid-cols-[6rem_minmax(0,1fr)] sm:gap-6 sm:py-5;
+  }
+
+  .blog-entry-date {
+    @apply flex items-center gap-3 text-muted-foreground text-xs tabular-nums sm:flex-col sm:items-start sm:gap-1.5 sm:pt-1;
+  }
+
+  .blog-entry-date > span {
+    @apply text-primary;
+  }
+
+  .blog-entry-body h2 {
+    @apply font-semibold text-base leading-7 transition-colors sm:text-lg;
+    overflow-wrap: anywhere;
+  }
+
+  .blog-entry-body h2 svg {
+    @apply ml-2 inline text-muted-foreground/60;
+    vertical-align: -0.15em;
+  }
+
+  .blog-entry-link:hover h2,
+  .blog-entry-link:focus-visible h2 {
+    @apply text-primary;
+  }
+
+  .blog-entry-body p {
+    @apply mt-1 line-clamp-2 text-muted-foreground text-sm leading-6;
+    overflow-wrap: anywhere;
+  }
+
+  .blog-entry-match {
+    @apply mt-1 block text-primary text-xs;
+  }
+
+  .blog-entry-traffic {
+    @apply mt-1 leading-4;
+  }
+
+  .blog-entry-traffic:has([data-traffic-empty]),
+  .blog-entry-traffic:empty {
+    display: none;
+  }
+
+  .blog-journal-empty {
+    @apply grid justify-items-center gap-3 py-10 text-muted-foreground text-sm;
+  }
+
   .music-floating {
     @apply fixed right-4 z-40 w-[min(23rem,calc(100vw-2rem))] rounded-2xl border bg-background/94 p-4 shadow-2xl backdrop-blur-xl;
     bottom: calc(env(safe-area-inset-bottom) + 1rem);

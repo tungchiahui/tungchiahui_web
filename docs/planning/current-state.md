@@ -2,13 +2,51 @@
 
 > Status: Phase 0–18 completed
 > Current Phase: Website V2 Production Completion
-> Handoff audit date: 2026-10-02
+> Handoff audit date: 2026-10-07
 
 本文件是新 Claude Code/Codex 会话的简洁交接入口。它索引当前实际状态和容易遗漏的实施事实，不替代 `AGENTS.md`、Accepted ADR、架构规范或 `implementation-plan.md`。
 
 维护规则：每个 Phase 完成时，Agent 自动复核并沉淀后续实施所需事实；完成沉淀只表示下一 Phase 依赖可供 Owner 评估，不授权 Agent 自动继续。
 
 ## 1. 新会话读取顺序
+
+### 2026-10-07：博客列表与 Public SEO
+
+Owner 授权美化 Blog List 并补齐 SEO，并明确要求缩小文章占用空间。当前实现为
+Server-rendered Blog Journal（紧凑单栏、桌面左侧日期/手机日期上置、细分隔线、轻量最新标记、
+Search/Clear/Empty State）、四 Locale 文案，以及共享 Public Metadata、
+robots、Request-time Sitemap、1200×630 品牌分享图与安全序列化的 WebSite/Article JSON-LD。
+Legacy Alias 使用解析后的 Canonical Route；`/zh-cn/**` 指向原 unprefixed Canonical，
+Search/Query Page 为 noindex/follow，文档新增/移动/删除复用已有内容失效 Tag。
+
+复核确认 `sourceUpdatedAt` 是 Frontmatter/文件名日期，**不能视为真实最后修改时刻**；
+本实现不填写 Sitemap lastmod 或 Article dateModified，也不引入新的必填 Frontmatter。
+详细契约与验证入口见 `docs/architecture/public-seo.md`。本轮无需数据库 Migration，
+没有修改部署、备份、权限或付费翻译策略；生产发布仍需走既有正常发布路径。
+
+2026-10-07 验证：46 个 Unit File / 255 Test、17 项 Public/Owner Browser E2E、隔离
+PostgreSQL/Content/Translation/Control Integration、S3Mock 7-case Contract、10 个 Migration
+均通过；新增 Sitemap Lifecycle 真实验证通过。Typecheck、Source/Workflow/Drizzle/Renovate、
+Production Build 与 Security/SBOM Gate 通过。已有未跟踪 `.marscode/deviceInfo.json` 缺少
+末尾换行，使直接 `./site check` 的全目录 Biome 检查失败；保留该文件，Tracked Files 与
+本轮 New Files 的 Biome 检查均通过，其余 Check Gate 独立执行。未发布到生产。
+
+Owner 后续反馈要求去掉大框和过度留白；已改为上述紧凑列表，并移除独立阅读操作栏、
+首篇放大和冗余装饰。调整后 255 Unit Test、17 E2E、隔离 Integration、Typecheck、
+Production Build、Source/Biome/Security Gate 再次通过。浏览器检查四篇 Fixture 的桌面
+文章行均小于 160px，390px 无页面横向溢出；已刷新本地预览，仍未生产发布。
+
+Owner 进一步要求首页底部 Latest Blog / Wiki 紧凑化：取消固定五行和 6.5rem 最小行高、
+内层卡片外框及面板拉伸；缩小区域标题、Padding、日期和展开控件。两栏按真实数量自然
+收缩，保持顶部与关闭条目的行节奏对齐；Wiki 的章节展开功能保持有效。
+首页调整后 255 Unit Test、17 E2E、隔离 Integration、Typecheck、Production Build 与
+Source/Biome/Security Gate 通过；桌面 Fixture 的关闭条目约 60px，390px 无页面溢出，
+Wiki 展开/收起经过浏览器验证。本地 `./site dev` 预览已更新，未生产发布。
+
+Owner 随后明确授权 Commit、Push 并追踪 GitHub Actions。本提交通过正常 main / Main Release
+路径进入 Quality、Immutable Image Set 与共享 Blue-green Deployment；最终发布结果与运行
+SHA 以对应 Main Release Run 和公网 `/api/version` 为准。上述“未生产发布”均描述本地验证
+时的状态，不代表 Owner 禁止本次正常自动发布。
 
 ### 2026-10-01：Tech V3 / Daily Protection 工作交接
 

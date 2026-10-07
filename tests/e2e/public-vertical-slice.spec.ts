@@ -75,7 +75,25 @@ test('aligns homepage previews and start search while article code follows the t
     const wikiBox = await wikiRows?.[index]?.boundingBox()
     expect(Math.abs((blogBox?.y ?? 0) - (wikiBox?.y ?? 0))).toBeLessThan(2)
     expect(Math.abs((blogBox?.height ?? 0) - (wikiBox?.height ?? 0))).toBeLessThan(2)
+    expect(blogBox?.height ?? 900).toBeLessThan(90)
+    expect(wikiBox?.height ?? 900).toBeLessThan(90)
   }
+  await page
+    .locator('.home-latest-grid')
+    .screenshot({ path: test.info().outputPath('home-latest-desktop.png') })
+  await page.locator('[data-wiki-document="home"] summary').first().click()
+  await expect(
+    page.locator('[data-wiki-document="home"][open]').first().getByRole('link').first(),
+  ).toBeVisible()
+  await page.locator('[data-wiki-document="home"][open] summary').first().click()
+  await page.setViewportSize({ height: 844, width: 390 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  )
+  await page
+    .locator('.home-latest-grid')
+    .screenshot({ path: test.info().outputPath('home-latest-mobile.png') })
+  await page.setViewportSize({ height: 900, width: 1440 })
   const actionColors = await page
     .locator('.home-actions a')
     .evaluateAll((links) => links.map((link) => getComputedStyle(link).backgroundColor))

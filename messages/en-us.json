@@ -318,6 +318,14 @@
       "copy": "Copy address",
       "copied": "Copied",
       "copyFailed": "Copy failed"
+    },
+    "blogIndex": {
+      "description": "Notes on solving problems, building things, and what I learn along the way.",
+      "entries": "journal entries",
+      "latest": "Latest entry",
+      "results": "Found {count} articles",
+      "query": "Search: {query}",
+      "clear": "View all"
     }
   },
   "Personal": {

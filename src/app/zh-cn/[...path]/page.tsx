@@ -9,8 +9,11 @@ type PageProperties = Readonly<{
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }>
 
-export async function generateMetadata({ params }: PageProperties): Promise<Metadata> {
-  return publicPageMetadata((await params).path, 'zh-cn')
+export async function generateMetadata({
+  params,
+  searchParams,
+}: PageProperties): Promise<Metadata> {
+  return publicPageMetadata((await params).path, 'zh-cn', await searchParams)
 }
 
 export default async function ZhCnPublicRoutePage({ params, searchParams }: PageProperties) {

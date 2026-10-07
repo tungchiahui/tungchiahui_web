@@ -1,3 +1,9 @@
+import type { Paragraph } from 'mdast'
+import remarkFrontmatter from 'remark-frontmatter'
+import remarkGfm from 'remark-gfm'
+import remarkParse from 'remark-parse'
+import { unified } from 'unified'
+import { visit } from 'unist-util-visit'
 import { z } from 'zod'
 
 import { legacyContentAliases } from '@/content/legacy-aliases'
@@ -143,15 +149,27 @@ export function documentSummary(document: PublicDocument) {
   const description = document.rawFrontmatter.description
   if (typeof description === 'string' && description.trim()) return description.trim()
   const markdown = document.localizedMarkdown ?? document.rawMarkdown
-  const body = markdown
-    .replace(/^---[\s\S]*?---/u, '')
-    .replace(/```[\s\S]*?```/gu, '')
-    .replace(/^#{1,6}\s+.*$/gmu, '')
-    .replace(/!\[[^\]]*\]\([^)]*\)/gu, '')
-    .replace(/\[([^\]]+)\]\([^)]*\)/gu, '$1')
-    .replace(/[`*_>~|-]/gu, ' ')
-    .replaceAll(/\s+/gu, ' ')
-    .trim()
+  const tree = unified()
+    .use(remarkParse)
+    .use(remarkFrontmatter, ['yaml'])
+    .use(remarkGfm)
+    .parse(markdown)
+  const paragraphs: string[] = []
+  visit(tree, 'paragraph', (paragraph: Paragraph) => {
+    const parts: string[] = []
+    visit(paragraph, (node) => {
+      if (node.type === 'text' || node.type === 'inlineCode') parts.push(node.value)
+      if (node.type === 'break') parts.push(' ')
+    })
+    const text = parts
+      .join('')
+      .replace(/https?:\/\/\S+/gu, '')
+      .replace(/\s+/gu, ' ')
+      .trim()
+    if (text && /[\p{L}\p{N}]/u.test(text) && !/^[^\s:：]{1,12}[:：]$/u.test(text))
+      paragraphs.push(text)
+  })
+  const body = paragraphs.join(' ')
   if (!body) return undefined
   return body.length > 160 ? `${body.slice(0, 157).trimEnd()}…` : body
 }
