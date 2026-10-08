@@ -1,0 +1,3 @@
+# Exclude generated static documentation from GitHub Linguist statistics.
+# These HTML files are exported build artifacts, not hand-written source.
+public/docs/** linguist-generated=true
