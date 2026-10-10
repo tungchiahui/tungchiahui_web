@@ -6,6 +6,7 @@ import {
   isSafeTranslationCandidate,
   segmentMarkdownForTranslation,
 } from '@/translation/segmentation'
+import { renderArticleMarkdown } from '@/web/article-markdown'
 import { renderMarkdown } from '@/web/markdown'
 
 const formula = String.raw`a_{\text{raw}}\frac{\|\texttt{gravity}\|}{\texttt{acc\_norm}}`
@@ -17,6 +18,35 @@ const delimiters = [
 ]
 
 describe('shared Markdown math', () => {
+  it.each(['zh-hk', 'zh-tw'] as const)(
+    'recovers formulas from older damaged %s materializations',
+    async (locale) => {
+      const rawMarkdown = `软件项目\n\n${delimiters.join('\n\n')}`
+      const rendered = await renderArticleMarkdown(
+        {
+          rawMarkdown,
+          localizedMarkdown: '軟體專案\n\n[r^2=x^2+y^2+z^2]',
+        },
+        locale,
+      )
+      expect(rendered.html.match(/class="katex"/g)).toHaveLength(4)
+      expect(rendered.html).toContain(locale === 'zh-tw' ? '軟體專案' : '軟件項目')
+    },
+    20_000,
+  )
+
+  it('keeps the reviewed English materialization when rendering formulas', async () => {
+    const rendered = await renderArticleMarkdown(
+      {
+        rawMarkdown: '原文 $x^2$。',
+        localizedMarkdown: 'Reviewed English $x^2$.',
+      },
+      'en-us',
+    )
+    expect(rendered.html).toContain('Reviewed English')
+    expect(rendered.html).not.toContain('原文')
+    expect(rendered.html).toContain('class="katex"')
+  })
   it.each(locales)(
     'renders all authoring delimiters as HTML and accessible MathML in %s',
     async (locale) => {

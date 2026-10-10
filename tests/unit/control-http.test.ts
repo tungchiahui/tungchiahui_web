@@ -10,14 +10,66 @@ import { parseGitHubOidcPolicy, sha256 } from '../../src/control-plane/auth'
 import { parseControlApiConfiguration } from '../../src/control-plane/configuration'
 import type { Capability } from '../../src/control-plane/contracts'
 import {
+  claimNextInfrastructureOperation,
+  createInfrastructureOperation,
+  finishInfrastructureOperation,
   initializeControlState,
   listControlAuditEvents,
   recordRecoveryBackup,
+  startInfrastructureOperation,
 } from '../../src/control-plane/control-state'
 import { createControlApiServer } from '../../src/control-plane/http-server'
 import { createLocalOperatorHeaders } from '../../tools/dev/control-auth-fixture'
 
 const cleanup: Array<() => Promise<void> | void> = []
+
+it('reads only a completed exact SHA/digest receipt without PostgreSQL or deployment side effects', async () => {
+  const { base, statePath } = await serverFixture(120, ['infrastructure-operation:read'])
+  const sha = 'a'.repeat(40),
+    digest = `sha256:${'b'.repeat(64)}`
+  const created = createInfrastructureOperation(
+    statePath,
+    {
+      operationType: 'deploy',
+      reason: 'Completed receipt fixture',
+      target: { gitSha: sha, imageDigest: digest },
+    },
+    { id: 'receipt-fixture', kind: 'operator', capabilities: ['infrastructure-operation:create'] },
+    'receipt-fixture',
+  )
+  const claimed = claimNextInfrastructureOperation(statePath, 'receipt-worker', 300)
+  if (!claimed) throw new Error('Missing fixture operation')
+  const lease = { leaseOwner: 'receipt-worker', fencingToken: claimed.fencingToken }
+  startInfrastructureOperation(statePath, created.operation.id, lease)
+  const url = `/api/ops/deployment-receipts/${sha}/${digest.slice(7)}`
+  const pending = await signedFetch(base, url, { nonce: 'receipt-pending-0001' })
+  expect(await pending.json()).toEqual({ operation: null })
+  finishInfrastructureOperation(statePath, created.operation.id, lease, {
+    status: 'completed',
+    phase: 'deployment-verified',
+    result: { verified: true },
+  })
+  const response = await signedFetch(base, url, { nonce: 'receipt-completed-0001' })
+  expect(response.status).toBe(200)
+  expect(await response.json()).toMatchObject({
+    operation: { id: created.operation.id, status: 'completed', result: { verified: true } },
+  })
+  const mismatch = await signedFetch(
+    base,
+    `/api/ops/deployment-receipts/${sha}/${'c'.repeat(64)}`,
+    { nonce: 'receipt-mismatch-0001' },
+  )
+  expect(await mismatch.json()).toEqual({ operation: null })
+  const malformed = await signedFetch(base, '/api/ops/deployment-receipts/invalid/invalid', {
+    nonce: 'receipt-malformed-0001',
+  })
+  expect(malformed.status).toBe(400)
+  expect((await fetch(new URL(url, base))).status).toBe(401)
+  const restricted = await serverFixture(120, ['status:read'])
+  expect((await signedFetch(restricted.base, url, { nonce: 'receipt-denied-0001' })).status).toBe(
+    403,
+  )
+})
 
 afterEach(async () => {
   for (const operation of cleanup.splice(0).reverse()) {

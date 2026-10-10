@@ -12,6 +12,18 @@ Web 镜像同时绑定同一 SHA 的 Service 与 Recovery Digest。服务器先�
 定时器，重跑内部/公网 Smoke，验证候选执行代码能启动，最后提交完整发布结果。
 `./site deploy ... --wait` 和 CI 都要求结果包含该 SHA/Digest 的 `hostRelease.status=converged`。
 
+CI 等待响应失败后，服务器 Operation 可能已经完成。再次运行同一版本时，客户端先读取
+Status；只有 Current SHA/Digest、有效 Previous Slot/SHA/Digest、健康的已安装 Executor、无 Pending/未完成 Operation
+全部一致，才通过 `GET /api/ops/deployment-receipts/<SHA>/<Digest hex>` 取回 SQLite 中的
+真实已完成 Deploy Record。该路由要求原 `infrastructure-operation:read` Capability、绑定
+认证/Nonce，并校验完整发布结果。随后匿名检查公网 Version/Health/Ready，并再次检查
+Status 未变化，才确认成功。没有记录、版本/执行器不一致、未完成 Operation 或检查失败
+均不能确认成功；正在收敛的同版本不会创建重复任务。
+
+此路径只确认同一个 Deployment Engine 的既有结果，保留原失败记录与 Previous Slot，
+不重新执行部署、变更权限、改写状态或把 bare Current SHA 当作完成。原引擎仍拒绝直接
+重复部署已 Active 的版本。公开检查复用已有三次有界网络重试，且不发送控制面认证头。
+
 系统组件：
 
 - `control-api`：原有认证、授权、幂等与 Operation HTTP，不持有 Docker Socket。

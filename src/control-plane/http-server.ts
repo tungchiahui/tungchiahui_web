@@ -39,6 +39,7 @@ import {
   ControlStateConflictError,
   consumeControlNonce,
   createInfrastructureOperation,
+  findCompletedDeployment,
   getInfrastructureOperation,
   getRecoveryBackup,
   listRecoveryBackups,
@@ -189,6 +190,15 @@ function routeShape(pathname: string) {
   }
   if (pathname === '/api/ops/infrastructure-operations') {
     return Object.freeze({ allow: 'POST', kind: 'infrastructure-operation-create' as const })
+  }
+  const deploymentReceipt = /^\/api\/ops\/deployment-receipts\/([^/]+)\/([^/]+)$/.exec(pathname)
+  if (deploymentReceipt?.[1] && deploymentReceipt[2]) {
+    return Object.freeze({
+      allow: 'GET',
+      kind: 'deployment-receipt-read' as const,
+      gitSha: deploymentReceipt[1],
+      imageDigest: `sha256:${deploymentReceipt[2]}`,
+    })
   }
   const infrastructureOperation = /^\/api\/ops\/infrastructure-operations\/([^/]+)$/.exec(pathname)
   if (infrastructureOperation?.[1]) {
@@ -813,6 +823,23 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
             idempotencyKey,
           )
           sendJson(response, { body: result, status: result.created ? 202 : 200 })
+          return
+        }
+        case 'deployment-receipt-read': {
+          requireCapability(actor, 'infrastructure-operation:read')
+          auditAuthorization(
+            configuration,
+            actor,
+            'infrastructure-operation:read',
+            request.method,
+            url.pathname,
+          )
+          const operation = findCompletedDeployment(
+            configuration.statePath,
+            route.gitSha,
+            route.imageDigest,
+          )
+          sendJson(response, { body: { operation }, status: 200 })
           return
         }
         case 'infrastructure-operation-read': {

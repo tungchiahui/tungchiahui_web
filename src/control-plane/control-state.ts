@@ -16,6 +16,7 @@ import { z } from 'zod'
 import {
   type ActorIdentity,
   type InfrastructureOperationRequest,
+  infrastructureOperationRequestSchema,
   infrastructureOperationStatusSchema,
   infrastructureOperationTypeSchema,
 } from './contracts'
@@ -813,6 +814,28 @@ export function getInfrastructureOperation(path: string, id: string) {
     const row = database
       .prepare('SELECT * FROM infrastructure_operations WHERE id = ?')
       .get(z.uuid().parse(id))
+    return row ? mapOperation(row) : null
+  } finally {
+    database.close()
+  }
+}
+
+export function findCompletedDeployment(path: string, gitSha: string, imageDigest: string) {
+  const request = infrastructureOperationRequestSchema.parse({
+    operationType: 'deploy',
+    reason: 'Read completed deployment receipt',
+    target: { gitSha, imageDigest },
+  })
+  if (request.operationType !== 'deploy') throw new Error('Expected deployment lookup target')
+  const database = openControlState(path)
+  try {
+    const row = database
+      .prepare(`SELECT * FROM infrastructure_operations
+      WHERE operation_type = 'deploy' AND status = 'completed'
+        AND json_extract(target_json, '$.gitSha') = ?
+        AND json_extract(target_json, '$.imageDigest') = ?
+      ORDER BY finished_at DESC, id DESC LIMIT 1`)
+      .get(request.target.gitSha, request.target.imageDigest)
     return row ? mapOperation(row) : null
   } finally {
     database.close()

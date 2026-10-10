@@ -40,6 +40,7 @@ import {
 } from '@/server/cached-content'
 import { environment } from '@/server/environment'
 import type { PublicDocument } from '@/server/public-content'
+import { renderArticleMarkdown } from './article-markdown'
 import {
   documentDate,
   documentSummary,
@@ -49,7 +50,6 @@ import {
   type WikiDocumentGroup,
   wikiDocumentKey,
 } from './content-compatibility'
-import { renderMarkdown } from './markdown'
 import {
   type PublicRouteContext,
   publicPath,
@@ -661,10 +661,7 @@ async function ArticlePage({
   const index = navigation.findIndex((candidate) => candidate.id === document.id)
   const previous = index > 0 ? navigation[index - 1] : undefined
   const next = index >= 0 ? navigation[index + 1] : undefined
-  const rendered = await renderMarkdown(
-    document.localizedMarkdown ?? document.rawMarkdown,
-    document.localizedMarkdown ? 'zh-cn' : context.locale,
-  )
+  const rendered = await renderArticleMarkdown(document, context.locale)
   const localizedTitle = localizeContentText(document.title, context.locale)
   const presentationState = document.contentLocaleState
   const trafficLabels = makeTrafficLabels(t)

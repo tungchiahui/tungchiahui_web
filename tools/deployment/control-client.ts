@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 
 import { z } from 'zod'
 
-import { controlRequest } from '../control/client'
+import { controlRequest, publicRequest } from '../control/client'
 
 const digestSchema = z.string().regex(/^sha256:[a-f0-9]{64}$/)
 const gitShaSchema = z.string().regex(/^[a-f0-9]{40}$/)
@@ -14,6 +14,86 @@ const operationEnvelopeSchema = z.object({
     .object({ errorSummary: z.string().nullable().optional(), id: z.uuid(), status: z.string() })
     .passthrough(),
 })
+
+const activeReleaseStatusSchema = z.object({
+  mode: z.enum(['production', 'local', 'test']),
+  controlState: z.object({ incompleteOperations: z.number().int().nonnegative() }),
+  deployment: z.object({
+    activeSlot: z.enum(['blue', 'green', 'none']),
+    currentSha: gitShaSchema.nullable(),
+    currentDigest: digestSchema.nullable(),
+    previousSlot: z.enum(['blue', 'green', 'none']),
+    lastSha: gitShaSchema.nullable(),
+    lastDigest: digestSchema.nullable(),
+    pendingSlot: z.enum(['blue', 'green', 'none']),
+  }),
+  hostExecutor: z.object({
+    installed: z.boolean(),
+    healthy: z.boolean(),
+    currentSha: gitShaSchema.nullable(),
+    pendingSha: gitShaSchema.nullable(),
+  }),
+})
+
+function isConvergedActiveRelease(input: unknown, sha: string, digest: string) {
+  const status = activeReleaseStatusSchema.parse(input)
+  return (
+    status.mode === 'production' &&
+    status.controlState.incompleteOperations === 0 &&
+    status.deployment.activeSlot !== 'none' &&
+    status.deployment.currentSha === sha &&
+    status.deployment.currentDigest === digest &&
+    status.deployment.previousSlot !== 'none' &&
+    status.deployment.previousSlot !== status.deployment.activeSlot &&
+    status.deployment.lastSha !== null &&
+    status.deployment.lastDigest !== null &&
+    status.deployment.pendingSlot === 'none' &&
+    status.hostExecutor.installed &&
+    status.hostExecutor.healthy &&
+    status.hostExecutor.currentSha === sha &&
+    status.hostExecutor.pendingSha === null
+  )
+}
+
+async function confirmCompletedDeployment(sha: string, digest: string) {
+  const status = await controlRequest('/api/ops/status', { purpose: 'deployment-confirm-status' })
+  const active = activeReleaseStatusSchema.parse(status)
+  if (
+    active.mode !== 'production' ||
+    active.deployment.currentSha !== sha ||
+    active.deployment.currentDigest !== digest
+  )
+    return null
+  if (!isConvergedActiveRelease(status, sha, digest))
+    throw new Error('Active release is still converging; no duplicate deployment was created')
+  const receipt = z.object({ operation: operationEnvelopeSchema.shape.operation.nullable() }).parse(
+    await controlRequest(`/api/ops/deployment-receipts/${sha}/${digest.slice(7)}`, {
+      purpose: 'deployment-confirm-receipt',
+    }),
+  )
+  if (receipt.operation?.status !== 'completed') {
+    throw new Error('Active release has no completed deployment receipt')
+  }
+  validateCompleteRelease(receipt.operation, sha, digest)
+  const responses = await Promise.all(
+    ['/api/version', '/api/health', '/api/ready'].map(publicRequest),
+  )
+  z.object({ gitSha: z.literal(sha) }).parse(responses[0])
+  z.object({ status: z.literal('ok') }).parse(responses[1])
+  z.object({
+    status: z.literal('ready'),
+    dependencies: z.object({ postgresql: z.literal('ready') }),
+  }).parse(responses[2])
+  if (
+    !isConvergedActiveRelease(
+      await controlRequest('/api/ops/status', { purpose: 'deployment-confirm-final-status' }),
+      sha,
+      digest,
+    )
+  )
+    throw new Error('Active release changed during deployment confirmation')
+  return { mode: 'production' as const, operation: receipt.operation }
+}
 
 type DigestCommandRunner = (executable: string, arguments_: readonly string[]) => string
 
@@ -163,6 +243,7 @@ export async function createDeployment(
     wait?: boolean
   }>,
 ) {
+  const reason = z.string().trim().min(1).max(1_000).parse(input.reason)
   const gitSha = gitShaSchema.parse(
     input.gitSha ?? execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
   )
@@ -174,9 +255,13 @@ export async function createDeployment(
         repository: deploymentImageRepositoryFromEnvironment(process.env),
       }),
   )
+  if (input.wait === true && process.env.GITHUB_ACTIONS === 'true') {
+    const confirmed = await confirmCompletedDeployment(gitSha, imageDigest)
+    if (confirmed) return confirmed
+  }
   const created = operationEnvelopeSchema.parse(
     await controlRequest('/api/ops/deployments', {
-      body: { gitSha, imageDigest, reason: input.reason },
+      body: { gitSha, imageDigest, reason },
       idempotencyKey: `deployment:${gitSha}:${imageDigest.slice(7)}:${deploymentAttemptIdentity(process.env)}`,
       method: 'POST',
       purpose: 'deployment-create',
