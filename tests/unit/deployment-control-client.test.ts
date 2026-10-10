@@ -21,7 +21,15 @@ const digest = `sha256:${'c'.repeat(64)}`
 const activeStatus = {
   mode: 'production',
   controlState: { incompleteOperations: 0 },
-  deployment: { activeSlot: 'green', currentSha: sha, currentDigest: digest, pendingSlot: 'none' },
+  deployment: {
+    activeSlot: 'green',
+    currentSha: sha,
+    currentDigest: digest,
+    pendingSlot: 'none',
+    previousSlot: 'blue',
+    lastSha: 'a'.repeat(40),
+    lastDigest: `sha256:${'a'.repeat(64)}`,
+  },
   hostExecutor: { installed: true, healthy: true, currentSha: sha, pendingSha: null },
 }
 const receipt = {
@@ -53,6 +61,29 @@ function confirmationFixture() {
 }
 
 describe('deployment control client', () => {
+  it('does not confirm an active release whose rollback slot is missing', async () => {
+    confirmationFixture()
+    vi.mocked(controlRequest).mockResolvedValue({
+      ...activeStatus,
+      deployment: {
+        ...activeStatus.deployment,
+        previousSlot: 'none',
+        lastSha: null,
+        lastDigest: null,
+      },
+    })
+    await expect(
+      createDeployment({
+        gitSha: sha,
+        imageDigest: digest,
+        reason: 'Missing rollback slot',
+        wait: true,
+      }),
+    ).rejects.toThrow('still converging')
+    expect(
+      vi.mocked(controlRequest).mock.calls.some(([, options]) => options.method === 'POST'),
+    ).toBe(false)
+  })
   it('confirms a previously completed full release without another deployment POST', async () => {
     confirmationFixture()
     const result = await createDeployment({

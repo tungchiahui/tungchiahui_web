@@ -45,7 +45,7 @@ phase=deployment-verified、完整 `hostRelease.status=converged`，Web/Executor
 独立 control-api 承担，使用原 Infrastructure Read Capability，SQLite Schema 8 不变。
 其边界和恢复说明见 `docs/operations/server-release.md`。
 
-补充实现本地验证：47 个 Unit File / 276 Test、18 项 Public/Owner E2E、隔离 Integration、
+补充实现本地验证：47 个 Unit File / 277 Test、18 项 Public/Owner E2E、隔离 Integration、
 S3Mock 7-case、完整 Source/Type/Build/Security Gate 与 Production Foundation 全部通过。
 PostgreSQL 的 10 个 Migration 在本轮初始验证已通过；补充实现无 Schema Migration。
 

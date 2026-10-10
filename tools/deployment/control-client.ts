@@ -22,6 +22,9 @@ const activeReleaseStatusSchema = z.object({
     activeSlot: z.enum(['blue', 'green', 'none']),
     currentSha: gitShaSchema.nullable(),
     currentDigest: digestSchema.nullable(),
+    previousSlot: z.enum(['blue', 'green', 'none']),
+    lastSha: gitShaSchema.nullable(),
+    lastDigest: digestSchema.nullable(),
     pendingSlot: z.enum(['blue', 'green', 'none']),
   }),
   hostExecutor: z.object({
@@ -40,6 +43,10 @@ function isConvergedActiveRelease(input: unknown, sha: string, digest: string) {
     status.deployment.activeSlot !== 'none' &&
     status.deployment.currentSha === sha &&
     status.deployment.currentDigest === digest &&
+    status.deployment.previousSlot !== 'none' &&
+    status.deployment.previousSlot !== status.deployment.activeSlot &&
+    status.deployment.lastSha !== null &&
+    status.deployment.lastDigest !== null &&
     status.deployment.pendingSlot === 'none' &&
     status.hostExecutor.installed &&
     status.hostExecutor.healthy &&

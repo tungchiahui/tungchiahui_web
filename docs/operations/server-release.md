@@ -13,7 +13,7 @@ Web 镜像同时绑定同一 SHA 的 Service 与 Recovery Digest。服务器先�
 `./site deploy ... --wait` 和 CI 都要求结果包含该 SHA/Digest 的 `hostRelease.status=converged`。
 
 CI 等待响应失败后，服务器 Operation 可能已经完成。再次运行同一版本时，客户端先读取
-Status；只有 Current SHA/Digest、健康的已安装 Executor、无 Pending/未完成 Operation
+Status；只有 Current SHA/Digest、有效 Previous Slot/SHA/Digest、健康的已安装 Executor、无 Pending/未完成 Operation
 全部一致，才通过 `GET /api/ops/deployment-receipts/<SHA>/<Digest hex>` 取回 SQLite 中的
 真实已完成 Deploy Record。该路由要求原 `infrastructure-operation:read` Capability、绑定
 认证/Nonce，并校验完整发布结果。随后匿名检查公网 Version/Health/Ready，并再次检查
