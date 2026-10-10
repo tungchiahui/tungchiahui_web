@@ -296,6 +296,7 @@ export function ArticleReader({
             <button
               aria-label={labels.close}
               className="article-drawer-close"
+              data-reader-pinned-control
               onClick={() => setDrawer(undefined)}
               type="button"
             >
