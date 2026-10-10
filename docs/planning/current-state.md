@@ -49,6 +49,14 @@ phase=deployment-verified、完整 `hostRelease.status=converged`，Web/Executor
 S3Mock 7-case、完整 Source/Type/Build/Security Gate 与 Production Foundation 全部通过。
 PostgreSQL 的 10 个 Migration 在本轮初始验证已通过；补充实现无 Schema Migration。
 
+PR #36 / main `3c1c3848` 的 Main Release `38039740317` 通过 Static/Unit/Migration。
+Integration 在 18 项 E2E 已通过后暴露旧断言：共享 Block 可关联两篇文章，不能固定要求
+重试的 Revalidation Document 数量为 1。断言已改为精确核对实际 Hook 的完整 Document ID
+集合，并保留单 Block/Provider Call Count/Retry 状态要求。Infrastructure 在控制面自升级时
+暴露状态 GET 的短暂 502；已分类瞬时连接失败现在可在原总 Deadline 内继续查询同一
+Operation，认证拒绝/实际任务失败/无效结果仍立即失败，不扩大单请求重试或总等待时限。
+本地新验证为 47 File / 280 Unit Test；完整 Integration 和 18 E2E 已通过。
+
 ### 2026-10-07：博客列表与 Public SEO
 
 Owner 授权美化 Blog List 并补齐 SEO，并明确要求缩小文章占用空间。当前实现为

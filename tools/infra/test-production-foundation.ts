@@ -43,7 +43,7 @@ import {
   executeServerMigrationOperation,
   type ServerMigrationPlatform,
 } from '../../src/server-migration/engine'
-import { controlRequest } from '../control/client'
+import { controlRequest, isTransientControlRequestFailure } from '../control/client'
 
 const input = z
   .object({
@@ -1388,13 +1388,17 @@ const operationResponseSchema = z.object({
 async function waitForOperation(id: string) {
   const deadline = Date.now() + 240_000
   while (Date.now() < deadline) {
-    const response = operationResponseSchema.parse(
-      await controlRequest(`/api/ops/infrastructure-operations/${id}`, {
-        purpose: `phase14-operation-${id}`,
-      }),
-    )
-    if (response.operation.status === 'completed' || response.operation.status === 'failed') {
-      return response.operation
+    try {
+      const response = operationResponseSchema.parse(
+        await controlRequest(`/api/ops/infrastructure-operations/${id}`, {
+          purpose: `phase14-operation-${id}`,
+        }),
+      )
+      if (response.operation.status === 'completed' || response.operation.status === 'failed') {
+        return response.operation
+      }
+    } catch (error: unknown) {
+      if (!isTransientControlRequestFailure(error)) throw error
     }
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 500))
   }

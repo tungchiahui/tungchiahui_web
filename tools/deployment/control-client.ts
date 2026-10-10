@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 
 import { z } from 'zod'
 
-import { controlRequest, publicRequest } from '../control/client'
+import { controlRequest, isTransientControlRequestFailure, publicRequest } from '../control/client'
 
 const digestSchema = z.string().regex(/^sha256:[a-f0-9]{64}$/)
 const gitShaSchema = z.string().regex(/^[a-f0-9]{40}$/)
@@ -216,19 +216,23 @@ async function waitForDeployment(
     .parse(process.env.SITE_DEPLOYMENT_WAIT_TIMEOUT_MILLISECONDS)
   const deadline = Date.now() + timeoutMilliseconds
   while (Date.now() < deadline) {
-    const result = operationEnvelopeSchema.parse(
-      await controlRequest(`/api/ops/infrastructure-operations/${operationId}`, {
-        purpose: `deployment-wait-${operationId}`,
-      }),
-    )
-    if (result.operation.status === 'completed') {
-      validateCompleteRelease(result.operation, sha, digest, mode)
-      return result
-    }
-    if (['failed', 'cancelled', 'needs-attention'].includes(result.operation.status)) {
-      throw new Error(
-        `Deployment operation ${operationId} ended in ${result.operation.status}: ${result.operation.errorSummary ?? 'no error summary'}`,
+    try {
+      const result = operationEnvelopeSchema.parse(
+        await controlRequest(`/api/ops/infrastructure-operations/${operationId}`, {
+          purpose: `deployment-wait-${operationId}`,
+        }),
       )
+      if (result.operation.status === 'completed') {
+        validateCompleteRelease(result.operation, sha, digest, mode)
+        return result
+      }
+      if (['failed', 'cancelled', 'needs-attention'].includes(result.operation.status)) {
+        throw new Error(
+          `Deployment operation ${operationId} ended in ${result.operation.status}: ${result.operation.errorSummary ?? 'no error summary'}`,
+        )
+      }
+    } catch (error: unknown) {
+      if (!isTransientControlRequestFailure(error)) throw error
     }
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 2_000))
   }
