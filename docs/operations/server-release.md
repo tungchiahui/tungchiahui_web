@@ -24,6 +24,11 @@ Status 未变化，才确认成功。没有记录、版本/执行器不一致、
 不重新执行部署、变更权限、改写状态或把 bare Current SHA 当作完成。原引擎仍拒绝直接
 重复部署已 Active 的版本。公开检查复用已有三次有界网络重试，且不发送控制面认证头。
 
+Control API 自升级会暂时断开状态查询。每个 GET 仍执行原三次有界连接重试；耗尽后的
+已分类瞬时网络/5xx 错误允许等待循环在原总 Deadline 内重新查询同一 Operation，
+不创建另一个部署。鉴权/权限拒绝、无效响应和任务 failed/cancelled/needs-attention
+仍立即失败，总等待期限保持不变。基础设施演练使用同样的错误分类恢复查询。
+
 系统组件：
 
 - `control-api`：原有认证、授权、幂等与 Operation HTTP，不持有 Docker Socket。

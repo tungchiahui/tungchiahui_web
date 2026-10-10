@@ -144,12 +144,16 @@ export async function verifyPhase9Translation(
         WHERE source_text = '# 新博客启用' AND status = 'reviewed' LIMIT 1`,
     )
     let injectRevalidationFailure = true
+    let failedRevalidationDocumentIds: readonly string[] = []
     const retryHooks = {
       async refreshSearch(input: Parameters<typeof hooks.refreshSearch>[0]) {
         await hooks.refreshSearch(input)
       },
       async revalidatePublicContent(input: Parameters<typeof hooks.revalidatePublicContent>[0]) {
         if (injectRevalidationFailure) {
+          failedRevalidationDocumentIds = [
+            ...new Set(input.changes.map((change) => change.documentId)),
+          ].toSorted()
           injectRevalidationFailure = false
           throw new Error('Injected exact revalidation failure')
         }
@@ -184,7 +188,9 @@ export async function verifyPhase9Translation(
       !('retryScheduled' in revalidationFailedAttempt) ||
       !revalidationFailedAttempt.retryScheduled ||
       revalidationFailedAttempt.progress.completedSegmentIds.length !== 1 ||
-      revalidationFailedAttempt.progress.revalidationDocumentIds.length !== 1 ||
+      failedRevalidationDocumentIds.length === 0 ||
+      JSON.stringify(revalidationFailedAttempt.progress.revalidationDocumentIds.toSorted()) !==
+        JSON.stringify(failedRevalidationDocumentIds) ||
       retryProvider.getCallCount() !== 2
     ) {
       throw new Error('Exact revalidation failure did not preserve progress for retry')

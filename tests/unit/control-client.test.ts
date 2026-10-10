@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { controlRequest, publicRequest } from '../../tools/control/client'
+import {
+  controlRequest,
+  isTransientControlRequestFailure,
+  publicRequest,
+} from '../../tools/control/client'
 
 afterEach(() => {
   vi.useRealTimers()
@@ -25,6 +29,22 @@ it('checks public readiness anonymously even when an OIDC credential is configur
   expect(fetchMock.mock.calls[0]?.[1]?.headers).toBeUndefined()
   await expect(publicRequest('/api/ops/status')).rejects.toThrow()
   expect(fetchMock).toHaveBeenCalledTimes(1)
+})
+
+it('identifies an exhausted transport retry without classifying an authentication denial as transient', async () => {
+  vi.useFakeTimers()
+  useLocalControlApi()
+  vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(new Response('', { status: 502 })))
+  const request = controlRequest('/api/ops/status', { purpose: 'unit-outage' }).catch(
+    (error) => error as unknown,
+  )
+  await vi.runAllTimersAsync()
+  expect(isTransientControlRequestFailure(await request)).toBe(true)
+  expect(
+    isTransientControlRequestFailure(
+      new Error('Control API returned HTTP 401: github_oidc_policy_denied'),
+    ),
+  ).toBe(false)
 })
 
 describe('control client transient retry boundary', () => {

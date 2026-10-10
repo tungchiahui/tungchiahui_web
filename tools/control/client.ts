@@ -34,6 +34,10 @@ class TransientControlRequestError extends Error {
   override readonly name = 'TransientControlRequestError'
 }
 
+export function isTransientControlRequestFailure(error: unknown) {
+  return error instanceof Error && error.cause instanceof TransientControlRequestError
+}
+
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'unknown transport failure'
 }

@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { controlRequest, publicRequest } from '../../tools/control/client'
+import {
+  controlRequest,
+  isTransientControlRequestFailure,
+  publicRequest,
+} from '../../tools/control/client'
 
 import {
   createDeployment,
@@ -9,11 +13,16 @@ import {
   resolveDeploymentImageDigest,
 } from '../../tools/deployment/control-client'
 
-vi.mock('../../tools/control/client', () => ({ controlRequest: vi.fn(), publicRequest: vi.fn() }))
+vi.mock('../../tools/control/client', () => ({
+  controlRequest: vi.fn(),
+  publicRequest: vi.fn(),
+  isTransientControlRequestFailure: vi.fn(),
+}))
 afterEach(() => {
   vi.unstubAllEnvs()
   vi.unstubAllGlobals()
   vi.clearAllMocks()
+  vi.useRealTimers()
 })
 
 const sha = 'b'.repeat(40)
@@ -61,6 +70,57 @@ function confirmationFixture() {
 }
 
 describe('deployment control client', () => {
+  it('resumes status reads after a control service outage without a second deployment POST', async () => {
+    vi.useFakeTimers()
+    vi.stubEnv('GITHUB_ACTIONS', 'true')
+    vi.stubEnv('GITHUB_RUN_ID', '123')
+    vi.stubEnv('GITHUB_RUN_ATTEMPT', '1')
+    vi.mocked(isTransientControlRequestFailure).mockImplementation(
+      (error) => error instanceof Error && error.message === 'recoverable-outage',
+    )
+    let reads = 0
+    vi.mocked(controlRequest).mockImplementation(async (path) => {
+      if (path === '/api/ops/status')
+        return {
+          ...activeStatus,
+          deployment: {
+            ...activeStatus.deployment,
+            currentSha: 'a'.repeat(40),
+            currentDigest: `sha256:${'a'.repeat(64)}`,
+          },
+        }
+      if (path === '/api/ops/deployments')
+        return { mode: 'production', operation: { id: receipt.operation.id, status: 'queued' } }
+      if (++reads === 1) throw new Error('recoverable-outage')
+      return receipt
+    })
+    const request = createDeployment({
+      gitSha: sha,
+      imageDigest: digest,
+      reason: 'Control upgrade outage',
+      wait: true,
+    })
+    await vi.runAllTimersAsync()
+    await expect(request).resolves.toMatchObject({ operation: { status: 'completed' } })
+    expect(reads).toBe(2)
+    expect(
+      vi.mocked(controlRequest).mock.calls.filter(([, options]) => options.method === 'POST'),
+    ).toHaveLength(1)
+  })
+
+  it('still fails immediately on an authentication denial during deployment polling', async () => {
+    vi.stubEnv('GITHUB_ACTIONS', '')
+    vi.mocked(isTransientControlRequestFailure).mockReturnValue(false)
+    vi.mocked(controlRequest).mockImplementation(async (path) => {
+      if (path === '/api/ops/deployments')
+        return { mode: 'production', operation: { id: receipt.operation.id, status: 'queued' } }
+      throw new Error('Control API returned HTTP 401: github_oidc_policy_denied')
+    })
+    await expect(
+      createDeployment({ gitSha: sha, imageDigest: digest, reason: 'Denied polling', wait: true }),
+    ).rejects.toThrow('github_oidc_policy_denied')
+    expect(vi.mocked(controlRequest).mock.calls).toHaveLength(2)
+  })
   it('does not confirm an active release whose rollback slot is missing', async () => {
     confirmationFixture()
     vi.mocked(controlRequest).mockResolvedValue({
