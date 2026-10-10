@@ -28,6 +28,27 @@ Typecheck、Renovate、Production Build、Security/SBOM 通过。隔离 Integrat
 Translation 与控制面故障边界；S3Mock 7-case Contract 通过。原始北极熊导航日志本地完整
 渲染得到 23 个公式 / 11 个独立公式块，0 个错误；390px 公式截图已检查。
 
+PR #35 / main `b81ef16d` 已由服务器切换至 Green；只读 Status 显示 Host Executor 同 SHA、
+healthy、无 Pending/未完成 Operation，并保留 `d1dd6a16` Blue。Main Release
+`38031711425` 的全部 Quality 与四镜像成功，但前三次 Deploy Client 分别遇到 OIDC Policy
+Denial、等待 Operation GET 超时、POST HTTP 554，不能把这些 CI 结果当作最终成功。
+公网 zh-CN/en-US 当前已存储正文有 22 个公式 / 10 个独立块（本地未发布稿为 23 / 11）。
+实际浏览器发现旧 zh-HK/zh-TW Materialization 只有 4 个公式，已在旧文本转换中丢失其余
+分隔符。兼容修复让繁体文章从 PostgreSQL 权威正文经同一个确定性渲染器生成；无需修改
+Canonical Content、派生 Row 或触发付费翻译，英文已审阅内容保持有效。
+
+只读查询 Operation `acdd8a2d-560d-44f6-a41a-0d80bfc757a5` 已确认 status=completed、
+phase=deployment-verified、完整 `hostRelease.status=converged`，Web/Executor 同 `b81ef16d`。
+第四次重跑因同版本已 Active 而被原引擎拒绝；没有降低该保护。客户端兼容修复为读取
+同 SHA/Digest 的既有已完成 Receipt，核对 Current/Executor/无 Pending 与公网健康，并
+再次核对 Status；只在完整证据匹配后返回成功，不创建重复 Deploy。新增只读路由仍由
+独立 control-api 承担，使用原 Infrastructure Read Capability，SQLite Schema 8 不变。
+其边界和恢复说明见 `docs/operations/server-release.md`。
+
+补充实现本地验证：47 个 Unit File / 276 Test、18 项 Public/Owner E2E、隔离 Integration、
+S3Mock 7-case、完整 Source/Type/Build/Security Gate 与 Production Foundation 全部通过。
+PostgreSQL 的 10 个 Migration 在本轮初始验证已通过；补充实现无 Schema Migration。
+
 ### 2026-10-07：博客列表与 Public SEO
 
 Owner 授权美化 Blog List 并补齐 SEO，并明确要求缩小文章占用空间。当前实现为

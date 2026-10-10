@@ -40,7 +40,10 @@ r^2=x^2+y^2+z^2
   可以翻译 prose，但目标必须保留公式 AST / TeX 值；不安全目标仍回退 zh-CN。
   Normalization Version 保持 1，没有公式的原 Block Identity 继续复用。
 - 已存储的 Locale Materialization 不在发布时批量重写。下次显式 Content Sync 使用
-  新的公式保护边界；本功能不发起 Content Push、生产回写或付费 Translation Job。
+  新的公式保护边界。旧繁体 Materialization 可能已丢失 TeX 分隔符，因此 zh-HK/zh-TW
+  文章阅读器使用 PostgreSQL 的权威 `raw_markdown`，通过同一服务端解析器和 OpenCC
+  做确定性转换，立即恢复完整公式。英文继续使用已审阅的 Materialization/Block Fallback。
+  本功能不发起 Content Push、生产回写或付费 Translation Job。
 - 异常公式通过已有结构化 Telemetry 发出 `markdown_math_render_failed`，仅记录
   Locale 和错误数量，不记录公式、文章内容或底层异常。Health/Readiness 不新增依赖。
 

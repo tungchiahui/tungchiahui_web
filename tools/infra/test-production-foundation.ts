@@ -1747,6 +1747,15 @@ async function verifyBlueGreenDeployment() {
     deployedVersion.gitSha === candidateSha && deployedVersion.slot === 'green',
     'Public entry did not switch to the green candidate',
   )
+  const receipt = operationResponseSchema.parse(
+    await controlRequest(`/api/ops/deployment-receipts/${candidateSha}/${digest.slice(7)}`, {
+      purpose: 'phase14-completed-receipt-read',
+    }),
+  )
+  expect(
+    receipt.operation.id === created.operation.id,
+    'Completed receipt did not match the exact deployed SHA/digest',
+  )
   const candidateLabels = z
     .record(z.string(), z.string())
     .parse(

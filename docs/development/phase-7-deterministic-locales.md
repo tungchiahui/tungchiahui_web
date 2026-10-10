@@ -30,6 +30,12 @@ canonical zh-CN Markdown
 
 The materialization uses the existing `document_translations` table, so Phase 7 adds no schema migration. A row is updated only when its Markdown, SHA-256 hash, or glossary revision changes. Replaying the same snapshot preserves `generated_at` and emits no duplicate downstream effect. A glossary revision change can rematerialize an otherwise unchanged canonical document without inflating the canonical `files_changed` count.
 
+The math-compatible regional article reader renders authoritative PostgreSQL `raw_markdown` with
+the same deterministic OpenCC/Markdown pipeline. Pre-math materializations may have already lost
+TeX delimiters, so regional article display must not trust them to recover formulas. Stored derived
+rows are still maintained by ingestion; English continues to use reviewed translations and fallback.
+This compatibility path changes no authoring source or production row. See `markdown-math.md`.
+
 The public DAL reads the requested zh-HK/zh-TW row and keys Next Cache by locale. If a deterministic row has not yet been backfilled, the server renderer applies the same converter as a safe temporary view; a subsequent explicit content sync materializes the row. No public request writes PostgreSQL.
 
 ## Protected Markdown and glossary rules

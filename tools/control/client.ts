@@ -48,7 +48,7 @@ function isTransientFetchFailure(error: unknown) {
 async function fetchControlBoundary(
   url: URL,
   request: RequestInit,
-  boundary: 'Control API' | 'GitHub OIDC token',
+  boundary: 'Control API' | 'GitHub OIDC token' | 'Public web',
 ) {
   try {
     const response = await fetch(url, request)
@@ -162,6 +162,27 @@ async function authenticationHeaders(
     'x-ops-signature': signature,
     'x-ops-timestamp': String(bound.timestamp),
   })
+}
+
+/** Anonymous checks never receive the control-plane credential or bound headers. */
+export async function publicRequest(pathInput: string) {
+  const path = z.enum(['/api/version', '/api/health', '/api/ready']).parse(pathInput)
+  return boundedRetry(
+    async () => {
+      const response = await fetchControlBoundary(
+        new URL(path, baseUrl()),
+        {
+          cache: 'no-store',
+          signal: AbortSignal.timeout(30_000),
+        },
+        'Public web',
+      )
+      if (!response.ok) throw new Error(`Public check ${path} returned HTTP ${response.status}`)
+      return (await response.json()) as unknown
+    },
+    `Public request GET ${path}`,
+    true,
+  )
 }
 
 export async function controlRequest(

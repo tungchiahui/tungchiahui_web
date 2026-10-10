@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { controlRequest } from '../../tools/control/client'
+import { controlRequest, publicRequest } from '../../tools/control/client'
 
 afterEach(() => {
   vi.useRealTimers()
@@ -13,6 +13,19 @@ function useLocalControlApi() {
   vi.stubEnv('ACTIONS_ID_TOKEN_REQUEST_URL', '')
   vi.stubEnv('ACTIONS_ID_TOKEN_REQUEST_TOKEN', '')
 }
+
+it('checks public readiness anonymously even when an OIDC credential is configured', async () => {
+  useLocalControlApi()
+  vi.stubEnv('ACTIONS_ID_TOKEN_REQUEST_URL', 'https://issuer.example/token')
+  vi.stubEnv('ACTIONS_ID_TOKEN_REQUEST_TOKEN', 'must-not-be-forwarded')
+  const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ status: 'ready' }))
+  vi.stubGlobal('fetch', fetchMock)
+  await expect(publicRequest('/api/ready')).resolves.toEqual({ status: 'ready' })
+  expect(String(fetchMock.mock.calls[0]?.[0])).toBe('http://127.0.0.1:8080/api/ready')
+  expect(fetchMock.mock.calls[0]?.[1]?.headers).toBeUndefined()
+  await expect(publicRequest('/api/ops/status')).rejects.toThrow()
+  expect(fetchMock).toHaveBeenCalledTimes(1)
+})
 
 describe('control client transient retry boundary', () => {
   it('retries a transient GET with a newly bound request', async () => {
