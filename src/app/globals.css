@@ -103,7 +103,8 @@
   }
 
   .prose-site :where(h1, h2, h3, h4, h5, h6) {
-    @apply mt-10 scroll-mt-24 font-semibold tracking-tight transition-colors;
+    @apply mt-10 font-semibold tracking-tight transition-colors;
+    scroll-margin-top: var(--reader-anchor-offset, 6rem);
   }
 
   .prose-site .heading-number {
@@ -277,7 +278,11 @@
 
   .article-reader-sidebar,
   .article-reader-toc {
-    @apply sticky top-24 max-h-[calc(100vh-7rem)] self-start overflow-y-auto rounded-xl border bg-card p-5;
+    @apply sticky self-start overflow-y-auto rounded-xl border bg-card p-5;
+    top: var(--reader-anchor-offset, 6rem);
+    max-height: calc(100dvh - var(--reader-anchor-offset, 6rem) - 1rem);
+    overscroll-behavior-y: contain;
+    scrollbar-width: thin;
   }
 
   [data-toc-link][aria-current="location"] {
@@ -299,6 +304,8 @@
 
   .article-drawer-panel {
     @apply relative max-h-[78dvh] w-full max-w-lg overflow-y-auto rounded-3xl border bg-background p-6 pt-8 shadow-2xl;
+    overscroll-behavior-y: contain;
+    scrollbar-width: thin;
   }
 
   .article-drawer-handle {

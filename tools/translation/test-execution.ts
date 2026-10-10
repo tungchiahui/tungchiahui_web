@@ -188,13 +188,30 @@ export async function verifyPhase9Translation(
       !('retryScheduled' in revalidationFailedAttempt) ||
       !revalidationFailedAttempt.retryScheduled ||
       revalidationFailedAttempt.progress.completedSegmentIds.length !== 1 ||
-      failedRevalidationDocumentIds.length === 0 ||
-      JSON.stringify(revalidationFailedAttempt.progress.revalidationDocumentIds.toSorted()) !==
-        JSON.stringify(failedRevalidationDocumentIds) ||
       retryProvider.getCallCount() !== 2
     ) {
       throw new Error('Exact revalidation failure did not preserve progress for retry')
     }
+    // A segment shared by documents creates one hook input per document. Failure on the first
+    // delivery must retain the entire affected set, including deliveries not yet attempted.
+    const affected = await client.query<{ document_id: string }>(
+      `SELECT DISTINCT segments.document_id
+         FROM app.document_translation_segments AS segments
+         JOIN app.documents AS documents ON documents.id = segments.document_id
+        WHERE segments.segment_id = $1 AND documents.is_deleted = false
+        ORDER BY segments.document_id`,
+      [revalidationFailedAttempt.progress.completedSegmentIds[0]],
+    )
+    const expectedRevalidationDocumentIds = affected.rows.map((row) => row.document_id)
+    if (
+      failedRevalidationDocumentIds.length === 0 ||
+      !failedRevalidationDocumentIds.every((id) => expectedRevalidationDocumentIds.includes(id)) ||
+      JSON.stringify(revalidationFailedAttempt.progress.revalidationDocumentIds.toSorted()) !==
+        JSON.stringify(expectedRevalidationDocumentIds)
+    )
+      throw new Error(
+        'Revalidation retry did not retain all affected documents, including undelivered hooks',
+      )
     const successfulRetry = await runJob(retryWorker, retry.job.id)
     const retryState = await control.get(retry.job.id)
     const preservedAfter = await client.query<{ translated_text: string }>(

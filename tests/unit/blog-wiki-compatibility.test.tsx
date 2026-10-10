@@ -15,7 +15,8 @@ import {
   trafficPaths,
 } from '@/web/content-compatibility'
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }))
+const router = vi.hoisted(() => ({ push: vi.fn() }))
+vi.mock('next/navigation', () => ({ useRouter: () => router }))
 
 function fixture(overrides: Partial<PublicDocument>): PublicDocument {
   return {
@@ -196,16 +197,21 @@ describe('Phase 18 Blog/Wiki compatibility', () => {
       />,
     )
     expect(await screen.findByText('CPP')).toHaveAttribute('data-code-language', 'CPP')
-    await userEvent.click(await screen.findByRole('button', { name: 'Copy code' }))
+    const copyButton = await screen.findByRole('button', { name: 'Copy code' })
+    await userEvent.click(copyButton)
     expect(writeText).toHaveBeenCalledWith('const safe = true')
     await userEvent.click(screen.getByRole('heading', { name: 'First' }))
     expect(window.location.hash).toBe('#first')
+    expect(document.querySelector('.code-copy-button')).toBe(copyButton)
     await userEvent.click(screen.getByRole('img', { name: 'Fixture image' }))
     expect(screen.getByRole('dialog', { name: 'Image preview' })).toBeVisible()
     await userEvent.click(
       screen.getByRole('dialog', { name: 'Image preview' }).querySelector('img') as HTMLElement,
     )
     expect(screen.queryByRole('dialog', { name: 'Image preview' })).not.toBeInTheDocument()
+    expect(document.querySelector('.code-copy-button')).toBe(copyButton)
+    await userEvent.click(copyButton)
+    expect(writeText).toHaveBeenCalledTimes(2)
     await userEvent.click(screen.getByRole('button', { name: 'Document chapters' }))
     expect(document.querySelector('[data-reader-drawer]')).toBeInTheDocument()
     fireEvent.keyDown(document, { key: 'Escape' })

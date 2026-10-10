@@ -63,7 +63,10 @@ export async function SiteShell({
       <a className="sr-only focus:not-sr-only" href="#main-content">
         {t('skipToContent')}
       </a>
-      <header className="sticky top-0 z-20 border-b bg-background/80 shadow-sm backdrop-blur-xl">
+      <header
+        className="sticky top-0 z-20 border-b bg-background/80 shadow-sm backdrop-blur-xl"
+        data-site-header
+      >
         <div className="mx-auto flex max-w-7xl items-center gap-6 px-5 py-3 lg:px-8">
           <Link
             aria-label={t('siteName')}
