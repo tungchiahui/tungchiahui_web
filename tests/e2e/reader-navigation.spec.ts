@@ -239,8 +239,10 @@ test('TOC browsing pauses automatic following without scrolling the body', async
 test('mobile drawers show the reading position and close before smooth navigation', async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 390, height: 844 })
+  // Preserve the floating player across a desktop-to-mobile resize, as in real reading.
+  await page.setViewportSize({ width: 1600, height: 900 })
   await openReader(page, readers[1].path)
+  await page.setViewportSize({ width: 390, height: 844 })
   await heading(page, 20).evaluate((element) =>
     window.scrollTo(0, scrollY + element.getBoundingClientRect().top - 100),
   )
@@ -248,6 +250,20 @@ test('mobile drawers show the reading position and close before smooth navigatio
   const drawer = page.locator('.article-drawer-panel')
   await expect(drawer.locator('[aria-current]')).toHaveAttribute('data-toc-link', '阅读定位-20')
   await expectCurrentVisible(drawer)
+  await expect
+    .poll(() =>
+      drawer.evaluate((panel) => {
+        const item = panel.querySelector('[aria-current]')
+        if (!item) return false
+        const rect = item.getBoundingClientRect()
+        const hit = document.elementFromPoint(
+          rect.left + rect.width / 2,
+          rect.top + rect.height / 2,
+        )
+        return item.contains(hit)
+      }),
+    )
+    .toBe(true)
   await expect(drawer.locator('.article-drawer-close')).toBeInViewport()
   await drawer.locator('[data-toc-link="阅读定位-3"]').click()
   await expect(drawer).toBeHidden()
