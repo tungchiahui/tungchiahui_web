@@ -313,7 +313,7 @@
   }
 
   .article-drawer-close {
-    @apply absolute top-4 right-4 grid size-9 place-items-center rounded-full border bg-card text-muted-foreground;
+    @apply sticky top-0 z-10 mb-[-2.25rem] ml-auto grid size-9 place-items-center rounded-full border bg-card text-muted-foreground;
   }
 
   .article-drawer-panel nav > h2 {

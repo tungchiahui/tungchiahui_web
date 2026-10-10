@@ -29,10 +29,12 @@ export function ReaderNavigationPanel({
       const item = panel.querySelector<HTMLElement>('[aria-current]')
       if (!item) return
       const itemRect = item.getBoundingClientRect()
+      const control = panel.querySelector<HTMLElement>('[data-reader-pinned-control]')
+      const reservedTop = control ? control.offsetHeight + 16 : 0
       const to = panelScrollDestination({
         scrollTop: panel.scrollTop,
-        panelTop: panel.getBoundingClientRect().top,
-        panelHeight: panel.clientHeight,
+        panelTop: panel.getBoundingClientRect().top + reservedTop,
+        panelHeight: panel.clientHeight - reservedTop,
         itemTop: itemRect.top,
         itemHeight: itemRect.height,
         maximum: Math.max(0, panel.scrollHeight - panel.clientHeight),
