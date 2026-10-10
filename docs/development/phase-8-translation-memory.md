@@ -22,6 +22,7 @@ Before a translated block is reusable, the system reparses it and requires the s
 
 - Markdown node shape, heading depth, table/list structure and link/image nodes;
 - fenced/inline code and raw HTML;
+- inline/block TeX formulas parsed with the shared content-math syntax; standalone formula blocks (including math-only backslash paragraphs) never become provider candidates;
 - link/image destinations and titles;
 - URLs, code-like identifiers, brands, names and versioned glossary terms.
 

@@ -2,13 +2,31 @@
 
 > Status: Phase 0–18 completed
 > Current Phase: Website V2 Production Completion
-> Handoff audit date: 2026-10-07
+> Handoff audit date: 2026-10-10
 
 本文件是新 Claude Code/Codex 会话的简洁交接入口。它索引当前实际状态和容易遗漏的实施事实，不替代 `AGENTS.md`、Accepted ADR、架构规范或 `implementation-plan.md`。
 
 维护规则：每个 Phase 完成时，Agent 自动复核并沉淀后续实施所需事实；完成沉淀只表示下一 Phase 依赖可供 Owner 评估，不授权 Agent 自动继续。
 
 ## 1. 新会话读取顺序
+
+### 2026-10-10：Blog / Wiki 数学公式
+
+基于 GitHub main `d1dd6a16` 开发，共享服务端 Markdown Renderer 增加 KaTeX。
+支持 `$...$`、`$$` Block、`\(...\)`、`\[...\]`；北极熊导航日志现有写法保持有效。
+统一语法保护 OpenCC 和 Semantic Translation 中的 TeX；独立公式不进入付费翻译，
+未含公式的 Block Memory Identity 保持不变。CSS/Font 为同源不可变制品，保留 Raw HTML
+Sanitization、trust=false、宏/尺寸上限及只记录计数的结构化异常事件。
+没有 Migration、生产内容写入或 Backup/Recovery 变更。使用原 main CI 与服务器完整
+Blue-green 发布。编写/回退说明与 Unit / Browser Verification 入口见
+`docs/development/markdown-math.md`；生产结果以该 PR / Main Release 与 Public SHA 为准。
+
+本地验证：47 个 Unit File / 267 Test、18 项 Public/Owner E2E（新增默认路由 + 四 Locale
+公式验证）、10 个 PostgreSQL Migration 均通过；Format/Lint、Source/Workflow/Drizzle、
+Typecheck、Renovate、Production Build、Security/SBOM 通过。隔离 Integration 验证公式随
+真实 Content Sync/Locale Materialization 保持，并继续覆盖 Idempotency、Search、Sitemap、
+Translation 与控制面故障边界；S3Mock 7-case Contract 通过。原始北极熊导航日志本地完整
+渲染得到 23 个公式 / 11 个独立公式块，0 个错误；390px 公式截图已检查。
 
 ### 2026-10-07：博客列表与 Public SEO
 

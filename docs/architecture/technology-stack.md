@@ -43,6 +43,7 @@ Renovate 不得绕过 PR 直接修改 `main`。所有升级 PR 通过现有 CI Q
 - unified
 - remark
 - rehype
+- KaTeX + remark-math / rehype-katex：Blog/Wiki 服务端公式渲染；语法与 Locale/Translation 共享，字体随制品部署。详见 `../development/markdown-math.md`。
 - Shiki
 - OpenCC
 

@@ -16,6 +16,7 @@ Both unprefixed routes and `/zh-cn/**` represent zh-CN. The public surface inclu
 - `src/server/public-content.ts` is the server-only PostgreSQL boundary. Every query uses `SET LOCAL ROLE site_app`, filters soft-deleted rows and validates database/cache output with Zod.
 - React Server Components own content reads and Markdown rendering. Client Components are limited to theme, print and browser-local Start-page interactions.
 - Markdown passes through unified, GFM, raw-HTML dropping, `rehype-sanitize`, Shiki and a final validated link/image metadata pass. Unsafe raw HTML and unsupported asset schemes do not reach the rendered tree.
+- Shared Blog/Wiki math supports dollar and LaTeX backslash delimiters via the same parser used by localization/translation. Sanitized input passes through server-side KaTeX before Shiki, with local CSS/fonts and accessible MathML. Authoring, safety and rollback details: `markdown-math.md`.
 - Article metadata is derived from validated runtime content. Code fences, inline identifiers, Unicode headings, safe external links, responsive lazy images, TOC and previous/next navigation are covered by tests.
 
 ## Route and compatibility surface

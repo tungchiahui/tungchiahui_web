@@ -55,7 +55,7 @@ export async function seedDevelopmentDatabase(connectionString: string) {
     title: 'Phase 3 Development Seed',
     rawFrontmatter: { title: 'Phase 3 Development Seed', path: '/blog/phase-3-seed' },
     rawMarkdown:
-      '# Phase 6 Development Seed\n\nDeterministic local content with `inline-code` and `ROS2_Control`.\n\n## Asset\n\n![Local fixture](/api/assets/fixtures/phase-6.svg)\n\n```ts\nconst phase = 6\n```',
+      '# Phase 6 Development Seed\n\nDeterministic local content with `inline-code` and `ROS2_Control`.\n\n## Asset\n\n![Local fixture](/api/assets/fixtures/phase-6.svg)\n\n```ts\nconst phase = 6\n```\n\nInline math: $E=mc^2$ and \\(r^2\\).\n\n$$\na^2+b^2=c^2\n$$\n\n\\[\nf(x)=\\underbrace{x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x}_{20\\text{ terms}}\n\\]',
     sourceHash,
     routePath: '/blog/phase-3-seed',
     sourceUpdatedAt: seedTimestamp,
@@ -67,7 +67,8 @@ export async function seedDevelopmentDatabase(connectionString: string) {
     sourceCommit,
     title: 'Phase 3 Wiki Seed',
     rawFrontmatter: { title: 'Phase 3 Wiki Seed' },
-    rawMarkdown: '# Phase 3 Wiki Seed\n\nDeterministic local wiki content.',
+    rawMarkdown:
+      '# Phase 3 Wiki Seed\n\nDeterministic local wiki content.\n\nInline math: $E=mc^2$ and \\(r^2\\).\n\n$$\na^2+b^2=c^2\n$$\n\n\\[\nf(x)=\\underbrace{x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x}_{20\\text{ terms}}\n\\]',
     sourceHash: wikiHash,
     routePath: '/wiki/2026-01-01-phase-3-seed',
     sourceUpdatedAt: seedTimestamp,

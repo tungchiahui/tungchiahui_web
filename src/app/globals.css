@@ -85,6 +85,23 @@
     max-width: 100%;
   }
 
+  .prose-site .katex-display {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-block: 0.25rem;
+  }
+
+  .prose-site .katex {
+    overflow-wrap: normal;
+    text-indent: 0;
+  }
+
+  .prose-site .katex-error {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
   .prose-site :where(h1, h2, h3, h4, h5, h6) {
     @apply mt-10 scroll-mt-24 font-semibold tracking-tight transition-colors;
   }
