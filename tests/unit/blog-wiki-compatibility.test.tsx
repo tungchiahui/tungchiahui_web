@@ -203,6 +203,12 @@ describe('Phase 18 Blog/Wiki compatibility', () => {
     await userEvent.click(screen.getByRole('heading', { name: 'First' }))
     expect(window.location.hash).toBe('#first')
     expect(document.querySelector('.code-copy-button')).toBe(copyButton)
+    const samePageLink = document.createElement('a')
+    samePageLink.href = `${window.location.pathname}#first`
+    samePageLink.textContent = 'Same-page full path'
+    document.querySelector('.prose-site')?.append(samePageLink)
+    await userEvent.click(samePageLink)
+    expect(router.push).not.toHaveBeenCalled()
     await userEvent.click(screen.getByRole('img', { name: 'Fixture image' }))
     expect(screen.getByRole('dialog', { name: 'Image preview' })).toBeVisible()
     await userEvent.click(

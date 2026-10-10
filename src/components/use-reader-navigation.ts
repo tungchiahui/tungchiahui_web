@@ -46,9 +46,15 @@ export function useReaderNavigation(
     if (!reader || !content || !html) return
     const header = document.querySelector<HTMLElement>('[data-site-header]')
     const motion = window.matchMedia?.('(prefers-reduced-motion: reduce)')
+    const contentHeadings = new Map(
+      Array.from(content.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6')).map((element) => [
+        element.id,
+        element,
+      ]),
+    )
     const nodes = headings.flatMap(({ id }) => {
-      const element = document.getElementById(id)
-      return element instanceof HTMLElement && content.contains(element) ? [element] : []
+      const element = contentHeadings.get(id)
+      return element ? [element] : []
     })
     let navigation: AnchorNavigation | undefined
     let settleTimeout = 0
@@ -220,7 +226,8 @@ export function useReaderNavigation(
     for (const image of content.querySelectorAll('img')) reserveImageSpace(image)
     measureOffset()
     updateReadingPosition()
-    reader.addEventListener('click', onClick)
+    // Handle same-page full-path hashes before the prose's generic Next navigation listener.
+    reader.addEventListener('click', onClick, true)
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('wheel', onUserScroll, { passive: true, capture: true })
     window.addEventListener('touchstart', onUserScroll, { passive: true, capture: true })
@@ -235,6 +242,9 @@ export function useReaderNavigation(
     const observer =
       typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(scheduleUpdate)
     observer?.observe(content)
+    // Hero metadata (for example asynchronous traffic statistics) can move the entire reader
+    // without changing the prose's own dimensions.
+    if (reader.parentElement) observer?.observe(reader.parentElement)
     if (header) observer?.observe(header)
     void document.fonts?.ready.then(() => {
       if (!disposed) scheduleUpdate()
@@ -247,7 +257,7 @@ export function useReaderNavigation(
       cancelAnimationFrame(frame)
       cancelAnimationFrame(hashFrame)
       observer?.disconnect()
-      reader.removeEventListener('click', onClick)
+      reader.removeEventListener('click', onClick, true)
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('wheel', onUserScroll, true)
       window.removeEventListener('touchstart', onUserScroll, true)

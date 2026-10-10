@@ -159,6 +159,18 @@ for (const reader of readers) {
       await expectAligned(heading(page, 13))
       await page.goForward({ waitUntil: 'domcontentloaded' })
       await expectAligned(heading(page, 17))
+      await page.locator('.prose-site').evaluate((content) => {
+        const link = document.createElement('a')
+        link.href = `${location.pathname}#${encodeURIComponent('阅读定位-15')}`
+        link.textContent = 'Full-path anchor fixture'
+        link.dataset.fullPathAnchor = ''
+        content.prepend(link)
+      })
+      await page
+        .locator('[data-full-path-anchor]')
+        .evaluate((link: HTMLAnchorElement) => link.click())
+      await expectAligned(heading(page, 15))
+      await expect(page).toHaveURL(new RegExp(`${encodeURIComponent('阅读定位-15')}$`))
     } finally {
       image.release()
     }
@@ -267,6 +279,12 @@ test('reduced motion remains immediate and image failures do not prevent navigat
     const spacer = document.createElement('div')
     spacer.style.height = '350px'
     element.before(spacer)
+  })
+  await expectAligned(heading(page, 13))
+  await page.locator('.article-hero').evaluate((hero) => {
+    const metadata = document.createElement('div')
+    metadata.style.height = '94px'
+    hero.append(metadata)
   })
   await expectAligned(heading(page, 13))
 })
