@@ -79,6 +79,20 @@ function setupLayout() {
 }
 
 describe('reader anchor lifecycle', () => {
+  it('resolves headings within the reader when the surrounding page has the same id', () => {
+    setupLayout()
+    const outside = document.createElement('div')
+    outside.id = 'target'
+    document.body.prepend(outside)
+    try {
+      render(<Fixture />)
+      act(() => vi.advanceTimersByTime(100))
+      expect(window.scrollY).toBe(904)
+    } finally {
+      outside.remove()
+    }
+  })
+
   it('corrects late layout changes only within the bounded settle window', () => {
     const { scroll, shift } = setupLayout()
     const { container } = render(<Fixture />)

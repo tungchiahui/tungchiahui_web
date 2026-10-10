@@ -99,7 +99,9 @@ test('aligns homepage previews and start search while article code follows the t
     .evaluateAll((links) => links.map((link) => getComputedStyle(link).backgroundColor))
   expect(actionColors[0]).not.toBe(actionColors[1])
 
-  await page.goto('/start')
+  // This checks the clock/search layout; a remote background image must not gate readiness.
+  await page.goto('/start', { waitUntil: 'domcontentloaded' })
+  await expect(page.locator('.start-clock')).toBeVisible()
   const clockBox = await page.locator('.start-clock').boundingBox()
   const searchBox = await page.locator('.start-search').boundingBox()
   const submitBox = await page.locator('.start-search-submit').boundingBox()
