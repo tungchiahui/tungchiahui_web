@@ -29,6 +29,10 @@ Typecheck、Renovate、Production Build 与 Security/SBOM Gate 通过。新增�
 保留 Memoized 正文 DOM 和代码复制/图片事件。长文章 Fixture 暴露旧翻译测试把首个
 Hook 的已尝试文档当成完整待重试集合；现在核对实际持久关联的完整集合，包括尚未
 交付的 Hook，不改变运行时 Translation/Worker 行为。
+完整 Production Foundation 与 Recovery Gate 均通过，包含完整服务器发布/回退、执行器
+中断与候选启动失败、数据库故障控制面隔离、物理迁移、Full/Diff/Incr + WAL/PITR、
+Off-site 回退及恢复重试；目标均为一次性非生产资源。改动与最终自动发布证据见
+[PR #38](https://github.com/tungchiahui/tungchiahui_web/pull/38)。
 
 ### 2026-10-10：Blog / Wiki 数学公式
 
