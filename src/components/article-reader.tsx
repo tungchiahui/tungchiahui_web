@@ -3,9 +3,12 @@
 import { BookOpen, ListTree, X } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import type { MarkdownHeading } from '@/web/markdown'
+
+import { ReaderNavigationPanel } from './reader-navigation-panel'
+import { useReaderNavigation } from './use-reader-navigation'
 
 type NavigationItem = Readonly<{
   chapter?: string
@@ -32,10 +35,12 @@ function getCodeLanguage(pre: HTMLPreElement) {
 }
 
 function Toc({
+  activeId,
   headings,
   label,
   onNavigate,
 }: Readonly<{
+  activeId: string | undefined
   headings: readonly MarkdownHeading[]
   label: string
   onNavigate?: () => void
@@ -47,6 +52,7 @@ function Toc({
         {headings.map((heading) => (
           <li key={heading.id} style={{ paddingInlineStart: `${heading.level * 0.75}rem` }}>
             <a
+              aria-current={heading.id === activeId ? 'location' : undefined}
               aria-label={`${heading.number}. ${heading.text}`}
               className="flex gap-2 rounded-md px-1.5 py-1 hover:bg-background hover:text-primary"
               data-toc-link={heading.id}
@@ -108,39 +114,20 @@ export function ArticleReader({
   labels: ReaderLabels
 }>) {
   const contentRef = useRef<HTMLDivElement>(null)
+  const readerRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const [drawer, setDrawer] = useState<'document' | 'toc' | undefined>()
   const [image, setImage] = useState<Readonly<{ alt: string; src: string }> | undefined>()
   const hasToc = headings.length > 1
+  const activeId = useReaderNavigation(readerRef, contentRef, headings, html)
+  const currentDocument = documentNavigation.find((item) => item.current)?.href
+  // Highlight/drawer updates must retain the enhanced DOM and its heading/image references.
+  const markup = useMemo(() => ({ __html: html }), [html])
 
   useEffect(() => {
     const content = contentRef.current
-    if (!content) return
+    if (!content || !html) return
     const cleanup: Array<() => void> = []
-    const activateHeading = (heading: HTMLElement) => {
-      const nextHash = `#${encodeURIComponent(heading.id)}`
-      window.history.pushState(null, '', nextHash)
-      heading.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
-    }
-    const onHeadingClick = (event: MouseEvent) => {
-      const target = event.target
-      if (!(target instanceof Element) || target.closest('a, button')) return
-      const heading = target.closest<HTMLElement>('[data-heading-anchor]')
-      if (heading && content.contains(heading)) activateHeading(heading)
-    }
-    const onHeadingKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Enter' && event.key !== ' ') return
-      const target = event.target
-      if (!(target instanceof HTMLElement) || !target.matches('[data-heading-anchor]')) return
-      event.preventDefault()
-      activateHeading(target)
-    }
-    content.addEventListener('click', onHeadingClick)
-    content.addEventListener('keydown', onHeadingKeyDown)
-    cleanup.push(() => {
-      content.removeEventListener('click', onHeadingClick)
-      content.removeEventListener('keydown', onHeadingKeyDown)
-    })
     for (const pre of content.querySelectorAll('pre')) {
       const wrapper = document.createElement('div')
       wrapper.className = 'code-block'
@@ -230,46 +217,7 @@ export function ArticleReader({
     return () => {
       for (const dispose of cleanup) dispose()
     }
-  }, [labels.codeCopied, labels.copyCode, router])
-
-  useEffect(() => {
-    const update = () => {
-      const root = document.documentElement
-      const maximum = root.scrollHeight - window.innerHeight
-      root.style.setProperty(
-        '--reading-progress',
-        `${maximum <= 0 ? 100 : Math.min(100, (window.scrollY / maximum) * 100)}%`,
-      )
-    }
-    update()
-    window.addEventListener('resize', update)
-    window.addEventListener('scroll', update, { passive: true })
-    return () => {
-      window.removeEventListener('resize', update)
-      window.removeEventListener('scroll', update)
-    }
-  }, [])
-
-  useEffect(() => {
-    const content = contentRef.current
-    if (!content || headings.length === 0) return
-    const update = () => {
-      const active = headings
-        .map((heading) => document.getElementById(heading.id))
-        .filter(
-          (heading): heading is HTMLElement =>
-            heading instanceof HTMLElement && content.contains(heading),
-        )
-        .findLast((heading) => heading.getBoundingClientRect().top <= 140)
-      for (const link of document.querySelectorAll<HTMLElement>('[data-toc-link]')) {
-        if (link.dataset.tocLink === active?.id) link.setAttribute('aria-current', 'location')
-        else link.removeAttribute('aria-current')
-      }
-    }
-    update()
-    window.addEventListener('scroll', update, { passive: true })
-    return () => window.removeEventListener('scroll', update)
-  }, [headings])
+  }, [html, labels.codeCopied, labels.copyCode, router])
 
   useEffect(() => {
     if (!drawer) return
@@ -281,7 +229,7 @@ export function ArticleReader({
   }, [drawer])
 
   return (
-    <>
+    <div data-reader-root ref={readerRef}>
       <div aria-hidden="true" className="reading-progress" data-reading-progress />
       {(documentNavigation.length > 0 || hasToc) && (
         <div className="article-mobile-tools xl:hidden">
@@ -309,20 +257,26 @@ export function ArticleReader({
       )}
       <div className="article-reader-grid">
         {documentNavigation.length > 0 ? (
-          <aside className="article-reader-sidebar hidden xl:block">
+          <ReaderNavigationPanel
+            className="article-reader-sidebar hidden xl:block"
+            selectedKey={currentDocument}
+          >
             <DocumentNavigation items={documentNavigation} label={labels.documentNavigation} />
-          </aside>
+          </ReaderNavigationPanel>
         ) : null}
         <div
           className="prose-site min-w-0"
           ref={contentRef}
           // biome-ignore lint/security/noDangerouslySetInnerHtml: Markdown is sanitized before this client boundary.
-          dangerouslySetInnerHTML={{ __html: html }}
+          dangerouslySetInnerHTML={markup}
         />
         {hasToc ? (
-          <aside className="article-reader-toc hidden xl:block">
-            <Toc headings={headings} label={labels.tableOfContents} />
-          </aside>
+          <ReaderNavigationPanel
+            className="article-reader-toc hidden xl:block"
+            selectedKey={activeId}
+          >
+            <Toc activeId={activeId} headings={headings} label={labels.tableOfContents} />
+          </ReaderNavigationPanel>
         ) : null}
       </div>
       {drawer ? (
@@ -333,7 +287,11 @@ export function ArticleReader({
             onClick={() => setDrawer(undefined)}
             type="button"
           />
-          <aside className="article-drawer-panel">
+          <ReaderNavigationPanel
+            className="article-drawer-panel"
+            key={drawer}
+            selectedKey={drawer === 'toc' ? activeId : currentDocument}
+          >
             <div aria-hidden className="article-drawer-handle" />
             <button
               aria-label={labels.close}
@@ -351,12 +309,13 @@ export function ArticleReader({
               />
             ) : (
               <Toc
+                activeId={activeId}
                 headings={headings}
                 label={labels.tableOfContents}
                 onNavigate={() => setDrawer(undefined)}
               />
             )}
-          </aside>
+          </ReaderNavigationPanel>
         </div>
       ) : null}
       {image ? (
@@ -388,6 +347,6 @@ export function ArticleReader({
           </button>
         </div>
       ) : null}
-    </>
+    </div>
   )
 }

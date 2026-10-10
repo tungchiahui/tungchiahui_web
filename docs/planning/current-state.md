@@ -10,6 +10,26 @@
 
 ## 1. 新会话读取顺序
 
+### 2026-10-10：Blog / Wiki 阅读导航
+
+Owner 批准动态阅读目录、稳定锚点和优雅滚动。基于已发布 main `bb35f338` 实现，沿用
+共享 ArticleReader：真实 Header 偏移、声明式当前标题、仅目录内部的有界平滑跟随、
+手动目录浏览暂停和手机当前项定位。Wiki 文档章节表示当前文档，本文目录表示当前小节。
+统一目录/正文标题/同页链接导航，平滑首次跳转、延迟布局短动画校准、最多 20s 的
+校准窗口与用户输入立即接管；Hash/History、减少动画、图片失败和卸载都有明确边界。
+已知图片尺寸和最多 128 条会话内真实尺寸帮助预留空间，不新增图片抓取/API/依赖或
+生产存储。说明及测试入口见 `docs/development/reader-navigation.md`。
+无需 Migration、Canonical Content 改写、付费翻译或恢复策略变更；沿用正常 main CI 和
+服务器完整 Blue-green 发布。验证和生产结论以该 PR / Main Release 实际结果为准。
+
+本地已通过 49 File / 289 Unit Test、27 项 Public/Owner E2E、完整隔离 Integration、
+S3Mock 7-case 和 10 个 PostgreSQL Migration；Format/Lint、Source/Workflow/Drizzle、
+Typecheck、Renovate、Production Build 与 Security/SBOM Gate 通过。新增校准测试关闭
+浏览器自带 Scroll Anchoring，生命周期测试验证 20s 到期、中断与卸载。高亮/抽屉更新
+保留 Memoized 正文 DOM 和代码复制/图片事件。长文章 Fixture 暴露旧翻译测试把首个
+Hook 的已尝试文档当成完整待重试集合；现在核对实际持久关联的完整集合，包括尚未
+交付的 Hook，不改变运行时 Translation/Worker 行为。
+
 ### 2026-10-10：Blog / Wiki 数学公式
 
 基于 GitHub main `d1dd6a16` 开发，共享服务端 Markdown Renderer 增加 KaTeX。
@@ -56,6 +76,14 @@ Integration 在 18 项 E2E 已通过后暴露旧断言：共享 Block 可关联�
 暴露状态 GET 的短暂 502；已分类瞬时连接失败现在可在原总 Deadline 内继续查询同一
 Operation，认证拒绝/实际任务失败/无效结果仍立即失败，不扩大单请求重试或总等待时限。
 本地新验证为 47 File / 280 Unit Test；完整 Integration 和 18 E2E 已通过。
+
+公式功能最终发布证据：PR #35–37 均已合入，Main Release `38041517442` 的第三次执行
+于 UTC 2026-10-10 12:23 完整 success。Operation `0804cf72-1204-412c-ad74-e36ee6f7cd91`
+为 completed/deployment-verified、hostRelease.status=converged；Web/Executor 同
+`bb35f338`，Blue Active / Green Previous `b81ef16d`，无 Pending/未完成 Operation。
+实际浏览器在默认入口及四 Locale 均验证存储正文 22 个公式 / 10 个独立块、22 个 MathML、
+0 个错误、字体已加载且 390px 无页面溢出。正常 GitHub/服务器重试完成，没有开发机
+SSH、手动部署或生产内容改写；前两次 resolve-artifacts 失败历史保留。
 
 ### 2026-10-07：博客列表与 Public SEO
 
