@@ -11,6 +11,7 @@ import { MusicPlayerProvider } from '@/components/music-player-provider'
 import { environment } from '@/server/environment'
 import { serializeStructuredData } from '@/web/seo'
 
+import 'katex/dist/katex.min.css'
 import './globals.css'
 
 export async function generateMetadata(): Promise<Metadata> {

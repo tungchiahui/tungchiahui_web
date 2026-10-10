@@ -6,6 +6,7 @@ import remarkParse from 'remark-parse'
 import { unified } from 'unified'
 import { z } from 'zod'
 
+import remarkContentMath from '../content/remark-math'
 import { contentGlossary } from '../i18n/content-glossary'
 
 export const translationNormalizationVersion = 1
@@ -84,7 +85,15 @@ export const targetedPatchContextSchema = z
 
 export type TargetedPatchContext = Readonly<z.infer<typeof targetedPatchContextSchema>>
 
-const nontranslatableAstTypes = new Set(['code', 'definition', 'html', 'thematicBreak', 'yaml'])
+const nontranslatableAstTypes = new Set([
+  'code',
+  'definition',
+  'html',
+  'math',
+  'thematicBreak',
+  'yaml',
+])
+const protectedLiteralTypes = new Set(['code', 'html', 'inlineCode', 'inlineMath', 'math'])
 const dynamicProtectedPattern =
   /https?:\/\/[^\s<>()]+|[A-Za-z][A-Za-z0-9]*(?:[._:/#@+-][A-Za-z0-9]+)+/gu
 
@@ -119,7 +128,7 @@ function semanticStructure(node: z.infer<typeof astNodeSchema>): unknown {
   for (const key of ['align', 'depth', 'lang', 'meta', 'title', 'url'] as const) {
     if (node[key] !== undefined) attributes[key] = node[key]
   }
-  if (node.type === 'code' || node.type === 'html' || node.type === 'inlineCode') {
+  if (protectedLiteralTypes.has(node.type)) {
     attributes.value = node.value
   }
   if (node.children !== undefined) {
@@ -142,10 +151,7 @@ function protectedTextPattern() {
 }
 
 function collectProtectedValues(node: z.infer<typeof astNodeSchema>, output: string[]) {
-  if (
-    (node.type === 'code' || node.type === 'html' || node.type === 'inlineCode') &&
-    typeof node.value === 'string'
-  ) {
+  if (protectedLiteralTypes.has(node.type) && typeof node.value === 'string') {
     output.push(`${node.type}:${node.value}`)
   }
   if (node.type === 'link' || node.type === 'image' || node.type === 'definition') {
@@ -167,6 +173,7 @@ function parseMarkdown(value: string) {
     .use(remarkParse)
     .use(remarkFrontmatter, ['yaml'])
     .use(remarkGfm)
+    .use(remarkContentMath)
     .parse(value)
   return rootSchema.parse(tree)
 }
@@ -203,7 +210,17 @@ export function segmentMarkdownForTranslation(input: unknown) {
             }),
           ),
           endOffset,
-          isTranslatable: !nontranslatableAstTypes.has(node.type),
+          isTranslatable:
+            !nontranslatableAstTypes.has(node.type) &&
+            !(
+              node.type === 'paragraph' &&
+              node.children?.some((child) => child.type === 'inlineMath') &&
+              node.children.every(
+                (child) =>
+                  child.type === 'inlineMath' ||
+                  (child.type === 'text' && typeof child.value === 'string' && !child.value.trim()),
+              )
+            ),
           normalizationVersion: translationNormalizationVersion,
           ordinal,
           protectedValues: [...details.protectedValues],

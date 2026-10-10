@@ -6,6 +6,7 @@ import { unified } from 'unified'
 import { visit } from 'unist-util-visit'
 import { z } from 'zod'
 
+import remarkContentMath from '../content/remark-math'
 import { localizeContentText } from './content'
 import type { AppLocale } from './locales'
 
@@ -14,7 +15,7 @@ type Replacement = Readonly<{ end: number; start: number; value: string }>
 /**
  * Materializes localized Markdown while preserving the canonical source syntax.
  * Only mdast text nodes are replaced, so frontmatter, code, inline code, raw HTML,
- * and link/image destinations never cross the conversion boundary.
+ * formulas and link/image destinations never cross the conversion boundary.
  */
 export function localizeContentMarkdown(rawMarkdown: string, locale: AppLocale) {
   const source = z.string().min(1).parse(rawMarkdown)
@@ -24,6 +25,7 @@ export function localizeContentMarkdown(rawMarkdown: string, locale: AppLocale) 
     .use(remarkParse)
     .use(remarkFrontmatter, ['yaml'])
     .use(remarkGfm)
+    .use(remarkContentMath)
     .parse(source) as Root
   const replacements: Replacement[] = []
   visit(tree, 'text', (node) => {

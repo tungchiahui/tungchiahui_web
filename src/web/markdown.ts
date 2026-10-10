@@ -1,6 +1,7 @@
 import rehypeShiki from '@shikijs/rehype'
 import type { Root } from 'mdast'
-import rehypeSanitize from 'rehype-sanitize'
+import rehypeKatex from 'rehype-katex'
+import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
 import rehypeStringify from 'rehype-stringify'
 import remarkFrontmatter from 'remark-frontmatter'
 import remarkGfm from 'remark-gfm'
@@ -10,8 +11,10 @@ import { unified } from 'unified'
 import { visit } from 'unist-util-visit'
 import { z } from 'zod'
 
+import remarkContentMath from '@/content/remark-math'
 import { localizeContentText } from '@/i18n/content'
 import type { AppLocale } from '@/i18n/locales'
+import { emitTelemetry } from '@/observability/telemetry'
 
 import { resolveMarkdownAsset } from './assets'
 
@@ -41,14 +44,6 @@ function headingId(text: string, usedIds: Map<string, number>) {
   return occurrence === 0 ? base : `${base}-${occurrence + 1}`
 }
 
-function stripTags(value: string) {
-  return value
-    .replace(/<[^>]*>/g, '')
-    .replaceAll('&amp;', '&')
-    .replaceAll('&lt;', '<')
-    .replaceAll('&gt;', '>')
-}
-
 function numberHeadings(
   headings: readonly Readonly<{ depth: number; id: string; text: string }>[],
 ) {
@@ -71,13 +66,13 @@ function numberHeadings(
   })
 }
 
-function enhanceHtml(html: string) {
+function enhanceHtml(html: string, headingTexts: readonly string[]) {
   const headings: Array<Readonly<{ depth: number; id: string; text: string }>> = []
   const usedIds = new Map<string, number>()
   let enhanced = html.replace(
     /<h([1-6])>([\s\S]*?)<\/h\1>/g,
     (_match, depthText: string, contents: string) => {
-      const text = stripTags(contents).trim()
+      const text = headingTexts[headings.length] ?? ''
       const id = headingId(text, usedIds)
       headings.push({ depth: Number(depthText), id, text })
       return `<h${depthText} id="${id}">${contents}</h${depthText}>`
@@ -129,13 +124,34 @@ export async function renderMarkdown(
   locale: AppLocale = 'zh-cn',
 ): Promise<RenderedMarkdown> {
   const source = z.string().min(1).parse(rawMarkdown)
+  const headingTexts: string[] = []
   const rendered = await unified()
     .use(remarkParse)
     .use(remarkFrontmatter, ['yaml'])
     .use(remarkGfm)
+    .use(remarkContentMath)
     .use(remarkLocaleContent(locale))
+    .use(() => (tree: Root) => {
+      visit(tree, 'heading', (heading) => {
+        const parts: string[] = []
+        visit(heading, (node) => {
+          if (node.type === 'text' || node.type === 'inlineCode' || node.type === 'inlineMath') {
+            parts.push(node.value)
+          }
+        })
+        headingTexts.push(parts.join('').trim())
+      })
+    })
     .use(remarkRehype)
-    .use(rehypeSanitize)
+    .use(rehypeSanitize, {
+      ...defaultSchema,
+      attributes: {
+        ...defaultSchema.attributes,
+        code: [['className', /^language-./, 'math-inline', 'math-display']],
+      },
+    })
+    // Sanitize author input first; only the trusted renderer may generate MathML/styles.
+    .use(rehypeKatex, { maxExpand: 1000, maxSize: 20, strict: 'ignore', trust: false })
     .use(rehypeShiki, {
       addLanguageClass: true,
       defaultColor: false,
@@ -157,7 +173,16 @@ export async function renderMarkdown(
     })
     .use(rehypeStringify)
     .process(source)
-  const enhanced = enhanceHtml(String(rendered))
+  const mathErrors = rendered.messages.filter((message) => message.source === 'rehype-katex')
+  if (mathErrors.length > 0) {
+    emitTelemetry({
+      attributes: { error_count: mathErrors.length, locale },
+      component: 'nextjs',
+      event: 'markdown_math_render_failed',
+      level: 'warn',
+    })
+  }
+  const enhanced = enhanceHtml(String(rendered), headingTexts)
 
   const readableCharacters = source
     .replace(/^---[\s\S]*?---/m, '')

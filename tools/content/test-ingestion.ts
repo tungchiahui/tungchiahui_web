@@ -25,6 +25,16 @@ function markdown(frontmatter: readonly string[], body: string) {
   return `---\n${frontmatter.join('\n')}\n---\n\n${body}\n`
 }
 
+const mathFixture = String.raw`Inline math: $E=mc^2$ and \(r^2\).
+
+$$
+a^2+b^2=c^2
+$$
+
+\[
+f(x)=\underbrace{x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x}_{20\text{ terms}}
+\]`
+
 const snapshotAFiles = [
   {
     path: 'content/posts/2026-01-06-新博客启用.md',
@@ -43,7 +53,7 @@ const snapshotAFiles = [
   },
   {
     path: 'content/posts/2026-07-21-VSCode任务栏启动Codex插件打不开.md',
-    contents: markdown(['title: VSCode 任务栏启动 Codex 插件打不开'], '# Codex'),
+    contents: markdown(['title: VSCode 任务栏启动 Codex 插件打不开'], `# Codex\n\n${mathFixture}`),
   },
   {
     path: 'content/wiki/2024-10-03-Docker教程/index.md',
@@ -53,7 +63,7 @@ const snapshotAFiles = [
     path: 'content/wiki/2023-10-05-Cplusplus教学/0100-C++开发环境搭建与测试.md',
     contents: markdown(
       ['title: C++ 开发环境搭建与测试'],
-      '# C++ 与 Unicode 渲染\n\n正文保护 `ROS2_Control` 与 https://example.com/id。\n\n## 代码示例\n\n```cpp\nint main() { return 0; }\n```\n\n## 资源与链接\n\n![本地 S3Mock Fixture](/api/assets/fixtures/phase-6.svg)\n\n[ROS2 文档](/docs/ros2/core/index.html)',
+      `# C++ 与 Unicode 渲染\n\n正文保护 \`ROS2_Control\` 与 https://example.com/id。\n\n## 代码示例\n\n\`\`\`cpp\nint main() { return 0; }\n\`\`\`\n\n## 资源与链接\n\n![本地 S3Mock Fixture](/api/assets/fixtures/phase-6.svg)\n\n[ROS2 文档](/docs/ros2/core/index.html)\n\n${mathFixture}`,
     ),
   },
   {
@@ -255,7 +265,8 @@ export async function verifyPhase5Ingestion(connectionString: string, firstJobId
     if (
       !protectedMarkdown?.includes('title: C++ 开发环境搭建与测试') ||
       !protectedMarkdown.includes('`ROS2_Control`') ||
-      !protectedMarkdown.includes('https://example.com/id')
+      !protectedMarkdown.includes('https://example.com/id') ||
+      !protectedMarkdown.includes(mathFixture)
     ) {
       throw new Error('OpenCC materialization changed protected Markdown syntax')
     }

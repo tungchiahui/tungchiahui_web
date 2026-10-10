@@ -159,6 +159,7 @@ Phase 5 将上述 Pipeline 实现为以下边界：
 ## Phase 8 Translation Memory baseline
 
 - unified/remark 顶层 mdast Node 形成稳定 Semantic Block；Normalization Version、Source Hash 与 AST/受保护值 Context Fingerprint 形成全局 Memory Identity，Ordinal 只负责当前文档拼装。
+- Blog/Wiki 的公式语法由共享 `remarkContentMath` 解析，包含 `$`、`$$`、`\(`、`\[` 分隔符；OpenCC 不修改公式值，Semantic Translation 保留 TeX/AST，独立公式不付费翻译。服务端渲染/安全/编写说明见 `../development/markdown-math.md`。
 - 受保护 Frontmatter、Code、HTML、URL、Identifier 与 Markdown Shape 在复用前重新验证；不安全 Target 回到 Pending/当前 zh-CN Fallback。
 - `document_translation_segments` 保存当前 Mapping 和可选 Previous Segment，支持 old zh-CN + old en-US + new zh-CN Targeted Patch Context。
 - Hash Hit 复用 reviewed/translated Block；Miss 创建 Pending；被替换且不再 Current 的 Pending 变 Stale。单个 Block 改变不会使其他 Translation 失效。
