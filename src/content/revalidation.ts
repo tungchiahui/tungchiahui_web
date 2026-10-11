@@ -89,5 +89,10 @@ export class PublicContentHooks implements ContentIngestionHooks {
 }
 
 export function pathsForRevalidation(input: unknown) {
-  return affectedPublicPaths(revalidationRequestSchema.parse(input).changes)
+  const parsed = revalidationRequestSchema.parse(input)
+  const paths = affectedPublicPaths(parsed.changes)
+  if (parsed.searchLocales?.length === 1 && parsed.searchLocales[0] === 'en-us') {
+    return paths.filter((path) => path === '/en-us' || path.startsWith('/en-us/'))
+  }
+  return paths
 }

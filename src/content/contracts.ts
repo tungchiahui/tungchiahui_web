@@ -20,6 +20,11 @@ export const contentSourceFileSchema = z.object({
 export const contentSnapshotSchema = z.object({
   sourceCommit: sourceCommitSchema,
   files: z.array(contentSourceFileSchema),
+  memoryFiles: z
+    .array(z.object({ path: z.string().min(1), contents: z.string().max(16_000_000) }))
+    .default([]),
+  filesFetched: z.number().int().nonnegative().optional(),
+  ancestorCommit: sourceCommitSchema.optional(),
 })
 
 export const preparedContentDocumentSchema = z.object({
@@ -34,7 +39,7 @@ export const preparedContentDocumentSchema = z.object({
   sourceUpdatedAt: z.date().nullable(),
 })
 
-export type ContentSnapshot = z.infer<typeof contentSnapshotSchema>
+export type ContentSnapshot = z.input<typeof contentSnapshotSchema>
 export type PreparedContentDocument = z.infer<typeof preparedContentDocumentSchema>
 
 export interface ReadonlyContentSource {

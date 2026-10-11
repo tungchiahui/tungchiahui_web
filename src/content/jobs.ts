@@ -135,6 +135,21 @@ export class ContentJobRepository {
     if (result.rowCount !== 1) throw new Error('Content job claim was lost while updating progress')
   }
 
+  async renewClaim(job: ClaimedContentJob, leaseMilliseconds: number) {
+    const result = await this.#transaction((client) =>
+      client.query(
+        `UPDATE app.operational_jobs SET claim_expires_at = clock_timestamp() + ($3 * interval '1 millisecond')
+       WHERE id = $1 AND status = 'running' AND claimed_by = $2 AND claim_expires_at > clock_timestamp()`,
+        [
+          job.id,
+          job.claimedBy,
+          z.number().int().min(1_000).max(3_600_000).parse(leaseMilliseconds),
+        ],
+      ),
+    )
+    if (result.rowCount !== 1) throw new Error('Content job lease was lost')
+  }
+
   async complete(job: ClaimedContentJob, progress: Readonly<Record<string, unknown>>) {
     const result = await this.#transaction((client) =>
       client.query(

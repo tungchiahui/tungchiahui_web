@@ -191,7 +191,10 @@ function assertUniqueRoutes(documents: readonly PreparedContentDocument[]) {
   }
 }
 
-export function prepareContentSnapshot(snapshotInput: unknown) {
+export function prepareContentSnapshot(
+  snapshotInput: unknown,
+  reusable: ReadonlyMap<string, PreparedContentDocument> = new Map(),
+) {
   const snapshot = contentSnapshotSchema.parse(snapshotInput)
   const paths = new Set<string>()
   const documents = snapshot.files
@@ -201,7 +204,10 @@ export function prepareContentSnapshot(snapshotInput: unknown) {
         throw new Error(`Canonical content snapshot contains duplicate path ${file.path}`)
       }
       paths.add(file.path)
-      return prepareDocument(snapshot.sourceCommit, file)
+      const cached = reusable.get(file.path)
+      return cached?.rawMarkdown === file.contents
+        ? preparedContentDocumentSchema.parse({ ...cached, sourceCommit: snapshot.sourceCommit })
+        : prepareDocument(snapshot.sourceCommit, file)
     })
   assertUniqueRoutes(documents)
   return Object.freeze({ documents, sourceCommit: snapshot.sourceCommit })

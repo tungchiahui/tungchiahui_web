@@ -2,13 +2,26 @@ import { createHash } from 'node:crypto'
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { createDatabaseClient } from '../database/client'
-import { contentAliases, documents, documentTranslations, ingestionRuns } from '../database/schema'
+import {
+  contentAliases,
+  contentSourceFiles,
+  contentSyncState,
+  documents,
+  documentTranslations,
+  ingestionRuns,
+} from '../database/schema'
 import { sourceCommitSchema } from '../domain/persistence'
 import { contentGlossary } from '../i18n/content-glossary'
 import { localizeContentMarkdown } from '../i18n/content-markdown'
 import { redactTelemetryText } from '../observability/telemetry'
+import { applyGitMemoryImport, planGitMemoryImport } from '../translation/git-import'
+import { gitBlobSha, sourceCacheVersion } from '../translation/git-memory'
 import { reconcileEnglishTranslation, retireEnglishTranslations } from '../translation/memory'
-import type { PreparedContentDocument } from './contracts'
+import {
+  contentSnapshotSchema,
+  type PreparedContentDocument,
+  preparedContentDocumentSchema,
+} from './contracts'
 import {
   type ContentChange,
   type ContentHookInput,
@@ -140,6 +153,16 @@ export type IngestionResult = Readonly<{
   filesDeleted: number
   filesSeen: number
   sourceCommit: string
+  englishOnlyDocumentIds?: readonly string[] | undefined
+  memory?:
+    | Readonly<{
+        entriesChanged: number
+        shardsChanged: number
+        documentsMaterialized: number
+        filesFetched: number
+        error: string | null
+      }>
+    | undefined
   translation: Readonly<{
     fallbackSegments: number
     memoryHits: number
@@ -154,6 +177,16 @@ export class ContentHookDeliveryError extends Error {
 
   constructor(result: IngestionResult, cause: unknown) {
     super('Content materialization completed but downstream hooks were not delivered', { cause })
+    this.result = result
+  }
+}
+export class ContentMemoryValidationError extends Error {
+  override readonly name = 'ContentMemoryValidationError'
+  readonly result: IngestionResult
+  constructor(result: IngestionResult) {
+    super(
+      'Git translation memory was rejected; canonical content is published with last valid memory',
+    )
     this.result = result
   }
 }
@@ -183,6 +216,42 @@ export class ContentIngestionRepository {
     await this.#hooks.revalidatePublicContent(validated)
   }
 
+  async deliverResultHooks(result: IngestionResult) {
+    const englishOnly = new Set(result.englishOnlyDocumentIds ?? [])
+    const canonical = result.changes.filter((change) => !englishOnly.has(change.documentId))
+    const english = result.changes.filter((change) => englishOnly.has(change.documentId))
+    if (canonical.length)
+      await this.deliverHooks({
+        changes: canonical,
+        sourceCommit: result.sourceCommit,
+        translation: result.translation,
+      })
+    if (english.length)
+      await this.deliverHooks({
+        changes: english,
+        searchLocales: ['en-us'],
+        sourceCommit: result.sourceCommit,
+        translation: result.translation,
+      })
+  }
+
+  async readSourceCache() {
+    return this.#client.database.transaction(async (transaction) => {
+      await transaction.execute(sql`SET LOCAL ROLE site_content_worker`)
+      const files = await transaction
+        .select()
+        .from(contentSourceFiles)
+        .where(eq(contentSourceFiles.cacheVersion, sourceCacheVersion))
+      const state = (
+        await transaction
+          .select()
+          .from(contentSyncState)
+          .where(eq(contentSyncState.key, 'canonical'))
+      )[0]
+      return { files, ...(state ? { sourceCommit: state.sourceCommit } : {}) }
+    })
+  }
+
   async recordFailure(jobIdInput: unknown, sourceCommitInput: unknown, error: unknown) {
     const operationalJobId = jobIdSchema.parse(jobIdInput)
     const sourceCommit = sourceCommitSchema.parse(sourceCommitInput)
@@ -208,9 +277,9 @@ export class ContentIngestionRepository {
 
   async ingest(jobIdInput: unknown, snapshotInput: unknown): Promise<IngestionResult> {
     const operationalJobId = jobIdSchema.parse(jobIdInput)
-    let prepared: ReturnType<typeof prepareContentSnapshot>
+    let snapshot: z.infer<typeof contentSnapshotSchema>
     try {
-      prepared = prepareContentSnapshot(snapshotInput)
+      snapshot = contentSnapshotSchema.parse(snapshotInput)
     } catch (error: unknown) {
       if (error instanceof ContentRouteCollisionError) throw error
       throw new ContentSnapshotValidationError('Canonical content snapshot validation failed', {
@@ -219,7 +288,62 @@ export class ContentIngestionRepository {
     }
     const result = await this.#client.database.transaction(async (transaction) => {
       await transaction.execute(sql`SET LOCAL ROLE site_content_worker`)
+      await transaction.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext('canonical-content-sync'))`,
+      )
+      const state = (
+        await transaction
+          .select()
+          .from(contentSyncState)
+          .where(eq(contentSyncState.key, 'canonical'))
+      )[0]
+      if (
+        snapshot.ancestorCommit !== undefined &&
+        state &&
+        snapshot.ancestorCommit !== state.sourceCommit
+      )
+        throw new Error(
+          'Content sync lineage changed while fetching; retry from the current applied commit',
+        )
+      const sourceCache = await transaction
+        .select()
+        .from(contentSourceFiles)
+        .where(eq(contentSourceFiles.cacheVersion, sourceCacheVersion))
+      const cached = new Map(sourceCache.map((file) => [file.path, file]))
       const existingDocuments = await transaction.select().from(documents)
+      const reusable = new Map(
+        existingDocuments
+          .filter(
+            (document) =>
+              cached.get(document.sourcePath)?.contents === document.rawMarkdown &&
+              document.sourceHash === sha256(document.rawMarkdown),
+          )
+          .map((document) => [document.sourcePath, preparedContentDocumentSchema.parse(document)]),
+      )
+      let prepared: ReturnType<typeof prepareContentSnapshot>
+      try {
+        prepared = prepareContentSnapshot(snapshot, reusable)
+      } catch (error: unknown) {
+        if (error instanceof ContentRouteCollisionError) throw error
+        throw new ContentSnapshotValidationError('Canonical content snapshot validation failed', {
+          cause: error,
+        })
+      }
+      let memoryPlan: ReturnType<typeof planGitMemoryImport> | undefined
+      let memoryError: string | null = null
+      try {
+        memoryPlan = planGitMemoryImport(
+          snapshot.memoryFiles,
+          sourceCache.filter((file) => file.path.startsWith('translations/')),
+          state?.memoryEnabled ?? false,
+        )
+      } catch {
+        memoryError =
+          'Git translation memory validation failed; retained last valid memory and published canonical content'
+      }
+      const imported = memoryPlan
+        ? await applyGitMemoryImport(transaction, memoryPlan, state?.memoryEnabled ?? false)
+        : { documentIds: new Set<string>(), entriesChanged: 0, shardsChanged: 0 }
       const existingTranslations = await transaction
         .select()
         .from(documentTranslations)
@@ -274,6 +398,8 @@ export class ContentIngestionRepository {
         translatedSegments: 0,
       }
       const documentIdsByRoute = new Map<string, string>()
+      const englishOnlyDocumentIds: string[] = []
+      let documentsMaterialized = 0
       for (const item of plan) {
         const changed = item.existing
           ? documentContentChanged(item.existing, item.incoming) ||
@@ -305,7 +431,14 @@ export class ContentIngestionRepository {
         }
         documentIdsByRoute.set(item.incoming.routePath, documentId)
         let materializationChanged = false
+        const regionalNeedsMaterialization =
+          changed ||
+          deterministicContentLocales.some((locale) => {
+            const previous = existingTranslationsByKey.get(`${documentId}:${locale}`)
+            return !previous || previous.translationVersion !== contentGlossary.revision
+          })
         for (const locale of deterministicContentLocales) {
+          if (!regionalNeedsMaterialization) continue
           const translatedMarkdown = localizeContentMarkdown(item.incoming.rawMarkdown, locale)
           const translationHash = sha256(translatedMarkdown)
           const existingTranslation = existingTranslationsByKey.get(`${documentId}:${locale}`)
@@ -337,17 +470,44 @@ export class ContentIngestionRepository {
               },
             })
         }
-        const english = await reconcileEnglishTranslation(transaction, {
-          documentId,
-          rawMarkdown: item.incoming.rawMarkdown,
-          sourceHash: item.incoming.sourceHash,
-          timestamp: startedAt,
-        })
-        materializationChanged ||= english.changed
-        translation.fallbackSegments += english.metrics.fallbackSegmentCount
-        translation.memoryHits += english.metrics.translationMemoryHits
-        translation.pendingSegments += english.metrics.pendingSegmentCount
-        translation.translatedSegments += english.metrics.translatedSegmentCount
+        const previousEnglish = (
+          await transaction
+            .select()
+            .from(documentTranslations)
+            .where(
+              and(
+                eq(documentTranslations.documentId, documentId),
+                eq(documentTranslations.locale, 'en-us'),
+              ),
+            )
+        )[0]
+        if (
+          changed ||
+          !cached.has(item.incoming.sourcePath) ||
+          (memoryPlan?.enabled === true && state?.memoryEnabled !== true) ||
+          !(memoryPlan?.enabled ?? state?.memoryEnabled ?? false) ||
+          imported.documentIds.has(documentId) ||
+          !previousEnglish ||
+          previousEnglish.sourceHash !== item.incoming.sourceHash
+        ) {
+          const english = await reconcileEnglishTranslation(transaction, {
+            documentId,
+            rawMarkdown: item.incoming.rawMarkdown,
+            sourceHash: item.incoming.sourceHash,
+            timestamp: startedAt,
+          })
+          documentsMaterialized += 1
+          materializationChanged ||= english.changed
+          translation.fallbackSegments += english.metrics.fallbackSegmentCount
+          translation.memoryHits += english.metrics.translationMemoryHits
+          translation.pendingSegments += english.metrics.pendingSegmentCount
+          translation.translatedSegments += english.metrics.translatedSegmentCount
+        } else {
+          translation.fallbackSegments += previousEnglish.fallbackSegmentCount
+          translation.memoryHits += previousEnglish.translationMemoryHits
+          translation.pendingSegments += previousEnglish.pendingSegmentCount
+          translation.translatedSegments += previousEnglish.translatedSegmentCount
+        }
         if (changed) {
           changes.push({
             documentId,
@@ -360,6 +520,7 @@ export class ContentIngestionRepository {
             type: changeType(item.existing, item.incoming),
           })
         } else if (materializationChanged) {
+          if (!regionalNeedsMaterialization) englishOnlyDocumentIds.push(documentId)
           changes.push({
             documentId,
             routePath: item.incoming.routePath,
@@ -483,6 +644,43 @@ export class ContentIngestionRepository {
           : true,
       ).length
       const filesDeleted = deleted.length
+      const canonicalPaths = snapshot.files.map((file) => file.path)
+      const deletedFiles = sourceCache
+        .filter((file) => file.path.startsWith('content/') && !canonicalPaths.includes(file.path))
+        .map((file) => file.path)
+      if (deletedFiles.length)
+        await transaction
+          .delete(contentSourceFiles)
+          .where(inArray(contentSourceFiles.path, deletedFiles))
+      for (const file of snapshot.files) {
+        const blobSha = gitBlobSha(file.contents)
+        if (cached.get(file.path)?.blobSha === blobSha) continue
+        await transaction
+          .insert(contentSourceFiles)
+          .values({ ...file, blobSha, cacheVersion: sourceCacheVersion })
+          .onConflictDoUpdate({
+            target: contentSourceFiles.path,
+            set: { ...file, blobSha, cacheVersion: sourceCacheVersion },
+          })
+      }
+      await transaction
+        .insert(contentSyncState)
+        .values({
+          key: 'canonical',
+          sourceCommit: prepared.sourceCommit,
+          memoryCommit: memoryPlan?.enabled ? prepared.sourceCommit : (state?.memoryCommit ?? null),
+          memoryEnabled: memoryPlan?.enabled ?? state?.memoryEnabled ?? false,
+        })
+        .onConflictDoUpdate({
+          target: contentSyncState.key,
+          set: {
+            sourceCommit: prepared.sourceCommit,
+            memoryCommit: memoryPlan?.enabled
+              ? prepared.sourceCommit
+              : (state?.memoryCommit ?? null),
+            memoryEnabled: memoryPlan?.enabled ?? state?.memoryEnabled ?? false,
+          },
+        })
       await transaction
         .update(ingestionRuns)
         .set({
@@ -501,21 +699,34 @@ export class ContentIngestionRepository {
         filesDeleted,
         filesSeen: prepared.documents.length,
         sourceCommit: prepared.sourceCommit,
+        englishOnlyDocumentIds,
+        memory: {
+          entriesChanged: imported.entriesChanged,
+          shardsChanged: imported.shardsChanged,
+          documentsMaterialized,
+          filesFetched:
+            snapshot.filesFetched ?? snapshot.files.length + snapshot.memoryFiles.length,
+          error: memoryError,
+        },
         translation: Object.freeze(translation),
       })
     })
 
     if (result.changes.length > 0) {
       try {
-        await this.deliverHooks({
-          changes: [...result.changes],
-          sourceCommit: result.sourceCommit,
-          translation: result.translation,
-        })
+        await this.deliverResultHooks(result)
       } catch (error: unknown) {
         throw new ContentHookDeliveryError(result, error)
       }
     }
+    console.log(
+      JSON.stringify({
+        event: 'git_memory_content_sync',
+        sourceCommit: result.sourceCommit,
+        ...result.memory,
+      }),
+    )
+    if (result.memory?.error) throw new ContentMemoryValidationError(result)
     return result
   }
 }

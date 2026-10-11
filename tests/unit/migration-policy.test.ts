@@ -46,7 +46,7 @@ describe('migration policy', () => {
       },
     )
 
-    expect(policy.migrations).toHaveLength(10)
+    expect(policy.migrations).toHaveLength(11)
     expect(policy.migrations.every((migration) => migration.changeKind === 'expand')).toBe(true)
   })
 

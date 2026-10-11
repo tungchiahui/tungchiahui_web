@@ -1,15 +1,19 @@
 import { spawnSync } from 'node:child_process'
 
 import { z } from 'zod'
-
 import {
   type TranslationOperationRequest,
   translationOperationRequestSchema,
 } from '../src/translation/contracts'
+import {
+  type LocalTranslationCommand,
+  parseLocalTranslationCommand,
+} from './translation/local-command'
 
 const defaultProductionEnvFile = '/etc/tungchiahui/.env'
 
 export type SiteCommand =
+  | LocalTranslationCommand
   | Readonly<{
       databaseUrl: string
       kind: 'account-create'
@@ -114,6 +118,8 @@ export function assertToolchain(nodeVersion: string) {
 }
 
 export function parseSiteCommand(arguments_: readonly string[]): SiteCommand {
+  if (arguments_[0] === 'translate' && arguments_.includes('--content-root'))
+    return parseLocalTranslationCommand(arguments_.slice(1))
   if (arguments_.length === 0) {
     return Object.freeze({ kind: 'help' })
   }

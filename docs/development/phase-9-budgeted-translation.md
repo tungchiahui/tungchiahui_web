@@ -1,3 +1,5 @@
+> Historical Phase 9 baseline. ADR 0028 supersedes production paid execution with local authoring and Git JSON memory; see translation-operations.md.
+
 # Phase 9 Budgeted Translation
 
 ## Outcome

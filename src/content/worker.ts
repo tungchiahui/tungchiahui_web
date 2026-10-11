@@ -1,11 +1,13 @@
 import { ZodError, z } from 'zod'
 import { safeErrorAttributes } from '../observability/telemetry'
+import { gitMemorySyncMetricsSchema } from '../translation/git-memory'
 import type { ReadonlyContentSource } from './contracts'
 import { contentHookInputSchema } from './hooks'
 import {
   AmbiguousContentIdentityError,
   ContentHookDeliveryError,
   type ContentIngestionRepository,
+  ContentMemoryValidationError,
   ContentSnapshotValidationError,
 } from './ingestion'
 import type { ClaimedContentJob, ContentJobRepository } from './jobs'
@@ -23,6 +25,8 @@ const sideEffectsProgressSchema = z
       filesChanged: z.number().int().nonnegative(),
       filesDeleted: z.number().int().nonnegative(),
       filesSeen: z.number().int().nonnegative(),
+      englishOnlyDocumentIds: z.array(z.uuid()).optional(),
+      memory: gitMemorySyncMetricsSchema.optional(),
     }),
   })
   .strict()
@@ -40,7 +44,8 @@ function isPermanentContentError(error: unknown) {
     error instanceof ZodError ||
     error instanceof AmbiguousContentIdentityError ||
     error instanceof ContentRouteCollisionError ||
-    error instanceof ContentSnapshotValidationError
+    error instanceof ContentSnapshotValidationError ||
+    error instanceof ContentMemoryValidationError
   )
 }
 
@@ -62,7 +67,30 @@ export class ContentWorker {
   async runOnce(leaseMilliseconds = 300_000) {
     const job = await this.#jobs.claimNext(this.#workerId, leaseMilliseconds)
     if (!job) return Object.freeze({ claimed: false as const })
-    return this.#execute(job)
+    let renewing: Promise<void> | undefined
+    let leaseError: unknown
+    const timer = setInterval(
+      () => {
+        if (renewing) return
+        renewing = this.#jobs
+          .renewClaim(job, leaseMilliseconds)
+          .catch((error: unknown) => {
+            leaseError = error
+          })
+          .finally(() => {
+            renewing = undefined
+          })
+      },
+      Math.max(250, Math.min(30_000, Math.floor(leaseMilliseconds / 3))),
+    )
+    try {
+      const result = await this.#execute(job)
+      if (leaseError) throw new Error('Content job renewal failed')
+      return result
+    } finally {
+      clearInterval(timer)
+      await renewing
+    }
   }
 
   async #execute(job: ClaimedContentJob) {
@@ -72,13 +100,16 @@ export class ContentWorker {
       const pendingSideEffects = sideEffectsProgressSchema.safeParse(job.progress)
       if (pendingSideEffects.success) {
         replayingSideEffects = true
-        await this.#ingestion.deliverHooks(pendingSideEffects.data.hookInput)
         const result = Object.freeze({
           changes: pendingSideEffects.data.hookInput.changes,
           ...pendingSideEffects.data.result,
           sourceCommit,
           translation: pendingSideEffects.data.hookInput.translation,
         })
+        if (result.englishOnlyDocumentIds === undefined)
+          await this.#ingestion.deliverHooks(pendingSideEffects.data.hookInput)
+        else await this.#ingestion.deliverResultHooks(result)
+        if (result.memory?.error) throw new ContentMemoryValidationError(result)
         await this.#jobs.complete(job, {
           ...pendingSideEffects.data.result,
           phase: 'completed',
@@ -105,6 +136,7 @@ export class ContentWorker {
         filesSeen: result.filesSeen,
         phase: 'completed',
         sourceCommit,
+        ...(result.memory ? { memory: result.memory } : {}),
       }
       await this.#jobs.complete(job, progress)
       return Object.freeze({
@@ -114,7 +146,10 @@ export class ContentWorker {
         result,
       })
     } catch (error: unknown) {
-      if (!(error instanceof ContentHookDeliveryError) && !replayingSideEffects) {
+      if (
+        !(error instanceof ContentHookDeliveryError) &&
+        (!replayingSideEffects || error instanceof ContentMemoryValidationError)
+      ) {
         try {
           await this.#ingestion.recordFailure(job.id, sourceCommit, error)
         } catch (auditError: unknown) {
@@ -128,6 +163,15 @@ export class ContentWorker {
         }
       }
       const failure = await this.#jobs.fail(job, error, {
+        ...(error instanceof ContentMemoryValidationError
+          ? {
+              progress: {
+                phase: 'memory_rejected',
+                canonicalPublished: true,
+                memory: error.result.memory ?? null,
+              },
+            }
+          : {}),
         ...(error instanceof ContentHookDeliveryError
           ? {
               progress: {
@@ -141,6 +185,10 @@ export class ContentWorker {
                   filesChanged: error.result.filesChanged,
                   filesDeleted: error.result.filesDeleted,
                   filesSeen: error.result.filesSeen,
+                  ...(error.result.englishOnlyDocumentIds
+                    ? { englishOnlyDocumentIds: [...error.result.englishOnlyDocumentIds] }
+                    : {}),
+                  ...(error.result.memory ? { memory: error.result.memory } : {}),
                 },
               },
             }

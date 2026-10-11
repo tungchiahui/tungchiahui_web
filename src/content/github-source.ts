@@ -1,7 +1,6 @@
-import { createHash } from 'node:crypto'
-
 import { z } from 'zod'
 import { sourceCommitSchema } from '../domain/persistence'
+import { gitBlobSha } from '../translation/git-memory'
 import { contentSnapshotSchema, type ReadonlyContentSource } from './contracts'
 
 const repositorySchema = z
@@ -30,6 +29,12 @@ export type GitHubContentSourceOptions = Readonly<{
   fetchImplementation?: typeof fetch
   repository: string
   token?: string
+  readCache?: () => Promise<
+    Readonly<{
+      sourceCommit?: string
+      files: readonly { path: string; contents: string; blobSha: string }[]
+    }>
+  >
 }>
 
 function isCanonicalContentPath(path: string) {
@@ -37,11 +42,6 @@ function isCanonicalContentPath(path: string) {
     /^content\/posts\/[^/]+\.md$/.test(path) ||
     /^content\/wiki\/[^/]+\/(?:[^/]+\/)*[^/]+\.md$/.test(path)
   )
-}
-
-function gitBlobSha(contents: Buffer) {
-  const header = Buffer.from(`blob ${contents.byteLength}\0`)
-  return createHash('sha1').update(header).update(contents).digest('hex')
 }
 
 async function mapWithConcurrency<T, R>(
@@ -74,9 +74,11 @@ export class GitHubContentSource implements ReadonlyContentSource {
   readonly #fetch: typeof fetch
   readonly #headers: Readonly<Record<string, string>>
   readonly #repository: string
+  readonly #readCache: GitHubContentSourceOptions['readCache']
 
   constructor(options: GitHubContentSourceOptions) {
     this.#repository = repositorySchema.parse(options.repository)
+    this.#readCache = options.readCache
     const apiBaseUrl = new URL(options.apiBaseUrl ?? 'https://api.github.com')
     if (options.token !== undefined && apiBaseUrl.origin !== 'https://api.github.com') {
       throw new Error('GitHub read token may only be sent to the official GitHub API origin')
@@ -106,6 +108,24 @@ export class GitHubContentSource implements ReadonlyContentSource {
 
   async fetchSnapshot(sourceCommitInput: string) {
     const sourceCommit = sourceCommitSchema.parse(sourceCommitInput)
+    const cache = await this.#readCache?.()
+    const cachedFiles = new Map(cache?.files.map((file) => [file.path, file]))
+    const cachedBlobs = new Map(cache?.files.map((file) => [file.blobSha, file]))
+    if (cache?.sourceCommit && cache.sourceCommit !== sourceCommit) {
+      const comparison = z
+        .object({ status: z.enum(['ahead', 'behind', 'diverged', 'identical']) })
+        .parse(
+          await this.#getJson(
+            new URL(
+              `${this.#apiBaseUrl}/repos/${this.#repository}/compare/${cache.sourceCommit}...${sourceCommit}`,
+            ),
+          ),
+        )
+      if (comparison.status !== 'ahead')
+        throw new Error(
+          'Content sync target does not advance the applied Git history; publish rollback as a new Git commit',
+        )
+    }
     const treeUrl = new URL(
       `${this.#apiBaseUrl}/repos/${this.#repository}/git/trees/${sourceCommit}`,
     )
@@ -116,14 +136,23 @@ export class GitHubContentSource implements ReadonlyContentSource {
     }
 
     const entries = tree.tree
-      .filter((entry) => entry.type === 'blob' && isCanonicalContentPath(entry.path))
+      .filter(
+        (entry) =>
+          entry.type === 'blob' &&
+          (isCanonicalContentPath(entry.path) ||
+            /^translations\/en-us\/.*\.json$/u.test(entry.path)),
+      )
       .sort((left, right) => left.path.localeCompare(right.path, 'en'))
     const paths = new Set(entries.map((entry) => entry.path))
     if (paths.size !== entries.length) {
       throw new Error('GitHub content tree contains duplicate canonical paths')
     }
 
-    const files = await mapWithConcurrency(entries, 8, async (entry) => {
+    let filesFetched = 0
+    const sourceFiles = await mapWithConcurrency(entries, 8, async (entry) => {
+      const cached = cachedFiles.get(entry.path) ?? cachedBlobs.get(entry.sha)
+      if (cached?.blobSha === entry.sha && gitBlobSha(cached.contents) === entry.sha)
+        return { contents: cached.contents, path: entry.path }
       const blobUrl = new URL(
         `${this.#apiBaseUrl}/repos/${this.#repository}/git/blobs/${entry.sha}`,
       )
@@ -135,9 +164,19 @@ export class GitHubContentSource implements ReadonlyContentSource {
       if (gitBlobSha(contents) !== entry.sha) {
         throw new Error(`GitHub blob hash mismatch for ${entry.path}`)
       }
-      return { contents: contents.toString('utf8'), path: entry.path }
+      filesFetched += 1
+      return {
+        contents: new TextDecoder('utf-8', { fatal: true }).decode(contents),
+        path: entry.path,
+      }
     })
 
-    return contentSnapshotSchema.parse({ files, sourceCommit })
+    return contentSnapshotSchema.parse({
+      files: sourceFiles.filter((file) => isCanonicalContentPath(file.path)),
+      memoryFiles: sourceFiles.filter((file) => !isCanonicalContentPath(file.path)),
+      filesFetched,
+      sourceCommit,
+      ...(cache?.sourceCommit ? { ancestorCommit: cache.sourceCommit } : {}),
+    })
   }
 }

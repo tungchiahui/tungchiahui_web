@@ -28,6 +28,13 @@ type AstNode = {
   position?: unknown | undefined
   title?: unknown | undefined
   type: string
+  ordered?: unknown
+  start?: unknown
+  spread?: unknown
+  checked?: unknown
+  identifier?: unknown
+  label?: unknown
+  referenceType?: unknown
   url?: unknown | undefined
   value?: unknown | undefined
 }
@@ -125,7 +132,21 @@ function normalizeSource(value: string) {
 
 function semanticStructure(node: z.infer<typeof astNodeSchema>): unknown {
   const attributes: Record<string, unknown> = { type: node.type }
-  for (const key of ['align', 'depth', 'lang', 'meta', 'title', 'url'] as const) {
+  for (const key of [
+    'align',
+    'depth',
+    'lang',
+    'meta',
+    'title',
+    'url',
+    'ordered',
+    'start',
+    'spread',
+    'checked',
+    'identifier',
+    'label',
+    'referenceType',
+  ] as const) {
     if (node[key] !== undefined) attributes[key] = node[key]
   }
   if (protectedLiteralTypes.has(node.type)) {
@@ -147,7 +168,9 @@ function protectedTextPattern() {
   const terms = contentGlossary.protectedTerms
     .toSorted((left, right) => right.length - left.length)
     .map(escapeRegExp)
-  return new RegExp(`${terms.join('|')}|${dynamicProtectedPattern.source}`, 'gu')
+  // Match complete identifiers before shorter glossary terms such as ROS2;
+  // otherwise ROS2_Control would protect only the ROS2 prefix.
+  return new RegExp(`${dynamicProtectedPattern.source}|${terms.join('|')}`, 'gu')
 }
 
 function collectProtectedValues(node: z.infer<typeof astNodeSchema>, output: string[]) {
@@ -176,6 +199,70 @@ function parseMarkdown(value: string) {
     .use(remarkContentMath)
     .parse(value)
   return rootSchema.parse(tree)
+}
+
+// Translate only text leaves. Markdown delimiters, code, formula nodes, URLs and
+// titles remain in the source template rather than relying on model fidelity.
+export function createTranslationTextTemplate(source: string) {
+  const parts: { end: number; protected: string[]; start: number; text: string }[] = []
+  function visit(node: AstNode) {
+    if (node.type === 'text') {
+      const position = positionSchema.parse(node.position)
+      const rawText = source.slice(position.start.offset, position.end.offset)
+      if (!rawText.trim()) return
+      const protectedValues: string[] = []
+      const text = rawText.replace(protectedTextPattern(), (value) => {
+        const marker = `TRANSLATION_LITERAL_${protectedValues.length}_END`
+        protectedValues.push(value)
+        return marker
+      })
+      parts.push({
+        end: position.end.offset,
+        protected: protectedValues,
+        start: position.start.offset,
+        text,
+      })
+      return
+    }
+    if (protectedLiteralTypes.has(node.type)) return
+    for (const child of node.children ?? []) visit(child)
+  }
+  visit(parseMarkdown(source))
+  return Object.freeze({
+    texts: parts.map((part) => part.text),
+    assemble(textsInput: unknown) {
+      const texts = z.array(z.string().min(1).max(1_000_000)).length(parts.length).parse(textsInput)
+      let result = source
+      for (let index = parts.length - 1; index >= 0; index -= 1) {
+        const part = parts[index]
+        const translated = texts[index]
+        if (!part || translated === undefined) throw new Error('Missing translation text part')
+        const markers = translated.match(/TRANSLATION_LITERAL_\d+_END/gu) ?? []
+        const expected = part.protected.map((_, i) => `TRANSLATION_LITERAL_${i}_END`)
+        if (JSON.stringify(markers) !== JSON.stringify(expected)) {
+          throw new Error('Translation did not preserve protected text markers')
+        }
+        // Escape model-created Markdown before restoring exact source literals.
+        const escaped = translated
+          .replace(/\r?\n/gu, ' ')
+          .replace(/[\\`*_{}[\]<>|#$!.+~-]/gu, '\\$&')
+        const text = escaped.replace(
+          /TRANSLATION\\_LITERAL\\_(\d+)\\_END/gu,
+          (_, ordinal: string) => {
+            const literal = part.protected[Number(ordinal)]
+            if (literal === undefined) throw new Error('Unknown protected text marker')
+            return literal
+          },
+        )
+        result = result.slice(0, part.start) + text + result.slice(part.end)
+      }
+      const block = segmentMarkdownForTranslation(source)[0]
+      if (!block || !isSafeTranslationCandidate(block, result)) {
+        throw new Error('Translation did not preserve the Markdown structure and protected values')
+      }
+      return result
+    },
+  })
 }
 
 function blockDetails(node: z.infer<typeof astNodeSchema>) {
@@ -248,9 +335,16 @@ export function isSafeTranslationCandidate(
     const translatedNode = translatedRoot.children[0]
     if (!translatedNode) return false
     const details = blockDetails(translatedNode)
+    // Natural English compounds and e.g./i.e. can be newly introduced by a
+    // translation. Keep every original literal and all URL/code/identifier
+    // protection; do not mistake ordinary new English words for source code.
+    const protectedValues = details.protectedValues.filter((value) => {
+      if (block.protectedValues.includes(value)) return true
+      return !/^text:(?:[A-Za-z]+(?:-[A-Za-z]+)+|e\.g|i\.e)$/u.test(value)
+    })
     return (
       details.structureFingerprint === block.structureFingerprint &&
-      canonicalJson(details.protectedValues) === canonicalJson(block.protectedValues)
+      canonicalJson(protectedValues) === canonicalJson(block.protectedValues)
     )
   } catch {
     return false

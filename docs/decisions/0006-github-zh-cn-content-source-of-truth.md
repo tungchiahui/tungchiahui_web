@@ -1,6 +1,6 @@
 # ADR 0006：保持 GitHub zh-CN Markdown 为 Content Source of Truth
 
-- Status: Accepted
+- Status: Superseded by [ADR 0028](./0028-git-translation-memory-and-local-execution.md)
 - Date: 2026-08-23
 
 ## Context

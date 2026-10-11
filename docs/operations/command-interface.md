@@ -67,17 +67,22 @@ OpenResty 将该 Namespace 直接路由到独立 `control-api`，不经过 Next.
 
 ### Translation
 
+ADR 0028：付费任务只在开发机执行。生产旧 Execute Endpoint 返回 410。
+
 ```bash
-./site translate pending --dry-run
-./site translate pending --execute --budget-usd 0.50
-./site translate changed --dry-run
-./site translate article <source-path> --dry-run
-./site translate status
-./site translate status <job-id>
-./site translate cancel <job-id>
+./site translate pending --content-root ../tungchiahui_content --dry-run
+./site translate pending --content-root ../tungchiahui_content --execute --budget-usd 0.50 --key-file /private/deepseek-key.json
+./site translate changed --content-root ../tungchiahui_content --dry-run
+./site translate article <source-path> --content-root ../tungchiahui_content --dry-run
+./site translate validate --content-root ../tungchiahui_content
+./site translate status <job-id> --content-root ../tungchiahui_content
+./site translate cancel <job-id> --content-root ../tungchiahui_content
 ```
 
-Force 重译还要求 `--force --confirm-retranslation RETRANSLATE`。Execute 模式在请求 Contract 中加入显式 Paid Confirmation；Operator CLI 不直接连接 Production PostgreSQL，也不持有 Provider Credential。输出为结构化 JSON，包含 Job、Estimate、Progress、Usage/Cost 与 Error State，供 Human/Workflow 使用可靠 Exit Code 处理。
+Force 重译要求 `--force --confirm-retranslation RETRANSLATE`。本地持久账本先预占最大费用，
+未知结果保留占用；恢复必须保持源内容、Scope 和预算，未知请求不重复发送。
+API Key 存放在两个仓库之外的 0600 文件。结果 JSON 经 Review 后提交内容仓库，服务器免费导入。
+历史生产 Job 的 Status/Cancel 仍可使用不带 `--content-root` 的旧命令。
 
 ### Deployment
 
@@ -143,7 +148,7 @@ GitHub Actions 和 Human Operator 必须调用同一套底层 Production Control
 
 不得创建逻辑分叉的“CI Deployment Path”和“Manual Deployment Path”。
 
-Web Application Repository 的 `push to main` 在 `release.yml` 的 CI Quality Gates 全部通过后自动构建 Git-SHA-tagged Immutable Image Set，并调用该统一实现。`./site deploy` 只提供人工触发、重试或指定版本。Content Repository Push 只通过 reusable workflow 调用 `./site content sync`，不触发 Next.js Build/Blue-Green；Translation 仍只允许显式 typed `workflow_dispatch`。
+Web Application Repository 的 `push to main` 在 `release.yml` 的 CI Quality Gates 全部通过后自动构建 Git-SHA-tagged Immutable Image Set，并调用该统一实现。`./site deploy` 只提供人工触发、重试或指定版本。Content Repository Push 只通过 reusable workflow 调用 `./site content sync`，不触发 Next.js Build/Blue-Green；付费翻译只在开发机显式执行；Translation Manual Workflow 仅验证 JSON。
 
 生产配置边界使用以下命令；它们都不得打印配置值：
 

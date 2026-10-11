@@ -46,3 +46,7 @@ ADR 是不可变的历史记录。
 - `0023-scoped-production-runtime-configuration.md`
 - `0024-production-config-convergence-and-parallel-release.md`
 - `0025-audited-retention-cleanup.md`
+
+- `0026-roadmap-v3-and-unified-daily-protection.md`
+- `0027-server-managed-release-and-bootstrap.md`
+- `0028-git-translation-memory-and-local-execution.md`

@@ -178,7 +178,7 @@ Application Job 使用 PostgreSQL；Deploy/Rollback/Restore/Recovery 使用 host
 - Content Ingestion
 - GitHub Read-only Fetch
 - Translation Memory
-- 显式付费 Translation Job
+- Git JSON Translation Memory 增量导入（ADR 0028）
 - OpenCC
 - Search Refresh
 - Revalidation
@@ -248,7 +248,7 @@ Infrastructure recovery   -> host-local control-state SQLite + immutable artifac
 
 Content Ingestion 可以识别缺失翻译，但不得隐式消耗付费 AI Token。
 
-只有显式 Translation Job 可以调用付费 AI Provider。
+只有开发机上显式授权、持久预算约束的本地 Translation Job 可以调用付费 AI Provider（ADR 0028）。服务器与 Actions 不持有 AI Key；Git JSON 是英文记忆权威，PostgreSQL 负责导入与物化。
 
 ## 有意排除
 

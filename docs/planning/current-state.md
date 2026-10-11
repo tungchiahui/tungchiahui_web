@@ -2,13 +2,45 @@
 
 > Status: Phase 0–18 completed
 > Current Phase: Website V2 Production Completion
-> Handoff audit date: 2026-10-10
+> Handoff audit date: 2026-10-11
 
 本文件是新 Claude Code/Codex 会话的简洁交接入口。它索引当前实际状态和容易遗漏的实施事实，不替代 `AGENTS.md`、Accepted ADR、架构规范或 `implementation-plan.md`。
 
 维护规则：每个 Phase 完成时，Agent 自动复核并沉淀后续实施所需事实；完成沉淀只表示下一 Phase 依赖可供 Owner 评估，不授权 Agent 自动继续。
 
 ## 1. 新会话读取顺序
+
+### 2026-10-11：Git JSON 翻译记忆与本地执行（ADR 0028）
+
+Owner 最终明确：开发机 DeepSeek Flash/non-thinking，Content Git 保存块哈希 JSON，生产只
+导入并拼装英文；不提交英文 MD。先前服务器 Provider 草案未发布，已撤下。SSH 仅只读，
+生产无 DeepSeek 配置/付费任务/可翻译块已有英文；5 次非生产试译保守记账 0.000319 USD，
+首次累计授权 3 USD。CLI Key 在两个仓库外 0600 文件；生产旧 Execute 返回 410。
+
+Manifest/稳定 SHA-prefix Shard 与现有 Normalization 1 / AST 保护共享类型；本地持久预算
+预占、原子结果、单执行器锁、取消/续跑与未知请求不重发。源码修改只译变化块，移动复用。
+PostgreSQL Expand 0010 增加 Blob Cache/同步来源/Git Memory Provenance；应用/控制角色无缓存
+访问权。精确 Git Tree/Blob + 提交推进/CAS + 事务互斥防止陈旧同步覆盖；纯 JSON 更新只处理
+变化文件/记忆和受影响英文，每篇只物化一次，OpenCC 和无关正文跳过。
+删除记忆回退中文；坏记忆不导入且整体 Job 报告失败，中文保持发布。首次 Manifest 激活前
+保留旧测试/发布兼容边界；激活后 DB-only 译文不能成为隐藏权威。
+
+开发机清理了 190 个未引用旧测试镜像及 27.64 GB 旧 Build Cache，未删除运行容器或数据卷。
+当前新实现验证及自动发布以该 PR/Main Release 为准；首批生成/提交/同步状态以 Content PR
+和本地任务日志为准。恢复沿用 PG Backup/PITR，保留 Expand 表与 Git 记忆，不默认重新付费。
+详见 `docs/operations/translation-operations.md`，后续会话不用依赖聊天中的架构方向。
+临时 SSH 密码 Profile/Helper 已删除，仅保留仓库外 API-only 0600 Key 文件。
+本地 Unit 51 File / 311 Test 与 Production Build/Static/Security Gate 已通过；完整 Integration、
+Recovery/Foundation 与 11 Migration Gate 在提交前后复核，最终 CI 为 Merge Gate。
+初次 Dry-run 为 252 文档 / 18847 唯一可翻译块，保守预占总上限 16.633006 USD。
+授权 3 USD 是累计硬上限，初始执行额度扣除试译为 2.999681 USD；余额不足保留阶段性
+译文并停止，绝不自动追加。Content Bootstrap PR #1 必须在 Web importer 发布后合入。
+Web [PR #42](https://github.com/tungchiahui/tungchiahui_web/pull/42)；Content
+[PR #1](https://github.com/tungchiahui/tungchiahui_content/pull/1)。本地首批已启动，Job
+`df73803b-8aab-4208-82c9-47454216cf8b`，非秘密定位信息在 `.local/git-memory-paid-job.json`。
+Codex 当前线程 Heartbeat `automation` 每 20 分钟观察并按授权验证/发布阶段性 JSON；
+不能增加付费任务或恢复未知请求。开发机与 App 需保持运行。最终发布证据使用上述 PR
+以及关联 Main Release / Content-only Sync，不能把本地任务 running 当成生产发布成功。
 
 ### 2026-10-10：Blog / Wiki 阅读导航
 
@@ -340,7 +372,7 @@ Owner 于 2026-09-12 接受最终 Compatibility/Operations Report 并关闭旧 N
 | Four-locale UI/Route/OpenCC | Phase 7 production-shaped deterministic implementation | completed in Phase 7 |
 | en-US block-level Translation Memory/Fallback | Phase 8 production-shaped local implementation | completed in Phase 8 |
 | Translation Diff | Phase 8 transactional zero-cost reconcile | completed in Phase 8 |
-| Translation Provider/Dry-run/Budget Execution | validated vendor-neutral adapter + complete Fake/no-cost execution；concrete paid vendor unselected | production provider binding requires explicit non-production contract authorization |
+| Translation Provider/Dry-run/Budget Execution | ADR 0028 local DeepSeek + Git-authoritative memory；Production imports only | Owner-authorized local contract passed；no Production AI credential |
 | Search Refresh/Query | production-shaped PostgreSQL Projection、PGroonga Query、Durable Reindex 与精确 Cache Invalidation | completed in Phase 10 |
 | Generic S3/Public Asset Gateway | production-shaped generic Adapter plus S3Mock and AList `TEST` Bucket/CDN evidence | completed in Phase 11 |
 | GitHub polling default | idle content-worker polling; Phase 15 canonical reusable workflow explicitly creates exact-commit sync jobs | completed in Phase 15 |

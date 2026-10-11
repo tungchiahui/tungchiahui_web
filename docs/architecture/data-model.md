@@ -267,3 +267,9 @@ Internal Identity 属于 Database/Runtime Concern。
 ## Personal tracker owner sessions (ADR 0020)
 
 Migration `0007_personal_trackers` adds `owner_auth.sessions` with token SHA-256, credential-version SHA-256, expiry and creation time. This separate schema receives no app-reader or content-worker default grants; only control-api can create/read/revoke sessions. Missing dataset rows are initialized empty with ON CONFLICT DO NOTHING. Password verifiers remain host-local `.env` service configuration. PostgreSQL backup/restore includes these rows; rotate the verifier after restore before enabling owner login.
+
+## ADR 0028 当前执行边界
+
+上述 PostgreSQL Translation Job 结构保留用于历史状态和非生产 Fake Contract。生产 Paid Create 返回 410；付费执行、预占预算与断点状态位于开发机，Git JSON 是英文记忆权威。Content Worker 的 PostgreSQL Job 负责免费导入与物化，不持有 AI Key。
+
+新增 `content_source_files` 保存已验证 Blob/Parser Version，`content_sync_state` 保存单向提交推进和记忆启用状态，`git_translation_entries` 保存 Hash Key/Shard/Segment 来源。三表仅 Content Worker 可写；应用与 Control API 无权限。新增表纳入原有备份/PITR，回退时保留 Expand 表。

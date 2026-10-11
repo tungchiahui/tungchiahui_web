@@ -35,6 +35,33 @@ import {
 export * from './schema-core'
 
 export const localeEnum = applicationSchema.enum('locale', localeValues)
+
+export const contentSourceFiles = applicationSchema.table(
+  'content_source_files',
+  {
+    path: text().primaryKey(),
+    blobSha: text('blob_sha').notNull(),
+    contents: text().notNull(),
+    cacheVersion: integer('cache_version').notNull(),
+  },
+  (table) => [
+    check('content_source_files_sha', sql`${table.blobSha} ~ '^[a-f0-9]{40}$'`),
+    check('content_source_files_version', sql`${table.cacheVersion} > 0`),
+  ],
+)
+export const contentSyncState = applicationSchema.table(
+  'content_sync_state',
+  {
+    key: text().primaryKey(),
+    sourceCommit: text('source_commit').notNull(),
+    memoryCommit: text('memory_commit'),
+    memoryEnabled: boolean('memory_enabled').notNull().default(false),
+  },
+  (table) => [
+    check('content_sync_state_singleton', sql`${table.key} = 'canonical'`),
+    check('content_sync_state_sha', sql`${table.sourceCommit} ~ '^[a-f0-9]{40}$'`),
+  ],
+)
 export const translationSegmentStatusEnum = applicationSchema.enum(
   'translation_segment_status',
   translationSegmentStatusValues,
@@ -213,6 +240,24 @@ export const documentTranslationSegments = applicationSchema.table(
   ],
 )
 
+export const gitTranslationEntries = applicationSchema.table(
+  'git_translation_entries',
+  {
+    key: text().primaryKey(),
+    shardPath: text('shard_path').notNull(),
+    segmentId: uuid('segment_id')
+      .notNull()
+      .references(() => translationSegments.id),
+    recordHash: text('record_hash').notNull(),
+  },
+  (table) => [
+    index('git_translation_entries_shard').on(table.shardPath),
+    uniqueIndex('git_translation_entries_segment').on(table.segmentId),
+    check('git_translation_entries_key', sql`${table.key} ~ '^[a-f0-9]{64}$'`),
+    check('git_translation_entries_hash', sql`${table.recordHash} ~ '^[a-f0-9]{64}$'`),
+  ],
+)
+
 export const translationJobs = applicationSchema.table(
   'translation_jobs',
   {
@@ -324,6 +369,9 @@ export const contentAliases = applicationSchema.table(
 )
 
 export const persistenceSchema = {
+  contentSourceFiles,
+  contentSyncState,
+  gitTranslationEntries,
   ownerSessions,
   accounts,
   accountSessions,

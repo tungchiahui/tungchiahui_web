@@ -35,6 +35,7 @@ import {
   createTranslationJob,
   readTranslationStatus,
 } from './translation/control-client'
+import { runLocalTranslation } from './translation/local-memory'
 
 const usage = `Usage: ./site <command>
 
@@ -95,11 +96,12 @@ Maintenance:
             Re-plan, fail closed on drift, then delete only approved retained resources
 
 Translation:
-  translate pending|changed|all --dry-run
-  translate article <source-path> --dry-run
-  translate <scope> --execute --budget-usd <amount>
-  translate status [job-id]
-  translate cancel <job-id>
+  translate pending|changed|all --content-root <path> --dry-run
+  translate article <source-path> --content-root <path> --dry-run
+  translate <scope> --content-root <path> --execute --budget-usd <amount> --key-file <private-json>
+  translate status [job-id] --content-root <path>
+  translate cancel [job-id] --content-root <path>
+  translate validate --content-root <path>
 
 Storage:
   storage contract s3 --confirm S3-NON-PRODUCTION
@@ -240,6 +242,10 @@ async function main() {
             ? await cancelTranslationJob(command.jobId)
             : await readTranslationStatus(command.jobId)
       console.log(JSON.stringify(result, null, 2))
+      return 0
+    }
+    case 'translate-local': {
+      console.log(JSON.stringify(await runLocalTranslation(command), null, 2))
       return 0
     }
   }

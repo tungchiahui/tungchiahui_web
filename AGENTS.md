@@ -153,8 +153,8 @@ UI i18n 和 Content i18n 是两个独立系统。
 
 ### Content
 
-- GitHub 只保存 zh-CN
-- PostgreSQL 保存 Runtime Translation
+- GitHub 保存 zh-CN Markdown 与 ADR 0028 定义的块级翻译记忆 JSON；不保存生成英文 Markdown
+- PostgreSQL 导入 Git 翻译记忆并保存 Runtime Translation
 - 英文翻译使用 Semantic-block Incremental Translation
 - Translation Memory 为 Block-level
 - 未改变的 Block 必须复用
@@ -416,7 +416,7 @@ ddns.tungchiahui.cn
 
 内部使用 Docker Service DNS。
 
-Content Sync、Translation、Search/Reindex 和普通 Application Background Job 继续使用 PostgreSQL-backed Durable Job。
+Content Sync、翻译记忆导入、Search/Reindex 和普通 Application Background Job 继续使用 PostgreSQL-backed Durable Job。ADR 0028 的显式付费执行属于开发机 Authoring Tool，不是生产后台任务。
 
 Deploy、Rollback、PostgreSQL Restore/Recovery 和必要 Server Migration/Disaster Recovery 不得把健康的 Production PostgreSQL 当作创建、恢复或查询 Operation 的绝对前置条件。它们使用 ADR 0015 定义的 host-local SQLite Recovery State，且必须实现 Transaction、WAL/同步落盘、Crash Recovery、Lock/Lease、Active/Previous Slot、Current/Last SHA、Operation Status 与 Audit Record。该 SQLite 不是业务 Production Database。
 
@@ -435,7 +435,7 @@ Translation Hash Miss 时：
 
 Public Page Request 永远不得触发付费翻译。
 
-Translation Execution 必须具备 Budget Awareness，并且要求 Server-side Budget Enforcement。
+Translation Execution 必须具备 Budget Awareness；ADR 0028 要求本地执行器持久预算预占、取消、断点恢复和未知调用不重发。生产禁止付费执行。
 
 ## 22. GitHub 方向性
 

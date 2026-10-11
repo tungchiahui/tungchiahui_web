@@ -9,6 +9,7 @@ import { verifyPhase5Ingestion } from '../content/test-ingestion'
 import { verifyPhase10CacheInvalidation, verifyPhase10Search } from '../search/test-search'
 import { runStorageContract } from '../storage/contract'
 import { verifyPhase9Translation } from '../translation/test-execution'
+import { verifyGitMemoryImport } from '../translation/test-git-memory'
 import { verifyPhase6Revalidation } from '../web/test-revalidation'
 import { assertDockerPrerequisites, ComposeProject } from './compose'
 import { documentedLocalCredentials, parseLocalInfrastructureConfig } from './config'
@@ -452,6 +453,9 @@ async function run() {
     const firstTranslationJobId = await verifyTranslationJobBoundary(configuration.controlApiUrl)
     runPlaywright(configuration.siteBaseUrl)
     await verifyPhase9Translation(configuration.databaseUrl.toString(), firstTranslationJobId)
+    const memoryContractDatabase = new URL(configuration.databaseUrl)
+    memoryContractDatabase.port = String(compose.port('postgres', 5432))
+    await verifyGitMemoryImport(memoryContractDatabase.toString())
     const restartedControlApiUrl = await verifyControlStatePersistence(
       compose,
       configuration.controlApiUrl,
