@@ -27,6 +27,8 @@ Wiki 分组使用去日期前缀的目录译名，编号/排序按 Canonical 来
 本地已通过 52 File / 320 Unit、27 项 Public/Owner E2E、12 Migration、完整 Static/Type/Build/
 Security Gate、S3Mock 7-case、生产 Foundation 全流程与 Full/Diff/Incr/WAL/PITR/双副本 Recovery。
 完整标题导入测试覆盖增量/幂等/标题变更/删除/搜索 Locale 与权限；最终合入/发布以 CI 为准。
+CLI 后续边界复核：`changed` 的标题前后匹配使用字段名，正文增删不影响检测；新增真实 Git
+前后提交的组合编辑回归。标题专用执行范围和记忆身份不变，Unit 增至 321。
 
 ### 2026-10-11：Git JSON 翻译记忆与本地执行（ADR 0028）
 
