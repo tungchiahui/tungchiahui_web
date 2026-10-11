@@ -30,7 +30,8 @@ Content Sync Run `38119488655` 在首次 HTTP 554 后原流程重试成功；11 
 Wiki 目录、Metadata、中文主标题与正文 Heading ID 已公网对照通过。当前正文尚有 643 个
 唯一缺失记忆 / 678 个引用 / 134 篇文档，继续中文 Fallback；不是 UI 漏译或新增付费授权。
 本地 54 File / 339 Unit、33 Browser E2E、完整 Integration/S3Mock 7-case、12 Migration 与
-Static/Type/Build/Security 已通过；生产 Foundation/Recovery 和最终自动发布以 CI 为准。
+Static/Type/Build/Security 已通过；完整 Production Foundation 已通过；Recovery 和最终自动发布以 CI 为准。
+Web [PR #48](https://github.com/tungchiahui/tungchiahui_web/pull/48) 为本轮 UI/回归/交接入口。
 
 ### 2026-10-11：文章/Wiki 主标题英化
 

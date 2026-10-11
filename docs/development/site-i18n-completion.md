@@ -74,5 +74,5 @@ HTTP 554；原 GitHub 工作流重试成功，使用同一 Source Commit 与幂�
 本地当前门禁：54 个 Unit File / 339 Test、33 项完整 Browser E2E、隔离 Content/Search/
 Translation/控制面 Integration、S3Mock 7-case、12 个 Migration，以及 Static/Type/Build/
 Security Gate。Start 布局断言等待提交按钮可见并在稳定布局中核对同一个中心距离约束，
-避免分帧读取产生瞬态差值；没有放宽阈值。生产 Foundation / Recovery 的最终结果以关联
-本地记录和 main CI 为准。
+避免分帧读取产生瞬态差值；没有放宽阈值。完整 Production Foundation 已通过；Recovery 和最终自动发布以 main CI 为准。
+Web [PR #48](https://github.com/tungchiahui/tungchiahui_web/pull/48) 为 UI 及回归改动入口。
