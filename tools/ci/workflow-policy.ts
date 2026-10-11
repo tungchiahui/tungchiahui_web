@@ -26,7 +26,6 @@ const workflowJobSchema = z
 
 const pinnedActionPattern = /uses:\s+[^\s@]+@([a-f0-9]{40})(?:\s|$)/g
 const everyActionPattern = /uses:\s+[^\s@]+@([^\s#]+)/g
-const translationInvocation = './site "$' + '{arguments[@]}"'
 const workflowShaReference = 'ref: $' + '{{ github.workflow_sha }}'
 const serviceDigestReference =
   'SITE_SERVICE_IMAGE_DIGEST=$' + '{{ needs.build-service.outputs.image_digest }}'
@@ -303,15 +302,19 @@ export function analyzeWorkflowPolicies(root: string): readonly WorkflowPolicyIs
   if (
     JSON.stringify(Object.keys(translation.parsed.on)) !== JSON.stringify(['workflow_dispatch'])
   ) {
-    issues.push({ file: 'translation.yml', message: 'Paid translation must remain manual only' })
+    issues.push({
+      file: 'translation.yml',
+      message: 'Translation memory validation must remain manual only',
+    })
   }
   requireFragments(issues, 'translation.yml', translation.source, [
-    'id-token: write',
-    'environment: production',
-    'TRANSLATION_DRY_RUN',
-    translationInvocation,
+    './site translate validate --content-root',
+    'tungchiahui/tungchiahui_content',
   ])
   rejectFragments(issues, 'translation.yml', translation.source, [
+    'id-token: write',
+    '--execute',
+    'DEEPSEEK_API_KEY',
     'DATABASE_URL',
     'AI_API',
     '/var/run/docker.sock',

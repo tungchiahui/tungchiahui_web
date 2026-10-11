@@ -219,6 +219,10 @@ if (configuration.CONTENT_WORKER_POLLING_ENABLED) {
   const sourceOptions = {
     apiBaseUrl: configuration.GITHUB_API_BASE_URL,
     repository,
+    readCache: () => {
+      if (!ingestion) throw new Error('Content ingestion repository is not initialized')
+      return ingestion.readSourceCache()
+    },
     ...(configuration.GITHUB_CONTENT_READ_TOKEN === undefined
       ? {}
       : { token: configuration.GITHUB_CONTENT_READ_TOKEN }),

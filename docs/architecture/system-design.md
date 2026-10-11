@@ -133,7 +133,7 @@ SQLite Control-state Store 只保存基础设施恢复所需的最小状态，�
 - Markdown AST Processing
 - OpenCC Conversion
 - Translation-memory Operation
-- Paid AI Translation Job
+- Git JSON Memory Import（ADR 0028）
 - Search-data Refresh
 - Content Cache Invalidation/Revalidation
 
@@ -150,7 +150,7 @@ SQLite Control-state Store 只保存基础设施恢复所需的最小状态，�
 - Deployment Rollback
 - PostgreSQL Restore/Recovery
 
-除非明确需要，否则它不持有 Content Translation Credential。
+它不持有 Content Translation Credential。
 
 ## 5. Canonical Content Flow
 
@@ -212,18 +212,16 @@ new/changed zh-CN block
 
 ### 显式翻译
 
-Operator 可以从 Local CLI 触发：
+开发机执行显式付费任务，预算预占/未知请求/断点恢复在私有本地账本中处理：
 
 ```bash
-./site translate pending --dry-run
-./site translate pending --execute --budget-usd 0.50
+./site translate pending --content-root ../tungchiahui_content --dry-run
+./site translate pending --content-root ../tungchiahui_content --execute --budget-usd 0.50 --key-file /private/deepseek-key.json
 ```
 
-或者从专门的 GitHub Actions Manual Workflow 触发。
-
-两者创建同一个 Server-side Translation Job。
-
-Server-side Worker 强制执行 Budget，在可获得时记录实际 Token/Cost Data，写入 Translation，并 Revalidate 受影响页面。
+经过 AST/Hash 验证的块记忆写入内容仓库 JSON。Review 后推送 main，仅触发 Content Sync。
+服务器增量导入并物化受影响英文，刷新英文搜索与页面；服务器不调用 AI、不写 Git。
+参见 ADR 0028 与 `docs/operations/translation-operations.md`。
 
 ## 7. GitHub Actions 行为
 
@@ -238,15 +236,7 @@ push
 
 它不会暂停等待翻译。
 
-手动 Translation Workflow：
-
-```text
-workflow_dispatch
- -> scope choice
- -> budget
- -> dry-run / execute
- -> trigger translation job
-```
+手动 Translation Workflow 只校验指定内容 Commit 的 JSON，不调用 AI，不产生费用。
 
 Web Application Repository 的 `push to main` 是正常 Production Deployment Trigger：
 

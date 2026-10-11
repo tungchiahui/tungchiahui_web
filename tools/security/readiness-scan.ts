@@ -48,6 +48,7 @@ const forbiddenClientValues = [
   'ASSET_S3_SECRET_ACCESS_KEY',
   'CONTROL_OPERATOR_KEYS_JSON',
   'DEPLOYMENT_REGISTRY_TOKEN',
+  'DEEPSEEK_API_KEY',
 ] as const
 for (const path of clientBundleFiles) {
   const source = readFileSync(path, 'utf8')

@@ -1,6 +1,6 @@
 # ADR 0010：让付费 AI 翻译显式且受预算约束
 
-- Status: Accepted
+- Status: Superseded by [ADR 0028](./0028-git-translation-memory-and-local-execution.md)
 - Date: 2026-08-23
 
 ## Context

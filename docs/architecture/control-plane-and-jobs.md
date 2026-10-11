@@ -271,3 +271,9 @@ Manual GitHub Workflow 和本地 `./site translate` 都调用该 Control API。W
 - 适合 Control Endpoint 的 WAF/Rate-limit Rule
 - Method Restriction
 - 创建 Operation 前进行严格 Authentication/Authorization
+
+## ADR 0028 当前执行边界
+
+上述 PostgreSQL Translation Job 结构保留用于历史状态和非生产 Fake Contract。生产 Paid Create 返回 410；付费执行、预占预算与断点状态位于开发机，Git JSON 是英文记忆权威。Content Worker 的 PostgreSQL Job 负责免费导入与物化，不持有 AI Key。
+
+新增 `content_source_files` 保存已验证 Blob/Parser Version，`content_sync_state` 保存单向提交推进和记忆启用状态，`git_translation_entries` 保存 Hash Key/Shard/Segment 来源。三表仅 Content Worker 可写；应用与 Control API 无权限。新增表纳入原有备份/PITR，回退时保留 Expand 表。

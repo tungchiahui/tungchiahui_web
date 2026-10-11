@@ -10,7 +10,7 @@
 
 ## 用一句话概括最终架构
 
-**GitHub 是 zh-CN Markdown 的权威编写源；PostgreSQL 是生产运行时的内容/搜索/翻译存储；AList S3 用于静态资源与备份制品；Next.js 通过 OpenResty 采用完整 Blue-Green Deployment；独立 `control-api` 通过 `www.tungchiahui.cn/api/ops/*` 提供不依赖 Next.js Slot 的生产控制，并以 PostgreSQL-independent 的最小恢复状态支撑 Deploy/Restore；`ddns.tungchiahui.cn` 是 DNS-only/DDNS 的源站身份，家庭公网数字 IP 永远不是持久的应用或 CI 配置。**
+**GitHub 是 zh-CN Markdown 与块级英文翻译记忆 JSON 的权威源；PostgreSQL 是生产运行时的内容/搜索/翻译存储；AList S3 用于静态资源与备份制品；Next.js 通过 OpenResty 采用完整 Blue-Green Deployment；独立 `control-api` 通过 `www.tungchiahui.cn/api/ops/*` 提供不依赖 Next.js Slot 的生产控制，并以 PostgreSQL-independent 的最小恢复状态支撑 Deploy/Restore；`ddns.tungchiahui.cn` 是 DNS-only/DDNS 的源站身份，家庭公网数字 IP 永远不是持久的应用或 CI 配置。**
 
 ## 核心原则
 
@@ -25,7 +25,7 @@
 9. **部署、回滚、备份、恢复、Provision、翻译和服务器迁移都通过一个稳定的项目 CLI 暴露。**
 10. **备份在完成恢复测试之前不视为有效。**
 11. **付费 AI 翻译必须显式触发且受预算约束。内容 push/publish 永远不会隐式消耗 AI Token。**
-12. **英文翻译缺失的 Block，在显式完成翻译前回退显示最新的权威 zh-CN Block。**
+12. **英文翻译缺失的 Block，在开发机显式翻译并提交 Git 记忆前回退显示最新的权威 zh-CN Block。**
 13. **公网控制操作统一使用 `https://www.tungchiahui.cn/api/ops/*`；不需要单独的 Ops 域名。**
 14. **`ddns.tungchiahui.cn` 是生产源站 Hostname。它由 DNS-only/DDNS 管理，可以解析为 IPv4+IPv6，也可以只有 IPv6。**
 15. **公网数字 IP 地址不得成为长期的应用、CI、CLI、部署或源站配置。**
@@ -139,11 +139,11 @@ content sync
 翻译是后续的显式操作：
 
 ```bash
-./site translate pending --dry-run
-./site translate pending --execute --budget-usd 0.50
+./site translate pending --content-root <content-repository> --dry-run
+./site translate pending --content-root <content-repository> --execute --budget-usd 0.50 --key-file <private-key.json>
 ```
 
-GitHub Actions 的手动 `workflow_dispatch` 可以触发同一个 Translation Job，而不会阻塞正常的 Push/Content Sync Workflow。
+付费翻译仅在开发机执行，JSON 记忆提交后自动 Content Sync；手动 Translation Workflow 只做无付费验证。服务器不持有 AI Key。
 
 ## 目标技术栈基线
 

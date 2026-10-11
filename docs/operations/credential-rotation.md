@@ -16,7 +16,7 @@
 | S3 Contract Test | Operator test process | 指定非生产 Bucket/Prefix CRUD | Production Asset/Backup Bucket |
 | Backup S3 Primary（当前 AList） | recovery process | 固定 `backups/` Namespace Artifact Read/Write | Public Asset Write、Application DB |
 | Backup S3 Off-site（当前 R2） | recovery process | Off-site Artifact Read/Write | Asset Bucket、Application DB |
-| AI Provider | `content-worker` only | 指定 Provider/Model 与 Server-side Budget | Deploy Agent、GitHub Workflow、Public Browser |
+| AI Provider | Authoring Workstation only（ADR 0028） | 指定 Provider/Model 与持久本地预算 | 全部 Production Service、GitHub Workflow、Public Browser |
 | Deploy Registry Pull | `deploy-agent` only | 批准 Repository Digest Pull | Registry Push、DB、AI、GitHub Write |
 | Operator Request-signing Key | Operator workstation / approved CI OIDC | Explicit Capability | DB、Host Root、Docker Socket |
 | Alert Webhook | `observability-agent` only | 单一 HTTPS Alert Sink Publish | DB、Docker、Host Write、Application Secret |
@@ -40,7 +40,7 @@
 - Runtime/Migration：运行 Role Membership Gate；四个 Login 必须各只有一个批准 Group Role，且 `rolsuper=false`。
 - Backup/WAL/Off-site S3：轮换后必须执行非破坏性 `check`、Manifest Read-back 和 Replica Freshness；不要把 Credential 成功当作可恢复证据。
 - S3：先对非生产 Contract Prefix 运行完整 Contract；Production Asset Credential 只做代表性 Read，除非变更单明确授权写入。
-- AI：先 `--dry-run`，再用明确的小 Budget 做非生产 Contract；Public Request 与 Content Push 仍不得调用 Provider。
+- AI：Key 仅留开发机仓库外 0600 文件；先 `--dry-run`，再用明确的小 Budget 做非生产 Contract。全部 Production Service、Public Request 与 Content Push 不得调用 Provider。
 - Deploy：用批准 Repository 的不存在 Digest Failure 和已知 Digest Pull 验证 Fail-closed；不得 Retag。
 - Alert：发送 Disposable Test Event 并验证 Firing/Resolved；Payload 不含 Token、Header 或 Connection String。
 

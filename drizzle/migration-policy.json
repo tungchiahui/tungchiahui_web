@@ -81,6 +81,14 @@
       "requiresTechV3CompatiblePreviousRelease": true,
       "reason": "Atomically replaces the immutable V2 Tech definition with a versioned V3 document and maps every legacy record to a deterministic stable UUID, preserving progress, status, note and update time.",
       "recovery": "Deploy and verify the generated V2/V3 compatibility bridge first. The active slot must advertise V3-read compatibility before this backfill can run; retain that bridge as the rollback slot. PostgreSQL transaction failure leaves V2 and its revision intact."
+    },
+    {
+      "tag": "0010_git_translation_memory",
+      "changeKind": "expand",
+      "risk": "low",
+      "requiresFreshRecoverableBackup": false,
+      "reason": "Adds service-scoped Git content blob cache, sync lineage and translation provenance without replacing existing content or translations.",
+      "recovery": "Retain additive tables during blue-green rollback. Git is authoritative for memory. Replaying a complete accepted Git snapshot rebuilds imports and runtime English without paid calls; PostgreSQL backups include the new tables."
     }
   ]
 }

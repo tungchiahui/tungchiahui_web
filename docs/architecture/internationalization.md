@@ -39,7 +39,7 @@ messages/
 
 Canonical Content Source：GitHub 中的 zh-CN Markdown。
 
-Runtime Translation 保存于 PostgreSQL。
+块级英文 Translation Memory 保存于 Git JSON；PostgreSQL 导入并物化 Runtime Translation（ADR 0028）。
 
 ### 英文
 
@@ -63,7 +63,7 @@ Hash Miss 变为 `pending`。
 
 Pending Block 的英文渲染使用最新 Canonical zh-CN Source Block 作为 Fallback。
 
-只有在 Operator 显式请求后才执行 Paid Translation，可以先进行 Dry-run Cost/Token Estimate，并且始终受 Server-side Budget Enforcement 约束。
+只有在 Operator 显式请求后才执行 Paid Translation，可以先进行 Dry-run Cost/Token Estimate，并且始终受开发机上的持久预算预占约束（ADR 0028）。
 
 ### zh-HK / zh-TW
 
@@ -110,4 +110,11 @@ Phase 8 已实现该替换：顶层 mdast Semantic Block 使用版本化 Normali
 
 实现与安全 Backfill 见 `docs/development/phase-8-translation-memory.md`。
 
-Phase 9 在该数据层之上增加显式 Translation Job。Provider Adapter 的 Request、Estimate、Response 和 Usage 都经过 Runtime Validation；Worker 逐个 Current Segment 执行，每次调用前强制 Budget，并在写入后按受影响 Document 重新物化与精确 Revalidate。Dry-run 只读取候选并估算，Provider Call Count 必须为零。Provider 厂商不是架构常量；Local/Test 固定使用 Fake Provider，具体 Production Adapter 必须通过相同 Boundary 和经授权的非生产 Contract Test。
+历史 Phase 9（执行位置已由 ADR 0028 替代）在该数据层之上增加显式 Translation Job。Provider Adapter 的 Request、Estimate、Response 和 Usage 都经过 Runtime Validation；Worker 逐个 Current Segment 执行，每次调用前强制 Budget，并在写入后按受影响 Document 重新物化与精确 Revalidate。Dry-run 只读取候选并估算，Provider Call Count 必须为零。Provider 厂商不是架构常量；Local/Test 固定使用 Fake Provider，具体 Production Adapter 必须通过相同 Boundary 和经授权的非生产 Contract Test。
+
+## ADR 0028 更新
+
+付费执行移到 Authoring Workstation。版本化 JSON 记忆随 Content Commit 单向导入；服务器
+不持有 AI Key、不会付费或回写 Git。Blob SHA/Parser Version Cache、事务互斥/提交推进检查、
+变化记忆关联和单篇物化避免全量重编译；纯 JSON 更新只刷新英文。缺失/删除记忆仍按块
+中文 Fallback。旧 Phase 9 执行说明是历史基线，当前入口见翻译运维文档。

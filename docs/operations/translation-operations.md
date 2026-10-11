@@ -1,217 +1,64 @@
-# 翻译运维
+# 翻译运维（ADR 0028）
 
-## 原则
+付费 AI 在开发机执行。Git 保存块级 JSON 翻译记忆，服务器只导入和拼装英文正文。
+Content Push、Public Request、GitHub Actions 均不调用付费 API；生产服务器不持有 AI Key。
 
-Paid AI Translation 是显式的 Production Operation。
-
-正常 Content Push/Sync 永远不会自动消耗 AI Token。
-
-## 翻译在哪里执行
-
-实际 Translation Work 在生产侧 `content-worker` 中执行，靠近 Production PostgreSQL Runtime State。
-
-Operator 不需要 SSH 到 Production 执行翻译。
-
-External Client 只通过以下 Endpoint 创建/查询 Job：
-
-```text
-https://www.tungchiahui.cn/api/ops/translations
-```
-
-Phase 9 已实现以下专用 Surface：
-
-```text
-POST /api/ops/translations
-GET  /api/ops/translations/status?limit=10
-GET  /api/ops/translations/:id
-POST /api/ops/translations/:id/cancel
-```
-
-该 Endpoint 由独立 `control-api` 提供，不属于 Next.js Blue/Green Slot。Translation Job 本身仍是 PostgreSQL-backed Application Job；不得迁入只服务 Deploy/Restore/Recovery 的 Control-state SQLite。Production PostgreSQL 不可用时，Endpoint 应安全报告 Translation Capability 不可用，而不是尝试在 Recovery Store 中执行翻译。
-
-## 为什么这样设计
-
-避免暴露：
-
-- Production Database Credential 给 Developer Machine
-- Production AI Credential 给 Developer Machine
-- Production DB Port 到 Public Internet
-- 不需要时把 AI Credential 交给 GitHub Actions
-
-Production Worker 持有范围受限的 AI Credential 和 Content-table Access。
-
-## Content Push 行为
-
-普通 Push：
-
-```text
-push
- -> content sync
- -> reuse known translation blocks
- -> mark unknown/changed blocks pending
- -> publish latest zh-CN
- -> finish
-```
-
-它不会暂停等待 Manual Translation。
-
-Pending English Block 渲染 Canonical zh-CN Fallback。
-
-## Local CLI
-
-典型 Workflow：
+## 使用
 
 ```bash
-./site translate pending --dry-run
+./site translate pending --content-root <content-repository> --dry-run
+./site translate pending --content-root <content-repository> --execute --budget-usd 3 --key-file <private-key.json>
+./site translate status --content-root <content-repository>
+./site translate cancel --content-root <content-repository>
+./site translate validate --content-root <content-repository>
 ```
 
-示例输出：
+Key 文件在两个仓库外，权限 0600，内容为 `{"apiKey":"<private-key>"}`。
+CLI 不回显 Key。默认官方 `deepseek-flash` 非思考模式；不接受任意供应商 URL。
+支持 `changed`、`article <source-path>` 和 `all`；未改块复用，原文修改/移动不重译其他块。
+Force 需要 `--force --confirm-retranslation RETRANSLATE`。
 
-```text
-Documents affected:    7
-Pending blocks:        23
-Estimated input:    8,240 tokens
-Estimated output:   5,100 tokens
-Estimated cost:       $0.xx
+显式执行前须先提交中文更改。工具绑定 Canonical Content Tree；源变更会停止当前任务。
+支持 `--job-id <UUID>` 续跑，必须保留源内容与同一个 Budget。保存在
+`~/.local/state/tungchiahui/translation/<repository-identity>/` 的本地状态不是 Production Store。
+每个仓库仅一个执行器；状态与费用在请求前 fsync/原子落盘，结果验证后原子写入记忆。
+取消在下一个安全边界生效。崩溃/非法响应的未知成本保留最大占用，恢复不会再次发送该块。
+若无效响应连续发生，任务停止供人工检查。有效结果保留，未完成块继续中文。
 
-No paid request has been started.
-```
+费用以整数微美元记账，按 2026-10-11 Flash peak 上限：输入 0.30 / 输出 1.20 USD 每百万
+Token。Estimate 使用保守输入/输出上限，不能当作实际账单。最高费率记账可能高于供应商
+Cache/非高峰折扣账单。每次启动的新 Job 有独立 Budget；多任务授权总额须扣除前序已用
+和未知占用，不能自动追加预算。模型/费率改变通过 Code Review 更新。
 
-当前 CLI 输出完整结构化 JSON；上述字段是该 Response 中的核心运维信息。Dry-run Job 会持久保存 Estimate 和候选 Segment，但 `provider_request_count`/Provider Call Count 保持零。
+## Git 格式与发布
 
-执行：
+`translations/en-us/manifest.json` 声明 Schema/Normalization/Locale/Layout；
+`translations/en-us/v1/<hash-prefix>.json` 使用 SHA256 前两位稳定分片。
+每条记录含原文、译文、Normalization Version、Source Hash、Context Fingerprint 和 Usage。
+JSON 稳定排序，无全局时间戳；API Key、执行状态、锁文件和英文 Markdown 不提交 Git。
+手工修订译文只修改 `translatedText`，其余身份字段由 CLI 管理，并运行 validate。
 
-```bash
-./site translate pending --execute --budget-usd 0.50
-```
+完成/阶段性结果经 Review 提交 Content Repository。`translations/en-us/**` Push 触发同一
+Content-only Sync，不构建 Next.js Image 或执行 Blue-green。服务器验证精确 Git SHA 与 Blob
+SHA，Blob Cache 跳过未变化下载；批量更新变化记忆，每篇受影响英文只重新拼装一次。
+中文未变且仅 JSON 改动时，OpenCC 不重算，Search/Page 只刷新 en-US。
+删除记忆会让当前关联块回退最新中文。无关旧记忆保留用于未来复用，但没有数据库隐藏来源。
+坏记忆明确使 Job 失败；中文已发布，旧有效且匹配当前中文的记忆继续可用。
+旧任务不能覆盖已推进的 Git State；回退通过新的 Git Revert Commit 发布。
 
-其他预期 Scope 可以包括：
+首次先部署兼容导入器，再提交 Manifest。首次切换须核对/迁移已有有效英文；此仓库生产
+检查已有可翻译英文为零。后续 API 付费执行不在服务器：旧 Production Execute 返回 410，
+历史 Read/Cancel 仍可用；旧 Remote Fake/Dry-run 接口仅服务测试和历史状态。
+Manual Translation Workflow 现在仅验证指定内容 Commit，不持有 AI Key 或付费能力。
 
-```bash
-./site translate changed --dry-run
-./site translate article <source-path> --dry-run
-./site translate all --dry-run
-```
+## 验证和恢复
 
-Force/Retranslation Flag 必须显式，而且应要求更强 Confirmation，因为它们可能绕过 Translation-memory 节省机制。
+测试必须证明：单块修改、移动/重复块复用、JSON-only 增量、删除、幂等、公式/代码/链接
+保护、错误记忆隔离、预算/未知请求/恢复，以及 Provider-free Content Sync/Public Request。
+Structured `git_memory_content_sync` 与 Job Progress 记录下载文件、变化分片/条目、物化文章
+和错误，不记录 Prompt、Key 或连接串。中文失败与记忆失败可区分。
+新增表属于 Expand；回退保留表和已付费记忆。PG Backup/PITR 覆盖新增表；Git Snapshot 可
+免费重建译文，因此没有新增 Production File Store。清库/重译不是恢复默认方案。
 
-实际 Confirmation Contract：
-
-```bash
-./site translate all --dry-run --force --confirm-retranslation RETRANSLATE
-./site translate all --execute --budget-usd 1.00 \
-  --force --confirm-retranslation RETRANSLATE
-```
-
-Execute Request 还带有 `EXECUTE_PAID_TRANSLATION` Confirmation；CLI 根据显式 `--execute` 生成该字段，Control API 再次验证，不能由 Workflow 跳过。
-
-## Server-side Budget Enforcement
-
-Budget 不只是 Client-side Estimate。
-
-每次 Paid Request 前，`content-worker` 检查 Translation Job 剩余允许 Budget。
-
-如果下一个 Request 会超过配置 Budget：
-
-- 不开始该 Request
-- 保留已完成 Translation
-- 将 Job 标记为 `partial` 或等效状态
-- 剩余 Segment 保持 Pending
-
-## Job Status
-
-```bash
-./site translate status
-```
-
-应显示最近 Job 和 Usage。
-
-示例：
-
-```text
-Job:          183
-Status:       completed
-Documents:    4
-Blocks reused: 3
-Blocks translated: 14
-Input tokens:  7,832
-Output tokens: 4,019
-Cost:          $0.027
-```
-
-取消：
-
-```bash
-./site translate cancel <job-id>
-```
-
-Queued/Retry-wait Job 立即进入 Durable `cancelled`；Running Job 记录 `cancel_requested_at`，Worker 在下一 Segment Provider Request 前停止。已经持久化的 Segment 与 Usage 不回滚。
-
-## GitHub Actions Manual Workflow
-
-Translation 是独立 Manual Workflow，不是 Content-push Workflow 必须继续执行的一步。
-
-使用带 Typed Input 的 `workflow_dispatch`，例如：
-
-```text
-scope:
-  pending
-  changed
-  article
-  all
-
-article:
-  optional source path
-
-budget_usd:
-  numeric/string input validated server-side
-
-dry_run:
-  boolean
-```
-
-运行该 Workflow 会创建与 Local CLI 相同的 Server-side Translation Job。
-
-仓库中的 `.github/workflows/translation.yml` 直接调用 `./site translate`，因此复用同一 TypeScript Parser、Zod Request Contract、Authentication Client 与 Control Endpoint。Workflow 只声明 `contents: read` 和 `id-token: write`，使用 `github.run_id` 形成稳定 Idempotency Key；`environment: production` 可承载 GitHub Environment Approval，而不是存放 Provider Key。
-
-普通 `git push` 永远不会等待该 Workflow。
-
-## Authentication
-
-在可行情况下，GitHub Actions 应使用短期 OIDC 对 Control Request 认证。
-
-Workflow 不应获得：
-
-- PostgreSQL Credential
-- Production Host Shell Credential
-- Production AI API Key
-
-## Translation Memory
-
-安全时，全局复用未改变的 Semantic Block。
-
-Changed Block 可以使用：
-
-```text
-old zh-CN
-old en-US
-new zh-CN
-```
-
-作为 Targeted Patch Translation Context。
-
-不得因为一个 Block 改变就重新翻译整个 Document。
-
-Phase 8 已建立纯数据层：Pending/Translated/Reviewed/Stale、Current Document Mapping、Mixed Materialization、Current-source Binding、Pending/Fallback/Hit Metric，以及 validated Targeted Patch Context。它不会调用 Provider。Phase 9 的显式 Job 执行必须复用这些 Row/Mapping，不得另建 Whole-document Translation Path。
-
-Phase 9 Worker 已复用这些 Row/Mapping。每次成功调用记录 Provider、Model、Input/Output Token 与 Cost；Provider Response 还必须通过 Markdown AST/受保护值 Validator。Provider 或精确 Revalidation 失败会保留 Durable Progress 并 Retry，重验证恢复不会重复已记录的 Provider 调用。Budget 不覆盖的剩余块继续 Pending/Fallback。
-
-## Provider 与授权边界
-
-Local/Test 和所有 Automated Test 固定使用 Fake Provider。Production Provider 厂商尚未由 Accepted ADR 选定；Phase 9 交付的是经过严格 Validation 的 Paid Adapter Boundary，不静默固化 Vendor。真实 Provider Contract Test 只有在 Owner 明确提供非生产 Target、Credential 与付费授权后才运行。
-
-## Public Request
-
-Public `/en-us/...` Page Request 永远不得触发 Paid Translation。
-
-对于 Translation Spending，Public Rendering 是 Read-only 的。
+定时观察只读取本地任务状态并发布经过验证的记忆；不得自动重试未知请求或追加预算。
+本地任务及观察需要开发机保持运行，观察还要求 Codex 应用可执行该本地任务。

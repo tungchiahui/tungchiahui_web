@@ -18,7 +18,9 @@ import {
 } from './segmentation'
 
 type DatabaseClient = ReturnType<typeof createDatabaseClient>
-type DatabaseTransaction = Parameters<Parameters<DatabaseClient['database']['transaction']>[0]>[0]
+export type DatabaseTransaction = Parameters<
+  Parameters<DatabaseClient['database']['transaction']>[0]
+>[0]
 type TranslationSegment = typeof translationSegments.$inferSelect
 
 type ExistingMapping = Readonly<{

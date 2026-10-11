@@ -16,3 +16,10 @@ ALTER DEFAULT PRIVILEGES FOR ROLE site_migrator IN SCHEMA app
 ALTER DEFAULT PRIVILEGES FOR ROLE site_migrator IN SCHEMA app
   GRANT USAGE, SELECT ON SEQUENCES TO site_content_worker;
 REVOKE ALL ON SCHEMA drizzle FROM PUBLIC;
+DO $git_memory_grants$
+BEGIN
+  IF to_regclass('app.content_source_files') IS NOT NULL THEN
+    REVOKE ALL ON app.content_source_files, app.content_sync_state, app.git_translation_entries FROM site_app, site_control_api;
+  END IF;
+END
+$git_memory_grants$;

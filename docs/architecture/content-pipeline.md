@@ -52,7 +52,7 @@ Push Workflow **不会**等待人工翻译。
 
 GitHub 中的 zh-CN 内容是权威内容。
 
-数据库必须能够通过该仓库以及翻译生成能力重新构建。
+数据库必须能够通过该仓库的中文 Markdown 与已提交翻译记忆免费重建。
 
 同步是单向的：
 
@@ -167,3 +167,10 @@ Phase 5 将上述 Pipeline 实现为以下边界：
 - Content Sync 只执行纯数据 Diff/Reuse/Pending/Fallback，结构上不导入 Provider；同 Snapshot 重放不重复 Segment/Mapping/Hook。
 
 Local/Test Compose 默认让外部 GitHub Polling 处于 Idle，避免本地启动产生网络调用；Disposable Integration 以同一个 Worker/Repository 实现和内存只读 Snapshot 验证完整执行路径。配置明确的 Repository 后，Service 可启用 Polling；私有 Repository 的可选 Token 必须只有读取权限。
+
+## ADR 0028 Git Memory 与增量导入
+
+付费 AI 由开发机执行，服务器只消费版本化 Manifest/Shard。现有 Phase 9 生产付费位置由
+ADR 0028 替代。Cache Table 保存已验证 Blob 与 Parser Version；JSON-only 更新跳过无关
+下载、Markdown/OpenCC 处理，并按关联集合每篇英文只拼装一次。身份/译文验证失败不导入，
+中文仍发布，Job 明确报告失败。删除/新 Git Revert Commit/重复提交均有自动化验证。

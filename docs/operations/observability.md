@@ -161,3 +161,7 @@ Monitoring Model 不得假设 Public IPv4 一定存在。
 TypeScript Event 统一包含 `timestamp`、`level`、`component`、`event`、`request_id` 与有界 Scalar Attribute。禁止 Attribute Name 包含 Authorization、Cookie、Credential、Password、Private Key、Secret、Token 或 Connection String；Error Message 再对 Bearer、PostgreSQL URL、age Key 和 PEM Private Key 做 Redaction。
 
 OpenResty JSON Access Log 不记录 Query String、Client IP、Authorization、Cookie 或 Body。若诊断需要关联请求，使用 `x-request-id`，不要临时打开敏感 Header/Body Logging。
+
+## ADR 0028 翻译观察
+
+付费本地任务通过 `./site translate status --content-root ...` 观察预算、已完成/失败块、未知请求预占和停止原因。生产不再创建付费 Translation Job；`git_memory_content_sync` 记录下载文件、变化 Shard/Entry、英文物化文档及静态验证错误，Content Sync Job 明确区分中文提交成功与记忆验证失败。不得记录 Key、原始 Provider Error Body 或 Prompt。

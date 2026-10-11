@@ -750,6 +750,17 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
           const capability =
             parsedBody.mode === 'dry-run' ? 'translation:dry-run' : 'translation:execute'
           requireCapability(actor, capability)
+          if (configuration.mode === 'production' && parsedBody.mode === 'execute') {
+            sendJson(response, {
+              status: 410,
+              body: {
+                error: 'paid_translation_runs_on_authoring_workstation',
+                command:
+                  './site translate pending --content-root <path> --execute --budget-usd <amount>',
+              },
+            })
+            return
+          }
           if (!translationJobs) {
             throw new ApplicationJobStoreUnavailableError('Database is not configured')
           }
