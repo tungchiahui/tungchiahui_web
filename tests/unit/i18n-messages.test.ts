@@ -36,6 +36,26 @@ describe('UI message baseline', () => {
     expect(flattenKeys(enUs).toSorted()).toEqual(expectedKeys)
   })
 
+  it('keeps fixed English interface copy free of untranslated Chinese', () => {
+    const permitted = new Set([
+      'Web.locale.zhCn',
+      'Web.locale.zhHk',
+      'Web.locale.zhTw',
+      'Web.icp',
+      'Web.publicSecurity',
+    ])
+    function check(value: Readonly<Record<string, unknown>>, prefix = '') {
+      for (const [key, child] of Object.entries(value)) {
+        const path = prefix ? `${prefix}.${key}` : key
+        if (typeof child === 'string' && !permitted.has(path))
+          expect(child, path).not.toMatch(/[\p{Script=Han}]/u)
+        else if (typeof child === 'object' && child !== null)
+          check(child as Readonly<Record<string, unknown>>, path)
+      }
+    }
+    check(enUs)
+  })
+
   it('keeps legal registration identities byte-exact in every catalog', () => {
     for (const catalog of [zhCn, zhHk, zhTw, enUs]) {
       expect(catalog.Web.icp).toBe('鲁ICP备2025185601号-2')
@@ -96,7 +116,19 @@ const_identifier = '软件机器人项目'
   })
 
   it('keeps reusable UI copy in catalogs rather than Chinese literals in TSX', () => {
-    for (const file of ['src/components/site-shell.tsx', 'src/web/public-page.tsx']) {
+    for (const file of [
+      'src/components/site-shell.tsx',
+      'src/web/public-page.tsx',
+      'src/web/special-information-pages.tsx',
+      'src/components/bookmark-workspace.tsx',
+      'src/components/more-directory.tsx',
+      'src/components/music-page.tsx',
+      'src/components/stats-dashboard.tsx',
+      'src/components/personal/tech-tracker.tsx',
+      'src/components/personal/roadmap-editor.tsx',
+      'src/components/personal/weight-tracker.tsx',
+      'src/components/personal/tracker-toolbar.tsx',
+    ]) {
       const source = readFileSync(resolve(process.cwd(), file), 'utf8')
       expect(source, file).not.toMatch(/[\p{Script=Han}]/u)
     }

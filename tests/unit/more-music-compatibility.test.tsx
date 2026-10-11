@@ -1,12 +1,13 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { NextIntlClientProvider } from 'next-intl'
+import { createTranslator, NextIntlClientProvider } from 'next-intl'
 import { describe, expect, it, vi } from 'vitest'
 import { publicOverviewSchema } from '@/analytics/public-overview'
 import { BookmarkWorkspace } from '@/components/bookmark-workspace'
 import { MoreDirectory } from '@/components/more-directory'
 import { TechTracker } from '@/components/personal/tech-tracker'
 import { WeightTracker } from '@/components/personal/weight-tracker'
+import { messagesForLocale } from '@/i18n/messages'
 import { CDN_AUDIO_BY_ID } from '@/music/catalog'
 import {
   extractSongId,
@@ -32,6 +33,16 @@ import {
 } from '@/web/special-information-pages'
 import zhCn from '../../messages/zh-cn.json'
 
+vi.mock('next-intl/server', () => ({
+  getTranslations: async ({
+    locale,
+    namespace,
+  }: {
+    locale: Parameters<typeof messagesForLocale>[0]
+    namespace: 'Web.information'
+  }) => createTranslator({ locale, messages: messagesForLocale(locale), namespace }),
+}))
+
 describe('Phase 18 More and music compatibility', () => {
   it('preserves the complete self-hosted Tencent mapping and normalizes upstream songs', () => {
     expect(Object.keys(CDN_AUDIO_BY_ID)).toHaveLength(25)
@@ -50,6 +61,10 @@ describe('Phase 18 More and music compatibility', () => {
         url: expect.stringContaining('cdn.tungchiahui.cn/tungwebsite/assets/music/'),
       }),
     ])
+    expect(normalizeMusicPlaylist([{ url: 'https://example.test/audio.mp3' }])[0]).toMatchObject({
+      title: '',
+      artist: '',
+    })
     expect(() =>
       musicPlaylistSchema.parse([{ id: 'unsafe', url: 'javascript:alert(1)' }]),
     ).toThrow()
@@ -121,28 +136,47 @@ describe('Phase 18 More and music compatibility', () => {
     expect(await screen.findByText('已复制')).toBeVisible()
   })
 
-  it('restores the independent About, CV, Friend and Logo page content', () => {
+  it('restores the independent About, CV, Friend and Logo page content', async () => {
     cleanup()
     const context = { locale: 'zh-cn' as const, prefixed: false }
-    const { unmount } = render(<AboutInformationPage context={context} />)
+    const { unmount } = render(await AboutInformationPage({ context }))
     expect(screen.getByRole('heading', { name: '现在重点关注的方向' })).toBeVisible()
     expect(screen.getByText(/SLAM 建图/)).toBeVisible()
     unmount()
 
-    const cv = render(<CvInformationPage context={context} />)
+    const cv = render(await CvInformationPage({ context }))
     expect(screen.getByRole('heading', { name: '董佳辉' })).toBeVisible()
     expect(screen.getByRole('heading', { name: '教育背景' })).toBeVisible()
     cv.unmount()
 
-    const friend = render(<FriendInformationPage locale="zh-cn" />)
+    const friend = render(await FriendInformationPage({ locale: 'zh-cn' }))
     expect(screen.getAllByRole('link')).toHaveLength(8)
     expect(screen.getByRole('link', { name: /Vinci机器人队/ })).toBeVisible()
     friend.unmount()
 
-    render(<LogoInformationPage context={context} />)
+    render(await LogoInformationPage({ context }))
     expect(screen.getByRole('heading', { name: '字母结构' })).toBeVisible()
     expect(screen.getByText('工程支撑')).toBeVisible()
   })
+
+  it.each(['zh-cn', 'zh-hk', 'zh-tw', 'en-us'] as const)(
+    'renders the entire information copy in %s without content fallback',
+    async (locale) => {
+      cleanup()
+      const context = { locale, prefixed: true }
+      for (const element of [
+        await AboutInformationPage({ context }),
+        await CvInformationPage({ context }),
+        await FriendInformationPage({ locale }),
+        await LogoInformationPage({ context }),
+      ]) {
+        const view = render(element)
+        expect(view.container.querySelector('h1')).toBeTruthy()
+        if (locale === 'en-us') expect(view.container.textContent).not.toMatch(/[\p{Script=Han}]/u)
+        view.unmount()
+      }
+    },
+  )
 
   it('validates public Umami summaries and rejects malformed metric rows', () => {
     expect(

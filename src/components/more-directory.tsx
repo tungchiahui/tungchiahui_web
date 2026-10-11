@@ -95,7 +95,7 @@ const storage = [
     titleKey: 'alistTitle',
     descriptionKey: 'alistDescription',
     endpoint: 'https://alist.tungchiahui.cn',
-    badge: 'WEBUI',
+    badge: 'webUiBadge',
     icon: FolderOpen,
     canOpen: true,
   },
@@ -104,7 +104,7 @@ const storage = [
     titleKey: 's3Title',
     descriptionKey: 's3Description',
     endpoint: 'https://s3.tungchiahui.cn',
-    badge: 'S3 API',
+    badge: 's3Badge',
     icon: Database,
     canOpen: false,
   },
@@ -113,7 +113,7 @@ const storage = [
     titleKey: 'primaryCdnTitle',
     descriptionKey: 'primaryCdnDescription',
     endpoint: 'https://cdn.tungchiahui.cn',
-    badge: 'PRIMARY',
+    badge: 'primaryBadge',
     icon: Cloud,
     canOpen: false,
   },
@@ -122,7 +122,7 @@ const storage = [
     titleKey: 'globalCdnTitle',
     descriptionKey: 'globalCdnDescription',
     endpoint: 'https://global.cdn.tungchiahui.cn',
-    badge: 'R2 BACKUP',
+    badge: 'backupBadge',
     icon: Cloud,
     canOpen: false,
   },
@@ -178,7 +178,7 @@ export function MoreDirectory() {
 
       <DirectorySection
         description={t('analyticsDescription')}
-        eyebrow="01 / INSIGHT"
+        eyebrow={t('analyticsEyebrow')}
         id="analytics"
         title={t('analytics')}
       >
@@ -203,16 +203,16 @@ export function MoreDirectory() {
 
       <DirectorySection
         description={t('storageDescription')}
-        eyebrow="02 / STORAGE"
+        eyebrow={t('storageEyebrow')}
         id="storage"
         title={t('storage')}
       >
         <div className="mb-5 hidden items-center justify-center gap-3 rounded-xl border bg-card p-4 font-mono text-sm md:flex">
-          <span>AList WebUI</span>
+          <span>{t('alistFlow')}</span>
           <ArrowRight size={15} />
-          <span>S3 API</span>
+          <span>{t('s3Badge')}</span>
           <ArrowRight size={15} />
-          <span>Primary CDN · R2 Backup</span>
+          <span>{t('cdnFlow')}</span>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           {storage.map((service) => {
@@ -228,7 +228,7 @@ export function MoreDirectory() {
                     <Icon size={20} />
                   </span>
                   <span className="rounded-full border px-2.5 py-1 font-bold text-[0.68rem] tracking-wider">
-                    {service.badge}
+                    {t(service.badge)}
                   </span>
                 </header>
                 <h3 className="mt-5 font-bold text-lg">{message(service.titleKey)}</h3>
@@ -238,7 +238,7 @@ export function MoreDirectory() {
                 <code className="mt-4 block overflow-x-auto rounded-lg bg-background p-2 text-xs">
                   {service.endpoint}
                 </code>
-                <div className="mt-4 flex flex-wrap gap-2">
+                <div className="mt-4 flex flex-wrap gap-2" aria-live="polite">
                   {service.canOpen ? (
                     <a
                       className="more-action"
@@ -251,7 +251,7 @@ export function MoreDirectory() {
                     </a>
                   ) : null}
                   <button
-                    aria-label={`${t('copy')}：${message(service.titleKey)}`}
+                    aria-label={t('copyLabel', { service: message(service.titleKey) })}
                     className="more-action"
                     onClick={() => void copy(service.id, service.endpoint)}
                     type="button"
@@ -276,7 +276,7 @@ export function MoreDirectory() {
 
       <DirectorySection
         description={t('exploreDescription')}
-        eyebrow="03 / EXPLORE"
+        eyebrow={t('exploreEyebrow')}
         id="resources"
         title={t('explore')}
       >

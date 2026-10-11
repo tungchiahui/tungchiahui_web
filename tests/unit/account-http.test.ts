@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { createAccountHttpHandler } from '../../src/control-plane/account-http'
 import { localOwnerPasswordHash } from '../../src/control-plane/owner-password'
-import { defaultStartPayload } from '../../src/start/contracts'
+import { defaultStartPayload } from '../../src/start/defaults'
 
 const configuration = { mode: 'test' } as never
 const origin = new Headers({ origin: 'http://127.0.0.1:3000' })

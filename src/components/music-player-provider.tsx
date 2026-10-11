@@ -246,13 +246,18 @@ export function MusicPlayerProvider({ children }: Readonly<{ children: ReactNode
       void fetch('/api/music/playlist')
         .then(async (response) => {
           if (!response.ok) throw new Error('playlist unavailable')
-          return musicPlaylistSchema.parse(await response.json())
+          return musicPlaylistSchema.parse(await response.json()).map((song, index) => ({
+            ...song,
+            title: song.title || t('untitledTrack', { number: index + 1 }),
+            artist: song.artist || t('unknownArtist'),
+          }))
         })
         .then((playlist) => {
           songsRef.current = playlist
           setSongs(playlist)
           setIsReady(true)
           setError('')
+          if (!playlist.length) setLyricStatus(t('emptyPlaylist'))
           const first = playlist[0]
           if (first) applySource(first.url)
         })

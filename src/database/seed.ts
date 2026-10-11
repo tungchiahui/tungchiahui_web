@@ -9,7 +9,7 @@ import {
 import { locales } from '../i18n/locales'
 import { migrateLegacyTechPayload } from '../personal/legacy-migration'
 import { SearchIndexRepository } from '../search/repository'
-import { defaultStartPayload } from '../start/contracts'
+import { defaultStartPayload } from '../start/defaults'
 import { createDatabaseClient } from './client'
 import {
   accounts,

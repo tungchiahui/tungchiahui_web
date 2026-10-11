@@ -1,5 +1,6 @@
 import { z } from 'zod'
-import { defaultStartPayload, startPayloadSchema } from '../start/contracts'
+import { startPayloadSchema } from '../start/contracts'
+import { defaultStartPayload } from '../start/defaults'
 import type { ApplicationJobRepository } from './application-jobs'
 import type { ControlApiConfiguration } from './configuration'
 import { ownerDatasetUpdateSchema } from './contracts'

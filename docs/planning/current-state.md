@@ -10,11 +10,34 @@
 
 ## 1. 新会话读取顺序
 
+### 2026-10-11：全站国际化补漏
+
+本轮修复 About/CV/Friend/Mylogo 固定中文误作 Content i18n，迁入四 Locale 的 next-intl
+语义 Message；审查 More 全部本站子页及 Metadata，并补齐 More 固定标签/复制反馈、
+Start 内置默认/备用壁纸/输入标签/导入错误/空状态、Stats 状态与 Locale Number Format、
+Music 空 Playlist/缺失歌名与作者、Tech 各层空状态。作者数据、歌词、来源壁纸和统计行
+仍保留原架构，不隐式翻译。规范及回归入口见
+[`site-i18n-completion.md`](../development/site-i18n-completion.md)。
+
+Content [PR #10](https://github.com/tungchiahui/tungchiahui_content/pull/10) 已合入
+`5a05505e15b4a9371d277c497a58c64467570c28`，手工补齐 10 个失败标题 Key，覆盖 11 个
+主标题/15 个目录字段；497/497 当前字段命中、18,449 有效记忆。旧失败响应未持久化，
+无法精确细分具体失败原因；不降低 Hash/AST/Identifier 校验。任务仍终止、观察仍暂停、
+无付费调用/未知重发/新增预算。北极熊草稿持续由作者编辑，所有提交只纳入指定文件。
+本轮无需 Migration 或新的 Recovery 策略。Web 最终 main 发布及 Content-only Sync
+成功证据以关联 CI 与公网实际版本为准；此前最终生产 Web SHA 为 `59fa995d`。
+Content Sync Run `38119488655` 在首次 HTTP 554 后原流程重试成功；11 个真实英文主标题、
+Wiki 目录、Metadata、中文主标题与正文 Heading ID 已公网对照通过。当前正文尚有 643 个
+唯一缺失记忆 / 678 个引用 / 134 篇文档，继续中文 Fallback；不是 UI 漏译或新增付费授权。
+本地 54 File / 339 Unit、33 Browser E2E、完整 Integration/S3Mock 7-case、12 Migration 与
+Static/Type/Build/Security 已通过；生产 Foundation/Recovery 和最终自动发布以 CI 为准。
+
 ### 2026-10-11：文章/Wiki 主标题英化
 
 Owner 批准标题作为独立块沿用 Git JSON 记忆；文章主标题、首页/列表、Wiki 分组/章节、
-上下篇、搜索、SEO/分享共用译名，中文文件、URL 与正文锚点不改。原正文任务继续运行，
-标题补译须在其终止后使用累计 3 USD 剩余额度，排除前序不确定请求；不是新增预算授权。
+上下篇、搜索、SEO/分享共用译名，中文文件、URL 与正文锚点不改。历史执行时原正文任务继续运行，
+标题补译在其终止后使用累计 3 USD 剩余额度，排除前序不确定请求；不是新增预算授权。
+两者现均终止，观察器已暂停；不得由新会话自动恢复或分配剩余预算。
 `--fields-only` / `--after-job`、辅助 Heading Block、worker-only 字段关联与 Expand 0011
 已实现。字段来源哈希独立于正文哈希，覆盖旧版本回滚更新正文后再次升级的安全回退。
 下次 Content Sync 免费补齐关联；只更新受影响英文，原正文计数定义不改。无 index 的英文
@@ -67,7 +90,7 @@ Foundation/Recovery 全部通过。真实北极熊译文保持公式、代码、
 自动创建作者章节。Content
 [PR #1](https://github.com/tungchiahui/tungchiahui_content/pull/1)。本地首批已启动，Job
 `df73803b-8aab-4208-82c9-47454216cf8b`，非秘密定位信息在 `.local/git-memory-paid-job.json`。
-Codex 当前线程 Heartbeat `automation` 每 20 分钟观察并按授权验证/发布阶段性 JSON；
+当时 Codex 线程 Heartbeat `automation` 每 20 分钟观察并按授权验证/发布阶段性 JSON；
 不能增加付费任务或恢复未知请求。开发机与 App 需保持运行。最终发布证据使用上述 PR
 以及关联 Main Release / Content-only Sync，不能把本地任务 running 当成生产发布成功。
 
