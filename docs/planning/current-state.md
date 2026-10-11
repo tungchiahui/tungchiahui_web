@@ -37,7 +37,10 @@ Recovery/Foundation 与 11 Migration Gate 在提交前后复核，最终 CI 为 
 译文并停止，绝不自动追加。Content Bootstrap PR #1 必须在 Web importer 发布后合入。
 Web [PR #42](https://github.com/tungchiahui/tungchiahui_web/pull/42) 与边界复核
 [PR #43](https://github.com/tungchiahui/tungchiahui_web/pull/43)（NUL / PG Integer / Numeric 范围）
-共同构成本次上线；完整 Unit 51 File / 312 Test 通过，Foundation/Recovery 全部通过。Content
+以及英文 Canonical Anchor 修复共同构成本次上线；完整 Unit 51 File / 313 Test 通过，
+Foundation/Recovery 全部通过。真实北极熊译文保持公式、代码、标题数量和全部原文 Heading ID；
+标题/目录显示英文，不改变已存在的引用 Hash。原文 `[](#自转)` 本身没有对应标题，不由翻译
+自动创建作者章节。Content
 [PR #1](https://github.com/tungchiahui/tungchiahui_content/pull/1)。本地首批已启动，Job
 `df73803b-8aab-4208-82c9-47454216cf8b`，非秘密定位信息在 `.local/git-memory-paid-job.json`。
 Codex 当前线程 Heartbeat `automation` 每 20 分钟观察并按授权验证/发布阶段性 JSON；

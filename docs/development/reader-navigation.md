@@ -64,3 +64,5 @@ Fixture，验证动画中间帧、目录内部跟随、文档章节溢出、延�
 无数据库 Migration、生产内容写入、付费翻译或 Backup/Restore 行为变更。Health/Ready
 没有新增依赖；页面交互状态不发送日志或用户阅读行为。发布走原 main CI 与服务器
 Blue-green 流程，恢复使用同一 Engine 保留的 Previous Release，内容与锚点 ID 不变。
+
+英文文章复用中文 Canonical Heading ID，显示翻译后的标题与目录标签；原始正文链接、历史 Hash 与中文切换英文时保持同一目标。重复标题仍使用 Canonical occurrence 编号。共享 Article Renderer 在服务端绑定原文标题身份，不要求修改作者 Markdown 链接。实际翻译内容由 Markdown unit 与公共 Locale E2E 校验。

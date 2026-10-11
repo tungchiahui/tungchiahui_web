@@ -42,6 +42,8 @@ JSON 稳定排序，无全局时间戳；API Key、执行状态、锁文件和�
 Content-only Sync，不构建 Next.js Image 或执行 Blue-green。服务器验证精确 Git SHA 与 Blob
 SHA，Blob Cache 跳过未变化下载；批量更新变化记忆，每篇受影响英文只重新拼装一次。
 中文未变且仅 JSON 改动时，OpenCC 不重算，Search/Page 只刷新 en-US。
+英文正文与目录显示翻译后的标题，Heading ID 延续中文 Canonical Source（重复标题编号也保留），
+因此原有同页链接、外部引用 Hash 和中文切换英文后的锚点不会因翻译改名失效。
 删除记忆会让当前关联块回退最新中文。无关旧记忆保留用于未来复用，但没有数据库隐藏来源。
 文本 NUL、超出 PostgreSQL 范围的 Token/Cost 与错误 AST/Hash 一样，在入库前拒绝。
 坏记忆明确使 Job 失败；中文已发布，旧有效且匹配当前中文的记忆继续可用。
