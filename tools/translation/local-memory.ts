@@ -449,6 +449,8 @@ export async function runLocalTranslation(
         consecutiveFailures = 0
         persist()
       } catch {
+        if (job.completedKeys.includes(key))
+          throw new Error('Checkpoint persistence failed after a safe memory write')
         job.failedKeys.push(key)
         job.reserved = null
         job.error =
