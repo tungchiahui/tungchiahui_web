@@ -12,6 +12,11 @@ import {
   ownerManagedDatasets,
 } from '../database/schema'
 import type { AppLocale } from '../i18n/locales'
+import {
+  documentFieldSourceHash,
+  translatedFieldsSchema,
+  wikiGroupSourceTitle,
+} from '../translation/document-fields'
 
 const publicDocumentSchema = z.object({
   contentLocaleState: z.enum(['converted', 'fallback', 'mixed', 'source', 'translated']),
@@ -27,6 +32,8 @@ const publicDocumentSchema = z.object({
   sourcePath: z.string(),
   sourceUpdatedAt: z.coerce.date().nullable(),
   title: z.string().min(1),
+  canonicalTitle: z.string().min(1).optional(),
+  wikiGroupTitle: z.string().min(1).optional(),
   translatedSegmentCount: z.number().int().nonnegative(),
   translationMemoryHits: z.number().int().nonnegative(),
 })
@@ -40,6 +47,12 @@ const publicDocumentRowSchema = publicDocumentSchema
     translationMemoryHits: true,
   })
   .extend({
+    translatedFields: translatedFieldsSchema.nullable().default(null),
+    fieldSourceHash: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .nullable()
+      .default(null),
     fallbackSegmentCount: z.number().int().nonnegative().nullable(),
     localizedLocale: z.enum(['zh-cn', 'zh-hk', 'zh-tw', 'en-us']).nullable(),
     localizedSourceHash: z
@@ -65,7 +78,7 @@ function requestedTranslationLocale(locale: AppLocale) {
   return locale === 'zh-cn' ? 'zh-cn' : locale
 }
 
-function materializePublicDocument(rowInput: unknown, locale: AppLocale): PublicDocument {
+export function materializePublicDocument(rowInput: unknown, locale: AppLocale): PublicDocument {
   const row = publicDocumentRowSchema.parse(rowInput)
   const isCurrentEnglish =
     locale === 'en-us' &&
@@ -75,23 +88,45 @@ function materializePublicDocument(rowInput: unknown, locale: AppLocale): Public
     (locale === 'zh-hk' || locale === 'zh-tw') && row.localizedLocale === locale
   const localizedMarkdown =
     isCurrentEnglish || hasRegionalMaterialization ? row.localizedMarkdown : null
-  const fallbackSegmentCount = isCurrentEnglish ? (row.fallbackSegmentCount ?? 0) : 0
-  const pendingSegmentCount = isCurrentEnglish ? (row.pendingSegmentCount ?? 0) : 0
-  const translatedSegmentCount = isCurrentEnglish ? (row.translatedSegmentCount ?? 0) : 0
-  const translationMemoryHits = isCurrentEnglish ? (row.translationMemoryHits ?? 0) : 0
+  const fields =
+    isCurrentEnglish && row.fieldSourceHash === documentFieldSourceHash(row.title, row.sourcePath)
+      ? row.translatedFields
+      : null
+  const groupTitle = wikiGroupSourceTitle(row.sourcePath)
+  const missingFields =
+    Number(!fields?.title) + Number(groupTitle !== undefined && !fields?.wikiGroupTitle)
+  const translatedFields =
+    Number(fields?.title !== undefined) + Number(fields?.wikiGroupTitle !== undefined)
+  // Persisted metrics retain their body-only contract; public counts include
+  // metadata so a pending title never displays a misleading zero-block banner.
+  const fallbackSegmentCount = isCurrentEnglish
+    ? (row.fallbackSegmentCount ?? 0) + missingFields
+    : 0
+  const pendingSegmentCount = isCurrentEnglish ? (row.pendingSegmentCount ?? 0) + missingFields : 0
+  const translatedSegmentCount = isCurrentEnglish
+    ? (row.translatedSegmentCount ?? 0) + translatedFields
+    : 0
+  const translationMemoryHits = isCurrentEnglish
+    ? (row.translationMemoryHits ?? 0) + translatedFields
+    : 0
   const contentLocaleState =
     locale === 'zh-cn'
       ? 'source'
       : locale === 'zh-hk' || locale === 'zh-tw'
         ? 'converted'
         : !isCurrentEnglish || fallbackSegmentCount > 0
-          ? translatedSegmentCount > 0
+          ? translatedSegmentCount > 0 || fields?.title !== undefined
             ? 'mixed'
             : 'fallback'
           : 'translated'
   return Object.freeze(
     publicDocumentSchema.parse({
       ...row,
+      canonicalTitle: row.title,
+      title: fields?.title ?? row.title,
+      ...(locale === 'en-us' && groupTitle
+        ? { wikiGroupTitle: fields?.wikiGroupTitle ?? groupTitle }
+        : {}),
       contentLocaleState,
       fallbackSegmentCount,
       localizedMarkdown,
@@ -139,6 +174,12 @@ export class PublicContentRepository {
           sourcePath: documents.sourcePath,
           sourceUpdatedAt: documents.sourceUpdatedAt,
           title: documents.title,
+          // Whole-row JSON safely reads absent additive fields on the retained
+          // pre-expand slot used during initial migration/rollback smoke tests.
+          translatedFields: sql<unknown>`to_jsonb(document_translations)->'translated_fields'`,
+          fieldSourceHash: sql<
+            string | null
+          >`to_jsonb(document_translations)->>'field_source_hash'`,
         })
         .from(documents)
         .leftJoin(
@@ -175,6 +216,8 @@ export class PublicContentRepository {
         sourcePath: documents.sourcePath,
         sourceUpdatedAt: documents.sourceUpdatedAt,
         title: documents.title,
+        translatedFields: sql<unknown>`to_jsonb(document_translations)->'translated_fields'`,
+        fieldSourceHash: sql<string | null>`to_jsonb(document_translations)->>'field_source_hash'`,
       }
       const canonical = await transaction
         .select(selection)

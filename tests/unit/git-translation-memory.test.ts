@@ -266,6 +266,47 @@ describe('Git-authoritative block memory', () => {
       test.cleanup()
     }
   })
+
+  it('explicitly translates only metadata fields and leaves missing body blocks untouched', async () => {
+    const test = fixture()
+    const seen: string[] = []
+    const provider = createValidatedPaidTranslationProvider({
+      estimate: () => ({ estimatedInputTokens: 1, estimatedOutputTokens: 1, maximumCostUsd: 0.01 }),
+      async translate(request) {
+        seen.push(request.sourceText)
+        return {
+          provider: 'test',
+          model: 'test',
+          translatedText: '# Title',
+          usage: { inputTokens: 1, outputTokens: 1, costUsd: 0.004 },
+        }
+      },
+    })
+    try {
+      const result = await runLocalTranslation(
+        parseLocalTranslationCommand([
+          'pending',
+          '--content-root',
+          test.root,
+          '--fields-only',
+          '--execute',
+          '--budget-usd',
+          '0.02',
+        ]),
+        provider,
+      )
+      expect(result).toMatchObject({ completedBlocks: 1, requests: 1, accountedCostUsd: 0.004 })
+      expect(seen).toEqual(['# 标题'])
+      const pending = await runLocalTranslation(
+        parseLocalTranslationCommand(['pending', '--content-root', test.root, '--dry-run']),
+        provider,
+      )
+      expect(pending).toMatchObject({ pendingBlocks: 1, reusedBlocks: 1 })
+      expect(seen).toHaveLength(1)
+    } finally {
+      test.cleanup()
+    }
+  })
   it('does not resend a crash-reserved request when resuming its durable budget', async () => {
     const test = fixture()
     const id = randomUUID()
@@ -317,6 +358,79 @@ describe('Git-authoritative block memory', () => {
       await expect(
         runLocalTranslation(
           parseLocalTranslationCommand(args.map((arg) => (arg === 'pending' ? 'all' : arg))),
+          provider,
+        ),
+      ).rejects.toThrow('stopped safely')
+      expect(calls).toBe(1)
+    } finally {
+      test.cleanup()
+    }
+  })
+
+  it('caps a metadata follow-up at the preceding remainder and excludes uncertain requests', async () => {
+    const test = fixture()
+    const id = randomUUID()
+    let calls = 0
+    const provider = createValidatedPaidTranslationProvider({
+      estimate: () => ({ estimatedInputTokens: 1, estimatedOutputTokens: 1, maximumCostUsd: 0.01 }),
+      async translate() {
+        calls += 1
+        throw new Error('Unknown request')
+      },
+    })
+    try {
+      await runLocalTranslation(
+        parseLocalTranslationCommand([
+          'pending',
+          '--content-root',
+          test.root,
+          '--fields-only',
+          '--execute',
+          '--budget-usd',
+          '0.02',
+          '--job-id',
+          id,
+        ]),
+        provider,
+      )
+      const args = ['pending', '--content-root', test.root, '--fields-only', '--after-job', id]
+      const dry = await runLocalTranslation(
+        parseLocalTranslationCommand([...args, '--dry-run']),
+        provider,
+      )
+      expect(dry).toMatchObject({ pendingBlocks: 0, excludedUncertainBlocks: 1, providerCalls: 0 })
+      await expect(
+        runLocalTranslation(
+          parseLocalTranslationCommand([...args, '--execute', '--budget-usd', '0.011']),
+          provider,
+        ),
+      ).rejects.toThrow('authorized remainder')
+      expect(calls).toBe(1)
+      const safe = await runLocalTranslation(
+        parseLocalTranslationCommand([...args, '--execute', '--budget-usd', '0.01']),
+        provider,
+      )
+      expect(safe).toMatchObject({ requests: 0, accountedCostUsd: 0 })
+      expect(calls).toBe(1)
+      await expect(
+        runLocalTranslation(
+          parseLocalTranslationCommand([...args, '--execute', '--budget-usd', '0.01']),
+          provider,
+        ),
+      ).rejects.toThrow('stopped safely')
+      await expect(
+        runLocalTranslation(
+          parseLocalTranslationCommand([
+            'pending',
+            '--content-root',
+            test.root,
+            '--fields-only',
+            '--execute',
+            '--budget-usd',
+            '0.02',
+            '--job-id',
+            id,
+          ]),
           provider,
         ),
       ).rejects.toThrow('stopped safely')

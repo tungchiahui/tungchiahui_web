@@ -13,6 +13,40 @@ Content Push、Public Request、GitHub Actions 均不调用付费 API；生产�
 ./site translate validate --content-root <content-repository>
 ```
 
+主标题与 Wiki 目录名也进入同一套块级记忆。默认 pending/changed/article/all 包含正文和标题；
+只补标题可加 `--fields-only`。中文 Frontmatter、文件名、拼音 URL 和正文 Heading ID 不改。
+正文标题与元数据标题在 AST 身份一致时复用同一记忆；其余标题是独立 Heading Block，
+不会把模型输出写进整段 YAML，也不把这些辅助 Block 拼入正文。
+
+```bash
+./site translate pending --content-root <content-repository> --fields-only --dry-run
+./site translate pending --content-root <content-repository> --fields-only --after-job <settled-job-id> --dry-run
+./site translate pending --content-root <content-repository> --fields-only --after-job <settled-job-id> --execute --budget-usd <remaining-budget> --key-file <private-key.json>
+```
+
+`--after-job` 要求前序任务已终止、预占已结算且 Canonical Tree 相同。新任务额度不得超过
+前序额度减保守记账，执行中再次核对；整个前序链已知不确定请求被排除，不重新发送。
+它不会提高累计预算，也不会自动恢复前序任务。若前序仍 running，等待其完成。
+获取执行锁后，前序任务持久绑定唯一后续 Job ID，禁止恢复旧任务或重复分配同一余额；
+后续崩溃只用已绑定的 Job ID 续跑，不重新创建兄弟任务。
+标题任务具有自己的显式 Job ID；观察器只能发布结果，不能自动建立或重启付费任务。
+
+生产 Expand Migration 0011 保存 worker-only `document_translation_fields` 与
+`document_translations.translated_fields`。独立 `field_source_hash` 绑定当前主标题/目录来源，
+防止旧版本回滚更新正文后误用旧标题。下次普通 Content Sync 免费补齐字段关联；重复提交
+仍为 No-op，标题 JSON 变更只物化受影响英文并刷新搜索/缓存。正文计数保持原定义；字段
+状态可从关联 Segment 与 `translated_fields`/版本/来源哈希观察；Public DAL 展示计数包含
+标题字段，避免正文已译但标题缺失时提示零个待译块。
+
+文章页、列表、首页预览、Wiki 章节、上下篇、SEO/分享信息与搜索使用同一译名。
+有 index 的 Wiki 分组使用 index 主标题；没有 index 的英文分组使用顶层目录名（去日期前缀）
+对应的记忆。章节编号与分组排序仍使用 Canonical 中文来源。缺失、删除或过期的标题记忆
+回退最新中文；HK/TW 继续通过既有 OpenCC 转换。手动修订仍改 JSON `translatedText`。
+回滚保留新表/列和 Git 记忆，原版本忽略辅助标题；再次升级按独立字段哈希安全修复。
+新版本 Public/Search 也允许读取尚无辅助列的旧 Schema，缺失值直接回退；开发 Seed 的
+稳定列写入支持旧 Schema 的物理迁移演练。辅助关联表在 Migration、Role Bootstrap 与
+Runtime Grants 三个入口均明确禁止公开/控制角色访问。
+
 Key 文件在两个仓库外，权限 0600，内容为 `{"apiKey":"<private-key>"}`。
 CLI 不回显 Key。默认官方 `deepseek-flash` 非思考模式；不接受任意供应商 URL。
 支持 `changed`、`article <source-path>` 和 `all`；未改块复用，原文修改/移动不重译其他块。

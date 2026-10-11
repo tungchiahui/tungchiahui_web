@@ -21,5 +21,8 @@ BEGIN
   IF to_regclass('app.content_source_files') IS NOT NULL THEN
     REVOKE ALL ON app.content_source_files, app.content_sync_state, app.git_translation_entries FROM site_app, site_control_api;
   END IF;
+  IF to_regclass('app.document_translation_fields') IS NOT NULL THEN
+    REVOKE ALL ON app.document_translation_fields FROM site_app, site_control_api;
+  END IF;
 END
 $git_memory_grants$;

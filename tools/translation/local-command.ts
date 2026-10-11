@@ -8,9 +8,11 @@ export type LocalTranslationCommand = Readonly<{
   mode: 'dry-run' | 'execute'
   budgetUsd: number
   force: boolean
+  fieldsOnly: boolean
   article?: string
   jobId?: string
   keyFile?: string
+  afterJob?: string
 }>
 
 export function parseLocalTranslationCommand(args: readonly string[]): LocalTranslationCommand {
@@ -20,10 +22,12 @@ export function parseLocalTranslationCommand(args: readonly string[]): LocalTran
   let article: string | undefined
   let jobId: string | undefined
   let keyFile: string | undefined
+  let afterJob: string | undefined
   let contentRoot: string | undefined
   let mode: 'dry-run' | 'execute' = 'dry-run'
   let budgetUsd = 0
   let force = false
+  let fieldsOnly = false
   let confirmation = false
   let index = 1
   if (action === 'article') {
@@ -53,6 +57,9 @@ export function parseLocalTranslationCommand(args: readonly string[]): LocalTran
       case '--job-id':
         jobId = z.uuid().parse(args[++index])
         break
+      case '--after-job':
+        afterJob = z.uuid().parse(args[++index])
+        break
       case '--budget-usd':
         budgetUsd = z.coerce.number().finite().nonnegative().max(10_000).parse(args[++index])
         break
@@ -64,6 +71,9 @@ export function parseLocalTranslationCommand(args: readonly string[]): LocalTran
         break
       case '--force':
         force = true
+        break
+      case '--fields-only':
+        fieldsOnly = true
         break
       case '--confirm-retranslation':
         confirmation = z.literal('RETRANSLATE').parse(args[++index]) === 'RETRANSLATE'
@@ -89,8 +99,10 @@ export function parseLocalTranslationCommand(args: readonly string[]): LocalTran
     mode,
     budgetUsd,
     force,
+    fieldsOnly,
     ...(article ? { article } : {}),
     ...(jobId ? { jobId } : {}),
     ...(keyFile ? { keyFile } : {}),
+    ...(afterJob ? { afterJob } : {}),
   }
 }

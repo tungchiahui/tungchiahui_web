@@ -10,6 +10,24 @@
 
 ## 1. 新会话读取顺序
 
+### 2026-10-11：文章/Wiki 主标题英化
+
+Owner 批准标题作为独立块沿用 Git JSON 记忆；文章主标题、首页/列表、Wiki 分组/章节、
+上下篇、搜索、SEO/分享共用译名，中文文件、URL 与正文锚点不改。原正文任务继续运行，
+标题补译须在其终止后使用累计 3 USD 剩余额度，排除前序不确定请求；不是新增预算授权。
+`--fields-only` / `--after-job`、辅助 Heading Block、worker-only 字段关联与 Expand 0011
+已实现。字段来源哈希独立于正文哈希，覆盖旧版本回滚更新正文后再次升级的安全回退。
+下次 Content Sync 免费补齐关联；只更新受影响英文，原正文计数定义不改。无 index 的英文
+Wiki 分组使用去日期前缀的目录译名，编号/排序按 Canonical 来源。运行/验证/发布证据以
+本次标题 PR、Main Release、Content PR 及 `.local/git-memory-paid-job.json` 为准。
+详细操作、手动润色、预算链、回退和恢复见 `docs/operations/translation-operations.md`。
+补充边界：新辅助表必须在 Migration 与两套既有 Role-grant 入口明确排除公开/控制角色，
+不能只靠 Migration 的 Grant。Public/Search 使用 Whole-row JSON 读取可缺失的辅助字段；
+旧 Schema 的物理迁移演练和开发 Seed 只写稳定列，保留升级前的公开页面 Smoke。
+本地已通过 52 File / 320 Unit、27 项 Public/Owner E2E、12 Migration、完整 Static/Type/Build/
+Security Gate、S3Mock 7-case、生产 Foundation 全流程与 Full/Diff/Incr/WAL/PITR/双副本 Recovery。
+完整标题导入测试覆盖增量/幂等/标题变更/删除/搜索 Locale 与权限；最终合入/发布以 CI 为准。
+
 ### 2026-10-11：Git JSON 翻译记忆与本地执行（ADR 0028）
 
 Owner 最终明确：开发机 DeepSeek Flash/non-thinking，Content Git 保存块哈希 JSON，生产只

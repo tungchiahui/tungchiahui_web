@@ -38,6 +38,16 @@ Read/Cancel 与非生产 Fake Contract 保留，Manual Translation Workflow 改�
 
 ## Consequences
 
+### 2026-10-11：标题字段扩展
+
+显式允许翻译 Frontmatter `title` 与 Wiki 顶层目录展示名。辅助 Heading Block 沿用现有
+Normalization 1、AST/保护验证和 Git Shard，不新增记忆格式或模型系统；只提取经过验证的
+纯文本作为显示标题，绝不改 Canonical YAML 或 Route。字段关联独立于正文 Offset Mapping，
+仍引用同一个全局 Segment；正文未改时复用已有结果。Expand 0011 物化字段及独立来源哈希，
+旧版本回滚后更新正文也不能把旧字段伪装为新标题。页面、导航、搜索和 SEO 共用源匹配的译名。
+无 index 的英文 Wiki 分组译顶层目录名，Canonical 编号/排序不随英文文案变化。
+`--fields-only` 与 `--after-job` 提供显式范围、前序剩余额度约束和不确定请求排除；不自动付费。
+
 - 开发机须保持运行；断点可恢复，Git 管理内容与记忆，PostgreSQL 保持运行时职责。
 - 不恢复全站静态编译；Source/Memory Push 不触发 Next.js Build/Blue-Green。
 - 费率是 2026-10-11 官方 Flash peak 上限：输入 0.30、输出 1.20 USD/百万 Token。

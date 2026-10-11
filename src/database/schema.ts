@@ -4,6 +4,7 @@ import {
   check,
   index,
   integer,
+  jsonb,
   numeric,
   primaryKey,
   text,
@@ -94,6 +95,9 @@ export const documentTranslations = applicationSchema.table(
     translationHash: text('translation_hash').notNull(),
     translationVersion: integer('translation_version').notNull(),
     sourceHash: text('source_hash'),
+    translatedFields: jsonb('translated_fields').notNull().default({}),
+    fieldTranslationVersion: integer('field_translation_version').notNull().default(0),
+    fieldSourceHash: text('field_source_hash'),
     pendingSegmentCount: integer('pending_segment_count').notNull().default(0),
     translatedSegmentCount: integer('translated_segment_count').notNull().default(0),
     fallbackSegmentCount: integer('fallback_segment_count').notNull().default(0),
@@ -116,6 +120,15 @@ export const documentTranslations = applicationSchema.table(
     ),
     check('document_translations_fallback_nonnegative', sql`${table.fallbackSegmentCount} >= 0`),
     check('document_translations_hits_nonnegative', sql`${table.translationMemoryHits} >= 0`),
+    check(
+      'document_translations_fields_object',
+      sql`jsonb_typeof(${table.translatedFields}) = 'object'`,
+    ),
+    check('document_translations_fields_version', sql`${table.fieldTranslationVersion} >= 0`),
+    check(
+      'document_translations_field_source_hash',
+      sql`${table.fieldSourceHash} IS NULL OR ${table.fieldSourceHash} ~ '^[a-f0-9]{64}$'`,
+    ),
   ],
 )
 
@@ -237,6 +250,26 @@ export const documentTranslationSegments = applicationSchema.table(
       'document_translation_segments_previous_distinct',
       sql`${table.previousSegmentId} IS NULL OR ${table.previousSegmentId} <> ${table.segmentId}`,
     ),
+  ],
+)
+
+export const documentTranslationFields = applicationSchema.table(
+  'document_translation_fields',
+  {
+    documentId: uuid('document_id')
+      .notNull()
+      .references(() => documents.id, { onDelete: 'cascade' }),
+    locale: localeEnum().notNull(),
+    field: text().notNull(),
+    segmentId: uuid('segment_id')
+      .notNull()
+      .references(() => translationSegments.id, { onDelete: 'restrict' }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.documentId, table.locale, table.field] }),
+    index('document_translation_fields_segment_idx').on(table.segmentId),
+    check('document_translation_fields_english_only', sql`${table.locale} = 'en-us'`),
+    check('document_translation_fields_known', sql`${table.field} IN ('title', 'wikiGroupTitle')`),
   ],
 )
 
@@ -378,6 +411,7 @@ export const persistenceSchema = {
   startDatasets,
   contentAliases,
   documentTranslationSegments,
+  documentTranslationFields,
   documentTranslations,
   documents,
   ingestionRuns,

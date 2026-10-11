@@ -14,6 +14,10 @@ import { sourceCommitSchema } from '../domain/persistence'
 import { contentGlossary } from '../i18n/content-glossary'
 import { localizeContentMarkdown } from '../i18n/content-markdown'
 import { redactTelemetryText } from '../observability/telemetry'
+import {
+  documentFieldSourceHash,
+  documentFieldTranslationVersion,
+} from '../translation/document-fields'
 import { applyGitMemoryImport, planGitMemoryImport } from '../translation/git-import'
 import { gitBlobSha, sourceCacheVersion } from '../translation/git-memory'
 import { reconcileEnglishTranslation, retireEnglishTranslations } from '../translation/memory'
@@ -488,12 +492,16 @@ export class ContentIngestionRepository {
           !(memoryPlan?.enabled ?? state?.memoryEnabled ?? false) ||
           imported.documentIds.has(documentId) ||
           !previousEnglish ||
+          previousEnglish.fieldTranslationVersion !== documentFieldTranslationVersion ||
+          previousEnglish.fieldSourceHash !==
+            documentFieldSourceHash(item.incoming.title, item.incoming.sourcePath) ||
           previousEnglish.sourceHash !== item.incoming.sourceHash
         ) {
           const english = await reconcileEnglishTranslation(transaction, {
             documentId,
             rawMarkdown: item.incoming.rawMarkdown,
             sourceHash: item.incoming.sourceHash,
+            sourcePath: item.incoming.sourcePath,
             timestamp: startedAt,
           })
           documentsMaterialized += 1

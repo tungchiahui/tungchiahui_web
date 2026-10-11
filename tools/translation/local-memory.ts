@@ -18,6 +18,7 @@ import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { z } from 'zod'
 import { createDeepSeekTranslationProvider } from '../../src/translation/deepseek'
+import { documentTranslationFields } from '../../src/translation/document-fields'
 import {
   defaultMemoryManifest,
   type GitMemoryEntry,
@@ -39,6 +40,15 @@ import {
 } from '../../src/translation/segmentation'
 import type { LocalTranslationCommand } from './local-command'
 
+function documentBlocks(contents: string, path: string, fieldsOnly: boolean) {
+  const body = fieldsOnly ? [] : segmentMarkdownForTranslation(contents)
+  const fields = documentTranslationFields(contents, path).map((field, index) => ({
+    ...field.block,
+    ordinal: body.length + index,
+  }))
+  return [...body, ...fields]
+}
+
 const blockKeySchema = z.string().regex(/^[a-f0-9]{64}$/)
 const jobSchema = z
   .object({
@@ -59,6 +69,8 @@ const jobSchema = z
     requests: z.number().int().nonnegative(),
     updatedAt: z.string(),
     error: z.string().nullable(),
+    parentJobId: z.uuid().optional(),
+    followupJobId: z.uuid().optional(),
   })
   .strict()
   .refine((job) => {
@@ -220,6 +232,7 @@ export function localTranslationStatus(root: string, jobId?: string) {
     requests: job.requests,
     updatedAt: job.updatedAt,
     error: job.error,
+    followupJobId: job.followupJobId ?? null,
   }
 }
 export function cancelLocalTranslation(root: string, jobId?: string) {
@@ -251,17 +264,19 @@ export async function runLocalTranslation(
         ' ',
       )[0]
       if (parent)
-        previous = segmentMarkdownForTranslation(
+        previous = documentBlocks(
           execFileSync('git', ['-C', root, 'show', `${parent}:${file.path}`], {
             encoding: 'utf8',
             stdio: ['ignore', 'pipe', 'pipe'],
             maxBuffer: 16_000_000,
           }),
+          file.path,
+          command.fieldsOnly,
         )
     } catch {
       /* A newly added document has no prior source context. */
     }
-    for (const block of segmentMarkdownForTranslation(file.contents)) {
+    for (const block of documentBlocks(file.contents, file.path, command.fieldsOnly)) {
       if (!block.isTranslatable) continue
       const key = memoryEntryKey(block)
       blocks.set(key, block)
@@ -282,6 +297,40 @@ export async function runLocalTranslation(
     (key) =>
       (command.action !== 'changed' || changedKeys.has(key)) && (command.force || !memory.has(key)),
   )
+  const parent = command.afterJob ? readJob(root, command.afterJob).job : undefined
+  const excludedKeys = new Set<string>()
+  const seenParents = new Set<string>()
+  for (
+    let ancestor = parent;
+    ancestor;
+    ancestor = ancestor.parentJobId ? readJob(root, ancestor.parentJobId).job : undefined
+  ) {
+    if (
+      seenParents.has(ancestor.id) ||
+      ancestor.status === 'running' ||
+      ancestor.reserved ||
+      ancestor.sourceTree !== source.sourceTree ||
+      ancestor.contentRoot !== root
+    )
+      throw new Error('Follow-up lineage must contain settled jobs with the same source')
+    seenParents.add(ancestor.id)
+    for (const key of ancestor.failedKeys) excludedKeys.add(key)
+  }
+  if (
+    parent &&
+    (parent.status === 'running' ||
+      parent.reserved ||
+      parent.sourceTree !== source.sourceTree ||
+      parent.contentRoot !== root)
+  )
+    throw new Error('A follow-up requires a settled job with the same canonical source')
+  if (
+    parent &&
+    command.mode === 'execute' &&
+    Math.floor(command.budgetUsd * 1_000_000) > parent.budgetMicros - parent.spentMicros
+  )
+    throw new Error('Follow-up budget exceeds the preceding authorized remainder')
+  const safePlanned = planned.filter((key) => !excludedKeys.has(key))
   // Git tree order puts Blog before Wiki and keeps the initial job deterministic.
   // Dry-run uses a credential-free estimator. The key is required only for execute.
   const provider =
@@ -306,13 +355,14 @@ export async function runLocalTranslation(
   }
   if (command.mode === 'dry-run') {
     let maximumCostUsd = 0
-    for (const key of planned) maximumCostUsd += provider.estimate(request(key)).maximumCostUsd
+    for (const key of safePlanned) maximumCostUsd += provider.estimate(request(key)).maximumCostUsd
     return {
       mode: 'dry-run',
       sourceCommit: source.commit,
       documents: source.files.length,
-      pendingBlocks: planned.length,
+      pendingBlocks: safePlanned.length,
       reusedBlocks: blocks.size - planned.length,
+      excludedUncertainBlocks: planned.length - safePlanned.length,
       maximumCostUsd: Math.ceil(maximumCostUsd * 1_000_000) / 1_000_000,
       providerCalls: 0,
     }
@@ -342,10 +392,14 @@ export async function runLocalTranslation(
     action: command.action,
     article: command.article ?? null,
     force: command.force,
+    ...(command.fieldsOnly ? { fieldsOnly: true } : {}),
+    ...(command.afterJob ? { afterJob: command.afterJob } : {}),
   })
   try {
     if (command.jobId && existsSync(join(directory, `${command.jobId}.json`))) {
       job = readJob(root, command.jobId).job
+      if (job.followupJobId)
+        throw new Error('Preceding job is sealed; continue its allocated follow-up instead')
       if (
         job.sourceTree !== source.sourceTree ||
         job.budgetMicros !== Math.floor(command.budgetUsd * 1_000_000) ||
@@ -368,7 +422,7 @@ export async function runLocalTranslation(
         scope,
         budgetMicros: Math.floor(command.budgetUsd * 1_000_000),
         spentMicros: 0,
-        plannedKeys: planned,
+        plannedKeys: safePlanned,
         completedKeys: [],
         failedKeys: [],
         status: 'running',
@@ -376,7 +430,21 @@ export async function runLocalTranslation(
         requests: 0,
         updatedAt: new Date().toISOString(),
         error: null,
+        ...(command.afterJob ? { parentJobId: command.afterJob } : {}),
       }
+    }
+    if (command.afterJob) {
+      const currentParent = readJob(root, command.afterJob).job
+      if (currentParent.followupJobId && currentParent.followupJobId !== job.id)
+        throw new Error('Preceding remainder is already allocated to a different follow-up')
+      if (
+        currentParent.status === 'running' ||
+        currentParent.reserved ||
+        job.budgetMicros > currentParent.budgetMicros - currentParent.spentMicros
+      )
+        throw new Error('Preceding budget changed before acquiring the executor lock')
+      currentParent.followupJobId = job.id
+      atomicWrite(join(directory, `${currentParent.id}.json`), JSON.stringify(currentParent))
     }
     const activeJob = job
     const persist = () => {
@@ -394,6 +462,18 @@ export async function runLocalTranslation(
     let consecutiveFailures = 0
     for (const key of job.plannedKeys) {
       if (job.completedKeys.includes(key) || job.failedKeys.includes(key)) continue
+      if (command.afterJob) {
+        const currentParent = readJob(root, command.afterJob).job
+        if (
+          currentParent.status === 'running' ||
+          currentParent.reserved ||
+          job.budgetMicros > currentParent.budgetMicros - currentParent.spentMicros
+        ) {
+          job.status = 'partial'
+          job.error = 'Preceding job changed; retained cumulative budget boundary'
+          break
+        }
+      }
       if (existsSync(join(directory, `${job.id}.cancel`))) {
         job.status = 'cancelled'
         break

@@ -89,6 +89,14 @@
       "requiresFreshRecoverableBackup": false,
       "reason": "Adds service-scoped Git content blob cache, sync lineage and translation provenance without replacing existing content or translations.",
       "recovery": "Retain additive tables during blue-green rollback. Git is authoritative for memory. Replaying a complete accepted Git snapshot rebuilds imports and runtime English without paid calls; PostgreSQL backups include the new tables."
+    },
+    {
+      "tag": "0011_english_document_titles",
+      "changeKind": "expand",
+      "risk": "low",
+      "requiresFreshRecoverableBackup": false,
+      "reason": "Add defaulted locale title materializations and worker-only associations to existing Git block memory without changing canonical Markdown, routes, or old body mappings.",
+      "recovery": "Retain additive fields and associations on rollback. Existing applications ignore them; Git memory and PostgreSQL backup/PITR preserve paid results."
     }
   ]
 }

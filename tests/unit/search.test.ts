@@ -6,6 +6,7 @@ import {
   materializeSearchProjection,
 } from '../../src/search/materialization'
 import { createSearchSnippet } from '../../src/search/repository'
+import { documentFieldSourceHash } from '../../src/translation/document-fields'
 import { publicSearchCachePolicy, searchLocaleCacheTag } from '../../src/web/cache-policy'
 
 const source = {
@@ -54,6 +55,26 @@ describe('PGroonga search contracts and materialization', () => {
       },
     }
     expect(materializeSearchProjection(stale, 'en-us').headings).toBe('ROS2 与 C++')
+  })
+
+  it('indexes the current English title while Chinese, regional, and stale titles stay canonical', () => {
+    const translated = {
+      ...source,
+      translations: {
+        ...source.translations,
+        'en-us': {
+          ...source.translations['en-us'],
+          fields: { title: 'ROS2 tutorial' },
+          fieldSourceHash: documentFieldSourceHash(source.title, source.sourcePath),
+        },
+      },
+    }
+    expect(materializeSearchProjection(translated, 'en-us').title).toBe('ROS2 tutorial')
+    expect(materializeSearchProjection(translated, 'zh-cn').title).toBe('ROS2 教程')
+    expect(materializeSearchProjection(translated, 'zh-tw').title).toBe('ROS2 教程')
+    expect(
+      materializeSearchProjection({ ...translated, sourceHash: 'b'.repeat(64) }, 'en-us').title,
+    ).toBe('ROS2 教程')
   })
 
   it('normalizes bounded requests and exposes a strict public result contract', () => {

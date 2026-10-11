@@ -7,8 +7,17 @@ import type { createDatabaseClient } from '../database/client'
 import {
   documentTranslationSegments,
   documentTranslations,
+  documentTranslationFields as translationFields,
   translationSegments,
 } from '../database/schema'
+import {
+  documentFieldSourceHash,
+  documentFieldTranslationVersion,
+  documentTranslationFields,
+  type TranslatedFields,
+  titleTextFromBlock,
+  translatedFieldsSchema,
+} from './document-fields'
 import type { SemanticTranslationBlock } from './segmentation'
 import {
   isSafeTranslationCandidate,
@@ -208,6 +217,7 @@ async function staleSupersededPendingSegments(
           FROM ${documentTranslationSegments}
           WHERE ${documentTranslationSegments.segmentId} = ${translationSegments.id}
         )`,
+        sql`NOT EXISTS (SELECT 1 FROM ${translationFields} WHERE ${translationFields.segmentId} = ${translationSegments.id})`,
       ),
     )
 }
@@ -218,6 +228,7 @@ export async function reconcileEnglishTranslation(
     documentId: string
     rawMarkdown: string
     sourceHash: string
+    sourcePath: string
     timestamp: Date
   }>,
 ): Promise<EnglishMaterializationResult> {
@@ -228,7 +239,11 @@ export async function reconcileEnglishTranslation(
     .parse(input.sourceHash)
   const blocks = segmentMarkdownForTranslation(input.rawMarkdown)
   const existingMappings = await readExistingMappings(transaction, documentId)
-  const sourceHashes = [...new Set(blocks.map((block) => block.sourceHash))]
+  const fields = documentTranslationFields(input.rawMarkdown, input.sourcePath)
+  const fieldSourceHash = documentFieldSourceHash(fields[0]?.sourceText ?? '', input.sourcePath)
+  const sourceHashes = [
+    ...new Set([...blocks, ...fields.map((field) => field.block)].map((block) => block.sourceHash)),
+  ]
   const candidates =
     sourceHashes.length === 0
       ? []
@@ -309,6 +324,52 @@ export async function reconcileEnglishTranslation(
 
   const translatedBlocks = new Map<number, string>()
   let translatedSegmentCount = 0
+  const fieldMappings = await transaction
+    .select()
+    .from(translationFields)
+    .where(eq(translationFields.documentId, documentId))
+  const localizedFields: { -readonly [K in keyof TranslatedFields]: TranslatedFields[K] } = {}
+  let fieldsChanged = false
+  for (const field of fields) {
+    const segment = await ensureSegment(transaction, field.block, candidatesByKey)
+    const previous = fieldMappings.find((mapping) => mapping.field === field.field)
+    if (previous?.segmentId !== segment.id) {
+      fieldsChanged = true
+      await transaction
+        .insert(translationFields)
+        .values({ documentId, locale: 'en-us', field: field.field, segmentId: segment.id })
+        .onConflictDoUpdate({
+          target: [translationFields.documentId, translationFields.locale, translationFields.field],
+          set: { segmentId: segment.id },
+        })
+    }
+    if (
+      segment.translatedText !== null &&
+      (segment.status === 'translated' || segment.status === 'reviewed') &&
+      isSafeTranslationCandidate(field.block, segment.translatedText)
+    ) {
+      localizedFields[field.field] = titleTextFromBlock(segment.translatedText)
+    }
+  }
+  const retiredFields = fieldMappings.filter(
+    (mapping) => !fields.some((field) => field.field === mapping.field),
+  )
+  if (retiredFields.length) {
+    fieldsChanged = true
+    for (const mapping of retiredFields)
+      await transaction
+        .delete(translationFields)
+        .where(
+          and(
+            eq(translationFields.documentId, documentId),
+            eq(translationFields.field, mapping.field),
+          ),
+        )
+  }
+  await staleSupersededPendingSegments(
+    transaction,
+    fieldMappings.map((mapping) => mapping.segmentId),
+  )
   for (const mapping of planned) {
     const translatedText = mapping.segment.translatedText
     if (
@@ -358,13 +419,20 @@ export async function reconcileEnglishTranslation(
     existingMaterialization.pendingSegmentCount !== pendingSegmentCount ||
     existingMaterialization.translatedSegmentCount !== translatedSegmentCount ||
     existingMaterialization.fallbackSegmentCount !== fallbackSegmentCount ||
-    existingMaterialization.translationMemoryHits !== translatedSegmentCount
+    existingMaterialization.translationMemoryHits !== translatedSegmentCount ||
+    existingMaterialization.fieldTranslationVersion !== documentFieldTranslationVersion ||
+    existingMaterialization.fieldSourceHash !== fieldSourceHash ||
+    JSON.stringify(translatedFieldsSchema.parse(existingMaterialization.translatedFields)) !==
+      JSON.stringify(localizedFields)
 
   if (materializationChanged) {
     await transaction
       .insert(documentTranslations)
       .values({
         documentId,
+        translatedFields: localizedFields,
+        fieldTranslationVersion: documentFieldTranslationVersion,
+        fieldSourceHash,
         fallbackSegmentCount,
         generatedAt: input.timestamp,
         locale: 'en-us',
@@ -379,6 +447,9 @@ export async function reconcileEnglishTranslation(
       .onConflictDoUpdate({
         target: [documentTranslations.documentId, documentTranslations.locale],
         set: {
+          translatedFields: localizedFields,
+          fieldTranslationVersion: documentFieldTranslationVersion,
+          fieldSourceHash,
           fallbackSegmentCount,
           generatedAt: input.timestamp,
           pendingSegmentCount,
@@ -393,7 +464,7 @@ export async function reconcileEnglishTranslation(
   }
 
   return Object.freeze({
-    changed: mappingsChanged || materializationChanged,
+    changed: mappingsChanged || fieldsChanged || materializationChanged,
     metrics,
     translatedMarkdown,
   })
@@ -422,8 +493,15 @@ export async function retireEnglishTranslations(
         eq(documentTranslationSegments.locale, 'en-us'),
       ),
     )
+  const fields = await transaction
+    .select()
+    .from(translationFields)
+    .where(inArray(translationFields.documentId, documentIds))
+  await transaction
+    .delete(translationFields)
+    .where(inArray(translationFields.documentId, documentIds))
   await staleSupersededPendingSegments(
     transaction,
-    mappings.map((mapping) => mapping.segmentId),
+    [...mappings, ...fields].map((mapping) => mapping.segmentId),
   )
 }

@@ -90,7 +90,7 @@ export async function verifyPhase10Search(connectionString: string, siteBaseUrl:
           '/zh-cn/wiki/2023-10-05-cplusplus-jiao-xue/0200-c-kai-fa-huan-jing-da-jian-yu-ce-shi',
       },
       {
-        context: 'heading',
+        context: 'title',
         locale: 'en-us',
         query: 'New blog enabled',
         route: '/en-us/blog/2026-01-06-xin-bo-ke-qi-yong',

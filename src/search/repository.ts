@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { createDatabaseClient } from '../database/client'
 import { type Locale, localeSchema } from '../domain/persistence'
 import { locales } from '../i18n/locales'
+import { translatedFieldsSchema } from '../translation/document-fields'
 import { searchRequestSchema, searchResultSchema } from './contracts'
 import {
   materializeSearchProjection,
@@ -23,6 +24,11 @@ const sourceRowSchema = z.object({
   source_updated_at: z.date().nullable(),
   title: z.string().min(1),
   translated_markdown: z.string().nullable(),
+  translated_fields: translatedFieldsSchema.nullable(),
+  field_source_hash: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .nullable(),
   translation_locale: z.enum(['zh-hk', 'zh-tw', 'en-us']).nullable(),
   translation_source_hash: z
     .string()
@@ -71,6 +77,8 @@ function groupSourceDocuments(rowsInput: readonly unknown[]): readonly SearchSou
       translations[row.translation_locale] = {
         markdown: row.translated_markdown,
         sourceHash: row.translation_source_hash,
+        fields: row.translated_fields ?? {},
+        fieldSourceHash: row.field_source_hash,
       }
     }
     documents.set(row.document_id, {
@@ -111,6 +119,8 @@ async function readSourceDocuments(client: PoolClient, documentIds?: readonly st
             document.is_deleted,
             translation.locale AS translation_locale,
             translation.translated_markdown,
+            to_jsonb(translation)->'translated_fields' AS translated_fields,
+            to_jsonb(translation)->>'field_source_hash' AS field_source_hash,
             translation.source_hash AS translation_source_hash
        FROM app.documents AS document
        LEFT JOIN app.document_translations AS translation

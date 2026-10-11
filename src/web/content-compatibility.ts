@@ -49,7 +49,9 @@ export function compareWikiChapterOrders(
     if (rightPart === undefined) return 1
     if (leftPart !== rightPart) return leftPart - rightPart
   }
-  return left.document.title.localeCompare(right.document.title)
+  return (left.document.canonicalTitle ?? left.document.title).localeCompare(
+    right.document.canonicalTitle ?? right.document.title,
+  )
 }
 
 function numberWikiChapters(documents: readonly PublicDocument[]) {
@@ -117,13 +119,25 @@ export function groupWikiDocuments(
           chapters: Object.freeze(numberWikiChapters(entries)),
           index,
           key,
-          title: index?.title ?? entries[0]?.title ?? key,
+          title: index?.title ?? entries[0]?.wikiGroupTitle ?? entries[0]?.title ?? key,
         })
       })
       .toSorted((left, right) => {
         const leftDate = left.index?.sourceUpdatedAt?.getTime() ?? 0
         const rightDate = right.index?.sourceUpdatedAt?.getTime() ?? 0
-        return rightDate - leftDate || left.title.localeCompare(right.title)
+        const leftSourceTitle =
+          left.index?.canonicalTitle ??
+          left.index?.title ??
+          left.chapters[0]?.document.canonicalTitle ??
+          left.chapters[0]?.document.title ??
+          left.key
+        const rightSourceTitle =
+          right.index?.canonicalTitle ??
+          right.index?.title ??
+          right.chapters[0]?.document.canonicalTitle ??
+          right.chapters[0]?.document.title ??
+          right.key
+        return rightDate - leftDate || leftSourceTitle.localeCompare(rightSourceTitle)
       }),
   )
 }

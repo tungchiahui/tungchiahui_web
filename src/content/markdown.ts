@@ -64,7 +64,7 @@ export class ContentRouteCollisionError extends Error {
   }
 }
 
-function parseFrontmatter(rawMarkdown: string) {
+export function parseFrontmatter(rawMarkdown: string) {
   const processor = unified().use(remarkParse).use(remarkFrontmatter, ['yaml']).use(remarkRehype)
   const parsedTree = processor.parse(rawMarkdown)
   const markdownTree = markdownRootSchema.parse(parsedTree)
