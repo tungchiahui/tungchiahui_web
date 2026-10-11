@@ -29,6 +29,10 @@ Security Gate、S3Mock 7-case、生产 Foundation 全流程与 Full/Diff/Incr/WA
 完整标题导入测试覆盖增量/幂等/标题变更/删除/搜索 Locale 与权限；最终合入/发布以 CI 为准。
 CLI 后续边界复核：`changed` 的标题前后匹配使用字段名，正文增删不影响检测；新增真实 Git
 前后提交的组合编辑回归。标题专用执行范围和记忆身份不变，Unit 增至 321。
+标题补译首次启动在付费前被北极熊日志的两行未提交草稿拦下，未产生请求/Checkpoint。
+`--committed-source` 显式读取已发布 HEAD 的不可变中文 Blob，保留工作区草稿；默认仍拒绝
+未提交中文，已提交 Tree 变化仍安全停止，Scope/预算链/未知请求策略保持不变。新增真实
+草稿隔离回归；发布只提交 JSON 并核对 index 的中文 Tree。Unit 增至 322。
 
 ### 2026-10-11：Git JSON 翻译记忆与本地执行（ADR 0028）
 

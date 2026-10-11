@@ -349,6 +349,55 @@ describe('Git-authoritative block memory', () => {
       test.cleanup()
     }
   })
+
+  it('requires explicit committed-source mode to translate an immutable Git title while preserving drafts', async () => {
+    const test = fixture()
+    const requests: string[] = []
+    const provider = createValidatedPaidTranslationProvider({
+      estimate: () => ({ estimatedInputTokens: 1, estimatedOutputTokens: 1, maximumCostUsd: 0.01 }),
+      async translate(request) {
+        requests.push(request.sourceText)
+        return {
+          provider: 'test',
+          model: 'test',
+          translatedText: '# Committed title',
+          usage: { inputTokens: 1, outputTokens: 1, costUsd: 0.004 },
+        }
+      },
+    })
+    try {
+      const file = join(test.root, 'content/posts/2026-01-01-标题.md')
+      const draft = '---\ntitle: 未提交标题\n---\n\n# 未提交草稿\n'
+      writeFileSync(file, draft)
+      const args = [
+        'pending',
+        '--content-root',
+        test.root,
+        '--fields-only',
+        '--execute',
+        '--budget-usd',
+        '0.02',
+      ]
+      await expect(
+        runLocalTranslation(parseLocalTranslationCommand(args), provider),
+      ).rejects.toThrow('Commit canonical content')
+      expect(requests).toHaveLength(0)
+      const result = await runLocalTranslation(
+        parseLocalTranslationCommand([...args, '--committed-source']),
+        provider,
+      )
+      expect(result).toMatchObject({ completedBlocks: 1, requests: 1 })
+      expect(requests).toEqual(['# 标题'])
+      expect(readFileSync(file, 'utf8')).toBe(draft)
+      expect(
+        execFileSync('git', ['-C', test.root, 'diff', '--name-only', '-z', '--', 'content'], {
+          encoding: 'utf8',
+        }),
+      ).toContain('标题.md')
+    } finally {
+      test.cleanup()
+    }
+  })
   it('does not resend a crash-reserved request when resuming its durable budget', async () => {
     const test = fixture()
     const id = randomUUID()

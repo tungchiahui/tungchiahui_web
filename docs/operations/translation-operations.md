@@ -54,6 +54,11 @@ CLI 不回显 Key。默认官方 `deepseek-flash` 非思考模式；不接受任
 Force 需要 `--force --confirm-retranslation RETRANSLATE`。
 
 显式执行前须先提交中文更改。工具绑定 Canonical Content Tree；源变更会停止当前任务。
+若要保留作者正在编辑的未提交草稿，同时补译已发布的 Git 内容，可显式加
+`--committed-source`：只读取启动时 HEAD 的 Git Blob，绝不把工作区草稿发给模型；请求前
+仍核对已提交 Canonical Tree，新的中文 Commit 会安全停止任务。该选择进入持久 Scope，
+续跑必须保持相同选择。默认行为仍拒绝未提交中文，不静默忽略草稿。
+发布时必须独立核对 Git index 的中文 Tree 与基线一致，只提交翻译 JSON，保留作者文件。
 支持 `--job-id <UUID>` 续跑，必须保留源内容与同一个 Budget。保存在
 `~/.local/state/tungchiahui/translation/<repository-identity>/` 的本地状态不是 Production Store。
 每个仓库仅一个执行器；状态与费用在请求前 fsync/原子落盘，结果验证后原子写入记忆。

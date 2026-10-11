@@ -9,6 +9,7 @@ export type LocalTranslationCommand = Readonly<{
   budgetUsd: number
   force: boolean
   fieldsOnly: boolean
+  committedSource: boolean
   article?: string
   jobId?: string
   keyFile?: string
@@ -28,6 +29,7 @@ export function parseLocalTranslationCommand(args: readonly string[]): LocalTran
   let budgetUsd = 0
   let force = false
   let fieldsOnly = false
+  let committedSource = false
   let confirmation = false
   let index = 1
   if (action === 'article') {
@@ -75,6 +77,9 @@ export function parseLocalTranslationCommand(args: readonly string[]): LocalTran
       case '--fields-only':
         fieldsOnly = true
         break
+      case '--committed-source':
+        committedSource = true
+        break
       case '--confirm-retranslation':
         confirmation = z.literal('RETRANSLATE').parse(args[++index]) === 'RETRANSLATE'
         break
@@ -100,6 +105,7 @@ export function parseLocalTranslationCommand(args: readonly string[]): LocalTran
     budgetUsd,
     force,
     fieldsOnly,
+    committedSource,
     ...(article ? { article } : {}),
     ...(jobId ? { jobId } : {}),
     ...(keyFile ? { keyFile } : {}),

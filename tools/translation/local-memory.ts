@@ -161,10 +161,10 @@ export function readLocalMemory(root: string) {
   }
   return records
 }
-function readSources(root: string) {
+function readSources(root: string, committedSource: boolean) {
   if (git(root, ['rev-parse', '--show-toplevel']) !== realpathSync(root))
     throw new Error('--content-root must be the content Git repository root')
-  if (git(root, ['status', '--porcelain', '--', 'content']))
+  if (!committedSource && git(root, ['status', '--porcelain', '--', 'content']))
     throw new Error('Commit canonical content changes before translating')
   const commit = git(root, ['rev-parse', 'HEAD'])
   const tree = execFileSync('git', ['-C', root, 'ls-tree', '-rz', commit, '--', 'content'], {
@@ -198,8 +198,8 @@ function readSources(root: string) {
     })),
   }
 }
-function sourceTreeIdentity(root: string) {
-  if (git(root, ['status', '--porcelain', '--', 'content']))
+function sourceTreeIdentity(root: string, committedSource: boolean) {
+  if (!committedSource && git(root, ['status', '--porcelain', '--', 'content']))
     throw new Error('Canonical source has uncommitted changes')
   const tree = execFileSync('git', ['-C', root, 'ls-tree', '-rz', 'HEAD', '--', 'content'], {
     encoding: 'utf8',
@@ -253,7 +253,7 @@ export async function runLocalTranslation(
   if (command.action === 'cancel') return cancelLocalTranslation(root, command.jobId)
   const memory = readLocalMemory(root)
   if (command.action === 'validate') return { status: 'valid', entries: memory.size }
-  const source = readSources(root)
+  const source = readSources(root, command.committedSource)
   if (command.article && !source.files.some((file) => file.path === command.article))
     throw new Error('Article source path is not present in the canonical Git snapshot')
   const blocks = new Map<string, ReturnType<typeof segmentMarkdownForTranslation>[number]>()
@@ -372,6 +372,7 @@ export async function runLocalTranslation(
       excludedUncertainBlocks: planned.length - safePlanned.length,
       maximumCostUsd: Math.ceil(maximumCostUsd * 1_000_000) / 1_000_000,
       providerCalls: 0,
+      committedSource: command.committedSource,
     }
   }
   const directory = stateRoot(root)
@@ -401,6 +402,7 @@ export async function runLocalTranslation(
     force: command.force,
     ...(command.fieldsOnly ? { fieldsOnly: true } : {}),
     ...(command.afterJob ? { afterJob: command.afterJob } : {}),
+    ...(command.committedSource ? { committedSource: true } : {}),
   })
   try {
     if (command.jobId && existsSync(join(directory, `${command.jobId}.json`))) {
@@ -485,7 +487,7 @@ export async function runLocalTranslation(
         job.status = 'cancelled'
         break
       }
-      if (sourceTreeIdentity(root) !== job.sourceTree) {
+      if (sourceTreeIdentity(root, command.committedSource) !== job.sourceTree) {
         job.status = 'partial'
         job.error = 'Canonical source changed during translation'
         break
