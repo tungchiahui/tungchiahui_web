@@ -13,8 +13,12 @@ export function renderArticleMarkdown(
     case 'zh-tw':
       // Reuse the established deterministic renderer on the authoritative PostgreSQL source.
       return renderMarkdown(document.rawMarkdown, locale)
-    case 'zh-cn':
     case 'en-us':
+      // Translation changes visible headings, while authored links and existing hashes stay canonical.
+      return renderMarkdown(document.localizedMarkdown ?? document.rawMarkdown, locale, {
+        anchorSource: document.rawMarkdown,
+      })
+    case 'zh-cn':
       return renderMarkdown(document.localizedMarkdown ?? document.rawMarkdown, locale)
     default: {
       const unreachable: never = locale

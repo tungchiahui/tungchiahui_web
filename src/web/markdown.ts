@@ -1,5 +1,5 @@
 import rehypeShiki from '@shikijs/rehype'
-import type { Root } from 'mdast'
+import type { Heading, Root } from 'mdast'
 import rehypeKatex from 'rehype-katex'
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
 import rehypeStringify from 'rehype-stringify'
@@ -30,6 +30,29 @@ export type RenderedMarkdown = Readonly<{
   html: string
   readingMinutes: number
 }>
+
+function headingText(heading: Heading) {
+  const parts: string[] = []
+  visit(heading, (node) => {
+    if (node.type === 'text' || node.type === 'inlineCode' || node.type === 'inlineMath')
+      parts.push(node.value)
+  })
+  return parts.join('').trim()
+}
+
+function canonicalHeadings(source: string) {
+  const tree = unified()
+    .use(remarkParse)
+    .use(remarkFrontmatter, ['yaml'])
+    .use(remarkGfm)
+    .use(remarkContentMath)
+    .parse(source)
+  const headings: { depth: number; text: string }[] = []
+  visit(tree, 'heading', (heading) => {
+    headings.push({ depth: heading.depth, text: headingText(heading) })
+  })
+  return headings
+}
 
 function headingId(text: string, usedIds: Map<string, number>) {
   const base =
@@ -66,14 +89,19 @@ function numberHeadings(
   })
 }
 
-function enhanceHtml(html: string, headingTexts: readonly string[]) {
+function enhanceHtml(
+  html: string,
+  headingTexts: readonly string[],
+  anchors: readonly Readonly<{ depth: number; text: string }>[] | undefined,
+) {
   const headings: Array<Readonly<{ depth: number; id: string; text: string }>> = []
   const usedIds = new Map<string, number>()
   let enhanced = html.replace(
     /<h([1-6])>([\s\S]*?)<\/h\1>/g,
     (_match, depthText: string, contents: string) => {
       const text = headingTexts[headings.length] ?? ''
-      const id = headingId(text, usedIds)
+      const anchor = anchors?.[headings.length]
+      const id = headingId(anchor?.depth === Number(depthText) ? anchor.text : text, usedIds)
       headings.push({ depth: Number(depthText), id, text })
       return `<h${depthText} id="${id}">${contents}</h${depthText}>`
     },
@@ -122,6 +150,7 @@ function remarkLocaleContent(locale: AppLocale) {
 export async function renderMarkdown(
   rawMarkdown: string,
   locale: AppLocale = 'zh-cn',
+  options: Readonly<{ anchorSource?: string }> = {},
 ): Promise<RenderedMarkdown> {
   const source = z.string().min(1).parse(rawMarkdown)
   const headingTexts: string[] = []
@@ -133,13 +162,7 @@ export async function renderMarkdown(
     .use(remarkLocaleContent(locale))
     .use(() => (tree: Root) => {
       visit(tree, 'heading', (heading) => {
-        const parts: string[] = []
-        visit(heading, (node) => {
-          if (node.type === 'text' || node.type === 'inlineCode' || node.type === 'inlineMath') {
-            parts.push(node.value)
-          }
-        })
-        headingTexts.push(parts.join('').trim())
+        headingTexts.push(headingText(heading))
       })
     })
     .use(remarkRehype)
@@ -182,7 +205,15 @@ export async function renderMarkdown(
       level: 'warn',
     })
   }
-  const enhanced = enhanceHtml(String(rendered), headingTexts)
+  const anchors =
+    options.anchorSource === undefined
+      ? undefined
+      : canonicalHeadings(z.string().min(1).parse(options.anchorSource))
+  const enhanced = enhanceHtml(
+    String(rendered),
+    headingTexts,
+    anchors?.length === headingTexts.length ? anchors : undefined,
+  )
 
   const readableCharacters = source
     .replace(/^---[\s\S]*?---/m, '')

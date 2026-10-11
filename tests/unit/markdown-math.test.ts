@@ -18,6 +18,22 @@ const delimiters = [
 ]
 
 describe('shared Markdown math', () => {
+  it('retains source anchors and duplicate numbering under translated heading labels', async () => {
+    const rendered = await renderArticleMarkdown(
+      {
+        rawMarkdown: '## 自转\n\n[跳转](#自转)\n\n## 自转',
+        localizedMarkdown: '## Rotation\n\n[Jump](#自转)\n\n## Rotation',
+      },
+      'en-us',
+    )
+    expect(rendered.headings.map(({ id, text }) => ({ id, text }))).toEqual([
+      { id: '自转', text: 'Rotation' },
+      { id: '自转-2', text: 'Rotation' },
+    ])
+    expect(rendered.html).toContain('id="自转"')
+    expect(rendered.html).toContain(`href="#${encodeURIComponent('自转')}"`)
+    expect(rendered.headings.map(({ number }) => number)).toEqual(['1', '2'])
+  }, 20_000)
   it.each(['zh-hk', 'zh-tw'] as const)(
     'recovers formulas from older damaged %s materializations',
     async (locale) => {
