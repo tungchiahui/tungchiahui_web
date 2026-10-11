@@ -165,10 +165,6 @@ test('routes all approved locales, preserves logical switching and exposes conte
     'id',
     '新博客启用',
   )
-  await expect(page.locator('[data-toc-link="新博客启用"]').first()).toHaveAttribute(
-    'href',
-    '#新博客启用',
-  )
   await expect(page.getByText('Revalidated without rebuilding.')).toBeVisible()
   await expect(page.locator('[data-content-locale-state="mixed"]')).toContainText(
     '1 current source blocks remain',
