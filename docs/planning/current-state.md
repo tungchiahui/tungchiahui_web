@@ -35,7 +35,9 @@ Recovery/Foundation 与 11 Migration Gate 在提交前后复核，最终 CI 为 
 初次 Dry-run 为 252 文档 / 18847 唯一可翻译块，保守预占总上限 16.633006 USD。
 授权 3 USD 是累计硬上限，初始执行额度扣除试译为 2.999681 USD；余额不足保留阶段性
 译文并停止，绝不自动追加。Content Bootstrap PR #1 必须在 Web importer 发布后合入。
-Web [PR #42](https://github.com/tungchiahui/tungchiahui_web/pull/42)；Content
+Web [PR #42](https://github.com/tungchiahui/tungchiahui_web/pull/42) 与边界复核
+[PR #43](https://github.com/tungchiahui/tungchiahui_web/pull/43)（NUL / PG Integer / Numeric 范围）
+共同构成本次上线；完整 Unit 51 File / 312 Test 通过，Foundation/Recovery 全部通过。Content
 [PR #1](https://github.com/tungchiahui/tungchiahui_content/pull/1)。本地首批已启动，Job
 `df73803b-8aab-4208-82c9-47454216cf8b`，非秘密定位信息在 `.local/git-memory-paid-job.json`。
 Codex 当前线程 Heartbeat `automation` 每 20 分钟观察并按授权验证/发布阶段性 JSON；
