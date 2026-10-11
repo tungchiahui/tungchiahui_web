@@ -307,6 +307,48 @@ describe('Git-authoritative block memory', () => {
       test.cleanup()
     }
   })
+
+  it('finds a changed title even when added body blocks shift its authoring ordinal', async () => {
+    const test = fixture()
+    const calls: string[] = []
+    const provider = createValidatedPaidTranslationProvider({
+      estimate: () => ({ estimatedInputTokens: 1, estimatedOutputTokens: 1, maximumCostUsd: 0.01 }),
+      async translate(request) {
+        calls.push(request.sourceText)
+        return {
+          provider: 'test',
+          model: 'test',
+          translatedText: '# New title',
+          usage: { inputTokens: 1, outputTokens: 1, costUsd: 0.004 },
+        }
+      },
+    })
+    try {
+      writeFileSync(
+        join(test.root, 'content/posts/2026-01-01-标题.md'),
+        '---\ntitle: 新标题\n---\n\n# 标题\n\n正文。\n\n新增正文。\n',
+      )
+      execFileSync('git', ['-C', test.root, 'add', 'content'])
+      execFileSync('git', ['-C', test.root, 'commit', '-m', 'change title and add body'], {
+        stdio: 'ignore',
+      })
+      const result = await runLocalTranslation(
+        parseLocalTranslationCommand([
+          'changed',
+          '--content-root',
+          test.root,
+          '--execute',
+          '--budget-usd',
+          '0.02',
+        ]),
+        provider,
+      )
+      expect(result).toMatchObject({ completedBlocks: 1, requests: 1 })
+      expect(calls).toEqual(['# 新标题'])
+    } finally {
+      test.cleanup()
+    }
+  })
   it('does not resend a crash-reserved request when resuming its durable budget', async () => {
     const test = fixture()
     const id = randomUUID()

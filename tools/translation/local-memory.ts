@@ -41,9 +41,12 @@ import {
 import type { LocalTranslationCommand } from './local-command'
 
 function documentBlocks(contents: string, path: string, fieldsOnly: boolean) {
-  const body = fieldsOnly ? [] : segmentMarkdownForTranslation(contents)
+  const body = fieldsOnly
+    ? []
+    : segmentMarkdownForTranslation(contents).map((block) => ({ ...block, field: null }))
   const fields = documentTranslationFields(contents, path).map((field, index) => ({
     ...field.block,
+    field: field.field,
     ordinal: body.length + index,
   }))
   return [...body, ...fields]
@@ -258,7 +261,7 @@ export async function runLocalTranslation(
   const contexts = new Map<string, TargetedPatchContext>()
   for (const file of source.files) {
     if (command.article && file.path !== command.article) continue
-    let previous: ReturnType<typeof segmentMarkdownForTranslation> = []
+    let previous: ReturnType<typeof documentBlocks> = []
     try {
       const parent = git(root, ['log', '-1', '--format=%P', source.commit, '--', file.path]).split(
         ' ',
@@ -280,7 +283,11 @@ export async function runLocalTranslation(
       if (!block.isTranslatable) continue
       const key = memoryEntryKey(block)
       blocks.set(key, block)
-      const old = previous[block.ordinal]
+      const old = previous.find((candidate) =>
+        block.field === null
+          ? candidate.field === null && candidate.ordinal === block.ordinal
+          : candidate.field === block.field,
+      )
       if (old?.sourceAstType === block.sourceAstType && old.sourceHash !== block.sourceHash) {
         changedKeys.add(key)
         const translated = memory.get(memoryEntryKey(old))

@@ -15,6 +15,7 @@ Content Push、Public Request、GitHub Actions 均不调用付费 API；生产�
 
 主标题与 Wiki 目录名也进入同一套块级记忆。默认 pending/changed/article/all 包含正文和标题；
 只补标题可加 `--fields-only`。中文 Frontmatter、文件名、拼音 URL 和正文 Heading ID 不改。
+`changed` 按字段名称匹配前后标题，不依赖正文块数量；同时改标题和增加正文不会漏掉标题。
 正文标题与元数据标题在 AST 身份一致时复用同一记忆；其余标题是独立 Heading Block，
 不会把模型输出写进整段 YAML，也不把这些辅助 Block 拼入正文。
 
