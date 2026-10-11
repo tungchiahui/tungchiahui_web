@@ -129,6 +129,7 @@ export function TechTracker({ initial }: { initial: DatasetSnapshot<TechPayload>
                 </Button>
               ))}
             </fieldset>
+            {!stage ? <p>{t('emptyPlan')}</p> : null}
             {stage && (
               <>
                 <div className={panelClass + ' mb-5'}>
@@ -169,6 +170,7 @@ export function TechTracker({ initial }: { initial: DatasetSnapshot<TechPayload>
                   </div>
                 </div>
                 <div className="space-y-4" key={stage.id}>
+                  {!stage.tasks.some((task) => !task.archivedAt) ? <p>{t('emptyTasks')}</p> : null}
                   {stage.tasks
                     .filter((task) => !task.archivedAt)
                     .toSorted((a, b) => a.position - b.position)
@@ -199,6 +201,7 @@ export function TechTracker({ initial }: { initial: DatasetSnapshot<TechPayload>
                             ))}
                           </div>
                           <div className="divide-y">
+                            {!taskSubtasks.length ? <p>{t('emptySubtasks')}</p> : null}
                             {taskSubtasks.map((subtask) => {
                               const record = records[subtask.id]
                               const title = localize(subtask.title)
@@ -295,6 +298,7 @@ export function TechTracker({ initial }: { initial: DatasetSnapshot<TechPayload>
           </section>
           <section className={`${panelClass} mt-6`} aria-label={t('milestones')}>
             <h2 className="mb-4 font-bold text-2xl">{t('milestones')}</h2>
+            {!store.payload.roadmap.milestones.length ? <p>{t('emptyMilestones')}</p> : null}
             <ol className="space-y-3">
               {store.payload.roadmap.milestones.map((item) => (
                 <li

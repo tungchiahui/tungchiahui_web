@@ -102,17 +102,17 @@ test('aligns homepage previews and start search while article code follows the t
   // This checks the clock/search layout; a remote background image must not gate readiness.
   await page.goto('/start', { waitUntil: 'domcontentloaded' })
   await expect(page.locator('.start-clock')).toBeVisible()
+  await expect(page.locator('.start-search-submit')).toBeVisible()
   const clockBox = await page.locator('.start-clock').boundingBox()
-  const searchBox = await page.locator('.start-search').boundingBox()
-  const submitBox = await page.locator('.start-search-submit').boundingBox()
   expect(clockBox?.y ?? 900).toBeLessThan(270)
-  expect(
-    Math.abs(
-      (searchBox?.y ?? 0) +
-        (searchBox?.height ?? 0) / 2 -
-        ((submitBox?.y ?? 0) + (submitBox?.height ?? 0) / 2),
-    ),
-  ).toBeLessThan(2)
+  await expect
+    .poll(async () => {
+      const searchBox = await page.locator('.start-search').boundingBox()
+      const submitBox = await page.locator('.start-search-submit').boundingBox()
+      if (!searchBox || !submitBox) return Number.POSITIVE_INFINITY
+      return Math.abs(searchBox.y + searchBox.height / 2 - (submitBox.y + submitBox.height / 2))
+    })
+    .toBeLessThan(2)
 
   await page.goto('/wiki/2023-10-05-cplusplus-jiao-xue/0200-c-kai-fa-huan-jing-da-jian-yu-ce-shi')
   await page.getByRole('button', { name: '主题模式' }).click()

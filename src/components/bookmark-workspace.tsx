@@ -28,39 +28,40 @@ import { Button } from '@/components/ui/button'
 import { type StartBackground, startBackgroundListSchema } from '@/start/backgrounds'
 import {
   bookmarkSchema,
-  defaultStartPayload,
   type StartPayload,
   startDataResponseSchema,
   startPayloadSchema,
 } from '@/start/contracts'
+import { createDefaultStartPayload } from '@/start/defaults'
 
 type BookmarkSection = StartPayload['sections'][number]
 type HistoryEntry = StartPayload['history'][number]
 type EngineId = StartPayload['engine']
 
 const engines = [
-  { id: 'baidu', name: '百度', url: 'https://www.baidu.com/s?wd=' },
-  { id: 'google', name: 'Google', url: 'https://www.google.com/search?q=' },
-  { id: 'bing', name: 'Bing', url: 'https://www.bing.com/search?q=' },
+  { id: 'baidu', name: 'baidu', url: 'https://www.baidu.com/s?wd=' },
+  { id: 'google', name: 'google', url: 'https://www.google.com/search?q=' },
+  { id: 'bing', name: 'bing', url: 'https://www.bing.com/search?q=' },
 ] as const satisfies readonly { id: EngineId; name: string; url: string }[]
-const fallbackBackground: StartBackground = {
+const fallbackBackground = {
   url: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=2400&q=86',
-  title: '山谷',
+  title: 'valley',
   copyright: 'Unsplash',
-}
-const fallbackBackgrounds: readonly StartBackground[] = [
+} as const satisfies StartBackground
+const fallbackBackgrounds = [
   fallbackBackground,
   {
     url: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=2400&q=86',
-    title: '湖畔',
+    title: 'lake',
     copyright: 'Unsplash',
   },
-] as const
+] as const satisfies readonly StartBackground[]
 export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) {
   const t = useTranslations('Web.start')
   const locale = useLocale()
-  const [sections, setSections] = useState<readonly BookmarkSection[]>(defaultStartPayload.sections)
-  const [history, setHistory] = useState<readonly HistoryEntry[]>(defaultStartPayload.history)
+  const defaults = useMemo(() => createDefaultStartPayload(locale), [locale])
+  const [sections, setSections] = useState<readonly BookmarkSection[]>(defaults.sections)
+  const [history, setHistory] = useState<readonly HistoryEntry[]>(defaults.history)
   const [engineIndex, setEngineIndex] = useState(0)
   const [backgroundIndex, setBackgroundIndex] = useState(0)
   const [backgrounds, setBackgrounds] = useState<readonly StartBackground[]>(fallbackBackgrounds)
@@ -75,12 +76,10 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
   const [revision, setRevision] = useState(0)
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
-  const [authError, setAuthError] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
   const importInput = useRef<HTMLInputElement>(null)
   const currentEngine = engines[engineIndex] ?? engines[0]
+  const engineName = t(currentEngine.name)
 
   useEffect(() => {
     setNow(new Date())
@@ -91,7 +90,7 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
         setAuthenticated(data.authenticated)
         setAccountName(data.account?.username ?? null)
         setRevision(data.dataset.revision)
-        setSections(data.dataset.payload.sections)
+        setSections(data.dataset.revision === 0 ? defaults.sections : data.dataset.payload.sections)
         setHistory(data.dataset.payload.history)
         setEngineIndex(
           Math.max(
@@ -104,7 +103,7 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
       })
       .catch(() => setSaveError(t('loadFailed')))
     return () => window.clearInterval(timer)
-  }, [t])
+  }, [defaults, t])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -217,7 +216,7 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
   const options = useMemo(() => {
     const value = query.trim().toLowerCase()
     const combined = [
-      ...suggestions.map((text) => ({ text, engine: currentEngine.name, timestamp: 0 })),
+      ...suggestions.map((text) => ({ text, engine: engineName, timestamp: 0 })),
       ...history.filter((item) => !value || item.text.toLowerCase().includes(value)),
     ]
     return combined
@@ -227,14 +226,14 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
           index,
       )
       .slice(0, 8)
-  }, [currentEngine.name, history, query, suggestions])
+  }, [engineName, history, query, suggestions])
 
   function executeSearch(text = query) {
     const value = text.trim()
     if (!value) return
     if (authenticated)
       saveHistory([
-        { text: value, engine: currentEngine.name, timestamp: Date.now() },
+        { text: value, engine: engineName, timestamp: Date.now() },
         ...history.filter((item) => item.text !== value),
       ])
     window.location.assign(
@@ -271,7 +270,11 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
       name: form.get('name'),
       url: form.get('url'),
     })
-    if (!parsed.success) return
+    if (!parsed.success) {
+      setSaveError(t('bookmarkInvalid'))
+      return
+    }
+    setSaveError(null)
     saveSections(
       sections.map((section, index) =>
         index === sectionIndex ? { ...section, items: [...section.items, parsed.data] } : section,
@@ -293,9 +296,11 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
       const parsed = startPayloadSchema.shape.sections.safeParse(
         JSON.parse(await file.text()) as unknown,
       )
-      if (parsed.success) saveSections(parsed.data)
+      if (!parsed.success) throw new Error('invalid_bookmarks')
+      saveSections(parsed.data)
+      setSaveError(null)
     } catch {
-      /* Keep current collection. */
+      setSaveError(t('importFailed'))
     }
   }
 
@@ -313,6 +318,8 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
               : now.getHours() < 22
                 ? 'greetingEvening'
                 : 'greetingNight'
+  const background = backgrounds[backgroundIndex] ?? fallbackBackground
+  const localizedFallback = fallbackBackgrounds.find((item) => item.url === background.url)
   const backgroundStyle = {
     '--start-photo': `url("${backgrounds[backgroundIndex]?.url ?? fallbackBackground.url}")`,
   } as CSSProperties
@@ -324,6 +331,7 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
     >
       <div className="start-overlay" />
       <div className="start-content">
+        <h1 className="sr-only">{t('title')}</h1>
         <header className="start-toolbar">
           <Link aria-label={t('backHome')} className="start-home-mark" href={homeHref}>
             {/* biome-ignore lint/performance/noImgElement: the exact Legacy ICO is intentionally reused for the Start home control. */}
@@ -359,11 +367,11 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
           }}
         >
           <button
-            aria-label={t('switchEngine', { engine: currentEngine.name })}
+            aria-label={t('switchEngine', { engine: engineName })}
             onClick={cycleEngine}
             type="button"
           >
-            {currentEngine.name}
+            {engineName}
           </button>
           <input
             autoComplete="off"
@@ -373,6 +381,7 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
               setShowOptions(true)
             }}
             onFocus={() => setShowOptions(true)}
+            aria-label={t('search')}
             placeholder={t('searchPlaceholder')}
             value={query}
           />
@@ -403,8 +412,8 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
           <section className="start-launchpad">
             <div className="start-section-head">
               <div>
-                <span>LAUNCHPAD</span>
-                <h1>{t('bookmarks')}</h1>
+                <span>{t('launchpad')}</span>
+                <h2>{t('bookmarks')}</h2>
               </div>
               <div>
                 <Button
@@ -424,6 +433,7 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
               </div>
             </div>
             <div className="start-bookmark-sections">
+              {!sections.length ? <p>{t('emptyBookmarks')}</p> : null}
               {sections.map((section, sectionIndex) => (
                 <article key={section.title}>
                   {editing ? (
@@ -444,6 +454,7 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
                     <h2>{section.title}</h2>
                   )}
                   <div className="start-bookmark-grid">
+                    {!section.items.length ? <p>{t('emptySection')}</p> : null}
                     {section.items.map((bookmark) => (
                       <div className="start-bookmark" key={bookmark.id}>
                         <a href={bookmark.url} rel="noreferrer">
@@ -457,7 +468,7 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
                         </a>
                         {editing ? (
                           <button
-                            aria-label={`${t('remove')}: ${bookmark.name}`}
+                            aria-label={t('removeBookmark', { name: bookmark.name })}
                             onClick={() =>
                               saveSections(
                                 sections.map((item, index) =>
@@ -482,9 +493,19 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
                   </div>
                   {editing ? (
                     <form className="start-add-form" onSubmit={(event) => add(event, sectionIndex)}>
-                      <input name="name" placeholder={t('name')} required />
-                      <input name="desc" placeholder={t('descriptionField')} />
-                      <input name="url" placeholder={t('url')} required type="url" />
+                      <input name="name" aria-label={t('name')} placeholder={t('name')} required />
+                      <input
+                        name="desc"
+                        aria-label={t('descriptionField')}
+                        placeholder={t('descriptionField')}
+                      />
+                      <input
+                        name="url"
+                        aria-label={t('url')}
+                        placeholder={t('url')}
+                        required
+                        type="url"
+                      />
                       <Button type="submit">
                         <Plus size={15} />
                         {t('add')}
@@ -509,13 +530,14 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
               </Button>
               <Button
                 disabled={!authenticated}
-                onClick={() => saveSections(defaultStartPayload.sections)}
+                onClick={() => saveSections(defaults.sections)}
                 type="button"
               >
                 <RotateCcw size={16} />
                 {t('reset')}
               </Button>
               <input
+                aria-label={t('import')}
                 accept="application/json"
                 className="sr-only"
                 onChange={(event) => void importBookmarks(event.target.files?.[0])}
@@ -532,7 +554,7 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
         ) : null}
         <p className="start-wallpaper-credit">
           {t('wallpaperSource', {
-            title: backgrounds[backgroundIndex]?.title ?? fallbackBackground.title,
+            title: localizedFallback ? t(localizedFallback.title) : background.title,
           })}{' '}
           {backgrounds[backgroundIndex]?.copyright ?? fallbackBackground.copyright}
         </p>

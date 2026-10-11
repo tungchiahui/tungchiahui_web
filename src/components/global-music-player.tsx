@@ -185,6 +185,11 @@ export function GlobalMusicPlayer() {
       </div>
       {playlistOpen ? (
         <ul aria-label={t('playlist')} className="music-floating-playlist">
+          {!player.songs.length ? (
+            <li role="status">
+              {player.error || (player.isReady ? t('emptyPlaylist') : t('loading'))}
+            </li>
+          ) : null}
           {player.songs.map((song, index) => (
             <li key={song.url}>
               <button

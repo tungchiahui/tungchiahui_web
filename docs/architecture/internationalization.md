@@ -124,3 +124,12 @@ Phase 8 已实现该替换：顶层 mdast Semantic Block 使用版本化 Normali
 不持有 AI Key、不会付费或回写 Git。Blob SHA/Parser Version Cache、事务互斥/提交推进检查、
 变化记忆关联和单篇物化避免全量重编译；纯 JSON 更新只刷新英文。缺失/删除记忆仍按块
 中文 Fallback。旧 Phase 9 执行说明是历史基线，当前入口见翻译运维文档。
+
+## 固定信息页与 More 补漏
+
+About、CV、Friend、Mylogo 的受版本管理固定介绍使用 `Web.information` 语义 Message，
+四 Locale 与应用同部署；不得用仅简繁转换的 Content Converter 代替英文 UI 翻译。
+Start 系统默认视图使用 `Web.startDefaults`，已保存作者集合保留原文；技术路线作者的
+zhCN/en 字段、歌曲/歌词、来源壁纸和统计行继续作为数据。全部 More 子页的交互与
+Metadata 由四 Locale 回归覆盖。边界、标题缺口与发布/回退见
+[`site-i18n-completion.md`](../development/site-i18n-completion.md)。

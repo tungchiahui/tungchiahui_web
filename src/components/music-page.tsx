@@ -32,7 +32,9 @@ export function MusicPage() {
           >
             {song?.title || t('playerTitle')}
           </h1>
-          <p className="mt-2 text-muted-foreground">{song?.artist || t('loading')}</p>
+          <p className="mt-2 text-muted-foreground">
+            {song?.artist || (player.isReady ? t('emptyPlaylist') : t('loading'))}
+          </p>
           <div className="mt-7 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 text-xs">
             <span>{formatTime(player.currentTime)}</span>
             <input
@@ -73,12 +75,18 @@ export function MusicPage() {
           </div>
         </div>
         <aside className="music-status-panel">
-          <p className="flex items-center gap-2 font-semibold">
+          <p className="flex items-center gap-2 font-semibold" role="status">
             <span
               className={`size-2.5 rounded-full ${player.isPlaying ? 'bg-emerald-500' : 'bg-slate-400'}`}
             />
             {player.error ||
-              (player.isReady ? (player.isPlaying ? t('playing') : t('paused')) : t('loading'))}
+              (player.isReady
+                ? player.songs.length
+                  ? player.isPlaying
+                    ? t('playing')
+                    : t('paused')
+                  : t('emptyPlaylist')
+                : t('loading'))}
           </p>
           <label className="mt-5 grid grid-cols-[auto_1fr_auto] items-center gap-2 text-sm">
             <span>{t('volume')}</span>
@@ -152,7 +160,9 @@ export function MusicPage() {
             </button>
           ))}
           {!player.songs.length ? (
-            <p className="py-8 text-center text-muted-foreground">{player.error || t('loading')}</p>
+            <p className="py-8 text-center text-muted-foreground">
+              {player.error || (player.isReady ? t('emptyPlaylist') : t('loading'))}
+            </p>
           ) : null}
         </div>
       </section>

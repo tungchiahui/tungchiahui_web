@@ -13,6 +13,7 @@ COPY drizzle ./drizzle
 COPY ops/database/roles.sql ./ops/database/roles.sql
 COPY ops/database/runtime-grants.sql ./ops/database/runtime-grants.sql
 COPY src ./src
+COPY messages ./messages
 COPY tsconfig.json ./
 RUN mkdir -p /workspace/dist \
   && pnpm exec esbuild services/control-api/main.ts --bundle --format=cjs --platform=node --target=node24 --outfile=dist/control-api.cjs \

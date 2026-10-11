@@ -26,7 +26,7 @@ export const upstreamMusicSongSchema = z
 export const musicSongSchema = z
   .object({
     id: z.string().min(1).max(128),
-    title: z.string().min(1).max(300),
+    title: z.string().max(300),
     artist: z.string().max(300),
     cover: z.url().or(z.literal('')),
     lyricSource: z.string().max(20_000),
@@ -70,8 +70,7 @@ export function normalizeMusicSong(
   if (!parsedUrl.success) return null
   const rawCover = text(input.cover) || text(input.pic)
   const cover = z.url().safeParse(rawCover).success ? rawCover : ''
-  const title =
-    text(input.name) || text(input.title) || text(input.songname) || `Track ${index + 1}`
+  const title = text(input.name) || text(input.title) || text(input.songname)
   return musicSongSchema.parse({
     id: songId || `playlist-${index}`,
     title,

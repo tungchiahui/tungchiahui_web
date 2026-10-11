@@ -3,7 +3,7 @@ import { createInterface } from 'node:readline/promises'
 import { hashAccountPassword } from '../../src/control-plane/owner-password'
 import { createDatabaseClient } from '../../src/database/client'
 import { accounts, startDatasets } from '../../src/database/schema'
-import { defaultStartPayload } from '../../src/start/contracts'
+import { defaultStartPayload } from '../../src/start/defaults'
 
 export async function createAccount(databaseUrl: string, username: string, role: 'owner' | 'user') {
   const readline = createInterface({ input, output })

@@ -47,7 +47,7 @@ export function StatsDashboard() {
 
   useEffect(() => void load(), [load])
 
-  const numberLocale = locale === 'en-us' ? 'en-US' : 'zh-CN'
+  const numberLocale = locale
   const formatNumber = (value: number) => Math.round(value).toLocaleString(numberLocale)
   const formatDuration = (value: number) => {
     const seconds = Math.max(0, Math.round(value))
@@ -76,7 +76,7 @@ export function StatsDashboard() {
   return (
     <div className="stats-page">
       <header className="stats-hero">
-        <p className="legacy-kicker">ANALYTICS</p>
+        <p className="legacy-kicker">{t('kicker')}</p>
         <h1>
           <BarChart3 aria-hidden="true" /> {t('title')}
         </h1>
@@ -92,7 +92,11 @@ export function StatsDashboard() {
         </button>
       </header>
 
-      {failed ? <p className="stats-status">{t('unavailable')}</p> : null}
+      {failed ? (
+        <p className="stats-status" role="status">
+          {t('unavailable')}
+        </p>
+      ) : null}
       {loading && !overview ? <p className="stats-status">{t('loading')}</p> : null}
       {cards.length ? (
         <section aria-label={t('overview')} className="stats-summary-grid">
