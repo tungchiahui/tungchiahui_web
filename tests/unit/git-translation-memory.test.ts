@@ -88,6 +88,17 @@ describe('Git-authoritative block memory', () => {
     expect(() => parseMemoryShard(memoryShardPath('f'.repeat(64)), serialized)).toThrow()
     expect(serializeMemoryShard({ [key]: value })).toBe(serialized)
   })
+  it('rejects metadata outside PostgreSQL bounds before materializing canonical content', () => {
+    const value = entry('当前正文。', 'Current body.')
+    const key = memoryEntryKey(value)
+    for (const input of [
+      { ...value, usage: { ...value.usage, inputTokens: 2_147_483_648 } },
+      { ...value, usage: { ...value.usage, costUsd: 1_000_000 } },
+      { ...value, translatedText: 'Current\0 body.' },
+      { ...value, provider: 'test\0provider' },
+    ])
+      expect(() => validateMemoryEntry(key, input)).toThrow()
+  })
   it('permits ordinary English compounds while preserving every original identifier', () => {
     const good = entry('实时控制，例如快速执行。', 'Use real-time control, e.g. execute quickly.')
     expect(validateMemoryEntry(memoryEntryKey(good), good)).toEqual(good)

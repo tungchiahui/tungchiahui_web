@@ -20,20 +20,24 @@ export const defaultMemoryManifest = memoryManifestSchema.parse({
   layout: 'sha256-prefix-2',
 })
 const hashSchema = z.string().regex(/^[a-f0-9]{64}$/)
+const databaseText = z
+  .string()
+  .refine((value) => !value.includes('\0'), 'Translation memory text cannot contain NUL')
+const databaseTokenCount = z.number().int().nonnegative().max(2_147_483_647)
 export const memoryEntrySchema = z
   .object({
     normalizationVersion: z.literal(1),
     sourceHash: hashSchema,
     contextFingerprint: hashSchema,
-    sourceText: z.string().min(1).max(1_000_000),
-    translatedText: z.string().min(1).max(1_000_000),
-    provider: z.string().min(1).max(100),
-    model: z.string().min(1).max(200),
+    sourceText: databaseText.min(1).max(1_000_000),
+    translatedText: databaseText.min(1).max(1_000_000),
+    provider: databaseText.min(1).max(100),
+    model: databaseText.min(1).max(200),
     usage: z
       .object({
-        inputTokens: z.number().int().nonnegative(),
-        outputTokens: z.number().int().nonnegative(),
-        costUsd: z.number().finite().nonnegative(),
+        inputTokens: databaseTokenCount,
+        outputTokens: databaseTokenCount,
+        costUsd: z.number().finite().nonnegative().max(999_999.999999),
       })
       .strict(),
   })

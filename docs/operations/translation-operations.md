@@ -43,6 +43,7 @@ Content-only Sync，不构建 Next.js Image 或执行 Blue-green。服务器验�
 SHA，Blob Cache 跳过未变化下载；批量更新变化记忆，每篇受影响英文只重新拼装一次。
 中文未变且仅 JSON 改动时，OpenCC 不重算，Search/Page 只刷新 en-US。
 删除记忆会让当前关联块回退最新中文。无关旧记忆保留用于未来复用，但没有数据库隐藏来源。
+文本 NUL、超出 PostgreSQL 范围的 Token/Cost 与错误 AST/Hash 一样，在入库前拒绝。
 坏记忆明确使 Job 失败；中文已发布，旧有效且匹配当前中文的记忆继续可用。
 旧任务不能覆盖已推进的 Git State；回退通过新的 Git Revert Commit 发布。
 
