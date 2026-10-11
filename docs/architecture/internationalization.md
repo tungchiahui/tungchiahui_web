@@ -114,6 +114,12 @@ Phase 8 已实现该替换：顶层 mdast Semantic Block 使用版本化 Normali
 
 ## ADR 0028 更新
 
+主标题和 Wiki 目录展示名属于 Content i18n。辅助 Heading Block 使用同一 Git JSON 记忆；
+字段关联与正文 Offset 分离，生产仅导入/物化。页面、列表、Wiki 导航、上下篇、搜索和 SEO
+读取同一当前译名；完整 Source Hash 与独立字段 Source Hash 双重防止过期译名。
+原中文 Frontmatter/文件名、拼音 Route、正文锚点、Canonical 章节编号/排序保持稳定。
+缺失/删除记忆回退中文；HK/TW 继续确定性转换。操作和回滚见翻译运维文档。
+
 付费执行移到 Authoring Workstation。版本化 JSON 记忆随 Content Commit 单向导入；服务器
 不持有 AI Key、不会付费或回写 Git。Blob SHA/Parser Version Cache、事务互斥/提交推进检查、
 变化记忆关联和单篇物化避免全量重编译；纯 JSON 更新只刷新英文。缺失/删除记忆仍按块

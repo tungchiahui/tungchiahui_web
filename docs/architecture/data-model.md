@@ -45,6 +45,9 @@ locale
 translated_markdown
 translation_hash
 translation_version
+translated_fields       validated title / wikiGroupTitle
+field_translation_version
+field_source_hash       independent canonical title/directory identity
 generated_at
 ```
 
@@ -113,6 +116,15 @@ created_at/updated_at
 ```
 
 Ordinal/Offset 只重建当前 Markdown，不是 Segment Identity。Mapping 可在局部修改时指向一个新 Pending Segment，同时保留旧 reviewed/translated Segment 供 targeted patch context 使用。
+
+### document_translation_fields
+
+Expand 0011 增加 worker-only 标题字段关联，以 `(document_id, locale, field)` 为主键，
+`field` 限制为 `title` / `wikiGroupTitle`，`segment_id` 继续引用全局 `translation_segments`。
+它不使用正文 Ordinal/Offset，不改中文 Frontmatter。译名与独立字段来源哈希物化在
+`document_translations`；公开角色只读该既有物化表，不读取字段关联。
+旧代码忽略辅助字段，重新升级按字段哈希免费修复，避免旧 Worker 改正文后留下过期译名。
+持久正文计数保持既有含义，Public DAL 的展示计数另包含缺失/命中的标题字段。
 
 ### translation_jobs
 

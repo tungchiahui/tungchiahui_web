@@ -413,6 +413,7 @@ export class TranslationJobRepository {
           documentId: document.id,
           rawMarkdown: document.rawMarkdown,
           sourceHash: document.sourceHash,
+          sourcePath: document.sourcePath,
           timestamp: new Date(),
         })
         hookInputs.push({

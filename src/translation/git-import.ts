@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { and, eq, inArray, notInArray, sql } from 'drizzle-orm'
 import {
   contentSourceFiles,
+  documentTranslationFields,
   documentTranslationSegments,
   gitTranslationEntries,
   translationSegments,
@@ -156,6 +157,11 @@ export async function applyGitMemoryImport(
       .from(documentTranslationSegments)
       .where(inArray(documentTranslationSegments.segmentId, [...changedSegments]))
     for (const reference of references) documentIds.add(reference.documentId)
+    const fields = await transaction
+      .select({ documentId: documentTranslationFields.documentId })
+      .from(documentTranslationFields)
+      .where(inArray(documentTranslationFields.segmentId, [...changedSegments]))
+    for (const field of fields) documentIds.add(field.documentId)
   }
   const current = new Set(plan.files.map((file) => file.path))
   const oldFiles = await transaction

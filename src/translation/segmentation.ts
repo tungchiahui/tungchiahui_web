@@ -202,7 +202,7 @@ function parseMarkdown(value: string) {
 }
 
 // Translate only text leaves. Markdown delimiters, code, formula nodes, URLs and
-// titles remain in the source template rather than relying on model fidelity.
+// link/image title attributes remain in the source template.
 export function createTranslationTextTemplate(source: string) {
   const parts: { end: number; protected: string[]; start: number; text: string }[] = []
   function visit(node: AstNode) {
@@ -211,11 +211,35 @@ export function createTranslationTextTemplate(source: string) {
       const rawText = source.slice(position.start.offset, position.end.offset)
       if (!rawText.trim()) return
       const protectedValues: string[] = []
-      const text = rawText.replace(protectedTextPattern(), (value) => {
+      const literals =
+        typeof node.value === 'string'
+          ? [...node.value.matchAll(protectedTextPattern())].map((match) => match[0])
+          : []
+      // Metadata headings escape punctuation. Match the decoded identifier with
+      // optional Markdown escapes, then restore the exact source spelling.
+      const literalPattern = literals.length
+        ? new RegExp(
+            [...new Set(literals)]
+              .toSorted((a, b) => b.length - a.length)
+              .map((literal) =>
+                [...literal]
+                  .map((character) =>
+                    /[\\`*_{}[\]<>|#$!.+~-]/u.test(character)
+                      ? `\\\\?${escapeRegExp(character)}`
+                      : escapeRegExp(character),
+                  )
+                  .join(''),
+              )
+              .join('|'),
+            'gu',
+          )
+        : null
+      const protect = (value: string) => {
         const marker = `TRANSLATION_LITERAL_${protectedValues.length}_END`
         protectedValues.push(value)
         return marker
-      })
+      }
+      const text = literalPattern ? rawText.replace(literalPattern, protect) : rawText
       parts.push({
         end: position.end.offset,
         protected: protectedValues,

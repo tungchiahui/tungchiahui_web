@@ -8,6 +8,7 @@ import { z } from 'zod'
 import type { ContentType, JsonValue, Locale } from '../domain/persistence'
 import { localizeContentText } from '../i18n/content'
 import { localizeContentMarkdown } from '../i18n/content-markdown'
+import { documentFieldSourceHash, translatedFieldsSchema } from '../translation/document-fields'
 
 const markdownNodeSchema = z
   .object({
@@ -34,6 +35,12 @@ const sourceDocumentSchema = z
       z
         .object({
           markdown: z.string().min(1),
+          fields: translatedFieldsSchema.optional(),
+          fieldSourceHash: z
+            .string()
+            .regex(/^[a-f0-9]{64}$/)
+            .nullable()
+            .optional(),
           sourceHash: z
             .string()
             .regex(/^[a-f0-9]{64}$/)
@@ -123,7 +130,13 @@ function localizedMarkdown(document: SearchSourceDocument, locale: Locale) {
 
 export function materializeSearchProjection(documentInput: unknown, locale: Locale) {
   const document = sourceDocumentSchema.parse(documentInput)
-  const title = localizeContentText(document.title, locale)
+  const english = document.translations['en-us']
+  const title =
+    locale === 'en-us' &&
+    english?.sourceHash === document.sourceHash &&
+    english.fieldSourceHash === documentFieldSourceHash(document.title, document.sourcePath)
+      ? (english.fields?.title ?? document.title)
+      : localizeContentText(document.title, locale)
   const metadata = localizeContentText(
     relevantMetadata(document.rawFrontmatter, document.sourcePath),
     locale,

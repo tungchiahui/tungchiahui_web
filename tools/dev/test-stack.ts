@@ -10,6 +10,7 @@ import { verifyPhase10CacheInvalidation, verifyPhase10Search } from '../search/t
 import { runStorageContract } from '../storage/contract'
 import { verifyPhase9Translation } from '../translation/test-execution'
 import { verifyGitMemoryImport } from '../translation/test-git-memory'
+import { verifyEnglishTitles } from '../translation/test-titles'
 import { verifyPhase6Revalidation } from '../web/test-revalidation'
 import { assertDockerPrerequisites, ComposeProject } from './compose'
 import { documentedLocalCredentials, parseLocalInfrastructureConfig } from './config'
@@ -456,6 +457,7 @@ async function run() {
     const memoryContractDatabase = new URL(configuration.databaseUrl)
     memoryContractDatabase.port = String(compose.port('postgres', 5432))
     await verifyGitMemoryImport(memoryContractDatabase.toString())
+    await verifyEnglishTitles(memoryContractDatabase.toString())
     const restartedControlApiUrl = await verifyControlStatePersistence(
       compose,
       configuration.controlApiUrl,

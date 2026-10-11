@@ -160,10 +160,15 @@ test('routes all approved locales, preserves logical switching and exposes conte
   )
 
   await page.goto('/en-us/blog/2026-01-06-xin-bo-ke-qi-yong')
-  await expect(page.getByRole('heading', { name: 'New blog enabled' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'New blog enabled' })).toHaveAttribute(
-    'id',
-    '新博客启用',
+  await expect(page.locator('.article-hero h1')).toHaveText('New blog enabled')
+  await expect(page.locator('[id="新博客启用"]')).toHaveAttribute('id', '新博客启用')
+  await expect(page).toHaveTitle(/New blog enabled/)
+  await expect(page.locator('meta[property="og:title"]')).toHaveAttribute(
+    'content',
+    /New blog enabled/,
+  )
+  expect(await page.locator('script[type="application/ld+json"]').last().textContent()).toContain(
+    'New blog enabled',
   )
   await expect(page.getByText('Revalidated without rebuilding.')).toBeVisible()
   await expect(page.locator('[data-content-locale-state="mixed"]')).toContainText(

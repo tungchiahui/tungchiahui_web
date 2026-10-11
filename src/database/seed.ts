@@ -14,7 +14,6 @@ import { createDatabaseClient } from './client'
 import {
   accounts,
   documents,
-  documentTranslations,
   ingestionRuns,
   operationalJobs,
   ownerManagedDatasets,
@@ -293,17 +292,12 @@ export async function seedDevelopmentDatabase(connectionString: string) {
           updatedAt: seedTimestamp,
         })
         .onConflictDoNothing()
-      await transaction
-        .insert(documentTranslations)
-        .values({
-          documentId: blogId,
-          locale: 'en-us',
-          translatedMarkdown: '# Phase 3 Development Seed\n\nDeterministic local content.',
-          translationHash,
-          translationVersion: 1,
-          generatedAt: seedTimestamp,
-        })
-        .onConflictDoNothing()
+      // The same seed is used by the pre-expand physical migration fixture.
+      // Explicit stable columns keep new Drizzle defaults out of its old schema.
+      await transaction.execute(sql`INSERT INTO app.document_translations
+        (document_id, locale, translated_markdown, translation_hash, translation_version, generated_at)
+        VALUES (${blogId}, 'en-us', ${'# Phase 3 Development Seed\n\nDeterministic local content.'}, ${translationHash}, 1, ${seedTimestamp})
+        ON CONFLICT DO NOTHING`)
       await transaction
         .insert(ownerManagedDatasets)
         .values([
