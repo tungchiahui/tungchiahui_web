@@ -232,7 +232,7 @@
       "logoutFailed": "退出失败，请重试。",
       "loadFailed": "无法读取起始页数据。",
       "saveFailed": "保存失败，请稍后重试。",
-      "conflict": "数据已被其他设备更新，请刷新后重试。",
+      "conflict": "数据已被其他设备更新，已暂停保存。请先导出草稿，再重新载入并合并修改。",
       "saving": "正在保存…",
       "baidu": "百度",
       "google": "Google",
@@ -245,7 +245,11 @@
       "importFailed": "导入失败，请检查书签 JSON 文件。",
       "bookmarkInvalid": "请填写有效的书签名称和网址。",
       "removeBookmark": "移除书签：{name}",
-      "title": "起始页"
+      "title": "起始页",
+      "retrySave": "重试保存",
+      "exportDraft": "导出当前草稿",
+      "reload": "重新载入已保存数据",
+      "reloadConfirm": "重新载入会丢弃未保存的修改。需要保留时，请先导出当前草稿。"
     },
     "stats": {
       "title": "网站公开统计",

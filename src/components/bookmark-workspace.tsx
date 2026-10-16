@@ -32,9 +32,9 @@ import {
   startDataResponseSchema,
   startPayloadSchema,
 } from '@/start/contracts'
-import { createDefaultStartPayload } from '@/start/defaults'
+import { buildDefaultStartPayload } from '@/start/default-payload'
 
-type BookmarkSection = StartPayload['sections'][number]
+type BookmarkSection = StartPayload['sections'][number] & Readonly<{ clientId: string }>
 type HistoryEntry = StartPayload['history'][number]
 type EngineId = StartPayload['engine']
 
@@ -43,6 +43,7 @@ const engines = [
   { id: 'google', name: 'google', url: 'https://www.google.com/search?q=' },
   { id: 'bing', name: 'bing', url: 'https://www.bing.com/search?q=' },
 ] as const satisfies readonly { id: EngineId; name: string; url: string }[]
+const importSchema = z.union([startPayloadSchema.shape.sections, startPayloadSchema])
 const fallbackBackground = {
   url: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=2400&q=86',
   title: 'valley',
@@ -58,9 +59,12 @@ const fallbackBackgrounds = [
 ] as const satisfies readonly StartBackground[]
 export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) {
   const t = useTranslations('Web.start')
+  const defaultT = useTranslations('Web.startDefaults')
   const locale = useLocale()
-  const defaults = useMemo(() => createDefaultStartPayload(locale), [locale])
-  const [sections, setSections] = useState<readonly BookmarkSection[]>(defaults.sections)
+  const defaults = useMemo(() => buildDefaultStartPayload(defaultT), [defaultT])
+  const [sections, setSections] = useState<readonly BookmarkSection[]>(() =>
+    createEditableSections(defaults.sections),
+  )
   const [history, setHistory] = useState<readonly HistoryEntry[]>(defaults.history)
   const [engineIndex, setEngineIndex] = useState(0)
   const [backgroundIndex, setBackgroundIndex] = useState(0)
@@ -76,10 +80,27 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
   const [revision, setRevision] = useState(0)
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [saveFailure, setSaveFailure] = useState<'conflict' | 'failed' | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const editGeneration = useRef(0)
   const importInput = useRef<HTMLInputElement>(null)
   const currentEngine = engines[engineIndex] ?? engines[0]
   const engineName = t(currentEngine.name)
+  const payload = useMemo<StartPayload>(
+    () => ({
+      version: 1,
+      sections: sections.map(({ title, items }) => ({ title, items })),
+      history: [...history],
+      engine: currentEngine.id,
+      background: backgroundIndex,
+      detailed,
+    }),
+    [backgroundIndex, currentEngine.id, detailed, history, sections],
+  )
+  const markDirty = useCallback(() => {
+    editGeneration.current += 1
+    setDirty(true)
+  }, [])
 
   useEffect(() => {
     setNow(new Date())
@@ -90,7 +111,11 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
         setAuthenticated(data.authenticated)
         setAccountName(data.account?.username ?? null)
         setRevision(data.dataset.revision)
-        setSections(data.dataset.revision === 0 ? defaults.sections : data.dataset.payload.sections)
+        setSections(
+          createEditableSections(
+            data.dataset.revision === 0 ? defaults.sections : data.dataset.payload.sections,
+          ),
+        )
         setHistory(data.dataset.payload.history)
         setEngineIndex(
           Math.max(
@@ -151,32 +176,25 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
     (next: readonly BookmarkSection[]) => {
       if (!authenticated) return
       setSections(next)
-      setDirty(true)
+      markDirty()
     },
-    [authenticated],
+    [authenticated, markDirty],
   )
   const saveHistory = useCallback(
     (next: readonly HistoryEntry[]) => {
       if (!authenticated) return
       const limited = next.slice(0, 20)
       setHistory(limited)
-      setDirty(true)
+      markDirty()
     },
-    [authenticated],
+    [authenticated, markDirty],
   )
   useEffect(() => {
-    if (!authenticated || !dirty || saving) return
+    if (!authenticated || !dirty || saving || saveFailure !== null) return
     const timer = window.setTimeout(() => {
+      const savedGeneration = editGeneration.current
       setSaving(true)
       setSaveError(null)
-      const payload = {
-        version: 1 as const,
-        sections,
-        history,
-        engine: currentEngine.id,
-        background: backgroundIndex,
-        detailed,
-      }
       void fetch('/api/ops/start/data', {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
@@ -189,30 +207,17 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
         })
         .then((result) => {
           setRevision(result.dataset.revision)
-          setDirty(false)
+          setDirty(editGeneration.current !== savedGeneration)
         })
-        .catch((error: unknown) =>
-          setSaveError(
-            error instanceof Error && error.message === 'conflict'
-              ? t('conflict')
-              : t('saveFailed'),
-          ),
-        )
+        .catch((error: unknown) => {
+          const conflict = error instanceof Error && error.message === 'conflict'
+          setSaveFailure(conflict ? 'conflict' : 'failed')
+          setSaveError(conflict ? t('conflict') : t('saveFailed'))
+        })
         .finally(() => setSaving(false))
     }, 600)
     return () => window.clearTimeout(timer)
-  }, [
-    authenticated,
-    backgroundIndex,
-    currentEngine.id,
-    detailed,
-    dirty,
-    history,
-    revision,
-    saving,
-    sections,
-    t,
-  ])
+  }, [authenticated, dirty, payload, revision, saveFailure, saving, t])
   const options = useMemo(() => {
     const value = query.trim().toLowerCase()
     const combined = [
@@ -247,17 +252,17 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
   function cycleEngine() {
     const next = (engineIndex + 1) % engines.length
     setEngineIndex(next)
-    if (authenticated) setDirty(true)
+    if (authenticated) markDirty()
   }
   function cycleBackground() {
     const next = (backgroundIndex + 1) % backgrounds.length
     setBackgroundIndex(next)
-    if (authenticated) setDirty(true)
+    if (authenticated) markDirty()
   }
   function switchView(next: boolean) {
     setDetailed(next)
     if (!next) setEditing(false)
-    if (authenticated) setDirty(true)
+    if (authenticated) markDirty()
   }
   function add(event: FormEvent<HTMLFormElement>, sectionIndex: number) {
     event.preventDefault()
@@ -283,21 +288,26 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
     event.currentTarget.reset()
   }
   function exportBookmarks() {
-    const blob = new Blob([JSON.stringify(sections, null, 2)], { type: 'application/json' })
-    const anchor = document.createElement('a')
-    anchor.href = URL.createObjectURL(blob)
-    anchor.download = 'start-page-bookmarks.json'
-    anchor.click()
-    URL.revokeObjectURL(anchor.href)
+    downloadJson(payload.sections, 'start-page-bookmarks.json')
   }
   async function importBookmarks(file: File | undefined) {
     if (!file || !authenticated) return
     try {
-      const parsed = startPayloadSchema.shape.sections.safeParse(
-        JSON.parse(await file.text()) as unknown,
-      )
-      if (!parsed.success) throw new Error('invalid_bookmarks')
-      saveSections(parsed.data)
+      const imported = importSchema.parse(JSON.parse(await file.text()) as unknown)
+      if (Array.isArray(imported)) {
+        saveSections(createEditableSections(imported))
+      } else {
+        saveSections(createEditableSections(imported.sections))
+        setHistory(imported.history)
+        setEngineIndex(
+          Math.max(
+            0,
+            engines.findIndex((engine) => engine.id === imported.engine),
+          ),
+        )
+        setBackgroundIndex(imported.background)
+        setDetailed(imported.detailed)
+      }
       setSaveError(null)
     } catch {
       setSaveError(t('importFailed'))
@@ -425,7 +435,13 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
                 </Button>
                 <Button
                   aria-label={t('addSection')}
-                  onClick={() => saveSections([...sections, { title: t('newSection'), items: [] }])}
+                  disabled={!authenticated}
+                  onClick={() =>
+                    saveSections([
+                      ...sections,
+                      ...createEditableSections([{ title: t('newSection'), items: [] }]),
+                    ])
+                  }
                   type="button"
                 >
                   <Plus size={16} />
@@ -435,7 +451,7 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
             <div className="start-bookmark-sections">
               {!sections.length ? <p>{t('emptyBookmarks')}</p> : null}
               {sections.map((section, sectionIndex) => (
-                <article key={section.title}>
+                <article key={section.clientId}>
                   {editing ? (
                     <input
                       aria-label={t('sectionName')}
@@ -530,7 +546,7 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
               </Button>
               <Button
                 disabled={!authenticated}
-                onClick={() => saveSections(defaults.sections)}
+                onClick={() => saveSections(createEditableSections(defaults.sections))}
                 type="button"
               >
                 <RotateCcw size={16} />
@@ -547,10 +563,45 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
             </footer>
           </section>
         ) : null}
-        {saving || saveError ? (
+        {saving || saveError || saveFailure ? (
           <p aria-live="polite" className="start-save-status" role="status">
-            {saving ? t('saving') : saveError}
+            {saving
+              ? t('saving')
+              : saveFailure === 'conflict'
+                ? t('conflict')
+                : saveFailure === 'failed'
+                  ? t('saveFailed')
+                  : saveError}
           </p>
+        ) : null}
+        {saveFailure ? (
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button
+              onClick={() => downloadJson(payload, 'start-page-unsaved-draft.json')}
+              type="button"
+            >
+              {t('exportDraft')}
+            </Button>
+            {saveFailure === 'failed' ? (
+              <Button
+                onClick={() => {
+                  setSaveError(null)
+                  setSaveFailure(null)
+                }}
+                type="button"
+              >
+                {t('retrySave')}
+              </Button>
+            ) : null}
+            <Button
+              onClick={() => {
+                if (window.confirm(t('reloadConfirm'))) window.location.reload()
+              }}
+              type="button"
+            >
+              {t('reload')}
+            </Button>
+          </div>
         ) : null}
         <p className="start-wallpaper-credit">
           {t('wallpaperSource', {
@@ -565,4 +616,17 @@ export function BookmarkWorkspace({ homeHref }: Readonly<{ homeHref: string }>) 
 
 function looksLikeUrl(value: string) {
   return /^(https?:\/\/|[a-z0-9-]+\.[a-z]{2,})/i.test(value)
+}
+
+function createEditableSections(sections: StartPayload['sections']): readonly BookmarkSection[] {
+  return sections.map((section) => ({ ...section, clientId: crypto.randomUUID() }))
+}
+
+function downloadJson(value: unknown, filename: string) {
+  const blob = new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' })
+  const anchor = document.createElement('a')
+  anchor.href = URL.createObjectURL(blob)
+  anchor.download = filename
+  anchor.click()
+  URL.revokeObjectURL(anchor.href)
 }

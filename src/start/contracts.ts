@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { publicAccountSchema } from '../control-plane/account-contracts'
 
 export const bookmarkSchema = z
   .object({
@@ -31,6 +32,6 @@ export type StartPayload = z.infer<typeof startPayloadSchema>
 
 export const startDataResponseSchema = z.object({
   authenticated: z.boolean(),
-  account: z.object({ username: z.string(), role: z.enum(['owner', 'user']) }).nullable(),
+  account: publicAccountSchema.nullable(),
   dataset: z.object({ payload: startPayloadSchema, revision: z.number().int().nonnegative() }),
 })

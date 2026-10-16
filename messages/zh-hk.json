@@ -232,7 +232,7 @@
       "logoutFailed": "登出失敗，請重試。",
       "loadFailed": "無法讀取起始頁資料。",
       "saveFailed": "儲存失敗，請稍後重試。",
-      "conflict": "資料已被其他裝置更新，請重新載入後再試。",
+      "conflict": "資料已被其他裝置更新，已暫停儲存。請先匯出草稿，再重新載入並合併修改。",
       "saving": "正在儲存…",
       "baidu": "百度",
       "google": "Google",
@@ -245,7 +245,11 @@
       "importFailed": "導入失敗，請檢查書籤 JSON 文件。",
       "bookmarkInvalid": "請填寫有效的書籤名稱和網址。",
       "removeBookmark": "移除書籤：{name}",
-      "title": "起始頁"
+      "title": "起始頁",
+      "retrySave": "重試儲存",
+      "exportDraft": "匯出目前草稿",
+      "reload": "重新載入已儲存資料",
+      "reloadConfirm": "重新載入會捨棄未儲存的修改。如需保留，請先匯出目前草稿。"
     },
     "stats": {
       "title": "網站公開統計",

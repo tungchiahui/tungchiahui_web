@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { publicAccountSchema } from '../control-plane/account-contracts'
 import { techFootprintPayloadSchema, weightLossPayloadSchema } from '../control-plane/contracts'
 
 export { techFootprintPayloadSchema, weightLossPayloadSchema }
@@ -10,10 +11,7 @@ export type DatasetSnapshot<T> = { payload: T; revision: number }
 export const sessionStatusSchema = z.object({
   authenticated: z.boolean(),
   enabled: z.boolean().optional(),
-  account: z
-    .object({ username: z.string(), role: z.enum(['owner', 'user']) })
-    .nullable()
-    .optional(),
+  account: publicAccountSchema.nullable().optional(),
 })
 export const emptyTechPayload: TechPayload = {
   version: 3,

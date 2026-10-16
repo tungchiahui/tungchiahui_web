@@ -10,6 +10,22 @@
 
 ## 1. 新会话读取顺序
 
+### 2026-10-16：Start 保存与账户状态修复
+
+Start 保存按编辑序号确认，串行提交保存期间的新改动并使用返回的 revision。409 冲突
+暂停；网络/HTTP/无效响应同样等待显式重试，草稿保留在当前页面并可完整导出。导入兼容
+旧书签数组和完整 version-1 草稿；重新载入前确认丢弃未保存修改。分组使用页面内稳定
+标识，改名保持焦点，标识不进入 API、数据库或导出。Header 只在退出成功且响应明确
+匿名后切换显示；失败保留账户并提示，登录/退出/会话检查使用共享校验。
+Start 默认结构改为接收当前 next-intl translator，客户端不再引入四 Locale Catalog，
+服务端/Seed 的 zh-CN 默认与已保存作者数据不变。无需 Migration，无新增生产权限、
+付费调用或恢复策略。实现、回归与回退边界见
+[`start-session-reliability.md`](../development/start-session-reliability.md)。
+本地最终通过 57 File / 355 Unit、36 Browser E2E、完整隔离 Integration/S3Mock 7-case、
+12 Migration、Static/Type/Build/Security Gate。相关共享脚本 gzip 从 132,857 降到
+28,106 bytes（减少 78.8%）；当前 Locale 的页面 Message 仍正常提供。390px 手机截图
+确认冲突操作无横向溢出、退出失败提示位于视口内。生产未发布。
+
 ### 2026-10-11：全站国际化补漏
 
 本轮修复 About/CV/Friend/Mylogo 固定中文误作 Content i18n，迁入四 Locale 的 next-intl

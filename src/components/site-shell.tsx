@@ -118,6 +118,7 @@ export async function SiteShell({
                 submit: authT('login'),
                 cancel: authT('cancel'),
                 failed: authT('loginFailed'),
+                logoutFailed: authT('logoutFailed'),
               }}
             />
             <Link

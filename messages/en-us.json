@@ -232,7 +232,7 @@
       "logoutFailed": "Sign-out failed. Please retry.",
       "loadFailed": "Unable to load Start data.",
       "saveFailed": "Unable to save. Please retry.",
-      "conflict": "This data changed on another device. Reload and try again.",
+      "conflict": "Another device updated this data. Saving is paused. Export your draft, reload, and reconcile your changes.",
       "saving": "Saving…",
       "baidu": "Baidu",
       "google": "Google",
@@ -245,7 +245,11 @@
       "importFailed": "Import failed. Check the bookmarks JSON file.",
       "bookmarkInvalid": "Enter a valid bookmark name and URL.",
       "removeBookmark": "Remove bookmark: {name}",
-      "title": "Start page"
+      "title": "Start page",
+      "retrySave": "Retry saving",
+      "exportDraft": "Export current draft",
+      "reload": "Reload saved data",
+      "reloadConfirm": "Reloading discards unsaved changes. Export your current draft first if you need to keep them."
     },
     "stats": {
       "title": "Public site analytics",
