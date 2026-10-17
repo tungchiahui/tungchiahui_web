@@ -162,7 +162,9 @@
       "importBookmarks": "Import bookmark JSON",
       "searchPlaceholder": "Enter keywords to search with your browser",
       "searchAction": "Search",
-      "bookmarkStorageNote": "Bookmarks stay in this browser and are not uploaded."
+      "bookmarkStorageNote": "Bookmarks stay in this browser and are not uploaded.",
+      "projectsTitle": "Projects & Work",
+      "projectsDescription": "Robotics, embedded systems and software projects, with individual contributions, implementation and results."
     },
     "music": {
       "playerTitle": "Music player",
@@ -347,7 +349,9 @@
       "backupBadge": "R2 BACKUP",
       "alistFlow": "AList Web UI",
       "cdnFlow": "Primary CDN · R2 Backup",
-      "copyLabel": "Copy address: {service}"
+      "copyLabel": "Copy address: {service}",
+      "projectsTitle": "Projects & Work",
+      "projectsDescription": "Robotics, embedded systems and software projects, with individual contributions, implementation and results."
     },
     "blogIndex": {
       "description": "Notes on solving problems, building things, and what I learn along the way.",
@@ -519,6 +523,33 @@
       "v2ex": "Creative community",
       "zhihu": "Questions and answers",
       "zhihuName": "Zhihu"
+    },
+    "project": "Projects",
+    "portfolio": {
+      "title": "Projects & Work",
+      "intro": "Engineering work in robot control and autonomous navigation, with a closer look at my contribution and implementation.",
+      "selectedProjects": "Selected projects",
+      "allProjects": "All projects",
+      "viewProject": "Explore project",
+      "viewCv": "View resume",
+      "backProjects": "Back to all projects",
+      "navigation": "Project navigation",
+      "technologies": "Technologies",
+      "printResume": "Print / Save PDF",
+      "contact": "Contact",
+      "contactIntro": "Get in touch about job opportunities, robotics projects, or technical discussions.",
+      "emptyTitle": "Project case studies coming soon",
+      "emptyBody": "I am documenting project implementations and demonstrations. My resume covers the relevant experience in the meantime.",
+      "selectedEmpty": "Project case studies are being prepared. Related project experience is listed below.",
+      "code": "Source code",
+      "demo": "Live demo",
+      "video": "Watch demo",
+      "status": {
+        "completed": "Completed",
+        "ongoing": "In progress",
+        "archived": "Archived"
+      },
+      "eyebrow": "Selected engineering work"
     }
   },
   "Personal": {

@@ -40,12 +40,14 @@ export async function SiteShell({
     { path: '/', label: t('home') },
     { path: '/blog', label: t('blog') },
     { path: '/wiki', label: t('wiki') },
+    { path: '/projects', label: t('project') },
     { path: '/about', label: t('about') },
     { path: '/more', label: t('more') },
   ]
   const footerLinks = [
     { path: '/blog', label: t('blog'), icon: 'fas fa-newspaper' },
     { path: '/wiki', label: t('wiki'), icon: 'fas fa-book-open' },
+    { path: '/projects', label: t('project'), icon: 'fas fa-folder-open' },
     { path: '/stats', label: t('special.statsTitle'), icon: 'fas fa-chart-line' },
     { path: '/friend', label: t('special.friendTitle'), icon: 'fas fa-handshake' },
     { path: '/about', label: t('about'), icon: 'fas fa-circle-info' },
@@ -79,7 +81,7 @@ export async function SiteShell({
           </Link>
           <nav
             aria-label={t('navigationLabel')}
-            className="hidden items-center gap-1 rounded-full border bg-card/70 p-1 shadow-sm sm:flex"
+            className="hidden items-center gap-1 rounded-full border bg-card/70 p-1 shadow-sm lg:flex"
           >
             {links.map((link) => (
               <Link

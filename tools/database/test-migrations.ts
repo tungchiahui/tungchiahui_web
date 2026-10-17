@@ -9,6 +9,7 @@ import { ownerDigest } from '../../src/control-plane/owner-password'
 import { OwnerSessionRepository } from '../../src/control-plane/owner-sessions'
 import { createDatabaseClient } from '../../src/database/client'
 import { runPostgresMigrations } from '../../src/database/migrate'
+import { developmentProjectFiles } from '../../src/database/project-seed'
 import { documents } from '../../src/database/schema'
 import { seedDevelopmentDatabase } from '../../src/database/seed'
 import { techFootprintPayloadSchema } from '../../src/personal/contracts'
@@ -362,7 +363,7 @@ async function assertPgBouncerDrizzleCompatibility(connectionString: string) {
         await transaction.execute(sql`SET LOCAL ROLE site_app`)
         return transaction.select({ id: documents.id }).from(documents)
       })
-      if (rows.length !== 5) {
+      if (rows.length !== 5 + developmentProjectFiles.length) {
         throw new Error('Drizzle query through transaction-mode PgBouncer returned wrong rows')
       }
     }

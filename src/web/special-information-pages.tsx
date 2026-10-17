@@ -1,8 +1,13 @@
 import { ExternalLink } from 'lucide-react'
 import Link from 'next/link'
 import { getTranslations } from 'next-intl/server'
+import { PrintResume } from '@/components/print-resume'
 import type { AppLocale } from '@/i18n/locales'
 import type { messagesForLocale } from '@/i18n/messages'
+import { awards, cvProfile, education, experiences } from '@/personal/cv-profile'
+import { featuredProjects } from '@/projects/catalog'
+import type { PublicDocument } from '@/server/public-content'
+import { ProjectEntries } from './project-pages'
 import type { PublicRouteContext } from './routes'
 import { withLocalePrefix } from './routes'
 
@@ -85,36 +90,6 @@ const friends = [
     'https://blog.ksah.cn/img/logo.svg',
     'friendPersonalTag',
   ],
-] as const
-
-const education = [
-  [
-    'educationUndergraduatePeriod',
-    'educationUndergraduateName',
-    'educationUndergraduateRole',
-    'educationUndergraduateBody',
-  ],
-  ['educationMasterPeriod', 'educationMasterName', 'educationMasterRole', 'educationMasterBody'],
-] as const
-
-const experiences = [
-  [
-    'experienceRoboconPeriod',
-    'experienceRoboconName',
-    'experienceRoboconRole',
-    'experienceRoboconBody',
-  ],
-  ['experienceAmrPeriod', 'experienceAmrName', 'experienceAmrRole', 'experienceAmrBody'],
-  ['experienceTeamPeriod', 'experienceTeamName', 'experienceTeamRole', 'experienceTeamBody'],
-] as const
-
-const awards = [
-  'awardRoboconIndividualSecond',
-  'awardRoboconTeamSecond',
-  'awardRoboconTeamThird',
-  'awardRoboconIndividualThird',
-  'awardEnergy',
-  'awardSkills',
 ] as const
 
 type InformationKey = keyof ReturnType<typeof messagesForLocale>['Web']['information']
@@ -218,88 +193,70 @@ export async function AboutInformationPage({ context }: Readonly<{ context: Publ
   )
 }
 
-export async function CvInformationPage({ context }: Readonly<{ context: PublicRouteContext }>) {
+export async function CvInformationPage({
+  context,
+  projects = [],
+}: Readonly<{ context: PublicRouteContext; projects?: readonly PublicDocument[] }>) {
   const l = await getTranslations({ locale: context.locale, namespace: 'Web.information' })
+  const t = await getTranslations({ locale: context.locale, namespace: 'Web.portfolio' })
+  const selected = featuredProjects(projects)
   return (
-    <div className="legacy-info-page">
-      <section className="cv-rich-hero">
+    <div className="legacy-info-page cv-page">
+      <header className="cv-header">
         <div>
-          <p className="legacy-kicker">{l('cvKicker')}</p>
           <h1>{l('name')}</h1>
-          <h2>{l('cvFocus')}</h2>
-          <strong className="text-primary">{l('cvAffiliation')}</strong>
-          <p>{l('cvIntro')}</p>
+          <p className="cv-focus">{l('cvFocus')}</p>
+          <p className="cv-affiliation">{l('cvAffiliation')}</p>
+          <p className="cv-intro">{l('cvIntro')}</p>
+          <nav className="cv-contact-links" aria-label={l('contactDetails')}>
+            <a href={`mailto:${cvProfile.email}`}>{cvProfile.email}</a>
+            <a href={cvProfile.github} rel="noreferrer" target="_blank">
+              {l('github')}
+            </a>
+            <PrintResume label={t('printResume')} />
+          </nav>
+          <p className="cv-secondary-contact">
+            {l('wechat')}: {cvProfile.wechat} <span aria-hidden>·</span> {l('qq')}: {cvProfile.qq}
+          </p>
         </div>
         <figure>
           {/* biome-ignore lint/performance/noImgElement: approved public CDN portrait */}
-          <img
-            alt={l('portraitAlt')}
-            src="https://cdn.tungchiahui.cn/tungwebsite/assets/images/tungchiahui.webp"
-          />
+          <img alt={l('portraitAlt')} src={cvProfile.portrait} width="132" height="160" />
           <figcaption>
             {l('portraitCaption')}
-            <br />
             <span>{l('portraitFocus')}</span>
           </figcaption>
         </figure>
+      </header>
+      <section className="cv-section" aria-labelledby="cv-project-heading">
+        <div className="cv-section-heading">
+          <h2 id="cv-project-heading">{t('selectedProjects')}</h2>
+          <Link href={withLocalePrefix('/projects', context)}>{t('allProjects')} →</Link>
+        </div>
+        {selected.length ? (
+          await ProjectEntries({ context, documents: selected, compact: true })
+        ) : (
+          <p className="cv-empty">{t('selectedEmpty')}</p>
+        )}
       </section>
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {(
-          [
-            ['metricAcademicValue', 'metricAcademic'],
-            ['metricAssessmentValue', 'metricAssessment'],
-            ['metricAwardsValue', 'metricAwards'],
-            ['metricTrainingValue', 'metricTraining'],
-          ] as const
-        ).map(([value, label]) => (
-          <div className="legacy-metric" key={value}>
-            <strong>{l(value)}</strong>
-            <span>{l(label)}</span>
-          </div>
-        ))}
+      <TimelineSection items={experiences} l={l} title={l('experienceTitle')} />
+      <TimelineSection items={education} l={l} title={l('educationTitle')} />
+      <section className="cv-section">
+        <h2>{l('skills')}</h2>
+        <p className="cv-skills">{l('skillsList').split(',').join(' · ')}</p>
       </section>
-      <div className="grid gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]">
-        <aside className="grid content-start gap-5">
-          <InfoSection title={l('contactDetails')}>
-            <div className="grid gap-2">
-              <Contact
-                label={l('email')}
-                value="tungchiahui@gmail.com"
-                href="mailto:tungchiahui@gmail.com"
-              />
-              <Contact
-                label={l('github')}
-                value="tungchiahui"
-                href="https://github.com/tungchiahui"
-              />
-              <Contact label={l('qq')} value="2225279276" />
-              <Contact label={l('wechat')} value="tungchiahui" />
-            </div>
-          </InfoSection>
-          <InfoSection title={l('skills')}>
-            <div className="flex flex-wrap gap-2">
-              {l('skillsList')
-                .split(',')
-                .map((tag) => (
-                  <span className="legacy-tag" key={tag}>
-                    {tag}
-                  </span>
-                ))}
-            </div>
-          </InfoSection>
-        </aside>
-        <main className="grid gap-5">
-          <TimelineSection items={education} l={l} title={l('educationTitle')} />
-          <TimelineSection items={experiences} l={l} title={l('experienceTitle')} />
-          <InfoSection title={l('awardsTitle')}>
-            <ul className="grid list-disc gap-2 pl-5">
-              {awards.map((award) => (
-                <li key={award}>{l(award)}</li>
-              ))}
-            </ul>
-          </InfoSection>
-        </main>
-      </div>
+      <section className="cv-section">
+        <h2>{l('awardsTitle')}</h2>
+        <p className="cv-awards-summary">
+          {l('metricAwards')}: {l('metricAwardsValue')} · {l('metricTraining')}:{' '}
+          {l('metricTrainingValue')}
+        </p>
+        <ul className="cv-awards">
+          {awards.map((award) => (
+            <li key={award}>{l(award)}</li>
+          ))}
+        </ul>
+      </section>
     </div>
   )
 }

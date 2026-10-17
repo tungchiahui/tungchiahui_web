@@ -5,6 +5,8 @@ import { type AppLocale, defaultLocale, parseAppLocale } from '@/i18n/locales'
 export const specialPageSlugs = [
   'about',
   'cv',
+  'projects',
+  'contact',
   'friend',
   'more',
   'music',

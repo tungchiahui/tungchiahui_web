@@ -2,7 +2,7 @@ import type { PoolClient } from 'pg'
 import { z } from 'zod'
 
 import { createDatabaseClient } from '../database/client'
-import { type Locale, localeSchema } from '../domain/persistence'
+import { contentTypeSchema, type Locale, localeSchema } from '../domain/persistence'
 import { locales } from '../i18n/locales'
 import { translatedFieldsSchema } from '../translation/document-fields'
 import { searchRequestSchema, searchResultSchema } from './contracts'
@@ -13,7 +13,7 @@ import {
 } from './materialization'
 
 const sourceRowSchema = z.object({
-  content_type: z.enum(['blog', 'wiki']),
+  content_type: contentTypeSchema,
   document_id: z.uuid(),
   is_deleted: z.boolean(),
   raw_frontmatter: z.record(z.string(), z.json()),
@@ -38,7 +38,7 @@ const sourceRowSchema = z.object({
 
 const searchRowSchema = z.object({
   body: z.string(),
-  content_type: z.enum(['blog', 'wiki']),
+  content_type: contentTypeSchema,
   headings: z.string(),
   matched_context: z.enum(['title', 'heading', 'body', 'metadata']),
   metadata: z.string(),

@@ -1,5 +1,58 @@
 # Website V2 Current Implementation State
 
+## 2026-10-17：多语言简历与项目作品集
+
+Owner 已授权实施简洁 CV、独立成果列表与项目详情，保持四 Locale 并减少重复维护。
+工作分支为 codex/multilingual-project-portfolio。首版已被 Owner 明确要求改为接近参考站的
+纯白 HTML 风格；当前使用 CareerShell，普通文字导航、左侧照片与单列项目条目，
+没有卡片/渐变/阴影/占位图；即使博客主题为深色也保持白底，不修改已保存主题。/cv 采用紧凑图文、精简导航/页脚与当前语言
+打印/保存 PDF；/projects 与项目详情在 Owner 视觉纠正后采用同一纯白文档外观，详情复用安全 Markdown Reader。
+三个入口共用 PostgreSQL 项目记录，精选与排序从同一份资料控制；简介取当前 Locale
+正文首段。求职页面隐藏浮动播放器控件而不重置已开启的播放状态。
+按 Owner 后续反馈，求职导航移除博客入口，改为「个人简历 / 项目 / 联系」；
+联系按 Owner 再次纠正改为同语言 `/contact` 独立白底页面，展示邮箱、GitHub、WeChat、QQ；
+与 CV 共用 `cvProfile`，四 Locale 共用布局，沿用 Metadata/Sitemap 与语言切换，不再跳到 CV。
+
+ADR 0029 与 Expand 0012 增加 project Enum、content/projects/<stable-slug>.md 来源；
+原 GitHub → PostgreSQL 单向同步、事务/幂等/移动/删除、OpenCC、Git Memory、PGroonga、
+缓存/SEO/Sitemap 继续复用。项目变更刷新 CV 和成果列表，英文记忆单独更新只刷新英文。
+没有新增 CMS、后台付费执行、服务、凭据、权限或备份格式。部署先升级 Web/Worker/Schema，
+再发布 Content Commit；回退保留 Enum，退到项目支持前版本须暂停内容同步。
+
+内容仓库新增 amr-autonomous-navigation.md 与 robocon-robot-control.md，两篇仅依据
+既有 CV 经历整理；14 个唯一英文记忆进入 12 个 Shard，provider=manual、零 Usage、
+零付费调用。没有虚构图片、演示链接、论文或量化指标。内容仓库已有及同时发生的 Wiki
+工作区改动保留，本次只新增两篇项目和对应记忆；不得把其他未提交改动一起发布。
+
+真实浏览器回归发现 Next.js 16 的 Metadata Streaming 在 CV → Project 后留下两个
+Canonical。根据版本内官方文档使用 htmlLimitedBots: /.*/，阻塞输出当前 Metadata；
+回归要求只存在一个且指向当前页面，未放宽为取首个/末个标签。冷请求可能等待元数据，
+查询继续复用原缓存。维护、翻译、上线与回退入口：docs/development/project-portfolio.md。
+
+本地已通过 363 项 Unit、13 项 Migration、Static/Type/Build/Security；新增项目全 Locale
+Create/Replay/Update/Delete/Restore、搜索相关性/Locale 与 Sitemap 集成已通过。
+最终完整 Disposable Integration 已通过：42 项 Browser E2E、7-case S3Mock Contract、
+Git Memory / 英文标题、Control-state 重启持久化与 Next.js/PostgreSQL 故障边界全部通过；
+测试容器/Volume 已清理，保留支持入口启动的本地开发预览。源码、维护说明与交接事实
+已沉淀；上述记录为上线授权前的本地验收。发布需先 Web/Worker/0012，再选取项目 Content
+Commit；不得包含内容仓库中 Owner 的其他未提交工作。
+
+
+白底版复验：363 项 Unit、42 项完整 Browser E2E 与 Disposable Integration 均通过，
+新增断言直接给根节点施加 dark Class，仍要求 CV / 成果 / 详情的实际背景为纯白。
+手机、打印、Locale Switch、既有 Blog/Wiki 与服务故障边界保持通过；没有新增 Migration。
+
+独立联系页复验：363 项 Unit、Static/Type/Build/Security 与完整 Disposable Integration
+通过，Browser E2E 增至 46 项（含四 Locale 联系页导航、独立正文、Canonical、语言切换、
+手机与深色背景断言）。另已确认 `/contact` 直接返回 200，Metadata Alternate/Sitemap
+包含各语言联系页，桌面/手机截图已检查。测试资源已清理，本地保留真实项目预览。
+
+Owner 已于 2026-10-17 授权上线。本次 Web 从 main 的既有 Main Release Workflow 发布，
+必须等完整 Quality/Image/Blue-green/Host Convergence 成功，再推送内容仓库的两篇项目与
+12 个英文记忆 Shard；内容仓库其他 Wiki 工作区改动不纳入提交。生产结果以该提交的
+Main Release、Canonical Content Sync 与发布后的四语言页面验收为准，不以本地验收代替。
+
+
 > Status: Phase 0–18 completed
 > Current Phase: Website V2 Production Completion
 > Handoff audit date: 2026-10-11

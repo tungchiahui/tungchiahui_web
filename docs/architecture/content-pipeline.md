@@ -174,3 +174,11 @@ Local/Test Compose 默认让外部 GitHub Polling 处于 Idle，避免本地启�
 ADR 0028 替代。Cache Table 保存已验证 Blob 与 Parser Version；JSON-only 更新跳过无关
 下载、Markdown/OpenCC 处理，并按关联集合每篇英文只拼装一次。身份/译文验证失败不导入，
 中文仍发布，Job 明确报告失败。删除/新 Git Revert Commit/重复提交均有自动化验证。
+
+## 项目作品集（ADR 0029）
+
+`content/projects/<stable-ascii-slug>.md` 是新增的 Canonical 项目来源，复用现有事务、删除/移动、
+幂等同步、翻译、搜索与缓存流程。`project` Frontmatter 只保存少量展示控制与 HTTPS 资源；
+简介来自第一个正文段落。`/cv` 精选、`/projects` 列表和详情共用一份数据。
+项目变更还会刷新四语言 CV，英文记忆单独更新仍只刷新英文。
+维护与上线顺序见 `../development/project-portfolio.md`。

@@ -1,0 +1,1 @@
+ALTER TYPE "app"."content_type" ADD VALUE 'project';

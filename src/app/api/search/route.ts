@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { contentTypeSchema } from '@/domain/persistence'
 import { safeErrorAttributes } from '@/observability/telemetry'
 import { readCachedSearch } from '@/search/cache'
 import { searchRequestSchema, searchResponseSchema } from '@/search/contracts'
@@ -7,7 +8,7 @@ export const dynamic = 'force-dynamic'
 
 const queryParametersSchema = z
   .object({
-    type: z.enum(['blog', 'wiki']).optional(),
+    type: contentTypeSchema.optional(),
     limit: z.coerce.number().int().min(1).max(50).default(20),
     locale: z.enum(['zh-cn', 'zh-hk', 'zh-tw', 'en-us']).default('zh-cn'),
     q: z.string().trim().min(1).max(200),

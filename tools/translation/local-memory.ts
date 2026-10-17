@@ -17,6 +17,7 @@ import {
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { z } from 'zod'
+import { contentSourcePathSchema } from '../../src/content/contracts'
 import { createDeepSeekTranslationProvider } from '../../src/translation/deepseek'
 import { documentTranslationFields } from '../../src/translation/document-fields'
 import {
@@ -181,11 +182,7 @@ function readSources(root: string, committedSource: boolean) {
         throw new Error('Canonical content cannot contain symlinks or submodules')
       return line.slice(tab + 1)
     })
-    .filter(
-      (path) =>
-        /^content\/posts\/[^/]+\.md$/u.test(path) ||
-        /^content\/wiki\/[^/]+\/(?:[^/]+\/)*[^/]+\.md$/u.test(path),
-    )
+    .filter((path) => contentSourcePathSchema.safeParse(path).success)
   return {
     commit,
     sourceTree: createHash('sha256').update(tree).digest('hex'),

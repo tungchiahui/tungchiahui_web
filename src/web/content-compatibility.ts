@@ -161,7 +161,8 @@ export function documentDate(document: PublicDocument) {
 
 export function documentSummary(document: PublicDocument) {
   const description = document.rawFrontmatter.description
-  if (typeof description === 'string' && description.trim()) return description.trim()
+  if (document.contentType !== 'project' && typeof description === 'string' && description.trim())
+    return description.trim()
   const markdown = document.localizedMarkdown ?? document.rawMarkdown
   const tree = unified()
     .use(remarkParse)
@@ -183,8 +184,9 @@ export function documentSummary(document: PublicDocument) {
     if (text && /[\p{L}\p{N}]/u.test(text) && !/^[^\s:：]{1,12}[:：]$/u.test(text))
       paragraphs.push(text)
   })
-  const body = paragraphs.join(' ')
+  const body = document.contentType === 'project' ? (paragraphs[0] ?? '') : paragraphs.join(' ')
   if (!body) return undefined
+  if (document.contentType === 'project') return body
   return body.length > 160 ? `${body.slice(0, 157).trimEnd()}…` : body
 }
 

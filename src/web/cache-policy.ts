@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 import type { ContentChange } from '../content/hooks'
-import type { Locale } from '../domain/persistence'
+import type { ContentType, Locale } from '../domain/persistence'
 import { locales } from '../i18n/locales'
 import { localeSwitchPath } from './routes'
 
@@ -26,7 +26,7 @@ export function routeCacheTag(routePath: string) {
   return `content:route:${routeSchema.parse(routePath)}`
 }
 
-export function contentTypeCacheTag(contentType: 'blog' | 'wiki') {
+export function contentTypeCacheTag(contentType: ContentType) {
   return `content:list:${contentType}`
 }
 
@@ -44,8 +44,16 @@ export function affectedPublicPaths(changes: readonly ContentChange[]) {
       const validated = routeSchema.parse(routePath)
       paths.add(validated)
       for (const locale of locales) paths.add(localeSwitchPath(validated, locale))
-      const section = validated.startsWith('/blog/') ? '/blog' : '/wiki'
+      const section = validated.startsWith('/projects/')
+        ? '/projects'
+        : validated.startsWith('/blog/')
+          ? '/blog'
+          : '/wiki'
       paths.add(section)
+      if (section === '/projects') {
+        paths.add('/cv')
+        for (const locale of locales) paths.add(localeSwitchPath('/cv', locale))
+      }
       for (const locale of locales) paths.add(localeSwitchPath(section, locale))
     }
   }

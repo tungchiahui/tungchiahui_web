@@ -82,3 +82,17 @@ Engine；本地验收不等于生产发布。
 
 参考：[Google Canonical 指南](https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls)、
 [Google 多语言页面指南](https://developers.google.com/search/docs/specialty/international/localized-versions)。
+
+## 项目作品集（ADR 0029）
+
+Sitemap 增加 `/projects` 与全部公开项目四 Locale URL，列表复用 `content:list:project`。
+独立 `/contact` 联系页沿用 Special Page 清单，提供四语言 Metadata、Canonical、hreflang
+与 Sitemap；联系方式和 CV 共享 `cvProfile`，不依赖项目查询或新增数据表。
+项目详情继承 Article Metadata、Canonical、hreflang 和 TechArticle JSON-LD；标题、简介
+使用当前译名和正文首段。项目的修改/软删除同时刷新 CV、列表、详情、搜索与 Sitemap。
+
+Next.js 16 的流式 Metadata 在真实 Client Navigation 回归中曾同时保留前一页和项目页的
+Canonical。当前通过官方支持的 `htmlLimitedBots: /.*/` 关闭 Metadata Streaming，让各类
+User Agent 都等待当前元数据，再输出一致的 Head。页面数据与 Metadata 仍复用原缓存；
+冷请求可能多等待元数据查询，因此不承诺首字节时间不变。Browser Gate 要求 CV → Project
+后恰好一个 Canonical，且指向当前 Locale 的当前项目，不通过取首个/末个标签隐藏重复。

@@ -8,8 +8,9 @@ export const contentSourcePathSchema = z
   .refine(
     (path) =>
       /^content\/posts\/[^/]+\.md$/.test(path) ||
-      /^content\/wiki\/[^/]+\/(?:[^/]+\/)*[^/]+\.md$/.test(path),
-    'Expected a canonical Blog or Wiki Markdown path',
+      /^content\/wiki\/[^/]+\/(?:[^/]+\/)*[^/]+\.md$/.test(path) ||
+      /^content\/projects\/[a-z0-9]+(?:-[a-z0-9]+)*\.md$/.test(path),
+    'Expected a canonical Blog, Wiki or Project Markdown path',
   )
 
 export const contentSourceFileSchema = z.object({

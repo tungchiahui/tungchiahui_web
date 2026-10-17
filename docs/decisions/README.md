@@ -50,3 +50,4 @@ ADR 是不可变的历史记录。
 - `0026-roadmap-v3-and-unified-daily-protection.md`
 - `0027-server-managed-release-and-bootstrap.md`
 - `0028-git-translation-memory-and-local-execution.md`
+- `0029-multilingual-project-portfolio.md`

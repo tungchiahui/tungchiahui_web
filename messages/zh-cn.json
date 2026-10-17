@@ -162,7 +162,9 @@
       "importBookmarks": "导入书签 JSON",
       "searchPlaceholder": "输入关键词并使用浏览器搜索",
       "searchAction": "搜索",
-      "bookmarkStorageNote": "书签只保存在这个浏览器，不会上传到服务器。"
+      "bookmarkStorageNote": "书签只保存在这个浏览器，不会上传到服务器。",
+      "projectsTitle": "项目与成果",
+      "projectsDescription": "机器人、嵌入式与软件工程项目，记录个人贡献、实现过程和实际成果。"
     },
     "music": {
       "playerTitle": "音乐播放器",
@@ -347,7 +349,9 @@
       "backupBadge": "R2 备份",
       "alistFlow": "AList 网页界面",
       "cdnFlow": "主 CDN · R2 备份",
-      "copyLabel": "复制地址：{service}"
+      "copyLabel": "复制地址：{service}",
+      "projectsTitle": "项目与成果",
+      "projectsDescription": "机器人、嵌入式与软件工程项目，记录个人贡献、实现过程和实际成果。"
     },
     "blogIndex": {
       "description": "把解决问题的过程写下来，让每一次探索都有迹可循。",
@@ -519,6 +523,33 @@
       "v2ex": "创意社区",
       "zhihu": "知识问答",
       "zhihuName": "知乎"
+    },
+    "project": "项目",
+    "portfolio": {
+      "title": "项目与成果",
+      "intro": "从机器人控制到自主导航，记录我参与设计、实现和调试的工程项目。",
+      "selectedProjects": "代表项目",
+      "allProjects": "全部项目",
+      "viewProject": "查看项目",
+      "viewCv": "查看简历",
+      "backProjects": "返回全部项目",
+      "navigation": "项目导航",
+      "contact": "联系",
+      "contactIntro": "欢迎就工作机会、机器人项目或技术交流与我联系。",
+      "technologies": "技术栈",
+      "printResume": "打印 / 保存 PDF",
+      "emptyTitle": "项目案例整理中",
+      "emptyBody": "正在整理项目的实现过程与演示。你可以先查看简历，了解我的相关经历。",
+      "selectedEmpty": "项目案例正在整理，可先在下方了解相关项目经历。",
+      "code": "源代码",
+      "demo": "在线演示",
+      "video": "演示视频",
+      "status": {
+        "completed": "已完成",
+        "ongoing": "进行中",
+        "archived": "已归档"
+      },
+      "eyebrow": "工程实践"
     }
   },
   "Personal": {

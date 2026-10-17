@@ -64,6 +64,13 @@ const resources: readonly Entry[] = [
     href: '/tech-footprint',
     icon: CodeXml,
   },
+  {
+    id: 'projects',
+    titleKey: 'projectsTitle',
+    descriptionKey: 'projectsDescription',
+    href: '/projects',
+    icon: FolderOpen,
+  },
   { id: 'cv', titleKey: 'cvTitle', descriptionKey: 'cvDescription', href: '/cv', icon: FileUser },
   {
     id: 'start',

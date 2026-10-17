@@ -7,6 +7,7 @@ import { ContentJobRepository } from '../../src/content/jobs'
 import { ContentWorker } from '../../src/content/worker'
 import { ApplicationJobRepository } from '../../src/control-plane/application-jobs'
 import type { ActorIdentity } from '../../src/control-plane/contracts'
+import { developmentProjectFiles } from '../../src/database/project-seed'
 import { TranslationMemoryRepository } from '../../src/translation/repository'
 
 const commitA = 'a'.repeat(40)
@@ -89,8 +90,9 @@ function snapshot(
   return { files: [...files], sourceCommit }
 }
 
-const snapshotA = snapshot(commitA, snapshotAFiles)
+const snapshotA = snapshot(commitA, [...snapshotAFiles, ...developmentProjectFiles])
 export const phase5FinalSnapshot = snapshot(commitB, [
+  ...developmentProjectFiles,
   {
     ...snapshotAFiles[0],
     contents: markdown(['title: 新博客启用'], '# 新博客启用\n\nModified at commit B.'),

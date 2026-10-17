@@ -8,9 +8,10 @@ import { publicSitemap } from '@/web/seo'
 export const dynamic = 'force-dynamic'
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const [blogs, wikis] = await Promise.all([
+  const [blogs, wikis, projects] = await Promise.all([
     listCachedDocuments('blog', 'zh-cn'),
     listCachedDocuments('wiki', 'zh-cn'),
+    listCachedDocuments('project', 'zh-cn'),
   ])
-  return publicSitemap(environment.siteBaseUrl, [...blogs, ...wikis])
+  return publicSitemap(environment.siteBaseUrl, [...blogs, ...wikis, ...projects])
 }

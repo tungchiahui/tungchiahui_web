@@ -268,6 +268,11 @@ pnpm install --frozen-lockfile
 
 - `docs/migration/nuxt-to-next.md`
 
+### 简历与项目维护
+
+- `docs/development/project-portfolio.md` — 四语言 CV、项目作品集、正文与英文记忆维护。
+- `docs/decisions/0029-multilingual-project-portfolio.md` — 复用内容流水线的项目架构。
+
 ### 当前实施状态
 
 - Phase 0–18 已完成；当前增量工作与生产发布证据见 `current-state.md`。

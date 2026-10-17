@@ -6,6 +6,7 @@ import {
   revalidationRequestSchema,
   verifyRevalidationSignature,
 } from '@/content/revalidation'
+import type { ContentType } from '@/domain/persistence'
 import { locales } from '@/i18n/locales'
 import { contentTypeCacheTag, routeCacheTag, searchLocaleCacheTag } from '@/web/cache-policy'
 import { localeSwitchPath } from '@/web/routes'
@@ -49,13 +50,18 @@ export async function POST(request: Request) {
   }
 
   const paths = pathsForRevalidation(parsed.data)
-  const contentTypes = new Set<'blog' | 'wiki'>()
+  const contentTypes = new Set<ContentType>()
   for (const change of parsed.data.changes) {
     revalidateTag(routeCacheTag(change.routePath), { expire: 0 })
     if (change.previousRoutePath) {
       revalidateTag(routeCacheTag(change.previousRoutePath), { expire: 0 })
     }
-    contentTypes.add(change.routePath.startsWith('/blog/') ? 'blog' : 'wiki')
+    for (const path of [change.routePath, change.previousRoutePath]) {
+      if (path)
+        contentTypes.add(
+          path.startsWith('/projects/') ? 'project' : path.startsWith('/blog/') ? 'blog' : 'wiki',
+        )
+    }
   }
   for (const contentType of contentTypes) {
     revalidateTag(contentTypeCacheTag(contentType), { expire: 0 })

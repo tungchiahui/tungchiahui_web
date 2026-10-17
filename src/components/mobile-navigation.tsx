@@ -31,7 +31,7 @@ export function MobileNavigation({
     }
   }, [open])
   return (
-    <div className="relative sm:hidden" ref={rootRef}>
+    <div className="relative lg:hidden" ref={rootRef}>
       <button
         aria-expanded={open}
         aria-label={buttonLabel}
@@ -46,14 +46,14 @@ export function MobileNavigation({
             <>
               <button
                 aria-label={closeLabel}
-                className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[2px] sm:hidden"
+                className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[2px] lg:hidden"
                 data-mobile-menu-backdrop
                 onClick={() => setOpen(false)}
                 type="button"
               />
               <nav
                 aria-label={navigationLabel}
-                className="fixed top-[4.5rem] right-4 z-50 w-[min(18rem,calc(100vw-2rem))] rounded-2xl border bg-background/95 p-3 shadow-2xl backdrop-blur sm:hidden"
+                className="fixed top-[4.5rem] right-4 z-50 w-[min(18rem,calc(100vw-2rem))] rounded-2xl border bg-background/95 p-3 shadow-2xl backdrop-blur lg:hidden"
               >
                 <p className="px-2 pt-1 pb-3 font-semibold text-muted-foreground text-xs uppercase tracking-[0.16em]">
                   {navigationLabel}

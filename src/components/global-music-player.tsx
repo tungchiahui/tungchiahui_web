@@ -11,6 +11,7 @@ import {
   SkipForward,
 } from 'lucide-react'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { type CSSProperties, useEffect, useRef, useState } from 'react'
 import { useMusicPlayer } from './music-player-provider'
@@ -18,6 +19,7 @@ import { useMusicPlayer } from './music-player-provider'
 const hiddenStorageKey = 'music_player_hidden'
 
 export function GlobalMusicPlayer() {
+  const pathname = usePathname()
   const t = useTranslations('Web.music')
   const player = useMusicPlayer()
   const [collapsed, setCollapsed] = useState(false)
@@ -61,7 +63,13 @@ export function GlobalMusicPlayer() {
     localStorage.setItem(hiddenStorageKey, String(next))
   }
 
-  if (!hydrated) return null
+  if (
+    !hydrated ||
+    /^\/(?:(?:zh-cn|zh-hk|zh-tw|en-us)\/)?(?:cv|contact|projects(?:\/[^/]+)?)\/?$/u.test(
+      pathname ?? '',
+    )
+  )
+    return null
 
   if (collapsed) {
     return (

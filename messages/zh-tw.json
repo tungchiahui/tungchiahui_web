@@ -162,7 +162,9 @@
       "importBookmarks": "匯入書籤 JSON",
       "searchPlaceholder": "輸入關鍵字並使用瀏覽器搜尋",
       "searchAction": "搜尋",
-      "bookmarkStorageNote": "書籤只保存在這個瀏覽器，不會上傳到伺服器。"
+      "bookmarkStorageNote": "書籤只保存在這個瀏覽器，不會上傳到伺服器。",
+      "projectsTitle": "專案與成果",
+      "projectsDescription": "機器人、嵌入式與軟體工程專案，記錄個人貢獻、實作過程和實際成果。"
     },
     "music": {
       "playerTitle": "音樂播放器",
@@ -347,7 +349,9 @@
       "backupBadge": "R2 備份",
       "alistFlow": "AList 網頁介面",
       "cdnFlow": "主 CDN · R2 備份",
-      "copyLabel": "複製地址：{service}"
+      "copyLabel": "複製地址：{service}",
+      "projectsTitle": "專案與成果",
+      "projectsDescription": "機器人、嵌入式與軟體工程專案，記錄個人貢獻、實作過程和實際成果。"
     },
     "blogIndex": {
       "description": "把解決問題的過程寫下來，讓每一次探索都有跡可循。",
@@ -519,6 +523,33 @@
       "v2ex": "創意社群",
       "zhihu": "知識問答",
       "zhihuName": "知乎"
+    },
+    "project": "專案",
+    "portfolio": {
+      "title": "專案與成果",
+      "intro": "從機器人控制到自主導航，記錄我參與設計、實作和除錯的工程專案。",
+      "selectedProjects": "代表專案",
+      "allProjects": "全部專案",
+      "viewProject": "查看專案",
+      "viewCv": "查看履歷",
+      "backProjects": "返回全部專案",
+      "navigation": "專案導覽",
+      "technologies": "技術堆疊",
+      "printResume": "列印 / 儲存 PDF",
+      "contact": "聯絡",
+      "contactIntro": "歡迎就工作機會、機器人專案或技術交流與我聯絡。",
+      "emptyTitle": "專案案例整理中",
+      "emptyBody": "正在整理專案的實作過程與展示。你可以先查看履歷，了解我的相關經歷。",
+      "selectedEmpty": "專案案例正在整理，可先在下方了解相關專案經歷。",
+      "code": "原始碼",
+      "demo": "線上展示",
+      "video": "展示影片",
+      "status": {
+        "completed": "已完成",
+        "ongoing": "進行中",
+        "archived": "已封存"
+      },
+      "eyebrow": "工程實作"
     }
   },
   "Personal": {

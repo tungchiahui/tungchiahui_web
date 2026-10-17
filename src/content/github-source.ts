@@ -1,7 +1,11 @@
 import { z } from 'zod'
 import { sourceCommitSchema } from '../domain/persistence'
 import { gitBlobSha } from '../translation/git-memory'
-import { contentSnapshotSchema, type ReadonlyContentSource } from './contracts'
+import {
+  contentSnapshotSchema,
+  contentSourcePathSchema,
+  type ReadonlyContentSource,
+} from './contracts'
 
 const repositorySchema = z
   .string()
@@ -38,10 +42,7 @@ export type GitHubContentSourceOptions = Readonly<{
 }>
 
 function isCanonicalContentPath(path: string) {
-  return (
-    /^content\/posts\/[^/]+\.md$/.test(path) ||
-    /^content\/wiki\/[^/]+\/(?:[^/]+\/)*[^/]+\.md$/.test(path)
-  )
+  return contentSourcePathSchema.safeParse(path).success
 }
 
 async function mapWithConcurrency<T, R>(

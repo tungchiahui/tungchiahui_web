@@ -8,6 +8,9 @@ const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts')
 const nextConfig: NextConfig = {
   allowedDevOrigins: ['127.0.0.1'],
   devIndicators: { position: 'bottom-right' },
+  // Keep a single authoritative head when navigating between a resume and its
+  // projects; streamed metadata can retain the previous canonical in Next 16.
+  htmlLimitedBots: /.*/,
   output: 'standalone',
   poweredByHeader: false,
   reactStrictMode: true,

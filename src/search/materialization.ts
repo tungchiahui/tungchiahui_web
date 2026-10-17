@@ -5,9 +5,15 @@ import remarkParse from 'remark-parse'
 import { unified } from 'unified'
 import { z } from 'zod'
 
-import type { ContentType, JsonValue, Locale } from '../domain/persistence'
+import {
+  type ContentType,
+  contentTypeSchema,
+  type JsonValue,
+  type Locale,
+} from '../domain/persistence'
 import { localizeContentText } from '../i18n/content'
 import { localizeContentMarkdown } from '../i18n/content-markdown'
+import { projectMetadataSchema } from '../projects/contracts'
 import { documentFieldSourceHash, translatedFieldsSchema } from '../translation/document-fields'
 
 const markdownNodeSchema = z
@@ -21,7 +27,7 @@ const markdownNodeSchema = z
 
 const sourceDocumentSchema = z
   .object({
-    contentType: z.enum(['blog', 'wiki']),
+    contentType: contentTypeSchema,
     id: z.uuid(),
     rawFrontmatter: z.record(z.string(), z.json()),
     rawMarkdown: z.string().min(1),
@@ -114,6 +120,8 @@ function relevantMetadata(frontmatter: Readonly<Record<string, JsonValue>>, sour
       values.push(...value.filter((entry): entry is string => typeof entry === 'string'))
     }
   }
+  if (frontmatter.project !== undefined)
+    values.push(...projectMetadataSchema.parse(frontmatter.project).tags)
   return normalizedText(values)
 }
 

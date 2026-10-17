@@ -12,7 +12,7 @@
 
 ```text
 id
-content_type          blog | wiki
+content_type          blog | wiki | project
 source_path
 source_commit
 title

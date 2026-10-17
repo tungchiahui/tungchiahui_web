@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 export const localeValues = ['zh-cn', 'zh-hk', 'zh-tw', 'en-us'] as const
-export const contentTypeValues = ['blog', 'wiki'] as const
+export const contentTypeValues = ['blog', 'wiki', 'project'] as const
 export const translationSegmentStatusValues = [
   'pending',
   'translated',

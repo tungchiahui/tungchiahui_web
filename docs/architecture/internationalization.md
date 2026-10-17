@@ -133,3 +133,10 @@ Start 系统默认视图使用 `Web.startDefaults`，已保存作者集合保留
 zhCN/en 字段、歌曲/歌词、来源壁纸和统计行继续作为数据。全部 More 子页的交互与
 Metadata 由四 Locale 回归覆盖。边界、标题缺口与发布/回退见
 [`site-i18n-completion.md`](../development/site-i18n-completion.md)。
+
+## 项目与简历（ADR 0029）
+
+CV 固定履历继续使用 `Web.information`，其结构与联系身份集中在 `src/personal/cv-profile.ts`。
+`Web.portfolio` 保存四语言项目标签、状态和空状态。项目标题与正文进入原有 Git Memory
+流程；卡片与 CV 的简介从同一篇当前 Locale 正文首段取得，不从中文 Frontmatter 复制
+摘要，不增加其他翻译来源。技术标签与资源 URL 保持原值。

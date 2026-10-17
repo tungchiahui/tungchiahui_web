@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm'
 import { contentHookInputSchema } from '../content/hooks'
+import { prepareContentSnapshot } from '../content/markdown'
 import { localOwnerPasswordHash } from '../control-plane/owner-password'
 import {
   applicationJobRequestSchema,
@@ -11,6 +12,7 @@ import { migrateLegacyTechPayload } from '../personal/legacy-migration'
 import { SearchIndexRepository } from '../search/repository'
 import { defaultStartPayload } from '../start/defaults'
 import { createDatabaseClient } from './client'
+import { developmentProjectFiles } from './project-seed'
 import {
   accounts,
   documents,
@@ -195,6 +197,14 @@ export async function seedDevelopmentDatabase(connectionString: string) {
       await transaction
         .insert(documents)
         .values([
+          ...prepareContentSnapshot({ sourceCommit, files: developmentProjectFiles }).documents.map(
+            (document, index) => ({
+              ...document,
+              id: `10000000-0000-4000-8000-00000000000${index + 6}`,
+              createdAt: seedTimestamp,
+              ingestedAt: seedTimestamp,
+            }),
+          ),
           { ...blog, createdAt: seedTimestamp, ingestedAt: seedTimestamp },
           { ...wiki, createdAt: seedTimestamp, ingestedAt: seedTimestamp },
           { ...wikiChapterOne, createdAt: seedTimestamp, ingestedAt: seedTimestamp },

@@ -11,6 +11,7 @@ import {
   documentTranslations,
   ownerManagedDatasets,
 } from '../database/schema'
+import { type ContentType, contentTypeSchema } from '../domain/persistence'
 import type { AppLocale } from '../i18n/locales'
 import {
   documentFieldSourceHash,
@@ -20,7 +21,7 @@ import {
 
 const publicDocumentSchema = z.object({
   contentLocaleState: z.enum(['converted', 'fallback', 'mixed', 'source', 'translated']),
-  contentType: z.enum(['blog', 'wiki']),
+  contentType: contentTypeSchema,
   fallbackSegmentCount: z.number().int().nonnegative(),
   id: z.uuid(),
   localizedMarkdown: z.string().min(1).nullable(),
@@ -153,7 +154,7 @@ export class PublicContentRepository {
     await this.#client.close()
   }
 
-  async list(contentType: 'blog' | 'wiki', locale: AppLocale) {
+  async list(contentType: ContentType, locale: AppLocale) {
     return this.#client.database.transaction(async (transaction) => {
       await transaction.execute(sql`SET LOCAL ROLE site_app`)
       const rows = await transaction

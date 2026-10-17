@@ -8,6 +8,7 @@ import remarkRehype from 'remark-rehype'
 import { unified } from 'unified'
 import { parseDocument } from 'yaml'
 import { z } from 'zod'
+import { projectMetadataSchema } from '../projects/contracts'
 
 import {
   contentSnapshotSchema,
@@ -49,6 +50,7 @@ const frontmatterSchema = z
     description: z.string().min(1).optional(),
     path: z.string().min(1).optional(),
     title: z.string().trim().min(1),
+    project: projectMetadataSchema.optional(),
   })
   .strict()
 
@@ -146,7 +148,17 @@ function prepareDocument(
   sourceFile: Readonly<{ contents: string; path: string }>,
 ) {
   const frontmatter = parseFrontmatter(sourceFile.contents)
-  const contentType = sourceFile.path.startsWith('content/posts/') ? 'blog' : 'wiki'
+  const contentType = sourceFile.path.startsWith('content/projects/')
+    ? 'project'
+    : sourceFile.path.startsWith('content/posts/')
+      ? 'blog'
+      : 'wiki'
+  if (contentType !== 'project' && frontmatter.project !== undefined) {
+    throw new Error('Project presentation fields are only allowed in content/projects/*.md')
+  }
+  if (contentType === 'project' && frontmatter.path !== undefined) {
+    throw new Error('Project routes use the stable filename; omit frontmatter path')
+  }
   const rawFrontmatter = Object.fromEntries(
     Object.entries(frontmatter).filter((entry) => entry[1] !== undefined),
   )
@@ -155,9 +167,11 @@ function prepareDocument(
     rawFrontmatter,
     rawMarkdown: sourceFile.contents,
     routePath:
-      contentType === 'blog'
-        ? blogRoute(sourceFile.path, frontmatter.path)
-        : wikiRoute(sourceFile.path),
+      contentType === 'project'
+        ? `/projects/${basename(sourceFile.path, '.md')}`
+        : contentType === 'blog'
+          ? blogRoute(sourceFile.path, frontmatter.path)
+          : wikiRoute(sourceFile.path),
     sourceCommit,
     sourceHash: createHash('sha256').update(sourceFile.contents).digest('hex'),
     sourcePath: posix.normalize(sourceFile.path),

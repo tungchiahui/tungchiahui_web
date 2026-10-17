@@ -20,6 +20,7 @@ import { z } from 'zod'
 import { ArticleReader } from '@/components/article-reader'
 import { BlogIndex } from '@/components/blog-index'
 import { BookmarkWorkspace } from '@/components/bookmark-workspace'
+import { CareerShell } from '@/components/career-shell'
 import { MoreDirectory } from '@/components/more-directory'
 import { MusicPage } from '@/components/music-page'
 import { TechTracker } from '@/components/personal/tech-tracker'
@@ -28,6 +29,7 @@ import { SiteShell } from '@/components/site-shell'
 import { StatsDashboard } from '@/components/stats-dashboard'
 import { TrafficMetrics } from '@/components/traffic-metrics'
 import { techFootprintPayloadSchema, weightLossPayloadSchema } from '@/control-plane/contracts'
+import { contentTypeSchema } from '@/domain/persistence'
 import { localizeContentText } from '@/i18n/content'
 import type { AppLocale } from '@/i18n/locales'
 import { emptyTechPayload, emptyWeightPayload } from '@/personal/contracts'
@@ -41,6 +43,7 @@ import {
 import { environment } from '@/server/environment'
 import type { PublicDocument } from '@/server/public-content'
 import { renderArticleMarkdown } from './article-markdown'
+import { ContactPage } from './contact-page'
 import {
   documentDate,
   documentSummary,
@@ -50,6 +53,7 @@ import {
   type WikiDocumentGroup,
   wikiDocumentKey,
 } from './content-compatibility'
+import { ProjectDetailFrame, ProjectsPage } from './project-pages'
 import {
   type PublicRouteContext,
   publicPath,
@@ -549,7 +553,7 @@ async function SearchPage({
   const t = await getTranslations({ locale: context.locale, namespace: 'Web' })
   const parsedQuery = searchQuerySchema.safeParse(queryInput)
   const query = parsedQuery.success ? parsedQuery.data : undefined
-  const parsedType = z.enum(['blog', 'wiki']).safeParse(typeInput)
+  const parsedType = contentTypeSchema.safeParse(typeInput)
   const contentType = parsedType.success ? parsedType.data : undefined
   const results = query
     ? await readCachedSearch({
@@ -595,6 +599,7 @@ async function SearchPage({
             <option value="">{t('searchTypeAll')}</option>
             <option value="blog">{t('blog')}</option>
             <option value="wiki">{t('wiki')}</option>
+            <option value="project">{t('project')}</option>
           </select>
           <button
             className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 font-medium text-primary-foreground"
@@ -683,7 +688,7 @@ async function ArticlePage({
         })
       : []
 
-  return (
+  const article = (
     <article className="mx-auto max-w-[100rem]" data-article-type={document.contentType}>
       <script
         type="application/ld+json"
@@ -765,6 +770,13 @@ async function ArticlePage({
       </nav>
     </article>
   )
+  return document.contentType === 'project' ? (
+    <ProjectDetailFrame context={context} document={document}>
+      {article}
+    </ProjectDetailFrame>
+  ) : (
+    article
+  )
 }
 
 async function SpecialPage({
@@ -772,10 +784,24 @@ async function SpecialPage({
   slug,
 }: Readonly<{ context: PublicRouteContext; slug: SpecialPageSlug }>) {
   switch (slug) {
+    case 'contact':
+      return <ContactPage locale={context.locale} />
     case 'about':
       return <AboutInformationPage context={context} />
     case 'cv':
-      return <CvInformationPage context={context} />
+      return (
+        <CvInformationPage
+          context={context}
+          projects={await listCachedDocuments('project', context.locale)}
+        />
+      )
+    case 'projects':
+      return (
+        <ProjectsPage
+          context={context}
+          documents={await listCachedDocuments('project', context.locale)}
+        />
+      )
     case 'friend':
       return <FriendInformationPage locale={context.locale} />
     case 'more':
@@ -830,7 +856,7 @@ export async function renderPublicPage(
     page = <ContentList contentType="wiki" context={context} queryInput={query} />
   else if (path === '/search')
     page = <SearchPage context={context} queryInput={query} typeInput={type} />
-  else if (path.startsWith('/blog/') || path.startsWith('/wiki/'))
+  else if (path.startsWith('/blog/') || path.startsWith('/wiki/') || path.startsWith('/projects/'))
     page = <ArticlePage context={context} path={path} />
   else {
     const special = specialPageSlugSchema.safeParse(segments.length === 1 ? segments[0] : undefined)
@@ -838,6 +864,18 @@ export async function renderPublicPage(
     page = <SpecialPage context={context} slug={special.data} />
   }
   if (path === '/start') return page
+  if (
+    path === '/cv' ||
+    path === '/contact' ||
+    path === '/projects' ||
+    path.startsWith('/projects/')
+  ) {
+    return (
+      <CareerShell context={context} logicalPath={path}>
+        {page}
+      </CareerShell>
+    )
+  }
   return (
     <SiteShell context={context} logicalPath={path}>
       {page}
@@ -865,7 +903,7 @@ export async function publicPageMetadata(
         ((path === '/blog' || path === '/wiki') && searchParameters.q !== undefined),
       ...(document ? { document } : {}),
     })
-  if (path.startsWith('/blog/') || path.startsWith('/wiki/')) {
+  if (path.startsWith('/blog/') || path.startsWith('/wiki/') || path.startsWith('/projects/')) {
     const document = await readCachedDocument(path, locale)
     if (!document) return { title: t('notFoundTitle'), robots: { index: false, follow: true } }
     const sourceDescription = documentSummary(document) ?? document.title
@@ -880,10 +918,14 @@ export async function publicPageMetadata(
   const special = specialPageSlugSchema.safeParse(segments.length === 1 ? segments[0] : undefined)
   if (special.success) {
     switch (special.data) {
+      case 'contact':
+        return metadata(t('portfolio.contact'), t('portfolio.contactIntro'))
       case 'about':
         return metadata(t('special.aboutTitle'), t('special.aboutDescription'))
       case 'cv':
         return metadata(t('special.cvTitle'), t('special.cvDescription'))
+      case 'projects':
+        return metadata(t('special.projectsTitle'), t('special.projectsDescription'))
       case 'friend':
         return metadata(t('special.friendTitle'), t('special.friendDescription'))
       case 'more':

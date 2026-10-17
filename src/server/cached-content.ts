@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { unstable_cache } from 'next/cache'
+import type { ContentType } from '../domain/persistence'
 import type { AppLocale } from '../i18n/locales'
 import { contentTypeCacheTag, routeCacheTag } from '../web/cache-policy'
 import {
@@ -18,7 +19,7 @@ export async function readCachedDocument(routePath: string, locale: AppLocale) {
   return cached === undefined ? undefined : parsePublicDocument(cached)
 }
 
-export async function listCachedDocuments(contentType: 'blog' | 'wiki', locale: AppLocale) {
+export async function listCachedDocuments(contentType: ContentType, locale: AppLocale) {
   const cached = await unstable_cache(
     () => getPublicContentRepository().list(contentType, locale),
     ['public-document-list', locale, contentType],

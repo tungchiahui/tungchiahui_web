@@ -1,7 +1,6 @@
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
-
 import { z } from 'zod'
 import { migrateLegacyTechPayload } from '../../src/personal/legacy-migration'
 import { S3ObjectStorageAdapter } from '../../src/storage/s3-adapter'
@@ -11,6 +10,7 @@ import { runStorageContract } from '../storage/contract'
 import { verifyPhase9Translation } from '../translation/test-execution'
 import { verifyGitMemoryImport } from '../translation/test-git-memory'
 import { verifyEnglishTitles } from '../translation/test-titles'
+import { verifyProjectPortfolio } from '../web/test-projects'
 import { verifyPhase6Revalidation } from '../web/test-revalidation'
 import { assertDockerPrerequisites, ComposeProject } from './compose'
 import { documentedLocalCredentials, parseLocalInfrastructureConfig } from './config'
@@ -452,6 +452,7 @@ async function run() {
     await verifyPhase6Revalidation(configuration.databaseUrl.toString(), configuration.siteBaseUrl)
     await verifyPhase10CacheInvalidation(configuration.siteBaseUrl)
     const firstTranslationJobId = await verifyTranslationJobBoundary(configuration.controlApiUrl)
+    await verifyProjectPortfolio(configuration.databaseUrl.toString(), configuration.siteBaseUrl)
     runPlaywright(configuration.siteBaseUrl)
     await verifyPhase9Translation(configuration.databaseUrl.toString(), firstTranslationJobId)
     const memoryContractDatabase = new URL(configuration.databaseUrl)
