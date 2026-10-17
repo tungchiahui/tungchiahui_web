@@ -20,7 +20,7 @@ ADR 0029 与 Expand 0012 增加 project Enum、content/projects/<stable-slug>.md
 再发布 Content Commit；回退保留 Enum，退到项目支持前版本须暂停内容同步。
 
 内容仓库新增 amr-autonomous-navigation.md 与 robocon-robot-control.md，两篇仅依据
-既有 CV 经历整理；14 个唯一英文记忆进入 12 个 Shard，provider=manual、零 Usage、
+既有 CV 经历整理；13 个唯一英文记忆进入 12 个 Shard，provider=manual、零 Usage、
 零付费调用。没有虚构图片、演示链接、论文或量化指标。内容仓库已有及同时发生的 Wiki
 工作区改动保留，本次只新增两篇项目和对应记忆；不得把其他未提交改动一起发布。
 
