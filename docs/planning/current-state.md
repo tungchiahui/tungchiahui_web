@@ -52,6 +52,10 @@ Owner 已于 2026-10-17 授权上线。本次 Web 从 main 的既有 Main Releas
 12 个英文记忆 Shard；内容仓库其他 Wiki 工作区改动不纳入提交。生产结果以该提交的
 Main Release、Canonical Content Sync 与发布后的四语言页面验收为准，不以本地验收代替。
 
+首次正式门禁发现 Production Foundation Fixture 在 `--control-schema` 基线（0012 之前）
+调用共用开发 Seed，不能提前插入 project。该旧 Schema 演练显式关闭项目样例，普通开发与
+完整 Migration/Integration 仍默认包含项目；继续验证后续受备份门禁保护的 Expand 部署。
+
 
 > Status: Phase 0–18 completed
 > Current Phase: Website V2 Production Completion

@@ -1270,7 +1270,8 @@ async function initializeDeploymentFixture(workerPassword: string) {
     postgresContainer,
   ]).stdout.trim()
   const databaseUrl = `postgresql://site_content_worker_login:${workerPassword}@${postgresIp}:5432/tungchiahui`
-  await seedDevelopmentDatabase(databaseUrl)
+  // This fixture starts at the control-schema baseline, before the project enum expand.
+  await seedDevelopmentDatabase(databaseUrl, { includeProjects: false })
   const search = new SearchIndexRepository(databaseUrl)
   try {
     await search.reindexLocales(['zh-cn'])

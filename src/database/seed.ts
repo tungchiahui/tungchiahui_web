@@ -42,7 +42,10 @@ const wikiChapterTwoHash = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
 const wikiNestedChapterHash = 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
 const translationHash = 'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'
 
-export async function seedDevelopmentDatabase(connectionString: string) {
+export async function seedDevelopmentDatabase(
+  connectionString: string,
+  options: Readonly<{ includeProjects?: boolean }> = {},
+) {
   const client = createDatabaseClient({
     applicationName: 'site-development-seed',
     connectionString,
@@ -197,14 +200,15 @@ export async function seedDevelopmentDatabase(connectionString: string) {
       await transaction
         .insert(documents)
         .values([
-          ...prepareContentSnapshot({ sourceCommit, files: developmentProjectFiles }).documents.map(
-            (document, index) => ({
-              ...document,
-              id: `10000000-0000-4000-8000-00000000000${index + 6}`,
-              createdAt: seedTimestamp,
-              ingestedAt: seedTimestamp,
-            }),
-          ),
+          ...prepareContentSnapshot({
+            sourceCommit,
+            files: options.includeProjects === false ? [] : developmentProjectFiles,
+          }).documents.map((document, index) => ({
+            ...document,
+            id: `10000000-0000-4000-8000-00000000000${index + 6}`,
+            createdAt: seedTimestamp,
+            ingestedAt: seedTimestamp,
+          })),
           { ...blog, createdAt: seedTimestamp, ingestedAt: seedTimestamp },
           { ...wiki, createdAt: seedTimestamp, ingestedAt: seedTimestamp },
           { ...wikiChapterOne, createdAt: seedTimestamp, ingestedAt: seedTimestamp },
