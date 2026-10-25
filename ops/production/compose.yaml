@@ -57,7 +57,7 @@ services:
 
   pgbouncer:
     <<: *hardened-service
-    image: percona/percona-pgbouncer:1.25.2-9@sha256:3558c3b79ef37989324616833d4763268d1ec171a10f3dec3b7d2c5da807b0be
+    image: ${TUNGCHIAHUI_PGBOUNCER_IMAGE:?patched immutable PgBouncer image is required}
     user: "1001:10050"
     entrypoint: [/usr/bin/pgbouncer]
     command: [/etc/pgbouncer/pgbouncer.ini]

@@ -235,6 +235,51 @@ jobs:
           [[ "$INTEGRATION_RESULT" == "success" ]]
           [[ "$MIGRATION_RESULT" == "success" ]]
 
+  build-pgbouncer:
+    name: build-pgbouncer
+    needs: [resolve-release, quality-gate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_digest: ${{ steps.publish.outputs.digest || steps.resolve.outputs.image_digest }}
+      source_sha: ${{ steps.resolve.outputs.source_sha }}
+    steps:
+      - name: Check out approved release
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.resolve-release.outputs.git_sha }}
+          fetch-depth: 0
+      - name: Install Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+      - name: Authenticate to GitHub Container Registry
+        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Resolve the immutable PgBouncer recipe image
+        id: resolve
+        run: node tools/ci/resolve-pgbouncer-image.ts
+      - name: Build and publish patched PgBouncer image
+        if: steps.resolve.outputs.exists != 'true'
+        id: publish
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          file: ops/production/images/pgbouncer.Dockerfile
+          push: true
+          tags: ${{ steps.resolve.outputs.image_reference }}
+          build-args: SITE_DEPLOYMENT_SHA=${{ steps.resolve.outputs.source_sha }}
+          cache-from: type=gha,scope=production-pgbouncer
+          cache-to: type=gha,mode=max,scope=production-pgbouncer
+
   build-postgres:
     name: build-postgres
     needs: [resolve-release, quality-gate]
@@ -274,7 +319,7 @@ jobs:
 
   build-recovery:
     name: build-recovery
-    needs: [resolve-release, quality-gate]
+    needs: [resolve-release, quality-gate, build-pgbouncer]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -305,7 +350,10 @@ jobs:
           file: ops/production/images/recovery.Dockerfile
           push: true
           tags: ${{ env.RECOVERY_IMAGE_REPOSITORY }}:${{ needs.resolve-release.outputs.git_sha }}
-          build-args: SITE_DEPLOYMENT_SHA=${{ needs.resolve-release.outputs.git_sha }}
+          build-args: |
+            SITE_DEPLOYMENT_SHA=${{ needs.resolve-release.outputs.git_sha }}
+            SITE_PGBOUNCER_IMAGE=ghcr.io/tungchiahui/tungchiahui_web-pgbouncer@${{ needs.build-pgbouncer.outputs.image_digest }}
+            SITE_PGBOUNCER_SHA=${{ needs.build-pgbouncer.outputs.source_sha }}
           cache-from: type=gha,scope=production-recovery
           cache-to: type=gha,mode=max,scope=production-recovery
 
@@ -388,13 +436,14 @@ jobs:
 
   build:
     name: build-and-publish-immutable-image-set
-    needs: [resolve-release, build-postgres, build-recovery, build-service, build-web]
+    needs: [resolve-release, build-pgbouncer, build-postgres, build-recovery, build-service, build-web]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       git_sha: ${{ needs.resolve-release.outputs.git_sha }}
       image_digest: ${{ needs.build-web.outputs.image_digest }}
       postgres_image_digest: ${{ needs.build-postgres.outputs.image_digest }}
+      pgbouncer_image_digest: ${{ needs.build-pgbouncer.outputs.image_digest }}
       recovery_image_digest: ${{ needs.build-recovery.outputs.image_digest }}
       service_image_digest: ${{ needs.build-service.outputs.image_digest }}
     steps:
@@ -403,13 +452,16 @@ jobs:
           RELEASE_SHA: ${{ needs.resolve-release.outputs.git_sha }}
           WEB_DIGEST: ${{ needs.build-web.outputs.image_digest }}
           POSTGRES_DIGEST: ${{ needs.build-postgres.outputs.image_digest }}
+          PGBOUNCER_DIGEST: ${{ needs.build-pgbouncer.outputs.image_digest }}
+          PGBOUNCER_SOURCE_SHA: ${{ needs.build-pgbouncer.outputs.source_sha }}
           RECOVERY_DIGEST: ${{ needs.build-recovery.outputs.image_digest }}
           SERVICE_DIGEST: ${{ needs.build-service.outputs.image_digest }}
         shell: bash
         run: |
           set -euo pipefail
           [[ "$RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
-          for digest in "$WEB_DIGEST" "$POSTGRES_DIGEST" "$RECOVERY_DIGEST" "$SERVICE_DIGEST"; do
+          [[ "$PGBOUNCER_SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          for digest in "$WEB_DIGEST" "$POSTGRES_DIGEST" "$PGBOUNCER_DIGEST" "$RECOVERY_DIGEST" "$SERVICE_DIGEST"; do
             [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
           done
           {
@@ -421,7 +473,9 @@ jobs:
               --arg service "$SERVICE_DIGEST" \
               --arg recovery "$RECOVERY_DIGEST" \
               --arg postgres "$POSTGRES_DIGEST" \
-              '{gitSha: $gitSha, images: {web: $web, service: $service, recovery: $recovery, postgres: $postgres}}'
+              --arg pgbouncer "$PGBOUNCER_DIGEST" \
+              --arg pgbouncerSourceSha "$PGBOUNCER_SOURCE_SHA" \
+              '{gitSha: $gitSha, pgbouncerSourceSha: $pgbouncerSourceSha, images: {web: $web, service: $service, recovery: $recovery, postgres: $postgres, pgbouncer: $pgbouncer}}'
             echo '```'
           } >>"$GITHUB_STEP_SUMMARY"
 

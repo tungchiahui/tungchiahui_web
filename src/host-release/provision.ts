@@ -24,6 +24,7 @@ import {
   provisionRequestSchema,
   topologyFiles,
 } from './contracts'
+import { bindPgBouncerImage, pgbouncerImagePlaceholder } from './pgbouncer-image'
 
 const environmentSchema = z.record(z.string(), z.string())
 const containerSchema = z
@@ -252,9 +253,13 @@ export function provisionHost(input: ProvisionRequest) {
     const source = join(request.sourceRoot, 'ops/production', file)
     if (!lstatSync(source).isFile() || lstatSync(source).isSymbolicLink())
       throw new Error('Release topology source must be a regular file')
-    changed += Number(
-      writeHostFile(join(settings.configRoot, file), readFileSync(source), 0, gid, 0o640),
-    )
+    let contents = readFileSync(source, 'utf8')
+    if (file === 'compose.yaml' && contents.includes(pgbouncerImagePlaceholder)) {
+      if (!request.pgbouncerImage)
+        throw new Error('Source bootstrap requires a patched immutable PgBouncer image')
+      contents = bindPgBouncerImage(contents, request.pgbouncerImage)
+    }
+    changed += Number(writeHostFile(join(settings.configRoot, file), contents, 0, gid, 0o640))
   }
   const activeSlot = join(settings.configRoot, 'deployment', 'active-slot.conf')
   if (!existsSync(activeSlot))

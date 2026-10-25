@@ -1,6 +1,7 @@
 node_modules/
 .next/
 .local/
+ops/production/pgbouncer-image.json
 out/
 coverage/
 playwright-report/

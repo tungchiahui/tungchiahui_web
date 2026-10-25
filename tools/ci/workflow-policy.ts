@@ -31,6 +31,9 @@ const serviceDigestReference =
   'SITE_SERVICE_IMAGE_DIGEST=$' + '{{ needs.build-service.outputs.image_digest }}'
 const recoveryDigestReference =
   'SITE_RECOVERY_IMAGE_DIGEST=$' + '{{ needs.build-recovery.outputs.image_digest }}'
+const pgbouncerImageReference =
+  'SITE_PGBOUNCER_IMAGE=ghcr.io/tungchiahui/tungchiahui_web-pgbouncer@$' +
+  '{{ needs.build-pgbouncer.outputs.image_digest }}'
 const releaseShaBuildArgument =
   'SITE_DEPLOYMENT_SHA=$' + '{{ needs.resolve-release.outputs.git_sha }}'
 
@@ -114,7 +117,13 @@ function requireReleaseJobStructure(
     })
   }
 
-  const publishJobs = ['build-postgres', 'build-recovery', 'build-service', 'build-web']
+  const publishJobs = [
+    'build-pgbouncer',
+    'build-postgres',
+    'build-recovery',
+    'build-service',
+    'build-web',
+  ]
   for (const name of publishJobs) {
     const publish = requireJob(name)
     if (publish?.permissions?.packages !== 'write') {
@@ -123,6 +132,16 @@ function requireReleaseJobStructure(
   }
 
   const webBuild = requireJob('build-web')
+  const recoveryBuild = requireJob('build-recovery')
+  if (
+    recoveryBuild &&
+    JSON.stringify(normalizedNeeds(recoveryBuild).toSorted()) !==
+      JSON.stringify(['resolve-release', 'quality-gate', 'build-pgbouncer'].toSorted())
+  )
+    issues.push({
+      file: 'release.yml',
+      message: 'Recovery topology must bind the reviewed PgBouncer image digest',
+    })
   if (
     webBuild &&
     JSON.stringify(normalizedNeeds(webBuild).toSorted()) !==
@@ -139,6 +158,7 @@ function requireReleaseJobStructure(
       'git_sha',
       'image_digest',
       'postgres_image_digest',
+      'pgbouncer_image_digest',
       'recovery_image_digest',
       'service_image_digest',
     ]
@@ -255,6 +275,10 @@ export function analyzeWorkflowPolicies(root: string): readonly WorkflowPolicyIs
     'SITE_CONTROL_API_URL: https://www.tungchiahui.cn',
     serviceDigestReference,
     recoveryDigestReference,
+    pgbouncerImageReference,
+    'run: node tools/ci/resolve-pgbouncer-image.ts',
+    'build-args: SITE_DEPLOYMENT_SHA=$' + '{{ steps.resolve.outputs.source_sha }}',
+    'SITE_PGBOUNCER_SHA=$' + '{{ needs.build-pgbouncer.outputs.source_sha }}',
     '### Immutable release manifest',
     'git rev-parse origin/main',
     './site deploy',
@@ -264,7 +288,7 @@ export function analyzeWorkflowPolicies(root: string): readonly WorkflowPolicyIs
   if (release.source.split(releaseShaBuildArgument).length - 1 !== 4) {
     issues.push({
       file: 'release.yml',
-      message: 'Every production image must bind the exact release SHA',
+      message: 'Every application image must bind the exact release SHA',
     })
   }
   rejectFragments(issues, 'release.yml', release.source, [

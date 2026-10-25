@@ -8,6 +8,9 @@ import { analyzeWorkflowPolicies } from '../../tools/ci/workflow-policy'
 
 const serviceDigestReference =
   'SITE_SERVICE_IMAGE_DIGEST=$' + '{{ needs.build-service.outputs.image_digest }}'
+const pgbouncerImageReference =
+  'SITE_PGBOUNCER_IMAGE=ghcr.io/tungchiahui/tungchiahui_web-pgbouncer@$' +
+  '{{ needs.build-pgbouncer.outputs.image_digest }}'
 
 describe('Phase 15 workflow trigger and credential separation', () => {
   it('keeps Quality, Application, Content and Translation automation hard-gated and separate', () => {
@@ -15,6 +18,11 @@ describe('Phase 15 workflow trigger and credential separation', () => {
   })
 
   it.each([
+    {
+      expected: `Missing policy: ${pgbouncerImageReference}`,
+      replacement: 'SITE_PGBOUNCER_IMAGE=percona/pgbouncer:latest',
+      target: pgbouncerImageReference,
+    },
     {
       expected: 'Deploy job must remain build-gated, production-scoped and OIDC-only',
       replacement: 'environment: staging',

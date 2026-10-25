@@ -47,11 +47,11 @@ describe('Phase 12 production foundation policy', () => {
   it('uses immutable images and multi-stage non-root application images', () => {
     expect(composeSource).not.toMatch(/image:\s+\S+:latest(?:\s|$)/)
     expect(compose.services.postgres?.image).toContain('TUNGCHIAHUI_POSTGRES_IMAGE')
-    expect(compose.services.pgbouncer?.image).toContain('@sha256:')
+    expect(compose.services.pgbouncer?.image).toContain('TUNGCHIAHUI_PGBOUNCER_IMAGE')
     expect(compose.services.openresty?.image).toContain('@sha256:')
     expect(compose.services.openresty?.restart).toBe('always')
 
-    for (const dockerfile of ['web.Dockerfile', 'services.Dockerfile']) {
+    for (const dockerfile of ['web.Dockerfile', 'services.Dockerfile', 'pgbouncer.Dockerfile']) {
       const source = readFileSync(resolve('ops/production/images', dockerfile), 'utf8')
       const fromLines = source.match(/^FROM .*$/gm) ?? []
       expect(fromLines.length).toBeGreaterThanOrEqual(2)

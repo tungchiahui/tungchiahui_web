@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { z } from 'zod'
 import {
   getInfrastructureOperation,
@@ -30,6 +31,9 @@ async function main() {
   const platform = new DockerDeploymentPlatform(
     configuration,
     z.string().startsWith('/run/deploy-capability/').parse(process.env.DOCKER_SOCKET_PATH),
+  )
+  await platform.preparePgBouncerImage(
+    JSON.parse(readFileSync('/app/host/ops/production/pgbouncer-image.json', 'utf8')) as unknown,
   )
   const runtime = readDeploymentState(path)
   const executing =

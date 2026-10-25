@@ -92,6 +92,15 @@ GHSA-2464-fhr4-w9xw / GHSA-673q-mjm6-r5xr。发布未切换生产；升级官方
 官方镜像修订 `1.25.2-9` / `sha256:3558c3b79ef37989324616833d4763268d1ec171a10f3dec3b7d2c5da807b0be`，
 同步 Dev/Production Compose、Policy Fixture 与实际扫描清单，不改变连接配置或数据格式。
 基础设施、双副本 Backup/Restore/PITR、集成连接/E2E 与蓝绿门禁全部保留，最终结果仍以新 Release 为准。
+`40191464665` 证明官方 `-9` 的证书仍未修复；本地直接 RPM 查询与 CI 扫描一致。
+现改用固定官方 Base 的受控 PgBouncer 修补镜像，证书精确版本在本地构建中已通过断言，
+PgBouncer 保持 1.25.2。CI 按配方 Source Commit 发布/复用，Digest 绑定进 Recovery 拓扑；
+Worker 在既有授权边界内认证拉取并校验。旧执行器/Checkpoint 格式不变，普通发布不会因
+新应用 SHA 重建/重启连接池。设计、验证、回退和保守 Retention 边界见
+[`pgbouncer-image.md`](../development/pgbouncer-image.md)。禁止把前三次失败描述为已上线。
+修补镜像本地构建成功，实际查询确认 `PgBouncer 1.25.2` 与修复证书 RPM；新增绑定/认证拉取
+测试后，61 File / 376 Unit 与完整 Static/Type/Build/Security 通过。完整镜像扫描、隔离
+Integration/E2E、Migration 和 Production-foundation/Recovery 由新的 main Release 运行。
 随后字号撤回已本地实测为 14px / 20px，`globals.css` 无改动。为 Owner 测试启动的本机
 `http://127.0.0.1:3000/wiki` 使用独立 Compose Project `tungchiahui_reader_preview`，
 首次预览时本地 checkout 只有 12 条 Migration，原 `tungchiahui_dev` Volume 已有 13 条，

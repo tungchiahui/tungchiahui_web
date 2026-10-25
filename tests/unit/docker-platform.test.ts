@@ -31,6 +31,76 @@ const migrationConfiguration: DeploymentConfiguration = {
   DEPLOYMENT_SEARCH_QUERY: 'test',
 }
 
+describe('PgBouncer release image preparation', () => {
+  it.each(['valid', 'wrong-revision', 'missing-digest', 'foreign-repository'] as const)(
+    'authenticates the pull and rejects an unbound image: %s',
+    async (scenario) => {
+      const directory = mkdtempSync(join(tmpdir(), 'pgbouncer-docker-'))
+      const socket = join(directory, 'docker.sock')
+      const repository = 'registry.example.test/site'
+      const reference = `${repository}-pgbouncer@sha256:${'b'.repeat(64)}`
+      const sha = 'a'.repeat(40)
+      let pulled = false
+      let authenticated = false
+      const server = createServer((request, response) => {
+        response.setHeader('content-type', 'application/json')
+        if (request.method === 'POST') {
+          authenticated = typeof request.headers['x-registry-auth'] === 'string'
+          pulled = true
+          response.end('{"status":"complete"}')
+        } else if (!pulled) {
+          response.statusCode = 404
+          response.end('{}')
+        } else
+          response.end(
+            JSON.stringify({
+              Id: `sha256:${'c'.repeat(64)}`,
+              Config: {
+                Labels: {
+                  'org.opencontainers.image.revision':
+                    scenario === 'wrong-revision' ? 'd'.repeat(40) : sha,
+                },
+              },
+              RepoDigests: scenario === 'missing-digest' ? [] : [reference],
+            }),
+          )
+      })
+      await new Promise<void>((resolve) => server.listen(socket, resolve))
+      try {
+        const platform = new DockerDeploymentPlatform(
+          {
+            ...migrationConfiguration,
+            DEPLOYMENT_IMAGE_REPOSITORY: repository,
+            DEPLOYMENT_REGISTRY_USERNAME: 'fixture',
+            DEPLOYMENT_REGISTRY_TOKEN: 'fixture-only-registry-token',
+          },
+          socket,
+        )
+        const result = platform.preparePgBouncerImage({
+          image:
+            scenario === 'foreign-repository'
+              ? reference.replace(repository, 'other.example/site')
+              : reference,
+          sha,
+        })
+        if (scenario === 'valid') await expect(result).resolves.toBeUndefined()
+        else
+          await expect(result).rejects.toThrow(
+            scenario === 'foreign-repository'
+              ? 'approved release repository'
+              : 'immutable release manifest',
+          )
+        expect(authenticated).toBe(scenario !== 'foreign-repository')
+      } finally {
+        await new Promise<void>((resolve, reject) =>
+          server.close((error) => (error ? reject(error) : resolve())),
+        )
+        rmSync(directory, { recursive: true, force: true })
+      }
+    },
+  )
+})
+
 describe('Docker migration image identity', () => {
   it.each([
     { revision: null },

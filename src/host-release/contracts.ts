@@ -51,6 +51,7 @@ export const provisionRequestSchema = z
     serviceImage: immutableImageSchema,
     recoveryImage: immutableImageSchema,
     postgresImage: immutableImageSchema,
+    pgbouncerImage: immutableImageSchema.optional(),
     mode: z.enum(['bootstrap', 'services', 'configuration']),
     deploymentPollingEnabled: z.boolean().optional(),
     backupScheduleEnabled: z.boolean().default(false),

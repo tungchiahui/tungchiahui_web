@@ -232,6 +232,13 @@ Bootstrap/Host Fact/动态 Release Identity，不得另存或覆盖 Owner-manage
 
 在重叠运行的 Blue/Green Application Slot 与 PostgreSQL 之间提供稳定的 PostgreSQL Connection Pooling。
 
+PgBouncer 使用固定 Percona Base 的受控修补镜像，保留 1.25.2 与原连接/权限配置，修复
+CVE-2026-114406 的证书包。CI 按 Dockerfile 最近变更 Commit SHA 发布/复用不可变制品；
+其精确 Digest 写入同次 Recovery Image 的拓扑，继续由 ADR 0027 的同一 Host Adapter 应用。
+Web / Service / Recovery / PostgreSQL 仍按应用 Release SHA 构建，PgBouncer 配方未改变时
+复用既有 Digest，不因普通网页发布重启连接池。Control-state 格式与 Supervisor Protocol 不变。
+详见 [`pgbouncer-image.md`](../development/pgbouncer-image.md)。
+
 ## 数据权威关系
 
 ```text

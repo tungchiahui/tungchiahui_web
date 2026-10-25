@@ -78,6 +78,8 @@ const staleServiceImage = `${projectName}-stale-service:test`
 const serviceRegistryTag = `${registryRepository}-service:${input.PHASE12_GIT_SHA}`
 const recoveryImage = `tungchiahui-recovery:${input.PHASE12_GIT_SHA}`
 const postgresImage = `tungchiahui-postgres:${input.PHASE12_GIT_SHA}`
+const pgbouncerImage = `tungchiahui-pgbouncer:${input.PHASE12_GIT_SHA}`
+let pgbouncerRegistryReference = ''
 const initialRecoveryImage = `tungchiahui-recovery:${initialSha}`
 const initialPostgresImage = `tungchiahui-postgres:${initialSha}`
 const trivyImage =
@@ -425,6 +427,26 @@ function buildImages() {
     '--build-arg',
     `SITE_DEPLOYMENT_SHA=${input.PHASE12_GIT_SHA}`,
     '--file',
+    'ops/production/images/pgbouncer.Dockerfile',
+    '--tag',
+    pgbouncerImage,
+    '.',
+  ])
+  const pgbouncerRegistryTag = `${registryRepository}-pgbouncer:${input.PHASE12_GIT_SHA}`
+  execute('docker', ['tag', pgbouncerImage, pgbouncerRegistryTag])
+  execute('docker', ['push', pgbouncerRegistryTag])
+  pgbouncerRegistryReference = execute('docker', [
+    'image',
+    'inspect',
+    '--format',
+    '{{(index .RepoDigests 0)}}',
+    pgbouncerRegistryTag,
+  ]).stdout.trim()
+  execute('docker', [
+    'build',
+    '--build-arg',
+    `SITE_DEPLOYMENT_SHA=${input.PHASE12_GIT_SHA}`,
+    '--file',
     'ops/production/images/services.Dockerfile',
     '--tag',
     serviceImage,
@@ -460,6 +482,10 @@ function buildImages() {
     `SITE_DEPLOYMENT_SHA=${input.PHASE12_GIT_SHA}`,
     '--file',
     'ops/production/images/recovery.Dockerfile',
+    '--build-arg',
+    `SITE_PGBOUNCER_IMAGE=${pgbouncerRegistryReference}`,
+    '--build-arg',
+    `SITE_PGBOUNCER_SHA=${input.PHASE12_GIT_SHA}`,
     '--tag',
     recoveryImage,
     '.',
@@ -551,7 +577,7 @@ function verifyImageSecurity() {
     recoveryImage,
     postgresImage,
     'openresty/openresty:1.31.1.1-2-alpine-fat@sha256:427d94fea0c24b099e7891e8d1b7976f6d008e2d427e56bab725c8b8b293795b',
-    'percona/percona-pgbouncer:1.25.2-9@sha256:3558c3b79ef37989324616833d4763268d1ec171a10f3dec3b7d2c5da807b0be',
+    pgbouncerImage,
   ]
   for (const image of images) {
     execute('docker', [
@@ -623,6 +649,7 @@ function runProvision() {
     serviceImage: initialServiceImage,
     recoveryImage: initialRecoveryImage,
     postgresImage: initialPostgresImage,
+    pgbouncerImage,
     mode: 'bootstrap' as const,
     deploymentPollingEnabled: true,
     backupScheduleEnabled: false,
@@ -661,6 +688,7 @@ function runMigrationTargetProvision() {
     serviceImage,
     recoveryImage,
     postgresImage,
+    pgbouncerImage,
     mode: 'bootstrap' as const,
     deploymentPollingEnabled: true,
     backupScheduleEnabled: false,

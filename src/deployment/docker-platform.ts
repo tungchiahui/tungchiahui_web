@@ -3,6 +3,7 @@ import { request as httpRequest } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 
 import { z } from 'zod'
+import { pgbouncerReleaseImageSchema } from '../host-release/pgbouncer-image'
 
 import type { DeploymentConfiguration } from './configuration'
 import {
@@ -342,6 +343,37 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
     } catch {
       throw new Error(`Docker image pull failed or returned invalid progress for ${reference}`)
     }
+  }
+
+  async preparePgBouncerImage(input: unknown) {
+    const manifest = pgbouncerReleaseImageSchema.parse(input)
+    const repository = this.configuration.DEPLOYMENT_IMAGE_REPOSITORY
+    const [imageRepository, digest] = manifest.image.split('@')
+    if (
+      !repository ||
+      imageRepository !== `${repository}-pgbouncer` ||
+      !digest ||
+      !/^sha256:[a-f0-9]{64}$/.test(digest)
+    )
+      throw new Error('PgBouncer image must belong to the approved release repository')
+    const inspect = () =>
+      requestDockerJson(
+        this.socketPath,
+        'GET',
+        `/images/${encodeURIComponent(manifest.image)}/json`,
+      )
+    let result = await inspect()
+    if (result.status === 404) {
+      await this.pullImage(manifest.image)
+      result = await inspect()
+    }
+    if (result.status !== 200) throw new Error('Patched PgBouncer image is unavailable')
+    const image = dockerImageSchema.parse(result.body)
+    if (
+      !image.RepoDigests?.includes(manifest.image) ||
+      image.Config.Labels?.['org.opencontainers.image.revision'] !== manifest.sha
+    )
+      throw new Error('PgBouncer image does not match its immutable release manifest')
   }
 
   async validateMigrationImage(target: DeploymentRelease) {

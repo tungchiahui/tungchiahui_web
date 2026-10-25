@@ -8,6 +8,8 @@ COPY .npmrc package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 
 FROM node-dependencies AS node-build
+ARG SITE_PGBOUNCER_IMAGE
+ARG SITE_PGBOUNCER_SHA
 COPY services ./services
 COPY tools/production ./tools/production
 COPY ops/production ./ops/production
@@ -24,7 +26,9 @@ RUN mkdir -p /workspace/dist \
   && pnpm exec esbuild services/release-job/main.ts --bundle --format=cjs --platform=node --target=node24 --outfile=dist/release-job.cjs \
   && pnpm exec esbuild services/host-coordinator/main.ts --bundle --format=cjs --platform=node --target=node24 --outfile=dist/host-coordinator.cjs \
   && pnpm exec esbuild services/release-supervisor/main.ts --bundle --format=cjs --platform=node --target=node24 --outfile=dist/release-supervisor.cjs \
-  && pnpm exec esbuild services/host-bootstrap/main.ts --bundle --format=cjs --platform=node --target=node24 --outfile=dist/host-bootstrap.cjs
+  && pnpm exec esbuild services/host-bootstrap/main.ts --bundle --format=cjs --platform=node --target=node24 --outfile=dist/host-bootstrap.cjs \
+  && pnpm exec esbuild tools/production/bind-pgbouncer-image.ts --bundle --format=cjs --platform=node --target=node24 --outfile=dist/bind-pgbouncer-image.cjs \
+  && node dist/bind-pgbouncer-image.cjs "$SITE_PGBOUNCER_IMAGE" "$SITE_PGBOUNCER_SHA"
 
 FROM node:24.19.0-alpine3.23@sha256:244cc2b53f46f9e876304391d17682b0ddae9ac33491f4857e25e35a36ba7995 AS pgbackrest-build
 
@@ -68,6 +72,7 @@ COPY --from=node-build --chown=70:10050 /workspace/drizzle ./deployment/drizzle
 COPY --from=node-build /usr/local/bin/node /app/host/node
 COPY --from=node-build /workspace/dist/host-coordinator.cjs /workspace/dist/release-supervisor.cjs /workspace/dist/host-bootstrap.cjs /app/host/
 COPY --from=node-build /workspace/ops/production/compose.yaml /workspace/ops/production/openresty.conf /workspace/ops/production/pgbouncer.ini /workspace/ops/production/pgbackrest.conf /workspace/ops/production/active-slot.conf /app/host/ops/production/
+COPY --from=node-build /workspace/ops/production/pgbouncer-image.json /app/host/ops/production/pgbouncer-image.json
 
 USER 70:10050
 CMD ["node", "dist/deploy-agent.cjs"]

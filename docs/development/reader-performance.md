@@ -84,3 +84,7 @@ CVE-2026-114406。PgBouncer 应用版本保持 1.25.2，官方镜像修订升级
 Digest；Dev、Production、测试 Policy 与扫描清单保持一致。不改变连接配置、持久化数据或
 Backup 格式。Recovery Validation Plan 继续为现有隔离基础设施/恢复门禁的真实双副本备份、
 Restore/PITR、连接与蓝绿/回退测试；不对生产执行恢复测试，不降低 Critical 扫描阈值。
+
+`1.25.2-9` 经本地 RPM 查询及后续 CI 扫描确认仍是旧证书，因此未放行。
+最终修复采用同一 Vendor Base 的受控证书修补 Image，配方 SHA/Digest 随 Recovery 拓扑绑定，
+兼容既有 Host Protocol、回退和最小权限拉取；详见 [`pgbouncer-image.md`](pgbouncer-image.md)。

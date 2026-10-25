@@ -1,6 +1,7 @@
 .git
 .next
 .local
+ops/production/pgbouncer-image.json
 coverage
 node_modules
 playwright-report
