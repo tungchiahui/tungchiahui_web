@@ -1,12 +1,12 @@
 'use client'
 
 import { BookOpen, ListTree, X } from 'lucide-react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { MarkdownHeading } from '@/web/markdown'
 
+import { ContentLink } from './content-link'
 import { ReaderNavigationPanel } from './reader-navigation-panel'
 import { useReaderNavigation } from './use-reader-navigation'
 
@@ -71,7 +71,7 @@ function Toc({
   )
 }
 
-function DocumentNavigation({
+const DocumentNavigation = memo(function DocumentNavigation({
   items,
   label,
   onNavigate,
@@ -86,7 +86,7 @@ function DocumentNavigation({
       <ol className="mt-3 grid gap-1 text-sm">
         {items.map((item) => (
           <li key={item.href} style={{ paddingInlineStart: `${item.depth * 0.75}rem` }}>
-            <Link
+            <ContentLink
               aria-current={item.current ? 'page' : undefined}
               className={item.current ? 'font-semibold text-primary' : 'hover:text-primary'}
               href={item.href}
@@ -94,13 +94,13 @@ function DocumentNavigation({
             >
               {item.chapter ? `${item.chapter} ` : ''}
               {item.title}
-            </Link>
+            </ContentLink>
           </li>
         ))}
       </ol>
     </nav>
   )
-}
+})
 
 export function ArticleReader({
   documentNavigation,

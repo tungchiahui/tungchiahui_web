@@ -63,7 +63,7 @@ const snapshotAFiles = [
     path: 'content/posts/2026-07-21-VSCode任务栏启动Codex插件打不开.md',
     contents: markdown(
       ['title: VSCode 任务栏启动 Codex 插件打不开'],
-      `# Codex\n\n${mathFixture}\n\n${readerFixture}`,
+      `# Codex\n\n\`\`\`typescript\nconst codeExample = 1\n\`\`\`\n\n${mathFixture}\n\n${readerFixture}`,
     ),
   },
   {

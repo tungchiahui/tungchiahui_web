@@ -71,6 +71,24 @@ describe('Phase 6 public web boundaries', () => {
     expect(() => resolvePublicAsset('/images/a" onerror="alert(1)')).toThrow()
   })
 
+  it('loads custom language aliases lazily and preserves unknown code fences', async () => {
+    const rendered = await renderMarkdown(
+      [
+        '```TypeScript\nconst value: number = 1\n```',
+        '```Dockerfile\nFROM node:24\n```',
+        '```ymal\nvalue: true\n```',
+        '```unknown-reader-language\nuntouched <source>\n```',
+        '```constructor\nprototype-safe\n```',
+      ].join('\n\n'),
+    )
+    expect(rendered.html).toContain('language-typescript')
+    expect(rendered.html).toContain('language-dockerfile')
+    expect(rendered.html).toContain('language-yaml')
+    const document = new DOMParser().parseFromString(rendered.html, 'text/html')
+    expect(document.querySelector('code.language-text')?.textContent).toBe('untouched <source>')
+    expect(rendered.html.match(/class="shiki /g)).toHaveLength(5)
+  })
+
   it('renders safe Markdown with Shiki, headings, links, images and protected identifiers', async () => {
     const rendered = await renderMarkdown(`---
 title: Fixture

@@ -1,13 +1,13 @@
 import { ArrowRight, ArrowUpRight, NotebookPen, Search } from 'lucide-react'
-import Link from 'next/link'
 import { getTranslations } from 'next-intl/server'
 import type { ComponentProps } from 'react'
 
 import { localizeContentText } from '@/i18n/content'
 import type { SearchResult } from '@/search/contracts'
-import type { PublicDocument } from '@/server/public-content'
+import type { PublicDocumentSummary } from '@/server/public-content'
 import { documentDate, documentSummary, trafficPaths } from '@/web/content-compatibility'
 import { type PublicRouteContext, withLocalePrefix } from '@/web/routes'
+import { ContentLink as Link } from './content-link'
 import { TrafficMetrics } from './traffic-metrics'
 
 export async function BlogIndex({
@@ -19,7 +19,7 @@ export async function BlogIndex({
   trafficLabels,
 }: Readonly<{
   context: PublicRouteContext
-  documents: readonly PublicDocument[]
+  documents: readonly PublicDocumentSummary[]
   query: string | undefined
   total: number
   searchResults: readonly SearchResult[] | undefined

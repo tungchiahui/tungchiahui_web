@@ -6,7 +6,7 @@ import type { AppLocale } from '@/i18n/locales'
 import type { messagesForLocale } from '@/i18n/messages'
 import { awards, cvProfile, education, experiences } from '@/personal/cv-profile'
 import { featuredProjects } from '@/projects/catalog'
-import type { PublicDocument } from '@/server/public-content'
+import type { PublicDocumentSummary } from '@/server/public-content'
 import { ProjectEntries } from './project-pages'
 import type { PublicRouteContext } from './routes'
 import { withLocalePrefix } from './routes'
@@ -196,7 +196,7 @@ export async function AboutInformationPage({ context }: Readonly<{ context: Publ
 export async function CvInformationPage({
   context,
   projects = [],
-}: Readonly<{ context: PublicRouteContext; projects?: readonly PublicDocument[] }>) {
+}: Readonly<{ context: PublicRouteContext; projects?: readonly PublicDocumentSummary[] }>) {
   const l = await getTranslations({ locale: context.locale, namespace: 'Web.information' })
   const t = await getTranslations({ locale: context.locale, namespace: 'Web.portfolio' })
   const selected = featuredProjects(projects)

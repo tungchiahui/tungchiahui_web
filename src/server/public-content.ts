@@ -18,6 +18,7 @@ import {
   translatedFieldsSchema,
   wikiGroupSourceTitle,
 } from '../translation/document-fields'
+import { documentSummary } from '../web/content-compatibility'
 
 const publicDocumentSchema = z.object({
   contentLocaleState: z.enum(['converted', 'fallback', 'mixed', 'source', 'translated']),
@@ -38,6 +39,26 @@ const publicDocumentSchema = z.object({
   translatedSegmentCount: z.number().int().nonnegative(),
   translationMemoryHits: z.number().int().nonnegative(),
 })
+
+const publicDocumentSummarySchema = publicDocumentSchema
+  .omit({ rawMarkdown: true, localizedMarkdown: true })
+  .extend({ summary: z.string().optional() })
+
+export type PublicDocumentSummary = Readonly<z.infer<typeof publicDocumentSummarySchema>>
+
+export function summarizePublicDocument(document: PublicDocument) {
+  const summary = document.contentType === 'wiki' ? undefined : documentSummary(document)
+  return Object.freeze(
+    publicDocumentSummarySchema.parse({
+      ...document,
+      ...(summary ? { summary } : {}),
+    }),
+  )
+}
+
+export function parsePublicDocumentSummaries(rows: readonly unknown[]) {
+  return Object.freeze(rows.map((row) => Object.freeze(publicDocumentSummarySchema.parse(row))))
+}
 
 const publicDocumentRowSchema = publicDocumentSchema
   .omit({
@@ -161,7 +182,8 @@ export class PublicContentRepository {
         .select({
           contentType: documents.contentType,
           id: documents.id,
-          localizedMarkdown: documentTranslations.translatedMarkdown,
+          localizedMarkdown:
+            contentType === 'wiki' ? sql<null>`NULL` : documentTranslations.translatedMarkdown,
           localizedLocale: documentTranslations.locale,
           localizedSourceHash: documentTranslations.sourceHash,
           fallbackSegmentCount: documentTranslations.fallbackSegmentCount,
@@ -169,7 +191,7 @@ export class PublicContentRepository {
           translatedSegmentCount: documentTranslations.translatedSegmentCount,
           translationMemoryHits: documentTranslations.translationMemoryHits,
           rawFrontmatter: documents.rawFrontmatter,
-          rawMarkdown: documents.rawMarkdown,
+          rawMarkdown: contentType === 'wiki' ? sql<string>`''` : documents.rawMarkdown,
           routePath: documents.routePath,
           sourceHash: documents.sourceHash,
           sourcePath: documents.sourcePath,
@@ -192,7 +214,9 @@ export class PublicContentRepository {
         )
         .where(and(eq(documents.contentType, contentType), eq(documents.isDeleted, false)))
         .orderBy(desc(documents.sourceUpdatedAt), asc(documents.sourcePath))
-      return Object.freeze(rows.map((row) => materializePublicDocument(row, locale)))
+      return Object.freeze(
+        rows.map((row) => summarizePublicDocument(materializePublicDocument(row, locale))),
+      )
     })
   }
 

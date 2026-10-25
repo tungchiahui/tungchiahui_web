@@ -8,7 +8,7 @@ import { z } from 'zod'
 
 import { legacyContentAliases } from '@/content/legacy-aliases'
 import { locales } from '@/i18n/locales'
-import type { PublicDocument } from '@/server/public-content'
+import type { PublicDocument, PublicDocumentSummary } from '@/server/public-content'
 
 const chapterOrderPattern = /^(\d{4}(?:-\d{4})*)-/
 
@@ -16,13 +16,13 @@ export type NumberedWikiDocument = Readonly<{
   chapter: string | undefined
   chapterDepth: number
   chapterOrder: string | undefined
-  document: PublicDocument
+  document: PublicDocumentSummary
   isIndex: boolean
 }>
 
 export type WikiDocumentGroup = Readonly<{
   chapters: readonly NumberedWikiDocument[]
-  index: PublicDocument | undefined
+  index: PublicDocumentSummary | undefined
   key: string
   title: string
 }>
@@ -31,7 +31,7 @@ function sourceFilename(sourcePath: string) {
   return sourcePath.split('/').at(-1)?.replace(/\.md$/u, '') ?? ''
 }
 
-function parseChapterOrder(document: PublicDocument) {
+function parseChapterOrder(document: PublicDocumentSummary) {
   return sourceFilename(document.sourcePath).match(chapterOrderPattern)?.[1]
 }
 
@@ -54,7 +54,7 @@ export function compareWikiChapterOrders(
   )
 }
 
-function numberWikiChapters(documents: readonly PublicDocument[]) {
+function numberWikiChapters(documents: readonly PublicDocumentSummary[]) {
   const entries = documents.map((document) => {
     const chapterOrder = parseChapterOrder(document)
     return {
@@ -103,12 +103,12 @@ function numberWikiChapters(documents: readonly PublicDocument[]) {
   })
 }
 
-export function wikiDocumentKey(document: PublicDocument) {
+export function wikiDocumentKey(document: PublicDocumentSummary) {
   return document.sourcePath.split('/')[2] ?? document.sourcePath
 }
 
 export function groupWikiDocuments(
-  documents: readonly PublicDocument[],
+  documents: readonly PublicDocumentSummary[],
 ): readonly WikiDocumentGroup[] {
   const grouped = Map.groupBy(documents, wikiDocumentKey)
   return Object.freeze(
@@ -143,14 +143,14 @@ export function groupWikiDocuments(
 }
 
 export function latestWikiDocumentGroups(
-  documents: readonly PublicDocument[],
+  documents: readonly PublicDocumentSummary[],
   limit = 5,
 ): readonly WikiDocumentGroup[] {
   const validatedLimit = z.number().int().min(1).max(50).parse(limit)
   return Object.freeze(groupWikiDocuments(documents).slice(0, validatedLimit))
 }
 
-export function documentDate(document: PublicDocument) {
+export function documentDate(document: PublicDocumentSummary) {
   const frontmatterDate = document.rawFrontmatter.date
   if (typeof frontmatterDate === 'string' && /^\d{4}-\d{2}-\d{2}$/u.test(frontmatterDate)) {
     return frontmatterDate
@@ -159,7 +159,8 @@ export function documentDate(document: PublicDocument) {
   return filenameDate ?? document.sourceUpdatedAt?.toISOString().slice(0, 10)
 }
 
-export function documentSummary(document: PublicDocument) {
+export function documentSummary(document: PublicDocument | PublicDocumentSummary) {
+  if (!('rawMarkdown' in document)) return document.summary
   const description = document.rawFrontmatter.description
   if (document.contentType !== 'project' && typeof description === 'string' && description.trim())
     return description.trim()

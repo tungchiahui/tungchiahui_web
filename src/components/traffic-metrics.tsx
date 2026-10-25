@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { type PublicTrafficResponse, publicTrafficResponseSchema } from '@/analytics/public-traffic'
 
@@ -19,25 +19,68 @@ export function TrafficMetrics({
   paths: readonly string[]
   variant?: 'compact' | 'detail'
 }>) {
+  const targetRef = useRef<HTMLElement | null>(null)
+  const pathsKey = JSON.stringify(paths)
   const [metrics, setMetrics] = useState<PublicTrafficResponse | 'unavailable'>()
   useEffect(() => {
     const controller = new AbortController()
-    fetch('/api/traffic', {
-      body: JSON.stringify({ paths }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-      signal: controller.signal,
-    })
-      .then(async (response) => {
-        if (!response.ok) throw new Error('unavailable')
-        setMetrics(publicTrafficResponseSchema.parse(await response.json()))
+    setMetrics(undefined)
+    const load = () =>
+      fetch('/api/traffic', {
+        body: `{"paths":${pathsKey}}`,
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+        signal: controller.signal,
       })
-      .catch((error: unknown) => {
-        if (!(error instanceof DOMException && error.name === 'AbortError'))
-          setMetrics('unavailable')
-      })
-    return () => controller.abort()
-  }, [paths])
+        .then(async (response) => {
+          if (!response.ok) throw new Error('unavailable')
+          const metrics = publicTrafficResponseSchema.parse(await response.json())
+          if (!controller.signal.aborted) setMetrics(metrics)
+        })
+        .catch((error: unknown) => {
+          if (
+            !controller.signal.aborted &&
+            !(error instanceof DOMException && error.name === 'AbortError')
+          )
+            setMetrics('unavailable')
+        })
+    const target = targetRef.current
+    // Below-the-fold cards should not contend with article navigation.
+    const observer =
+      target && typeof IntersectionObserver !== 'undefined'
+        ? new IntersectionObserver((entries) => {
+            if (entries.some((entry) => entry.isIntersecting)) {
+              observer?.disconnect()
+              void load()
+            }
+          })
+        : undefined
+    if (observer && target) observer.observe(target)
+    else void load()
+    return () => {
+      observer?.disconnect()
+      controller.abort()
+    }
+  }, [pathsKey])
+  const Container = variant === 'detail' ? 'div' : 'span'
+  return (
+    <Container
+      className={variant === 'detail' ? 'min-h-4' : 'inline-block min-h-4 min-w-px'}
+      ref={(element) => {
+        targetRef.current = element
+      }}
+      data-traffic-slot
+    >
+      {renderMetrics(metrics, labels, variant)}
+    </Container>
+  )
+}
+
+function renderMetrics(
+  metrics: PublicTrafficResponse | 'unavailable' | undefined,
+  labels: Parameters<typeof TrafficMetrics>[0]['labels'],
+  variant: 'compact' | 'detail',
+) {
   if (metrics === undefined) return null
   if (metrics === 'unavailable')
     return <span className="text-muted-foreground text-xs">{labels.unavailable}</span>

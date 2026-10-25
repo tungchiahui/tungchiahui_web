@@ -71,7 +71,7 @@ export function pageMetadata(
 
 export function publicSitemap(
   base: URL,
-  documents: readonly PublicDocument[],
+  documents: readonly Pick<PublicDocument, 'routePath'>[],
 ): MetadataRoute.Sitemap {
   const paths = new Set([
     '/',

@@ -32,11 +32,17 @@ Content Ingestion 应尽量只使受影响的 Cache Key/Route 失效。
 | Cache | Owner | Key / Tag | TTL | Invalidation |
 | --- | --- | --- | --- | --- |
 | Article | Next.js Web | Canonical Route；`content:route:<route>` | 无任意 TTL | Change 的当前/旧 Route Tag 与 prefixed/unprefixed Path |
+| Rendered Article | Next.js Web | 渲染版本 + Locale + Canonical Route + 原文/译文 SHA-256；同一 Route Tag | 无任意 TTL | 同一内容失效 Hook；纯译文变化也使用新 Key |
 | Blog/Wiki List | Next.js Web | Content Type；`content:list:<type>` | 无任意 TTL | 受影响 Content Type Tag 与 List Path |
 | Sitemap XML | Next.js Web | Request-time XML；复用 Blog/Wiki List Tag | 无独立 Route TTL | 同一签名内容失效 Hook；新增、移动、删除无需 Rebuild |
 | Homepage | Next.js Web | `/`、`/zh-cn` Route Cache | 无任意 TTL | 每次非空 Content Change 精确 Revalidate 两条 Home Path |
 | Owner Dataset | Next.js Web | Dataset Key | 无 Data Cache；HTTP no-store | ADR 0021：每次请求读取 PostgreSQL，写后下一次公开读取即为最新版本 |
 | Search Result | Next.js Web | Normalized Query + Locale + Limit；`search:locale:<locale>` | 无任意 TTL | Projection Transaction 成功后失效受影响 Locale Tag；Full Reindex 失效其请求 Locale |
+
+文章 HTML 复用同一 Next Data Cache，以 gzip/base64 缓存、读取时还原；目录元数据仍为 JSON，
+避免四 Locale 的高亮 HTML 挤满生产 64MiB tmpfs。列表缓存只保存共享 Schema 派生的摘要和
+导航元数据，Wiki 查询不返回正文，Blog 摘要在填充缓存时计算。React cache 仅做请求内去重，
+不另建跨请求/跨 Slot 的进程缓存。详见 [`reader-performance.md`](../development/reader-performance.md)。
 
 Content Worker 对严格 Zod Payload 执行 HMAC-SHA256 签名后调用 `/api/internal/revalidate`。Secret 只存在 Server/Worker Environment，不进入 Client Bundle。Endpoint 使 Article/List Tag 和 Home/List/Article 的 zh-CN prefixed/unprefixed Path 失效，并输出不含 Secret 的结构化事件。
 

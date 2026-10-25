@@ -9,6 +9,7 @@
     "statusValue": "等待 Phase 2 授权"
   },
   "Web": {
+    "loadingPage": "正在加载页面…",
     "metadataTitle": "TungChiaHui 的个人网站",
     "metadataDescription": "记录技术实践、Wiki 知识与个人进展。",
     "siteName": "TungChiaHui",

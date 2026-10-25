@@ -21,6 +21,7 @@ import { ArticleReader } from '@/components/article-reader'
 import { BlogIndex } from '@/components/blog-index'
 import { BookmarkWorkspace } from '@/components/bookmark-workspace'
 import { CareerShell } from '@/components/career-shell'
+import { ContentLink } from '@/components/content-link'
 import { MoreDirectory } from '@/components/more-directory'
 import { MusicPage } from '@/components/music-page'
 import { TechTracker } from '@/components/personal/tech-tracker'
@@ -40,9 +41,9 @@ import {
   readCachedDocument,
   readCachedOwnerDataset,
 } from '@/server/cached-content'
+import { readCachedArticleMarkdown } from '@/server/cached-markdown'
 import { environment } from '@/server/environment'
-import type { PublicDocument } from '@/server/public-content'
-import { renderArticleMarkdown } from './article-markdown'
+import type { PublicDocument, PublicDocumentSummary } from '@/server/public-content'
 import { ContactPage } from './contact-page'
 import {
   documentDate,
@@ -81,7 +82,7 @@ function CardLink({
   trafficLabels,
 }: Readonly<{
   context: PublicRouteContext
-  document: PublicDocument
+  document: PublicDocumentSummary
   searchMatch?: Readonly<{ label: string; snippet: string }> | undefined
   showSummary?: boolean
   trafficLabels?: TrafficLabels
@@ -89,7 +90,7 @@ function CardLink({
   const summary = searchMatch?.snippet ?? (showSummary ? documentSummary(document) : undefined)
   return (
     <li>
-      <Link
+      <ContentLink
         className="home-latest-blog-link"
         data-content-card={document.contentType}
         href={withLocalePrefix(document.routePath, context)}
@@ -115,7 +116,7 @@ function CardLink({
             <TrafficMetrics labels={trafficLabels} paths={trafficPaths(document.routePath)} />
           </span>
         ) : null}
-      </Link>
+      </ContentLink>
     </li>
   )
 }
@@ -135,7 +136,7 @@ function WikiDocumentCard({
   defaultOpen?: boolean
   group: WikiDocumentGroup
   labels: Readonly<{ chapterCount: string; collapse: string; expand: string; overview: string }>
-  searchMatch?: ((document: PublicDocument) => ContentSearchMatch | undefined) | undefined
+  searchMatch?: ((document: PublicDocumentSummary) => ContentSearchMatch | undefined) | undefined
   trafficLabels: TrafficLabels
   variant?: 'home' | 'index'
 }>) {
@@ -169,10 +170,10 @@ function WikiDocumentCard({
       <ol className="wiki-document-chapters">
         {group.index ? (
           <li>
-            <Link href={withLocalePrefix(group.index.routePath, context)}>
+            <ContentLink href={withLocalePrefix(group.index.routePath, context)}>
               <span className="wiki-chapter-number">⌂</span>
               <span>{labels.overview}</span>
-            </Link>
+            </ContentLink>
             {searchMatch?.(group.index) ? (
               <p>
                 <strong>{searchMatch(group.index)?.label}</strong> ·{' '}
@@ -186,10 +187,10 @@ function WikiDocumentCard({
             key={entry.document.id}
             style={{ paddingInlineStart: `${entry.chapterDepth * 0.9}rem` }}
           >
-            <Link href={withLocalePrefix(entry.document.routePath, context)}>
+            <ContentLink href={withLocalePrefix(entry.document.routePath, context)}>
               <span className="wiki-chapter-number">{entry.chapter}</span>
               <span>{localizeContentText(entry.document.title, context.locale)}</span>
-            </Link>
+            </ContentLink>
             {searchMatch?.(entry.document) ? (
               <p>
                 <strong>{searchMatch(entry.document)?.label}</strong> ·{' '}
@@ -410,7 +411,7 @@ async function ContentList({
   const searchByRoute = new Map<string, SearchResult>(
     searchResults?.map((result) => [result.route, result]) ?? [],
   )
-  const searchMatch = (document: PublicDocument) => {
+  const searchMatch = (document: PublicDocumentSummary) => {
     const result = searchByRoute.get(`/${context.locale}${document.routePath}`)
     return result
       ? { label: matchedContextLabels[result.matchedContext], snippet: result.snippet }
@@ -651,7 +652,10 @@ async function ArticlePage({
   const t = await getTranslations({ locale: context.locale, namespace: 'Web' })
   const document = await readCachedDocument(path, context.locale)
   if (!document) notFound()
-  const all = await listCachedDocuments(document.contentType, context.locale)
+  const [all, rendered] = await Promise.all([
+    listCachedDocuments(document.contentType, context.locale),
+    readCachedArticleMarkdown(document, context.locale),
+  ])
   const currentWikiGroup =
     document.contentType === 'wiki'
       ? groupWikiDocuments(all).find((group) => group.key === wikiDocumentKey(document))
@@ -666,7 +670,6 @@ async function ArticlePage({
   const index = navigation.findIndex((candidate) => candidate.id === document.id)
   const previous = index > 0 ? navigation[index - 1] : undefined
   const next = index >= 0 ? navigation[index + 1] : undefined
-  const rendered = await renderArticleMarkdown(document, context.locale)
   const localizedTitle = localizeContentText(document.title, context.locale)
   const presentationState = document.contentLocaleState
   const trafficLabels = makeTrafficLabels(t)
@@ -748,24 +751,24 @@ async function ArticlePage({
       />
       <nav className="mt-12 grid gap-3 border-t pt-6 sm:grid-cols-2">
         {previous ? (
-          <Link
+          <ContentLink
             className="rounded-xl border p-4 hover:border-primary"
             href={withLocalePrefix(previous.routePath, context)}
           >
             <span className="block text-muted-foreground text-sm">{t('previous')}</span>
             {localizeContentText(previous.title, context.locale)}
-          </Link>
+          </ContentLink>
         ) : (
           <span />
         )}
         {next ? (
-          <Link
+          <ContentLink
             className="rounded-xl border p-4 text-right hover:border-primary"
             href={withLocalePrefix(next.routePath, context)}
           >
             <span className="block text-muted-foreground text-sm">{t('next')}</span>
             {localizeContentText(next.title, context.locale)}
-          </Link>
+          </ContentLink>
         ) : null}
       </nav>
     </article>

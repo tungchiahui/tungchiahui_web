@@ -3,7 +3,7 @@ import { getTranslations } from 'next-intl/server'
 import type { ReactNode } from 'react'
 import { localizeContentText } from '@/i18n/content'
 import { orderedProjects, projectMetadata } from '@/projects/catalog'
-import type { PublicDocument } from '@/server/public-content'
+import type { PublicDocument, PublicDocumentSummary } from '@/server/public-content'
 import { documentDate, documentSummary } from './content-compatibility'
 import { type PublicRouteContext, withLocalePrefix } from './routes'
 
@@ -13,7 +13,7 @@ export async function ProjectEntries({
   compact = false,
 }: Readonly<{
   context: PublicRouteContext
-  documents: readonly PublicDocument[]
+  documents: readonly PublicDocumentSummary[]
   compact?: boolean
 }>) {
   const t = await getTranslations({ locale: context.locale, namespace: 'Web.portfolio' })
@@ -61,7 +61,7 @@ export async function ProjectEntries({
 export async function ProjectsPage({
   context,
   documents,
-}: Readonly<{ context: PublicRouteContext; documents: readonly PublicDocument[] }>) {
+}: Readonly<{ context: PublicRouteContext; documents: readonly PublicDocumentSummary[] }>) {
   const t = await getTranslations({ locale: context.locale, namespace: 'Web.portfolio' })
   return (
     <div className="projects-page">

@@ -18,6 +18,22 @@ import { emitTelemetry } from '@/observability/telemetry'
 
 import { resolveMarkdownAsset } from './assets'
 
+const codeLanguageAliases = new Map(
+  Object.entries({
+    Bash: 'bash',
+    Dockerfile: 'dockerfile',
+    JSON: 'json',
+    Plain: 'text',
+    PowerShell: 'powershell',
+    Python: 'python',
+    SQL: 'sql',
+    TypeScript: 'typescript',
+    YAML: 'yaml',
+    test: 'text',
+    ymal: 'yaml',
+  }),
+)
+
 export type MarkdownHeading = Readonly<{
   depth: number
   id: string
@@ -164,6 +180,11 @@ export async function renderMarkdown(
       visit(tree, 'heading', (heading) => {
         headingTexts.push(headingText(heading))
       })
+      // Normalize custom aliases before lazy loading; aliases to unloaded grammars
+      // otherwise appear registered before their grammar is available in Shiki.
+      visit(tree, 'code', (node) => {
+        if (node.lang) node.lang = codeLanguageAliases.get(node.lang) ?? node.lang
+      })
     })
     .use(remarkRehype)
     .use(rehypeSanitize, {
@@ -179,19 +200,9 @@ export async function renderMarkdown(
       addLanguageClass: true,
       defaultColor: false,
       fallbackLanguage: 'text',
-      langAlias: {
-        Bash: 'bash',
-        Dockerfile: 'dockerfile',
-        JSON: 'json',
-        Plain: 'text',
-        PowerShell: 'powershell',
-        Python: 'python',
-        SQL: 'sql',
-        TypeScript: 'typescript',
-        YAML: 'yaml',
-        test: 'text',
-        ymal: 'yaml',
-      },
+      // Load only grammars actually encountered; Shiki otherwise loads the entire bundle.
+      langs: [],
+      lazy: true,
       themes: { dark: 'github-dark', light: 'github-light' },
     })
     .use(rehypeStringify)

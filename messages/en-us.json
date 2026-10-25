@@ -9,6 +9,7 @@
     "statusValue": "Awaiting Phase 2 authorization"
   },
   "Web": {
+    "loadingPage": "Loading page…",
     "metadataTitle": "TungChiaHui's Personal Website",
     "metadataDescription": "Technical practice, wiki knowledge, and personal progress.",
     "siteName": "TungChiaHui",

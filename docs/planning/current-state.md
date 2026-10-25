@@ -59,13 +59,37 @@ Main Release、Canonical Content Sync 与发布后的四语言页面验收为准
 
 > Status: Phase 0–18 completed
 > Current Phase: Website V2 Production Completion
-> Handoff audit date: 2026-10-11
+> Handoff audit date: 2026-10-25
 
 本文件是新 Claude Code/Codex 会话的简洁交接入口。它索引当前实际状态和容易遗漏的实施事实，不替代 `AGENTS.md`、Accepted ADR、架构规范或 `implementation-plan.md`。
 
 维护规则：每个 Phase 完成时，Agent 自动复核并沉淀后续实施所需事实；完成沉淀只表示下一 Phase 依赖可供 Owner 评估，不授权 Agent 自动继续。
 
 ## 1. 新会话读取顺序
+
+### 2026-10-25：Blog/Wiki 阅读性能
+
+Owner 本地确认原代码块字号合适，已撤销字号/行高调整，保留原有 14px / 20px 排版。
+本轮只优化卡顿：列表改为共享 Schema 派生的轻量摘要；Wiki 列表 SQL 不返回正文，Blog 摘要随列表缓存生成。文章 HTML 按 Locale、
+Canonical Route 与原文/译文版本缓存，HTML 压缩以适配生产 64MiB tmpfs，沿用既有失效 Tag；
+Shiki 按需加载语法，自定义语言别名先规范化。当前真实 321 篇 Wiki 已逐篇渲染验证。
+章节/文章链接按明确交互意图预取并展示等待反馈，屏幕外统计延后请求，章节目录 memo 化。
+没有增加 catch-all 的整页 loading/Suspense 边界，以保持无 JS 公式和原有 404 语义。
+本机合成样例的冷渲染 5,336ms → 236ms；这不是线上整页提速承诺。证据、测试和回退见
+[`reader-performance.md`](../development/reader-performance.md)。无需 Migration 或恢复策略改变；
+Owner 已于 2026-10-25 授权上线；按 main 的既有 Main Release / 蓝绿流程发布，
+最终生产状态以该提交的 CI、Host Convergence 和公网版本/页面验收为准。
+发布前合入 main（a0d53b6a）后，本地复验通过 60 File / 369 Unit、49 Browser E2E、
+完整隔离 Integration/S3Mock 7-case、项目/翻译生命周期与 Static/Type/Build/Security。
+集成环境应用全部 13 条 Migration；独立迁移/基础设施/恢复门禁由同一 Main Release 验证。
+Wiki 单语言缓存表示由约 19.1MB 降至 3.17MB。
+随后字号撤回已本地实测为 14px / 20px，`globals.css` 无改动。为 Owner 测试启动的本机
+`http://127.0.0.1:3000/wiki` 使用独立 Compose Project `tungchiahui_reader_preview`，
+首次预览时本地 checkout 只有 12 条 Migration，原 `tungchiahui_dev` Volume 已有 13 条，
+当时因不匹配而保留未清除；上线前已合入 main 的 ADR 0029 / 0012，当前应用恢复为 13 条 Migration。
+预览状态目录为 `.local/reader-preview-control-state`；只读导入 Content 已提交
+`1db0d2e1db5489fb1e806ce5f31230d7c41d1e82` 的 363 篇内容和 Git 翻译记忆，
+未导入工作区草稿，无付费调用。
 
 ### 2026-10-16：Start 保存与账户状态修复
 
