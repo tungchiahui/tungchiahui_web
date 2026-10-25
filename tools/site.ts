@@ -5,6 +5,8 @@ import { createContentSync } from './content/control-client'
 import { createDeployment, createRollback, readDeploymentStatus } from './deployment/control-client'
 import { resetDevelopmentStack, startDevelopmentStack, stopDevelopmentStack } from './dev/runtime'
 import { runRetentionCleanup } from './maintenance/control-client'
+import { prepareMusic } from './music/prepare'
+import { startMusicStudio } from './music/studio'
 import {
   exportProductionConfiguration,
   restoreProductionConfiguration,
@@ -103,6 +105,12 @@ Translation:
   translate cancel [job-id] --content-root <path>
   translate validate --content-root <path>
 
+Music:
+  music studio
+            Open the loopback-only browser conversion tool
+  music prepare --input <directory> --output <directory>
+            Convert ordinary audio locally; preserve source files and existing destinations
+
 Storage:
   storage contract s3 --confirm S3-NON-PRODUCTION
             Run the generic contract against the configured non-production S3-compatible target
@@ -115,6 +123,14 @@ async function main() {
   const command = parseSiteCommand(process.argv.slice(2))
 
   switch (command.kind) {
+    case 'music-studio':
+      await startMusicStudio()
+      return 0
+    case 'music-prepare': {
+      const result = await prepareMusic(command.inputDirectory, command.outputDirectory)
+      console.log(JSON.stringify(result, null, 2))
+      return result.results.some((row) => row.status === 'failed') ? 2 : 0
+    }
     case 'account-create':
       console.log(
         JSON.stringify(await createAccount(command.databaseUrl, command.username, command.role)),

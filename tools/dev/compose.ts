@@ -64,6 +64,7 @@ function createRestrictedEnvironment(configuration: ComposeEnvironment) {
   }
 
   for (const name of [
+    'BUILDX_BUILDER',
     'DOCKER_CONFIG',
     'DOCKER_CONTEXT',
     'DOCKER_HOST',

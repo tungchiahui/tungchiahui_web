@@ -54,6 +54,11 @@ Suite 与配置、CLI、Report Contract 必须保持 Provider-neutral。当前�
 
 使用 Playwright。
 
+`./site dev`、Disposable E2E 与生产 Build 统一使用当前版本支持的 Webpack。Next.js 16.4.1
+默认 Turbopack 开发模式在冷导航时会间歇保留上一页 Canonical；同一语料、浏览器及
+断言下，Webpack 不复现。保留所有 Locale 的单一 Canonical 和当前 URL 断言，不通过
+删除检查、额外导航或重试掩盖问题。`./site dev` 继续使用同一支持入口。
+
 Critical Flow 包括：
 
 - Homepage

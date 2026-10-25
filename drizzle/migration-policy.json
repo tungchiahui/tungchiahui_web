@@ -105,6 +105,14 @@
       "requiresFreshRecoverableBackup": false,
       "reason": "Add project as a content enum value; reuse existing content, translation, search and permission tables.",
       "recovery": "Retain the additive enum on rollback. Before publishing project content, retain a project-capable release as the previous slot. If rolling back to an older worker, pause content sync; never contract the enum or replay an incomplete snapshot that omits projects."
+    },
+    {
+      "tag": "0013_music_library",
+      "changeKind": "expand",
+      "risk": "low",
+      "requiresFreshRecoverableBackup": false,
+      "reason": "Add isolated music library, owner-only import and diagnostic records; seed the exact 25 existing CDN mappings without rewriting assets.",
+      "recovery": "Retain additive music schema on rollback. Old application keeps its original mappings; new assets are immutable and retained. PostgreSQL backup/PITR includes music metadata. Revoke restored account sessions as documented after recovery."
     }
   ]
 }

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { parseAssetStorageConfiguration } from '../storage/configuration'
 
 import {
   type AuthenticationConfiguration,
@@ -22,6 +23,7 @@ const configurationSchema = z.object({
     ownerPasswordHashSchema.optional(),
   ),
   SITE_RUNTIME_MODE: z.enum(['local', 'test', 'production']),
+  ASSET_CDN_BASE_URL: z.url().default('https://cdn.tungchiahui.cn'),
 })
 
 const localOperatorPublicJwk = Object.freeze({
@@ -32,6 +34,9 @@ const localOperatorPublicJwk = Object.freeze({
 
 export function parseControlApiConfiguration(input: unknown) {
   const parsed = configurationSchema.parse(input)
+  const environment = z.object({ ASSET_S3_ENDPOINT: z.string().optional() }).parse(input)
+  const assetStorage =
+    environment.ASSET_S3_ENDPOINT === undefined ? undefined : parseAssetStorageConfiguration(input)
   const production = parsed.SITE_RUNTIME_MODE === 'production'
   if (production && parsed.OWNER_PASSWORD_HASH === localOwnerPasswordHash) {
     throw new Error('Production must not use the development owner credential')
@@ -93,6 +98,8 @@ export function parseControlApiConfiguration(input: unknown) {
   })
 
   return Object.freeze({
+    assetStorage,
+    assetCdnBaseUrl: new URL(parsed.ASSET_CDN_BASE_URL),
     authentication,
     ownerPasswordHash:
       parsed.OWNER_PASSWORD_HASH ?? (production ? undefined : localOwnerPasswordHash),

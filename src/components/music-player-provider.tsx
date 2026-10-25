@@ -242,10 +242,13 @@ export function MusicPlayerProvider({ children }: Readonly<{ children: ReactNode
   }, [])
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void fetch('/api/music/playlist')
+    const controller = new AbortController()
+    let sequence = 0
+    const refresh = () => {
+      const currentSequence = ++sequence
+      void fetch('/api/music/playlist', { cache: 'no-store', signal: controller.signal })
         .then(async (response) => {
-          if (!response.ok) throw new Error('playlist unavailable')
+          if (!response.ok) throw new Error('playlist_unavailable')
           return musicPlaylistSchema.parse(await response.json()).map((song, index) => ({
             ...song,
             title: song.title || t('untitledTrack', { number: index + 1 }),
@@ -253,20 +256,42 @@ export function MusicPlayerProvider({ children }: Readonly<{ children: ReactNode
           }))
         })
         .then((playlist) => {
+          if (controller.signal.aborted || currentSequence !== sequence) return
+          const previous = songsRef.current[indexRef.current]
+          const selectedIndex = previous
+            ? Math.max(
+                0,
+                playlist.findIndex((song) => song.id === previous.id),
+              )
+            : 0
+          const selected = playlist[selectedIndex]
           songsRef.current = playlist
           setSongs(playlist)
+          indexRef.current = selectedIndex
+          setCurrentIndex(selectedIndex)
+          failedRef.current.clear()
           setIsReady(true)
           setError('')
           if (!playlist.length) setLyricStatus(t('emptyPlaylist'))
-          const first = playlist[0]
-          if (first) applySource(first.url)
+          if (selected && selected.url !== previous?.url) {
+            applySource(selected.url)
+            if (intentRef.current) void audioRef.current?.play().catch(() => undefined)
+          }
         })
         .catch(() => {
-          setError(t('loadFailed'))
-          setLyricStatus(t('lyricsUnavailable'))
+          if (!controller.signal.aborted && currentSequence === sequence) {
+            setError(t('loadFailed'))
+            setLyricStatus(t('lyricsUnavailable'))
+          }
         })
-    }, 300)
-    return () => window.clearTimeout(timer)
+    }
+    const timer = window.setTimeout(refresh, 300)
+    window.addEventListener('music-library-change', refresh)
+    return () => {
+      window.clearTimeout(timer)
+      controller.abort()
+      window.removeEventListener('music-library-change', refresh)
+    }
   }, [applySource, t])
 
   useEffect(() => {

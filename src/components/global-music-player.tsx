@@ -65,7 +65,7 @@ export function GlobalMusicPlayer() {
 
   if (
     !hydrated ||
-    /^\/(?:(?:zh-cn|zh-hk|zh-tw|en-us)\/)?(?:cv|contact|projects(?:\/[^/]+)?)\/?$/u.test(
+    /^\/(?:(?:zh-cn|zh-hk|zh-tw|en-us)\/)?(?:cv|contact|projects(?:\/[^/]+)?|music\/manage)\/?$/u.test(
       pathname ?? '',
     )
   )

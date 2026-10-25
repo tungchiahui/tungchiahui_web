@@ -21,9 +21,7 @@ const assetEnvironmentSchema = z.object({
   SITE_RUNTIME_MODE: z.enum(['local', 'test', 'production']),
 })
 
-export function parseAssetStorageConfiguration(
-  input: Readonly<Record<string, string | undefined>>,
-): S3ConnectionConfiguration {
+export function parseAssetStorageConfiguration(input: unknown): S3ConnectionConfiguration {
   const result = assetEnvironmentSchema.safeParse(input)
   if (!result.success) {
     throw new StorageConfigurationError(

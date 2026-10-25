@@ -711,11 +711,17 @@
   }
 
   .wiki-document-chapters a {
-    @apply grid min-h-9 min-w-0 grid-cols-[2.75rem_minmax(0,1fr)] items-baseline gap-2 rounded-lg px-2 py-1.5 text-sm transition hover:bg-primary/8 hover:text-primary;
+    @apply grid min-h-9 min-w-0 items-baseline gap-x-3 rounded-lg px-2 py-1.5 text-sm transition hover:bg-primary/8 hover:text-primary;
+    grid-template-columns: minmax(2.75rem, max-content) minmax(0, 1fr);
+  }
+
+  .wiki-document-chapters a > span:last-child {
+    @apply min-w-0;
+    overflow-wrap: anywhere;
   }
 
   .wiki-chapter-number {
-    @apply font-bold text-primary tabular-nums;
+    @apply whitespace-nowrap font-bold text-primary tabular-nums;
   }
 
   .wiki-document-chapters p {

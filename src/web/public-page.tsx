@@ -23,6 +23,7 @@ import { BookmarkWorkspace } from '@/components/bookmark-workspace'
 import { CareerShell } from '@/components/career-shell'
 import { ContentLink } from '@/components/content-link'
 import { MoreDirectory } from '@/components/more-directory'
+import { MusicManagement } from '@/components/music-management'
 import { MusicPage } from '@/components/music-page'
 import { TechTracker } from '@/components/personal/tech-tracker'
 import { WeightTracker } from '@/components/personal/weight-tracker'
@@ -185,7 +186,7 @@ function WikiDocumentCard({
         {group.chapters.map((entry) => (
           <li
             key={entry.document.id}
-            style={{ paddingInlineStart: `${entry.chapterDepth * 0.9}rem` }}
+            style={{ paddingInlineStart: `${Math.min(entry.chapterDepth, 4) * 0.9}rem` }}
           >
             <ContentLink href={withLocalePrefix(entry.document.routePath, context)}>
               <span className="wiki-chapter-number">{entry.chapter}</span>
@@ -852,7 +853,8 @@ export async function renderPublicPage(
   const query = typeof searchParameters.q === 'string' ? searchParameters.q : undefined
   const type = typeof searchParameters.type === 'string' ? searchParameters.type : undefined
   let page: ReactNode
-  if (path === '/') page = <HomePage context={context} />
+  if (path === '/music/manage') page = <MusicManagement />
+  else if (path === '/') page = <HomePage context={context} />
   else if (path === '/blog')
     page = <ContentList contentType="blog" context={context} queryInput={query} />
   else if (path === '/wiki')
@@ -903,6 +905,7 @@ export async function publicPageMetadata(
       siteName: t('siteName'),
       noIndex:
         path === '/search' ||
+        path === '/music/manage' ||
         ((path === '/blog' || path === '/wiki') && searchParameters.q !== undefined),
       ...(document ? { document } : {}),
     })
@@ -918,6 +921,8 @@ export async function publicPageMetadata(
   if (path === '/blog') return metadata(t('blogTitle'), t('blogIndex.description'))
   if (path === '/wiki') return metadata(t('wikiTitle'), t('wikiDescription'))
   if (path === '/search') return metadata(t('searchTitle'), t('searchDescription'))
+  if (path === '/music/manage')
+    return metadata(t('musicManage.title'), t('musicManage.description'))
   const special = specialPageSlugSchema.safeParse(segments.length === 1 ? segments[0] : undefined)
   if (special.success) {
     switch (special.data) {

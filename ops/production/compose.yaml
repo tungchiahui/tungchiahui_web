@@ -120,6 +120,13 @@ services:
     user: "10002:10050"
     command: [node, dist/control-api.cjs]
     environment:
+      ASSET_S3_ACCESS_KEY_ID: ${ASSET_S3_ACCESS_KEY_ID:?asset S3 access key is required}
+      ASSET_S3_BUCKET: ${ASSET_S3_BUCKET:?asset S3 bucket is required}
+      ASSET_S3_ENDPOINT: ${ASSET_S3_ENDPOINT:?asset S3 endpoint is required}
+      ASSET_S3_FORCE_PATH_STYLE: ${ASSET_S3_FORCE_PATH_STYLE:-true}
+      ASSET_S3_REGION: ${ASSET_S3_REGION:-us-east-1}
+      ASSET_S3_SECRET_ACCESS_KEY: ${ASSET_S3_SECRET_ACCESS_KEY:?asset S3 secret is required}
+      ASSET_CDN_BASE_URL: ${ASSET_CDN_BASE_URL:-https://cdn.tungchiahui.cn/${ASSET_S3_BUCKET}}
       CONTROL_API_HOST: 0.0.0.0
       CONTROL_API_PORT: "8080"
       CONTROL_GITHUB_OIDC_POLICY_JSON: ${CONTROL_GITHUB_OIDC_POLICY_JSON:?GitHub OIDC policy is required}

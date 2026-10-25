@@ -1,14 +1,17 @@
 'use client'
 
 import { ExternalLink, Music2, Pause, Play, SkipBack, SkipForward } from 'lucide-react'
+import { usePathname } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { MUSIC_PLAYLIST_URL } from '@/music/catalog'
 import { clearCoverUrl } from './global-music-player'
+import { MusicManageLink } from './music-management'
 import { useMusicPlayer } from './music-player-provider'
 
 export function MusicPage() {
   const t = useTranslations('Web.music')
   const player = useMusicPlayer()
+  const pathname = usePathname()
   const song = player.currentSong
   const lyricStart = Math.max(0, Math.min(player.lyricIndex - 3, player.lyrics.length - 7))
   const visibleLyrics = player.lyrics.slice(lyricStart, lyricStart + 7)
@@ -51,6 +54,7 @@ export function MusicPage() {
             <span>{formatTime(player.duration)}</span>
           </div>
           <div className="mt-5 flex flex-wrap items-center gap-3">
+            <MusicManageLink href={`${pathname.replace(/\/$/u, '')}/manage`} />
             <Control label={t('previous')} onClick={() => player.skip(-1)}>
               <SkipBack />
             </Control>

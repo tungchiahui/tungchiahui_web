@@ -12,7 +12,7 @@ export const browserSecurityHeaders = Object.freeze({
     `frame-src ${approvedAnalyticsOrigin}`,
     "frame-ancestors 'none'",
     "img-src 'self' data: https:",
-    "media-src 'self' https:",
+    "media-src 'self' https: blob:",
     "object-src 'none'",
     `script-src 'self' 'unsafe-inline'${developmentEvalSource} ${approvedAnalyticsOrigin} ${approvedAssetOrigins}`,
     `style-src 'self' 'unsafe-inline' ${approvedAssetOrigins}`,

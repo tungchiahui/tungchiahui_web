@@ -17,6 +17,7 @@ import { documentedLocalCredentials, parseLocalInfrastructureConfig } from './co
 import { createLocalOperatorHeaders } from './control-auth-fixture'
 import { runInfrastructureHooks, verifyPostgresAndPgBouncer } from './hooks'
 import { fetchServiceHealth, waitForHttp } from './http'
+import { verifyMusicLibrary } from './music-validation'
 import { runCommand } from './process'
 import { ensureBucket, runS3Smoke, waitForS3 } from './s3'
 
@@ -418,6 +419,7 @@ async function run() {
     })
     try {
       const storageReport = await runStorageContract(contractStorage)
+      await verifyMusicLibrary(configuration.databaseUrl.toString(), contractStorage)
       console.log(
         `S3Mock storage contract: PASS (${storageReport.cases.length} cases; cleanup ${storageReport.cleanup})`,
       )

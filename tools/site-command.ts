@@ -13,6 +13,8 @@ import {
 const defaultProductionEnvFile = '/etc/tungchiahui/.env'
 
 export type SiteCommand =
+  | Readonly<{ kind: 'music-studio' }>
+  | Readonly<{ kind: 'music-prepare'; inputDirectory: string; outputDirectory: string }>
   | LocalTranslationCommand
   | Readonly<{
       databaseUrl: string
@@ -118,6 +120,27 @@ export function assertToolchain(nodeVersion: string) {
 }
 
 export function parseSiteCommand(arguments_: readonly string[]): SiteCommand {
+  if (arguments_.length === 2 && arguments_[0] === 'music' && arguments_[1] === 'studio')
+    return { kind: 'music-studio' }
+  if (arguments_[0] === 'music' && arguments_[1] === 'prepare') {
+    if (arguments_.length !== 6)
+      throw new SiteUsageError(
+        'Usage: ./site music prepare --input <directory> --output <directory>',
+      )
+    const options = new Map<string, string>()
+    for (let i = 2; i < arguments_.length; i += 2) {
+      const key = arguments_[i],
+        value = arguments_[i + 1]
+      if (!key || !value || !['--input', '--output'].includes(key) || options.has(key))
+        throw new SiteUsageError('Invalid music preparation arguments')
+      options.set(key, value)
+    }
+    const inputDirectory = options.get('--input'),
+      outputDirectory = options.get('--output')
+    if (!inputDirectory || !outputDirectory)
+      throw new SiteUsageError('Input and output directories are required')
+    return { kind: 'music-prepare', inputDirectory, outputDirectory }
+  }
   if (arguments_[0] === 'translate' && arguments_.includes('--content-root'))
     return parseLocalTranslationCommand(arguments_.slice(1))
   if (arguments_.length === 0) {

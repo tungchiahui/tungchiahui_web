@@ -50,7 +50,10 @@ function Toc({
       <h2 className="font-semibold">{label}</h2>
       <ol className="mt-3 grid gap-1 text-sm">
         {headings.map((heading) => (
-          <li key={heading.id} style={{ paddingInlineStart: `${heading.level * 0.75}rem` }}>
+          <li
+            key={heading.id}
+            style={{ paddingInlineStart: `${Math.min(heading.level, 4) * 0.75}rem` }}
+          >
             <a
               aria-current={heading.id === activeId ? 'location' : undefined}
               aria-label={`${heading.number}. ${heading.text}`}
@@ -59,10 +62,10 @@ function Toc({
               href={`#${heading.id}`}
               {...(onNavigate ? { onClick: onNavigate } : {})}
             >
-              <span className="min-w-fit font-medium text-muted-foreground tabular-nums">
+              <span className="shrink-0 whitespace-nowrap font-medium text-muted-foreground tabular-nums">
                 {heading.number}.
               </span>
-              <span>{heading.text}</span>
+              <span className="min-w-0 [overflow-wrap:anywhere]">{heading.text}</span>
             </a>
           </li>
         ))}
@@ -85,15 +88,20 @@ const DocumentNavigation = memo(function DocumentNavigation({
       <h2 className="font-semibold">{label}</h2>
       <ol className="mt-3 grid gap-1 text-sm">
         {items.map((item) => (
-          <li key={item.href} style={{ paddingInlineStart: `${item.depth * 0.75}rem` }}>
+          <li
+            key={item.href}
+            style={{ paddingInlineStart: `${Math.min(item.depth, 4) * 0.75}rem` }}
+          >
             <ContentLink
               aria-current={item.current ? 'page' : undefined}
-              className={item.current ? 'font-semibold text-primary' : 'hover:text-primary'}
+              className={`flex items-baseline gap-3 ${item.current ? 'font-semibold text-primary' : 'hover:text-primary'}`}
               href={item.href}
               {...(onNavigate ? { onClick: onNavigate } : {})}
             >
-              {item.chapter ? `${item.chapter} ` : ''}
-              {item.title}
+              {item.chapter ? (
+                <span className="shrink-0 whitespace-nowrap tabular-nums">{item.chapter}</span>
+              ) : null}
+              <span className="min-w-0 [overflow-wrap:anywhere]">{item.title}</span>
             </ContentLink>
           </li>
         ))}

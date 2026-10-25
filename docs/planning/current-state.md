@@ -67,6 +67,43 @@ Main Release、Canonical Content Sync 与发布后的四语言页面验收为准
 
 ## 1. 新会话读取顺序
 
+### 2026-10-26：音乐管理与 Wiki 排版发布授权
+
+Owner 已明确授权将 ADR 0030 音乐管理和下述 Wiki 编号修复上线，按 main 的既有 Main
+Release、不可变镜像、Migration、蓝绿切换和 Host Convergence 发布，不使用开发机 SSH
+代替发布引擎。生产完成状态以本提交的 Main Release 和公网版本/页面验收为准。
+
+发布前确认此前 Canonical 失败与 Next 16.4.1 默认 Turbopack 开发路径有关；同一测试中
+Webpack 下四 Locale 简历/项目/联系导航均通过。`./site dev` 和 Disposable E2E 统一显式
+使用与生产 Build 相同的 Webpack，保留原有 Canonical 断言。Reader 测试只将冷开发编译
+后的首次 Hydration 等待限定为 15 秒，不改变滚动/性能断言；更多页复制按钮在 Hydration
+完成前禁用，防止首次点击丢失。普通音频转换仍只在本机运行，生产没有 FFmpeg/QQ 解密。
+
+发布前本地复验：382 项 Unit、51 项完整 Browser E2E、14 项 Migration 与
+Static/Type/Build/Security 通过；S3Mock 与指定非生产 AList Contract 均已通过。
+以下 2026-10-25 的未发布/失败记录是历史验收过程，不代表本次 main 发布的最终状态。
+
+### 2026-10-25：音乐管理实施
+
+Owner 已授权 `/music/manage`、歌曲 ID 展示、数据库曲库、批量命名上传、歌单检测和本机转换，
+并明确第一版仅支持普通音频，不做 QQ 加密格式处理。ADR 0030 扩展现有站主账号的音乐管理
+范围，不开放部署/恢复权限。现有 25 首映射由 additive migration 0013 导入数据库；旧 URL
+不重命名，新音乐使用现有 S3 Adapter 的内容寻址路径。实现和操作见
+[`music-management.md`](../development/music-management.md)。本轮尚未生产发布；验收结果在该文档记录。
+
+本轮 Static/Type/Build/Security、382 项 Unit、14 项 Migration、音乐 PostgreSQL/S3Mock
+集成与非生产 AList TEST Bucket Contract 已通过。完整 Browser 为 49/51：音乐管理上传和
+Wiki 手机排版通过；剩余 Career 页面 Canonical 重复在无本轮修改的 1dd6cab6 副本也复现。
+没有放宽断言，完整 Integration Gate 尚未全绿，生产发布仍待后续处理。
+
+### 2026-10-25：Wiki 长章节编号排版
+
+Owner 截图中的 12.4.3.3 与标题重叠由章节列表固定 2.75rem 编号列导致；现改为按编号
+实际宽度展开，标题独立占剩余宽度、允许长英文断行，固定保留 0.75rem 间距。
+文章章节导航和 TOC 同步使用不收缩的编号、可换行标题，深层缩进最多四层，原编号/URL
+不变，代码块继续原有 14px/20px。真实 ROS2 目录确认 12px 间距，自动测试覆盖
+320/390/1440px 无重叠与行内溢出。本地预览已更新，本轮尚未发布。
+
 ### 2026-10-25：Blog/Wiki 阅读性能
 
 Owner 本地确认原代码块字号合适，已撤销字号/行高调整，保留原有 14px / 20px 排版。

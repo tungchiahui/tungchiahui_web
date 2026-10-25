@@ -144,7 +144,6 @@ describe('Phase 12 production foundation policy', () => {
         'DEPLOYMENT_REGISTRY_TOKEN',
       ],
       'control-api': [
-        'ASSET_S3_SECRET_ACCESS_KEY',
         'BACKUP_S3_SECRET_ACCESS_KEY',
         'DATABASE_ADMIN_URL',
         'DEPLOYMENT_REGISTRY_TOKEN',

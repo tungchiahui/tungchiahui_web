@@ -145,7 +145,7 @@ Provisioning 必须使用以下内容重新构建 Production Environment File：
 
 ```text
 PUBLIC_SITE_URL=https://www.tungchiahui.cn
-ASSET_CDN_BASE_URL=https://cdn.tungchiahui.cn
+ASSET_CDN_BASE_URL=https://cdn.tungchiahui.cn/tungwebsite
 PRODUCTION_ORIGIN_HOST=ddns.tungchiahui.cn
 ```
 

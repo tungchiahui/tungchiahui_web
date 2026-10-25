@@ -8,7 +8,6 @@ import { MoreDirectory } from '@/components/more-directory'
 import { TechTracker } from '@/components/personal/tech-tracker'
 import { WeightTracker } from '@/components/personal/weight-tracker'
 import { messagesForLocale } from '@/i18n/messages'
-import { CDN_AUDIO_BY_ID } from '@/music/catalog'
 import {
   extractSongId,
   musicPlaylistSchema,
@@ -32,6 +31,7 @@ import {
   LogoInformationPage,
 } from '@/web/special-information-pages'
 import zhCn from '../../messages/zh-cn.json'
+import CDN_AUDIO_BY_ID from '../fixtures/legacy-music.json'
 
 vi.mock('next-intl/server', () => ({
   getTranslations: async ({
@@ -57,8 +57,8 @@ describe('Phase 18 More and music compatibility', () => {
     expect(normalizeMusicPlaylist([upstream])).toEqual([
       expect.objectContaining({
         id: '000DNTXj0gJF8O',
-        selfHosted: true,
-        url: expect.stringContaining('cdn.tungchiahui.cn/tungwebsite/assets/music/'),
+        selfHosted: false,
+        url: expect.stringContaining('music.3e0.cn'),
       }),
     ])
     expect(normalizeMusicPlaylist([{ url: 'https://example.test/audio.mp3' }])[0]).toMatchObject({

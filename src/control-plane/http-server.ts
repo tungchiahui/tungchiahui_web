@@ -1,14 +1,16 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 
 import { z } from 'zod'
-
 import { readHostExecutorStatus } from '../host-release/state'
+import { createMusicHttpHandler } from '../music/http'
+import { MusicLibraryRepository } from '../music/library-repository'
 import { apiSecurityHeaders } from '../observability/security'
 import {
   emitTelemetry,
   requestIdFromHeaders,
   safeErrorAttributes,
 } from '../observability/telemetry'
+import { S3ObjectStorageAdapter } from '../storage/s3-adapter'
 import { createAccountHttpHandler } from './account-http'
 import { AccountSessionRepository } from './account-sessions'
 import {
@@ -301,6 +303,19 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
     ? new AccountSessionRepository(configuration.databaseUrl)
     : null
   const accountHandler = createAccountHttpHandler(configuration, accountSessions, applicationJobs)
+  const musicLibrary = configuration.databaseUrl
+    ? new MusicLibraryRepository(configuration.databaseUrl)
+    : null
+  const musicStorage = configuration.assetStorage
+    ? new S3ObjectStorageAdapter(configuration.assetStorage)
+    : null
+  const musicHandler = createMusicHttpHandler(
+    configuration,
+    accountSessions,
+    musicLibrary,
+    musicStorage,
+    configuration.assetCdnBaseUrl,
+  )
   const legacyOwnerSessions = configuration.databaseUrl
     ? new OwnerSessionRepository(configuration.databaseUrl)
     : null
@@ -375,6 +390,23 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
       return
     }
 
+    if (url.pathname.startsWith('/api/ops/music/')) {
+      try {
+        const result = await musicHandler(request, requestHeaders(request))
+        appendControlAuditEvent(configuration.statePath, {
+          actorId: 'music-owner',
+          eventType: 'music_request_completed',
+          outcome: result.status < 400 ? 'accepted' : 'denied',
+          operationId: null,
+          createdAt: new Date().toISOString(),
+          details: { path: url.pathname, method: request.method, status: result.status },
+        })
+        sendJson(response, result)
+      } catch (error: unknown) {
+        sendJson(response, errorResponse(error))
+      }
+      return
+    }
     if (
       url.pathname.startsWith('/api/ops/auth/') ||
       url.pathname.startsWith('/api/ops/start/') ||
@@ -937,11 +969,13 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
   return Object.freeze({
     close: async () => {
       await Promise.all([
+        musicLibrary?.close(),
         applicationJobs?.close(),
         translationJobs?.close(),
         accountSessions?.close(),
         legacyOwnerSessions?.close(),
       ])
+      musicStorage?.destroy()
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()))
       })

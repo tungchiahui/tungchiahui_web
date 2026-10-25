@@ -49,6 +49,10 @@ AList Asset S3
 ├─ images
 └─ attachments/media/libs
 
+Owner music management (ADR 0030) uses PostgreSQL `music` metadata, existing account sessions
+and scoped `/api/ops/music/*` control-api writes. Audio preparation runs on the owner's workstation;
+validated immutable music objects use the existing S3/CDN boundary. The public player remains native audio.
+
 Local encrypted pgBackRest repository + WAL
           |
           v

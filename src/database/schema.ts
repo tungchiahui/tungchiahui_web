@@ -33,6 +33,7 @@ import {
   startDatasets,
 } from './schema-core'
 
+export * from './music-schema'
 export * from './schema-core'
 
 export const localeEnum = applicationSchema.enum('locale', localeValues)

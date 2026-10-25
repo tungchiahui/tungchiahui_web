@@ -15,10 +15,13 @@ function heading(page: Page, number: number) {
 async function openReader(page: Page, path: string) {
   await page.goto(path, { waitUntil: 'domcontentloaded' })
   await expect
-    .poll(() =>
-      page
-        .locator('[data-reader-root]')
-        .evaluate((root) => getComputedStyle(root).getPropertyValue('--reader-anchor-offset')),
+    .poll(
+      () =>
+        page
+          .locator('[data-reader-root]')
+          .evaluate((root) => getComputedStyle(root).getPropertyValue('--reader-anchor-offset')),
+      // A cold Webpack development route also compiles its client entry on demand.
+      { timeout: 15_000 },
     )
     .not.toBe('')
 }

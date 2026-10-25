@@ -139,7 +139,10 @@ export function MoreDirectory() {
   const t = useTranslations('Web.moreDirectory')
   const message = (key: string) => t(key as Parameters<typeof t>[0])
   const locale = useLocale()
+  const [ready, setReady] = useState(false)
   const [feedback, setFeedback] = useState<Readonly<{ id: string; ok: boolean }> | null>(null)
+
+  useEffect(() => setReady(true), [])
 
   useEffect(() => {
     if (!feedback) return
@@ -260,6 +263,7 @@ export function MoreDirectory() {
                   <button
                     aria-label={t('copyLabel', { service: message(service.titleKey) })}
                     className="more-action"
+                    disabled={!ready}
                     onClick={() => void copy(service.id, service.endpoint)}
                     type="button"
                   >

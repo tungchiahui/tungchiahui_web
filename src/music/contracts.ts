@@ -1,5 +1,4 @@
 import { z } from 'zod'
-import { CDN_AUDIO_BY_ID, MUSIC_SERVER } from './catalog'
 
 const optionalText = z.union([z.string(), z.number()]).optional()
 
@@ -64,9 +63,8 @@ export function normalizeMusicSong(
   index: number,
 ): MusicSong | null {
   const songId = extractSongId(input)
-  const mapped = songId ? CDN_AUDIO_BY_ID[`${MUSIC_SERVER}:${songId}`] : undefined
   const upstreamUrl = text(input.url)
-  const parsedUrl = z.url().safeParse(mapped ?? upstreamUrl)
+  const parsedUrl = z.url().safeParse(upstreamUrl)
   if (!parsedUrl.success) return null
   const rawCover = text(input.cover) || text(input.pic)
   const cover = z.url().safeParse(rawCover).success ? rawCover : ''
@@ -78,7 +76,7 @@ export function normalizeMusicSong(
     cover,
     lyricSource: text(input.lrc),
     url: parsedUrl.data,
-    selfHosted: Boolean(mapped),
+    selfHosted: false,
   })
 }
 
