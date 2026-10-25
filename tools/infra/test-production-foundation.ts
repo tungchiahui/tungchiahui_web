@@ -700,8 +700,9 @@ function runMigrationTargetProvision() {
 
 function inspectHardening() {
   const credentialConsumers: Readonly<Record<string, readonly string[]>> = {
-    ASSET_S3_ACCESS_KEY_ID: ['deploy-agent', 'web-blue', 'web-green'],
-    ASSET_S3_SECRET_ACCESS_KEY: ['deploy-agent', 'web-blue', 'web-green'],
+    // ADR 0030 permits the owner's bounded music PUT/HEAD writer in control-api.
+    ASSET_S3_ACCESS_KEY_ID: ['control-api', 'deploy-agent', 'web-blue', 'web-green'],
+    ASSET_S3_SECRET_ACCESS_KEY: ['control-api', 'deploy-agent', 'web-blue', 'web-green'],
     BACKUP_OFFSITE_S3_ACCESS_KEY_ID: ['deploy-agent'],
     BACKUP_OFFSITE_S3_SECRET_ACCESS_KEY: ['deploy-agent'],
     BACKUP_S3_ACCESS_KEY_ID: ['deploy-agent'],

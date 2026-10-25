@@ -83,6 +83,12 @@ Webpack 下四 Locale 简历/项目/联系导航均通过。`./site dev` 和 Dis
 Static/Type/Build/Security 通过；S3Mock 与指定非生产 AList Contract 均已通过。
 以下 2026-10-25 的未发布/失败记录是历史验收过程，不代表本次 main 发布的最终状态。
 
+首次 Main Release `40212112763` 在切流前拦截了 Foundation Fixture 的旧 Credential
+Consumer 清单；按 ADR 0030 将 control-api 纳入 Asset S3 两个 Key 的消费者，Backup、
+Registry、Content Credential 与 Docker/Host 权限断言保持原范围。章节排版回归改用
+DOM Range 测量实际字形宽度，避免固定网格单元格掩盖文字溢出；旧线上真实文字间距
+仅约 0.16px，新排版在本地 320/390/1440px 下均通过。继续从最新 main 完整验证发布。
+
 ### 2026-10-25：音乐管理实施
 
 Owner 已授权 `/music/manage`、歌曲 ID 展示、数据库曲库、批量命名上传、歌单检测和本机转换，

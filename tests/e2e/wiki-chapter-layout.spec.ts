@@ -18,7 +18,12 @@ test('long chapter numbers keep their own width and a visible title gap on narro
   for (const width of [1440, 390, 320]) {
     await page.setViewportSize({ width, height: 844 })
     const layout = await link.evaluate((element) => {
-      const number = element.querySelector('.wiki-chapter-number')?.getBoundingClientRect()
+      const numberElement = element.querySelector('.wiki-chapter-number')
+      if (!numberElement) throw new Error('Chapter number is missing')
+      // A fixed grid cell can report a gap even while its text overflows into the title.
+      const numberText = document.createRange()
+      numberText.selectNodeContents(numberElement)
+      const number = numberText.getBoundingClientRect()
       const title = element.querySelector('span:last-child')?.getBoundingClientRect()
       const row = element.getBoundingClientRect()
       return {
