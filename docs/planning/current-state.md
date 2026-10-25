@@ -83,6 +83,10 @@ Owner 已于 2026-10-25 授权上线；按 main 的既有 Main Release / 蓝绿�
 完整隔离 Integration/S3Mock 7-case、项目/翻译生命周期与 Static/Type/Build/Security。
 集成环境应用全部 13 条 Migration；独立迁移/基础设施/恢复门禁由同一 Main Release 验证。
 Wiki 单语言缓存表示由约 19.1MB 降至 3.17MB。
+首次 Main Release `40189143024` 的镜像扫描拦截了既有 Next.js 16.3.8：
+GHSA-2464-fhr4-w9xw / GHSA-673q-mjm6-r5xr。发布未切换生产；升级官方修复版本
+16.4.1，同步锁文件和精确版本供应链例外，保留 Critical Gate，重新走完整发布验证。
+修复版本本地完整 Static/Type/Build/Security 和 60 File / 369 Unit 再次通过。
 随后字号撤回已本地实测为 14px / 20px，`globals.css` 无改动。为 Owner 测试启动的本机
 `http://127.0.0.1:3000/wiki` 使用独立 Compose Project `tungchiahui_reader_preview`，
 首次预览时本地 checkout 只有 12 条 Migration，原 `tungchiahui_dev` Volume 已有 13 条，

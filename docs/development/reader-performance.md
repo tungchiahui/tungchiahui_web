@@ -70,3 +70,11 @@ Shiki 使用 `langs: []` 与 `lazy: true`，只加载遇到的语法，保留语
 
 上述完整 Gate 验证后，按 Owner 要求撤回字号/行高改动；`globals.css` 已与原版本一致，
 更新了字号断言，并在真实内容预览页核对 14px / 20px 和代码复制按钮。
+
+首次 main 发布的镜像安全扫描发现既有 Next.js 16.3.8 命中
+[GHSA-2464-fhr4-w9xw](https://github.com/advisories/GHSA-2464-fhr4-w9xw) 和
+[GHSA-673q-mjm6-r5xr](https://github.com/advisories/GHSA-673q-mjm6-r5xr)，生产尚未切换。
+发布修复将 Next.js 固定到官方已修复的稳定版本 16.4.1，同步锁文件与精确版本的
+minimum-release-age 例外，不降低镜像扫描门禁；该依赖更新需要重跑完整 Main Release。
+修复版本本地再次通过完整 `site:check`（含 Typecheck、Build 和源码/Bundle 安全检查）及
+60 File / 369 Unit Test；完整镜像漏洞扫描、隔离集成/E2E、迁移和基础设施/恢复继续由 CI 验证。
