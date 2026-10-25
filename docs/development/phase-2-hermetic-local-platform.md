@@ -18,11 +18,16 @@
 | Responsibility | Version | Immutable digest |
 | --- | --- | --- |
 | PostgreSQL 18 + PGroonga | `groonga/pgroonga:4.0.8-alpine-18` | `sha256:b5c92fa3d86ad76ce75ddd8095f60542cf025348a58b8a38cd0b4a580fe4ce68` |
-| PgBouncer | `percona/percona-pgbouncer:1.25.2-5` | `sha256:ee8f9b3e8b80b379b47ae41419a0d16de7a20c2be0cae5dbf55fe403d3d9f33d` |
+| PgBouncer | `percona/percona-pgbouncer:1.25.2-9` | `sha256:3558c3b79ef37989324616833d4763268d1ec171a10f3dec3b7d2c5da807b0be` |
 | Adobe S3Mock | `adobe/s3mock:5.1.0` | `sha256:65cf60155a2e235fe7d5bf6c633747d6fc7ed93f9f5a6727d86470026b83c2a2` |
 | Local Node services | `node:24.19.0-bookworm-slim` | `sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03` |
 
 The local application image is tagged `tungchiahui-web-local:phase2`; it is not a Production Image or Deployment Identity.
+
+2026-10-25: PgBouncer remains on 1.25.2; its image revision is updated from `-5` to `-9`
+to refresh the base certificate package after CVE-2026-114406 blocked the production image scan.
+Development, production, the Compose policy fixture and the actual scanned image share the same digest.
+The Phase 2 verification report records the historical baseline rather than the current image revision.
 
 ## Implementation constraints and known pitfalls
 

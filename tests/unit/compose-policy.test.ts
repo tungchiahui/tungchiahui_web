@@ -15,7 +15,7 @@ describe('Phase 2 Compose policy', () => {
       'groonga/pgroonga:4.0.8-alpine-18@sha256:b5c92fa3d86ad76ce75ddd8095f60542cf025348a58b8a38cd0b4a580fe4ce68',
     )
     expect(compose).toContain(
-      'percona/percona-pgbouncer:1.25.2-5@sha256:ee8f9b3e8b80b379b47ae41419a0d16de7a20c2be0cae5dbf55fe403d3d9f33d',
+      'percona/percona-pgbouncer:1.25.2-9@sha256:3558c3b79ef37989324616833d4763268d1ec171a10f3dec3b7d2c5da807b0be',
     )
     expect(compose).toContain(
       'adobe/s3mock:5.1.0@sha256:65cf60155a2e235fe7d5bf6c633747d6fc7ed93f9f5a6727d86470026b83c2a2',

@@ -87,6 +87,11 @@ Wiki 单语言缓存表示由约 19.1MB 降至 3.17MB。
 GHSA-2464-fhr4-w9xw / GHSA-673q-mjm6-r5xr。发布未切换生产；升级官方修复版本
 16.4.1，同步锁文件和精确版本供应链例外，保留 Critical Gate，重新走完整发布验证。
 修复版本本地完整 Static/Type/Build/Security 和 60 File / 369 Unit 再次通过。
+随后 Main Release `40190868482` 已通过 Next.js 镜像扫描，但 PgBouncer `1.25.2-5`
+的 ca-certificates 命中 CVE-2026-114406，生产仍未切换。更新同一 PgBouncer 1.25.2 的
+官方镜像修订 `1.25.2-9` / `sha256:3558c3b79ef37989324616833d4763268d1ec171a10f3dec3b7d2c5da807b0be`，
+同步 Dev/Production Compose、Policy Fixture 与实际扫描清单，不改变连接配置或数据格式。
+基础设施、双副本 Backup/Restore/PITR、集成连接/E2E 与蓝绿门禁全部保留，最终结果仍以新 Release 为准。
 随后字号撤回已本地实测为 14px / 20px，`globals.css` 无改动。为 Owner 测试启动的本机
 `http://127.0.0.1:3000/wiki` 使用独立 Compose Project `tungchiahui_reader_preview`，
 首次预览时本地 checkout 只有 12 条 Migration，原 `tungchiahui_dev` Volume 已有 13 条，

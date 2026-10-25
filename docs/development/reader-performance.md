@@ -78,3 +78,9 @@ Shiki 使用 `langs: []` 与 `lazy: true`，只加载遇到的语法，保留语
 minimum-release-age 例外，不降低镜像扫描门禁；该依赖更新需要重跑完整 Main Release。
 修复版本本地再次通过完整 `site:check`（含 Typecheck、Build 和源码/Bundle 安全检查）及
 60 File / 369 Unit Test；完整镜像漏洞扫描、隔离集成/E2E、迁移和基础设施/恢复继续由 CI 验证。
+
+第二次发布通过 Next.js 扫描后，旧 PgBouncer 镜像的 ca-certificates 命中
+CVE-2026-114406。PgBouncer 应用版本保持 1.25.2，官方镜像修订升级为 `1.25.2-9` 并固定
+Digest；Dev、Production、测试 Policy 与扫描清单保持一致。不改变连接配置、持久化数据或
+Backup 格式。Recovery Validation Plan 继续为现有隔离基础设施/恢复门禁的真实双副本备份、
+Restore/PITR、连接与蓝绿/回退测试；不对生产执行恢复测试，不降低 Critical 扫描阈值。

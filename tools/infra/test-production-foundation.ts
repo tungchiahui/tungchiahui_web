@@ -551,7 +551,7 @@ function verifyImageSecurity() {
     recoveryImage,
     postgresImage,
     'openresty/openresty:1.31.1.1-2-alpine-fat@sha256:427d94fea0c24b099e7891e8d1b7976f6d008e2d427e56bab725c8b8b293795b',
-    'percona/percona-pgbouncer:1.25.2-5@sha256:ee8f9b3e8b80b379b47ae41419a0d16de7a20c2be0cae5dbf55fe403d3d9f33d',
+    'percona/percona-pgbouncer:1.25.2-9@sha256:3558c3b79ef37989324616833d4763268d1ec171a10f3dec3b7d2c5da807b0be',
   ]
   for (const image of images) {
     execute('docker', [
