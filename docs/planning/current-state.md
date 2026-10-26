@@ -1,5 +1,71 @@
 # Website V2 Current Implementation State
 
+## 2026-10-26：音乐诊断 v3 发布授权
+
+Owner 在完成本地验收后明确要求上线本次音乐管理整理、实际播放抽检、Meting/CDN 来源分离
+与 resolver 异常暂停修复。发布走 main 的 Main Release Quality/Image/Blue-Green/Host Convergence
+与公网 Smoke。下文“尚未上线/无发布”属于授权前验收记录；只有本次发布 SHA 的完整结果与
+公网检查通过，才可确认生产完成。无新 Migration、媒体重写或生产 Credential 变更；回退保留
+既有音乐表、源地址和上一 Slot。原始 Meting 服务的可用性不是本次修复保证的事项。
+
+## 2026-10-26：Meting 原始接口与实际 CDN 音源分离修复
+
+Owner 截图反馈几乎全为无法播放且已有 CDN 歌曲显示成 Meting。只读核对确认本地 25 首
+原 CDN URL、生产公开歌单 25 首原 CDN URL 均完整；本地另有 1 首集成测试自有音频。
+问题不是映射丢失，而是旧 UI 将所选诊断音源覆盖在当前音源列和试听链接上，且把 resolver
+无法解码归为逐曲失效。已修正为当前音源始终可见，逐行注明检测对象，原始接口模式显著
+提示不代表网站音源故障，默认试听固定使用实际播放 URL，原始接口试听进入明确菜单。
+CDN 总数快捷入口打开 CDN 列表并回到 effective 范围；仅原始接口问题不显示补音源主操作。
+
+抽查 3 个不同 QQ MID 对应的 Meting resolver 均为 HTTP 200 + text/html + 0 字节正文，
+包含站点 Referer 时也如此；playlist Endpoint 仍返回 169 首正常 Metadata。这个现场样本说明
+当前接口未提供音频，不能据此声称整份歌单无音源或全部为 VIP。浏览器证据按 resolver
+与直接音频区分：resolver 无可解码内容保留 uncertain，不判定歌曲永久失效；连续 3 首与
+服务器探测一致异常时暂停本轮该 resolver，明确跳过数。CDN/直接音源先扫描，结果独立。
+policy namespace 为 music-playback-v3，使此前误分类需要重测，不删除记录/URL/媒体。
+
+《晚风心里吹》《我还是想再问你》的真实 CDN 开头/中段/结尾均在本地浏览器抽检通过。
+切换到 Meting 排查后，试听链接与 CDN 来源仍保持。生产无本次写入、没有发布；本地预览
+依然是 `http://127.0.0.1:3000/music/manage`。相关回归新增 CDN-first + 空接口 + 三次暂停，
+以及 QQ 全量 Metadata 刷新仍保留 25 首 CDN 原映射的 PG 集成验证。
+
+最终验收通过：394 项 Unit、53 项完整 Browser E2E、Static/Type/Build/Security，完整 PG/S3Mock
+集成及后续重启/故障边界均通过。Disposable 资源已清理；最终现场截图与日志索引保存在
+`.local/music-source-scope-validation.json`。本次本地修复完成，尚未上线。
+
+## 2026-10-26：音乐管理操作整理与播放验证 v2
+
+Owner 已授权按已评估方案整理音乐管理界面，并要求重新核查播放检测误判。
+本次为 Phase 18 后增量；未开启新 Phase，也尚未发布本次改动。生产版本仍为
+`23ce5aaa0236e1ff861d191d7eb544c0c264ff76`（Main Release 40212831403 已成功）。
+
+管理页使用「音乐库 / 歌单检测 / 上传记录」页签；上传为主操作、独立 Dialog，
+导出与低频逐曲操作进入 Base UI Menu。歌曲 ID 保持可见/可复制，失败/试听行突出补音源，
+手机使用卡片布局。筛选、状态和导出采用当前检测音源；试听固定为网站当前音源，原始 Meting 试听独立进入菜单。停止仅属于扫描，
+进度不再被每曲刷新清空。四 Locale 文案同步。
+
+服务器前缀或浏览器元数据不再产生可播放 Pass。即使服务器拒绝访问，也从浏览器执行
+静音实际播放；验证开头、中段、近结尾的时间推进。<=8 秒短文件连续播放抽检，避免拖动或
+Range 限制造成误报。解码失败、疑似试听、未完成验证分开；未知完整时长明确提示。
+无 Meting 地址时提示先更新歌单，不把空地址加载为当前网页音频。
+诊断 Hash 加入 policy namespace，旧方法结果保留但不再展示为当前证据，必须主动重测。
+
+没有新增依赖、Schema、S3 权限、Cookie 接入、生产转码或媒体重写；播放器和文件命名保持。
+回退沿用原版本兼容的状态/原因结构；不删除旧诊断或音源。详见 ADR 0030 与
+`docs/development/music-management.md`。源码策略另修复 `AbortSignal.any` 属性名被误认为
+显式 Any 类型的误报，测试仍强制拒绝实际 Any 类型。
+
+本地预览保留在 `http://127.0.0.1:3000/music/manage`，仅使用本地站主账户、PG 和 S3Mock。
+真实公共音源的单曲只读对照中，CDN 播放抽检通过，而完整刷新后的对应 Meting 地址返回
+不可播放内容；这只是当时、当前浏览器的样本，不是永久的 VIP 分类。预览库已同步完整
+QQ 歌单并保留集成测试曲，不影响生产。桌面及 390px 截图位于忽略目录 `.local/`。
+
+最终本地验收：393 项 Unit、52 项 Browser E2E、完整 Disposable Integration（含 PG/S3Mock、
+旧诊断失效/新证据持久化、角色权限、7-case Storage Contract 和重启/故障边界）、14 项
+Migration 及 Static/Source/Workflow/Type/Build/Security 均通过。最后一轮 E2E 使用干净隔离栈，
+空上游地址与取消回归也通过；测试资源已清理。证据日志与截图索引在
+`.local/music-management-v2-validation.json`。生产无本次写入或发布。
+
 ## 2026-10-17：多语言简历与项目作品集
 
 Owner 已授权实施简洁 CV、独立成果列表与项目详情，保持四 Locale 并减少重复维护。

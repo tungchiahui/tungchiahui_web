@@ -50,7 +50,16 @@ export class MusicLibraryRepository {
         .limit(100)
       return musicLibrarySchema.parse({
         tracks,
-        checks: checks.map((r) => r.payload),
+        checks: checks
+          .map((r) => musicCheckSchema.parse(r.payload))
+          .filter((check) => {
+            const track = tracks.find((item) => item.id === check.id)
+            return (
+              track &&
+              check.urlHash ===
+                musicSourceHash(check.source === 'effective' ? track.url : track.upstreamUrl)
+            )
+          }),
         imports: imports.map((r) => r.payload),
       })
     })

@@ -11,6 +11,7 @@ import {
   musicImportSchema,
 } from './library-contracts'
 import { type MusicLibraryRepository, MusicRevisionConflict } from './library-repository'
+import { playbackEvidenceSchema, playbackVerdict } from './playback-check'
 import { checkMusicTrack, musicSourceHash } from './probe'
 import { uploadMusicAudio } from './upload'
 import { fetchMusicPlaylist } from './upstream'
@@ -113,6 +114,7 @@ export function createMusicHttpHandler(
             source: z.enum(['effective', 'meting']),
             urlHash: z.string().regex(/^[a-f0-9]{64}$/),
             duration: z.number().positive().max(7200).nullable(),
+            playback: playbackEvidenceSchema.optional(),
           })
           .strict()
           .parse(input)
@@ -123,28 +125,20 @@ export function createMusicHttpHandler(
           selected.urlHash
         )
           return response(409, { error: 'music_source_changed' })
-        const short =
-          selected.duration !== null &&
-          (track.duration !== null
-            ? selected.duration < track.duration - 10 && selected.duration < track.duration * 0.85
-            : selected.duration <= 60)
         const check = {
+          ...playbackVerdict(
+            track,
+            selected.playback ?? {
+              outcome: 'timeout',
+              duration: selected.duration,
+              samples: [],
+            },
+            selected.source === 'effective' ? track.url : track.upstreamUrl,
+          ),
           id: track.id,
           source: selected.source,
           urlHash: selected.urlHash,
           checkedAt: new Date().toISOString(),
-          status:
-            selected.duration === null
-              ? ('uncertain' as const)
-              : short
-                ? ('preview' as const)
-                : ('reachable' as const),
-          reason:
-            selected.duration === null
-              ? ('browser_blocked' as const)
-              : short
-                ? ('short_duration' as const)
-                : ('browser_decode' as const),
         }
         await repository.check(check)
         return response(200, { check })

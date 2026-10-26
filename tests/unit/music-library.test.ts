@@ -13,6 +13,7 @@ import {
 import {
   audioUrlAllowed,
   checkMusicTrack,
+  musicSourceHash,
   publicIpv4,
   recognizableAudio,
 } from '../../src/music/probe'
@@ -193,6 +194,55 @@ describe('music library boundaries', () => {
           })
         ).status,
       ).toBe(403)
+      for (const [duration, playback, expected] of [
+        [200, undefined, 'uncertain'],
+        [200, { outcome: 'played', duration: 200, samples: [0, 100, 199] }, 'reachable'],
+        [30, { outcome: 'played', duration: 30, samples: [0, 15, 29] }, 'preview'],
+        [200, { outcome: 'blocked', duration: 200, samples: [] }, 'uncertain'],
+        [200, { outcome: 'played', duration: 200, samples: [0, 0, 0] }, 'uncertain'],
+      ] as const) {
+        const inspected = await fetch(`${base}/api/ops/music/check/browser`, {
+          method: 'POST',
+          headers: { cookie, origin: base, 'content-type': 'application/json' },
+          body: JSON.stringify({
+            id: track.id,
+            source: 'effective',
+            urlHash: musicSourceHash(track.url),
+            duration,
+            ...(playback ? { playback } : {}),
+          }),
+        })
+        expect(inspected.status).toBe(200)
+        expect((await inspected.json()).check.status).toBe(expected)
+      }
+      for (const source of ['effective', 'meting'] as const) {
+        const inspected = await fetch(`${base}/api/ops/music/check/browser`, {
+          method: 'POST',
+          headers: { cookie, origin: base, 'content-type': 'application/json' },
+          body: JSON.stringify({
+            id: track.id,
+            source,
+            urlHash: musicSourceHash(source === 'effective' ? track.url : track.upstreamUrl),
+            duration: null,
+            playback: { outcome: 'decode', duration: null, samples: [] },
+          }),
+        })
+        expect(inspected.status).toBe(200)
+        expect((await inspected.json()).check.status).toBe(
+          source === 'meting' ? 'uncertain' : 'failed',
+        )
+      }
+      const changed = await fetch(`${base}/api/ops/music/check/browser`, {
+        method: 'POST',
+        headers: { cookie, origin: base, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          id: track.id,
+          source: 'effective',
+          urlHash: '0'.repeat(64),
+          duration: 200,
+        }),
+      })
+      expect(changed.status).toBe(409)
       const result = await fetch(`${base}/api/ops/music/imports/${task.id}/audio`, {
         method: 'PUT',
         headers: { cookie, origin: base, 'content-type': 'audio/mpeg' },

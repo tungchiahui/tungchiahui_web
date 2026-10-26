@@ -241,7 +241,8 @@ export function analyzeSourceFiles(
       })
     }
 
-    if (/\bany\b/.test(stripStringsAndComments(source))) {
+    // A property name such as AbortSignal.any is not the TypeScript escape-hatch type.
+    if (/\bany\b/.test(stripStringsAndComments(source).replace(/\.\s*[$\w]+/g, ''))) {
       violations.push({
         file: displayFile,
         message: 'Explicit any requires a documented exception and is not allowed in the baseline',

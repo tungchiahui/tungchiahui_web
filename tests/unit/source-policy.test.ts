@@ -13,6 +13,25 @@ function virtualFiles(entries: Readonly<Record<string, string>>) {
 }
 
 describe('source policy', () => {
+  it('allows AbortSignal.any while continuing to reject explicit any types', () => {
+    expect(
+      analyzeSourceFiles(
+        repositoryRoot,
+        virtualFiles({
+          'src/cancel.ts': 'export const signal = AbortSignal.any([])',
+        }),
+      ),
+    ).toEqual([])
+    expect(
+      analyzeSourceFiles(
+        repositoryRoot,
+        virtualFiles({
+          'src/cancel.ts': 'export const signal: any = AbortSignal.any([])',
+        }),
+      ),
+    ).toEqual([expect.objectContaining({ rule: 'unrecorded-any' })])
+  })
+
   it('rejects direct and transitive server imports from a client boundary', () => {
     const violations = analyzeSourceFiles(
       repositoryRoot,

@@ -85,7 +85,7 @@ export async function inspectAudioUrl(
           if (status !== 200 && status !== 206) {
             response.destroy()
             resolve({
-              status: status === 429 || status >= 500 ? 'uncertain' : 'failed',
+              status: 'uncertain',
               reason: status === 404 ? 'not_found' : 'http_denied',
             })
             return
@@ -96,8 +96,8 @@ export async function inspectAudioUrl(
             const data = Buffer.concat(chunks)
             resolve(
               recognizableAudio(data)
-                ? { status: 'reachable', reason: 'audio_response' }
-                : { status: 'failed', reason: 'not_audio' },
+                ? { status: 'uncertain', reason: 'audio_response' }
+                : { status: 'uncertain', reason: 'not_audio' },
             )
           }
           response.on('data', (chunk: Buffer) => {
@@ -121,7 +121,8 @@ export async function inspectAudioUrl(
   }
 }
 export function musicSourceHash(url: string) {
-  return createHash('sha256').update(url).digest('hex')
+  // Version the diagnostic policy too: old metadata-only passes require a new scan.
+  return createHash('sha256').update(`music-playback-v3\0${url}`).digest('hex')
 }
 export async function checkMusicTrack(
   track: LibraryTrack,

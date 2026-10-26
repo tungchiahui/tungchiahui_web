@@ -36,8 +36,8 @@ Diagnostics run only on explicit owner action. The browser orchestrates one boun
 song and saves completed results; there is no long-running public request or privileged background
 scan. The scan stops when its tab closes; saved results remain. The server checks an allowlisted
 HTTPS source and redirects using DNS resolution restricted to public IPv4 addresses, a 12-second
-deadline and a small response prefix. The browser optionally checks media loading and duration.
-Results distinguish reachable, failed, uncertain and suspected preview, and never infer VIP status
+deadline and a small response prefix. The browser verifies muted playback and duration at the start, middle and near the end, even when the server probe fails. Short clips play through continuously. Loading metadata alone never passes; the policy-versioned source hash requires historical checks to be repeated.
+Resolver failures remain uncertain; repeated provider-wide symptoms pause only that resolver for the current scan, with CDN checks preserved. Current playback source is always shown independently of diagnostic source. Results distinguish reachable, failed, uncertain and suspected preview, and never infer VIP status
 from a generic 403. Browser evidence is owner-supplied diagnostic data, not a security attestation.
 
 `./site music studio` runs a loopback-only browser tool; `./site music prepare` is the batch CLI.

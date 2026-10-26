@@ -4,6 +4,7 @@ import { sql } from 'drizzle-orm'
 import { createDatabaseClient } from '../../src/database/client'
 import { type MusicImport, musicFileName } from '../../src/music/library-contracts'
 import { MusicLibraryRepository, MusicRevisionConflict } from '../../src/music/library-repository'
+import { musicSourceHash } from '../../src/music/probe'
 import { uploadMusicAudio } from '../../src/music/upload'
 import type { ObjectStorage } from '../../src/storage/contracts'
 
@@ -39,8 +40,27 @@ export async function verifyMusicLibrary(databaseUrl: string, storage: ObjectSto
       lyricSource: '',
       selfHosted: false,
     }
-    await repository.sync([song])
-    await repository.sync([song])
+    const legacyTracks = await reader.tracks()
+    const refreshed = legacyTracks.map((track) => ({
+      id: track.id.slice(8),
+      title: track.title,
+      artist: track.artist,
+      cover: track.cover,
+      lyricSource: track.lyricSource,
+      selfHosted: false,
+      url: `https://music.3e0.cn/?server=tencent&type=url&id=${track.id.slice(8)}`,
+    }))
+    await repository.sync([...refreshed, song])
+    await repository.sync([...refreshed, song])
+    const refreshedTracks = await reader.tracks()
+    if (
+      !legacyTracks.every((legacy) =>
+        refreshedTracks.some(
+          (track) => track.id === legacy.id && track.selfHosted && track.url === legacy.url,
+        ),
+      )
+    )
+      throw new Error('QQ playlist refresh replaced a legacy CDN source')
     const original = (await repository.tracks()).find((t) => t.id === 'tencent:integrationMusic')
     if (original?.revision !== 0) throw new Error('Music sync is not idempotent')
     const bytes = readFileSync('tests/fixtures/music/test-tone.mp3')
@@ -80,6 +100,26 @@ export async function verifyMusicLibrary(databaseUrl: string, storage: ObjectSto
       published.sha256 !== task.sha256
     )
       throw new Error('Playlist refresh lost the published music source')
+    const diagnostic = {
+      id: original.id,
+      source: 'effective' as const,
+      status: 'reachable' as const,
+      reason: 'browser_decode' as const,
+      checkedAt: new Date().toISOString(),
+      urlHash: createHash('sha256').update(url.toString()).digest('hex'),
+    }
+    await client.database.execute(
+      sql`INSERT INTO music.checks (key, payload) VALUES (${`${original.id}:effective`}, ${JSON.stringify(diagnostic)}::jsonb) ON CONFLICT (key) DO UPDATE SET payload = EXCLUDED.payload`,
+    )
+    if ((await repository.library()).checks.some((check) => check.id === original.id))
+      throw new Error('Metadata-only legacy diagnostic was trusted by the playback policy')
+    await repository.check({ ...diagnostic, urlHash: musicSourceHash(url.toString()) })
+    if (
+      !(await repository.library()).checks.some(
+        (check) => check.id === original.id && check.status === 'reachable',
+      )
+    )
+      throw new Error('Current playback evidence was not retained')
     const restored = await storage.getObject(`music/${task.sha256}/${task.fileName}`)
     let total = 0
     for await (const part of restored.body) total += part.length
