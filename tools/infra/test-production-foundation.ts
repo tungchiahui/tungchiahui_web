@@ -39,6 +39,7 @@ import {
   commitHostGeneration,
   initializeHostReleaseState,
   readHostCheckpoint,
+  readHostExecutorStatus,
   readHostRuntime,
   recordHostBootstrapBaseline,
   releaseHostExecutor,
@@ -1616,6 +1617,16 @@ async function verifyCompleteServerReleases() {
       legacyBefore,
       'prepared',
     )
+    // The recreated deploy-agent health includes the host executor lease. Keep the
+    // supervisor running so host convergence does not fail on a lease-only health check.
+    start()
+    const executorDeadline = Date.now() + 30_000
+    while (!readHostExecutorStatus(path).healthy && Date.now() < executorDeadline)
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 250))
+    expect(
+      readHostExecutorStatus(path).healthy,
+      'Host executor did not become ready before the recovery fixture',
+    )
     provisionHost(releaseProvisionRequest(settings, registryRepository, candidate, legacyBefore))
     checkpointHostRelease(
       path,
@@ -1672,6 +1683,7 @@ async function verifyCompleteServerReleases() {
         openrestyBeforeRecovery,
       'Recovery did not rebind the stale OpenResty configuration',
     )
+    await stop()
 
     // Persist a prepared operation, then corrupt only its candidate startup artifact.
     // Restart must use the healthy current generation, replay the job, and compensate on failed probe.
