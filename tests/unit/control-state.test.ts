@@ -22,6 +22,7 @@ import {
   listRecoveryBackups,
   readControlState,
   reconcileInfrastructureOperations,
+  recordInfrastructureOperationDiagnostic,
   recordRecoveryBackup,
   retireRecoveryBackup,
   startInfrastructureOperation,
@@ -404,6 +405,63 @@ describe('control-state SQLite engine', () => {
         new Date('2026-08-24T12:00:03.000Z'),
       ),
     ).toThrow(ControlStateLeaseError)
+  })
+
+  it('stores a fenced release-job diagnostic without modifying the running deployment', () => {
+    const path = statePath()
+    initializeControlState(path, 'test')
+    const operation = createInfrastructureOperation(
+      path,
+      {
+        operationType: 'deploy',
+        reason: 'Synthetic failed deployment',
+        target: { gitSha: 'a'.repeat(40), imageDigest: ['sha256:', 'b'.repeat(64)].join('') },
+      },
+      actor,
+      'deployment:diagnostic-test',
+    ).operation
+    const claim = claimNextInfrastructureOperation(path, 'deploy-agent:fixture', 3600)
+    if (!claim) throw new Error('Expected deployment claim')
+    const lease = { leaseOwner: 'deploy-agent:fixture', fencingToken: claim.fencingToken }
+    startInfrastructureOperation(path, operation.id, lease)
+    const before = getInfrastructureOperation(path, operation.id)
+    recordInfrastructureOperationDiagnostic(path, operation.id, lease, {
+      error_type: 'Error',
+      message: 'Migration requires a health-compatible release: 0014',
+    })
+    expect(getInfrastructureOperation(path, operation.id)).toEqual(before)
+    expect(
+      listControlAuditEvents(path, operation.id).filter(
+        (event) => event.eventType === 'release_job_diagnostic',
+      ),
+    ).toMatchObject([
+      {
+        operationId: operation.id,
+        outcome: 'failed',
+        details: {
+          error_type: 'Error',
+          message: 'Migration requires a health-compatible release: 0014',
+          phase: 'executing',
+        },
+      },
+    ])
+    expect(() =>
+      recordInfrastructureOperationDiagnostic(
+        path,
+        operation.id,
+        { ...lease, fencingToken: lease.fencingToken + 1 },
+        { error_type: 'Error', message: 'not allowed' },
+      ),
+    ).toThrow(ControlStateLeaseError)
+    finishInfrastructureOperation(path, operation.id, lease, {
+      phase: 'host-release-reverted',
+      status: 'failed',
+    })
+    expect(
+      listControlAuditEvents(path, operation.id).filter(
+        (event) => event.eventType === 'release_job_diagnostic',
+      ),
+    ).toHaveLength(1)
   })
 
   it('keeps audit events append-only across retry and restart', () => {

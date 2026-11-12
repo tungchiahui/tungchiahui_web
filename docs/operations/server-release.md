@@ -122,3 +122,26 @@ Service/Recovery Manifest Label。回退至这个准确的保留 Slot 时，仍�
 保留已安装的独立控制/恢复服务与 Host Adapter，结果明确标记 `retained-web-restored`，不冒充
 旧 SHA 的完整镜像集合已收敛。后续具有完整 Manifest 的版本仍执行整套服务与执行器回退。
 这是首次迁移的兼容边界，不增加第二个蓝绿流程，也不撤销数据库 Expand Migration。
+
+## 发布失败诊断（兼容旧版 Host Coordinator）
+
+当 GitHub Actions 只显示 `Full release failed at web-engine` 时，可先检查服务器
+`journalctl -u tungchiahui-host-release.service` 中的 `host_release_failed` 事件。
+旧 Host Coordinator 可能在读取日志之前删除失败的容器。因此新候选版本
+`release-job` 会在现有 Control-state SQLite `control_audit_events` 中追加
+`release_job_diagnostic` 审计事件。仅有效的 Operation 租约持有者可追加，
+保存脱敏错误类型、信息及阶段，不改变 Operation 状态或租约。
+Host Coordinator 升级后也会在删除容器前解析结构化错误，忽略其余原始容器输出。
+
+在服务器控制台只读查看失败 Operation（以下使用默认 dataRoot，需安装 sqlite3）：
+
+```bash
+sudo sqlite3 -readonly /var/lib/tungchiahui/control-state/control.db \
+  "SELECT created_at, details_json FROM control_audit_events \
+   WHERE operation_id = '<operation-uuid>' AND event_type = 'release_job_diagnostic' \
+   ORDER BY event_id DESC LIMIT 3;"
+```
+
+如果没有此事件，可能是旧版一次性容器、启动前异常或诊断审计失败。
+请依据实际诊断检查迁移兼容版本、备份、镜像、网络或 Smoke Test，
+不要绕过数据库迁移和回滚门禁。

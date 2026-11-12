@@ -11,7 +11,7 @@ import {
   readDeploymentState,
   startInfrastructureOperation,
 } from '../control-plane/control-state'
-import { safeErrorAttributes } from '../observability/telemetry'
+import { redactTelemetryText, safeErrorAttributes } from '../observability/telemetry'
 import { extractHostGeneration, hostGenerationDirectory, resolveHostRelease } from './artifacts'
 import {
   type HostRelease,
@@ -126,6 +126,32 @@ export function probeHostGeneration(settings: HostSettings, sha: string) {
     throw new Error('Candidate host executor failed its startup contract')
 }
 
+/** Return only an explicit sanitized release-job failure, never raw container output. */
+export function parseReleaseJobFailure(logs: string) {
+  const schema = z
+    .object({
+      event: z.literal('release_job_failed'),
+      error_type: z.string().min(1).max(100),
+      message: z.string().min(1).max(500),
+    })
+    .strict()
+  for (const line of logs.split('\n').reverse()) {
+    let raw: unknown
+    try {
+      raw = JSON.parse(line) as unknown
+    } catch {
+      continue
+    }
+    const parsed = schema.safeParse(raw)
+    if (parsed.success)
+      return {
+        error_type: parsed.data.error_type,
+        message: redactTelemetryText(parsed.data.message),
+      }
+  }
+  return null
+}
+
 function executeWebJob(
   request: ProvisionRequest,
   operation: InfrastructureOperation,
@@ -151,7 +177,15 @@ function executeWebJob(
   ])
   try {
     const result = runHostCommand('docker', ['wait', name])
-    if (result.stdout.trim() !== '0') throw new Error('Shared deployment engine failed')
+    if (result.stdout.trim() !== '0') {
+      const logs = runHostCommand('docker', ['logs', '--tail', '80', name], {}, true)
+      const diagnostic = parseReleaseJobFailure([logs.stdout, logs.stderr].join('\n'))
+      if (diagnostic)
+        throw new Error(
+          'Shared deployment engine failed (' + diagnostic.error_type + '): ' + diagnostic.message,
+        )
+      throw new Error('Shared deployment engine failed; inspect release_job_diagnostic audit event')
+    }
   } finally {
     runHostCommand('docker', ['rm', '--force', name], {}, true)
   }

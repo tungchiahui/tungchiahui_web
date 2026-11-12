@@ -1080,6 +1080,46 @@ export function heartbeatInfrastructureOperation(
   }
 }
 
+/** Preserve a fenced failure explanation even if the installed host coordinator
+ * removes the failed one-shot container. Never change the operation state or lease.
+ */
+export function recordInfrastructureOperationDiagnostic(
+  path: string,
+  id: string,
+  lease: LeaseIdentity,
+  diagnostic: Readonly<{ error_type: string; message: string }>,
+  now = new Date(),
+) {
+  const details = z
+    .object({
+      error_type: z.string().trim().min(1).max(100),
+      message: z.string().trim().min(1).max(500),
+    })
+    .strict()
+    .parse(diagnostic)
+  const database = openControlState(path)
+  try {
+    transaction(database, () => {
+      const operation = mapOperation(
+        database
+          .prepare('SELECT * FROM infrastructure_operations WHERE id = ?')
+          .get(z.uuid().parse(id)),
+      )
+      requireActiveLease(operation, lease, now, ['running'])
+      appendAudit(database, {
+        actorId: lease.leaseOwner,
+        createdAt: now.toISOString(),
+        details: { ...details, phase: operation.phase },
+        eventType: 'release_job_diagnostic',
+        operationId: operation.id,
+        outcome: 'failed',
+      })
+    })
+  } finally {
+    database.close()
+  }
+}
+
 export function updateInfrastructureOperationPhase(
   path: string,
   id: string,
