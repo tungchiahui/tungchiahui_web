@@ -44,6 +44,87 @@ const containerSchema = z
   )
   .length(1)
 
+const knownHostServices = new Set([
+  ...independentServices,
+  'database-migrate',
+  'database-role-bootstrap',
+  'postgres',
+  'pgbouncer',
+  'openresty',
+  'web-blue',
+  'web-green',
+])
+const knownHostActions = new Set([
+  'config',
+  'create',
+  'exec',
+  'up',
+  'run',
+  'pull',
+  'inspect',
+  'logs',
+  'rm',
+  'version',
+  'enable',
+  'disable',
+  'is-active',
+  'is-enabled',
+  'daemon-reload',
+  'restart',
+  'start',
+  'stop',
+  'group',
+])
+
+/**
+ * Produce a bounded diagnostic without reproducing child output, arbitrary
+ * arguments, production environment values or secrets.
+ */
+export function describeHostActionFailure(
+  command: 'docker' | 'systemctl' | 'getent' | 'groupadd',
+  args: readonly string[],
+  result: Readonly<{
+    status: number | null
+    stdout: string | null
+    stderr: string | null
+    timedOut?: boolean
+  }>,
+) {
+  const action = args.find((arg) => knownHostActions.has(arg)) ?? 'unknown'
+  const kind = command === 'docker' && args[0] === 'compose' ? 'docker compose' : command
+  const services = [...new Set(args.filter((arg) => knownHostServices.has(arg)))]
+  const output = [result.stderr ?? '', result.stdout ?? ''].join('\n')
+  const category = result.timedOut
+    ? 'timeout'
+    : /unhealthy|healthcheck|health check|dependency failed/iu.test(output)
+      ? 'healthcheck-or-dependency'
+      : /permission denied|access denied|unauthorized|forbidden/iu.test(output)
+        ? 'permission'
+        : /no such file|not found|invalid mount|bind source path/iu.test(output)
+          ? 'resource-or-mount'
+          : /context canceled|context cancelled|timed out|timeout|connection refused|network is unreachable/iu.test(
+                output,
+              )
+            ? 'network-or-timeout'
+            : /conflict|already in use/iu.test(output)
+              ? 'resource-conflict'
+              : /exited with|exit code|exit status/iu.test(output)
+                ? 'child-exit'
+                : 'unclassified'
+  const code = result.status === null ? 'unknown' : String(result.status)
+  return [
+    'Host action failed: ',
+    kind,
+    ' ',
+    action,
+    '; exit_code=',
+    code,
+    '; category=',
+    category,
+    services.length > 0 ? '; services=' + services.join(',') : '',
+  ].join('')
+}
+
 // Never report a child environment or raw output: Compose and bootstrap see production secrets.
 export function runHostCommand(
   command: 'docker' | 'systemctl' | 'getent' | 'groupadd',
@@ -59,7 +140,14 @@ export function runHostCommand(
     timeout: 1_200_000,
   })
   if (result.error || (result.status !== 0 && !allowFailure))
-    throw new Error(`Host action failed: ${command} ${args[0] ?? ''}`)
+    throw new Error(
+      describeHostActionFailure(command, args, {
+        status: result.status,
+        stdout: result.stdout,
+        stderr: result.stderr,
+        timedOut: result.error?.message.includes('ETIMEDOUT') ?? false,
+      }),
+    )
   return { status: result.status ?? 1, stdout: result.stdout, stderr: result.stderr }
 }
 
@@ -85,6 +173,17 @@ function ensureDirectory(path: string, uid: number, gid: number, mode: number) {
     throw new Error('Host directory is not a regular directory')
   if (statSync(path).uid !== uid || statSync(path).gid !== gid) chownSync(path, uid, gid)
   if ((statSync(path).mode & 0o7777) !== mode) chmodSync(path, mode)
+}
+
+/**
+ * Only rebind a service for atomically replaced config files.
+ * Compose tracks changes to its own service definition without --force-recreate.
+ */
+export function requiresHostConfigRebind(
+  service: 'pgbouncer' | 'openresty',
+  rewrittenFiles: ReadonlySet<string>,
+) {
+  return rewrittenFiles.has(service === 'pgbouncer' ? 'pgbouncer.ini' : 'openresty.conf')
 }
 
 export function writeHostFile(
@@ -251,6 +350,7 @@ export function provisionHost(input: ProvisionRequest) {
       ),
     )
   }
+  const rewrittenTopology = new Set<string>()
   for (const file of topologyFiles) {
     const source = join(request.sourceRoot, 'ops/production', file)
     if (!lstatSync(source).isFile() || lstatSync(source).isSymbolicLink())
@@ -261,7 +361,9 @@ export function provisionHost(input: ProvisionRequest) {
         throw new Error('Source bootstrap requires a patched immutable PgBouncer image')
       contents = bindPgBouncerImage(contents, request.pgbouncerImage)
     }
-    changed += Number(writeHostFile(join(settings.configRoot, file), contents, 0, gid, 0o640))
+    const rewritten = writeHostFile(join(settings.configRoot, file), contents, 0, gid, 0o640)
+    changed += Number(rewritten)
+    if (rewritten) rewrittenTopology.add(file)
   }
   const activeSlot = join(settings.configRoot, 'deployment', 'active-slot.conf')
   if (!existsSync(activeSlot))
@@ -356,9 +458,21 @@ export function provisionHost(input: ProvisionRequest) {
       '-t',
     ])
     if (request.mode !== 'configuration')
-      changed += Number(servicesChanged(request, ['pgbouncer'], true))
-    // Atomic replacement changes the inode of the read-only bind; HUP alone is insufficient.
-    changed += Number(servicesChanged(request, ['openresty'], true))
+      changed += Number(
+        servicesChanged(
+          request,
+          ['pgbouncer'],
+          requiresHostConfigRebind('pgbouncer', rewrittenTopology),
+        ),
+      )
+    // Recreate only when an atomic config-file replacement changes the bind inode.
+    changed += Number(
+      servicesChanged(
+        request,
+        ['openresty'],
+        requiresHostConfigRebind('openresty', rewrittenTopology),
+      ),
+    )
     changed += Number(writeHostFile(fingerprintPath, `${fingerprint}\n`, 0, gid, 0o640))
   }
   if (request.mode === 'bootstrap')
