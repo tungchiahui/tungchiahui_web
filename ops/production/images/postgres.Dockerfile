@@ -19,7 +19,7 @@ ARG SITE_DEPLOYMENT_SHA
 LABEL org.opencontainers.image.revision=${SITE_DEPLOYMENT_SHA} \
   org.opencontainers.image.source="https://github.com/tungchiahui/tungchiahui_web"
 
-RUN apk add --no-cache libbz2 libcrypto3 libpq libssh2 libxml2 lz4-libs zlib zstd-libs \
+RUN apk add --no-cache brotli-libs=1.2.1-r0 libbz2 libcrypto3 libpq libssh2 libxml2 lz4-libs zlib zstd-libs \
   && rm -f /usr/local/bin/gosu
 COPY --from=build /tmp/pgbackrest-build/src/pgbackrest /usr/local/bin/pgbackrest
 
