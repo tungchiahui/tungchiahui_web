@@ -459,11 +459,19 @@ export function provisionHost(input: ProvisionRequest) {
     ])
     if (request.mode !== 'configuration')
       changed += Number(
-        servicesChanged(request, ['pgbouncer'], requiresHostConfigRebind('pgbouncer', rewrittenTopology)),
+        servicesChanged(
+          request,
+          ['pgbouncer'],
+          requiresHostConfigRebind('pgbouncer', rewrittenTopology),
+        ),
       )
     // Recreate only when an atomic config-file replacement changes the bind inode.
     changed += Number(
-      servicesChanged(request, ['openresty'], requiresHostConfigRebind('openresty', rewrittenTopology)),
+      servicesChanged(
+        request,
+        ['openresty'],
+        requiresHostConfigRebind('openresty', rewrittenTopology),
+      ),
     )
     changed += Number(writeHostFile(fingerprintPath, `${fingerprint}\n`, 0, gid, 0o640))
   }
