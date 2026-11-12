@@ -45,15 +45,7 @@ export async function runPostgresMigrations(
     ? null
     : readFileSync(resolve(options.repositoryRoot, 'ops/database/runtime-grants.sql'), 'utf8')
 
-  const policy = validateMigrationPolicy(policyPath, journalPath, {
-    allowContract: options.allowContract ?? false,
-    hasFreshRecoverableBackup: options.hasFreshRecoverableBackup ?? false,
-    hasHealthCompatiblePreviousRelease: options.hasHealthCompatiblePreviousRelease ?? false,
-    hasTechV3CompatiblePreviousRelease: options.hasTechV3CompatiblePreviousRelease ?? false,
-    ...(options.scope === 'control-schema'
-      ? { throughMigration: '0008_accounts_and_start_data' }
-      : {}),
-  })
+
   const client = new Client({
     application_name: configuration.applicationName,
     connectionTimeoutMillis: configuration.connectionTimeoutMilliseconds,
@@ -67,6 +59,31 @@ export async function runPostgresMigrations(
     await client.query("SELECT pg_advisory_lock(hashtext('tungchiahui-schema-migration'))")
     if (rolesSql !== null) await client.query(rolesSql)
     await client.query('SET ROLE site_migrator')
+    // Read the Drizzle ledger under the existing migrator role and advisory lock.
+    // The schema/table can be absent only for a new database.
+    const relation = await client.query<{ name: string | null }>(
+      "SELECT to_regclass('drizzle.__drizzle_migrations')::text AS name",
+    )
+    const appliedCount =
+      relation.rows[0]?.name == null
+        ? 0
+        : Number(
+            (
+              await client.query<{ count: string }>(
+                'SELECT count(*)::text AS count FROM drizzle.__drizzle_migrations',
+              )
+            ).rows[0]?.count ?? '0',
+          )
+    const policy = validateMigrationPolicy(policyPath, journalPath, {
+      allowContract: options.allowContract ?? false,
+      hasFreshRecoverableBackup: options.hasFreshRecoverableBackup ?? false,
+      hasHealthCompatiblePreviousRelease: options.hasHealthCompatiblePreviousRelease ?? false,
+      hasTechV3CompatiblePreviousRelease: options.hasTechV3CompatiblePreviousRelease ?? false,
+      appliedMigrationCount: appliedCount,
+      ...(options.scope === 'control-schema'
+        ? { throughMigration: '0008_accounts_and_start_data' }
+        : {}),
+    })
     if (options.scope === 'control-schema') {
       scopedDirectory = mkdtempSync(resolve(tmpdir(), 'site-control-schema-'))
       mkdirSync(resolve(scopedDirectory, 'meta'))

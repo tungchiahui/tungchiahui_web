@@ -145,3 +145,17 @@ sudo sqlite3 -readonly /var/lib/tungchiahui/control-state/control.db \
 如果没有此事件，可能是旧版一次性容器、启动前异常或诊断审计失败。
 请依据实际诊断检查迁移兼容版本、备份、镜像、网络或 Smoke Test，
 不要绕过数据库迁移和回滚门禁。
+
+## 发布前源代码兼容性预检查
+
+Main Release 的生产部署 Job 在调用 Deployment Engine 前，运行
+`tools/deployment/release-preflight.ts`。它只读控制面当前 SHA，并使用 Git 中两版
+Migration Journal 与镜像 Dockerfile 能力标记做保守兼容性筛查。
+
+如果当前版本不支持待新增的 `0014_private_body_measurements`，Job 提前拒绝发布，
+并提供 `416fb9501f70ba1da6dd7e482564eda20a0a5192` 的过渡发布方法。
+该检查不会直接更改服务器状态。历史兼容 SHA 白名单仅用于验证已有审计的桥接发行版，
+新版本使用镜像能力标记。
+
+此检查依据 Git 历史预测版本兼容性，无法取代 PostgreSQL 实际迁移记录、可恢复备份
+或 Deployment Engine 的最终门禁。高风险迁移仍需人工确认过渡版本已上线。

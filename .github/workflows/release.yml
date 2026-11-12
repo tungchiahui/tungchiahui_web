@@ -499,6 +499,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.workflow_sha }}
+          fetch-depth: 0
 
       - name: Refuse a stale automatic release
         if: github.event_name == 'push'
@@ -524,6 +525,11 @@ jobs:
 
       - name: Install locked deployment client
         run: pnpm install --frozen-lockfile
+
+      - name: Validate rollout compatibility before contacting the deployment engine
+        env:
+          RELEASE_SHA: ${{ needs.build.outputs.git_sha }}
+        run: pnpm exec tsx tools/deployment/release-preflight.ts
 
       - name: Trigger and wait for the shared deployment engine
         run: >-

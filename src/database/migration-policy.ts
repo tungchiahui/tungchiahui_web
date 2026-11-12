@@ -29,6 +29,7 @@ export type MigrationPolicyOptions = Readonly<{
   hasHealthCompatiblePreviousRelease?: boolean
   throughMigration?: string
   applyMigrations?: boolean
+  appliedMigrationCount?: number
 }>
 
 export function validateMigrationPolicy(
@@ -54,7 +55,17 @@ export function validateMigrationPolicy(
     : policyTags.length - 1
   if (lastIndex < 0) throw new Error('Migration scope references an unknown migration')
   const selected = { ...policy, migrations: policy.migrations.slice(0, lastIndex + 1) }
-  for (const migration of selected.migrations) {
+  // Completed migrations must not re-trigger their one-time rollout prerequisites.
+  // The caller must obtain this count from the authoritative Drizzle ledger.
+  const applied = z
+    .number()
+    .int()
+    .min(0)
+    .max(policyTags.length)
+    .parse(options.appliedMigrationCount ?? 0)
+  for (const migration of selected.migrations.slice(
+    Math.min(applied, selected.migrations.length),
+  )) {
     if (
       migration.requiresTechV3CompatiblePreviousRelease &&
       !options.hasTechV3CompatiblePreviousRelease

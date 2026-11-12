@@ -35,6 +35,35 @@ describe('migration policy', () => {
       }),
     ).toThrow('V3-compatible')
   })
+  it('does not require first-migration prerequisites for completed ledger entries', () => {
+    const policy = validateMigrationPolicy(
+      'drizzle/migration-policy.json',
+      'drizzle/meta/_journal.json',
+      {
+        allowContract: false,
+        hasFreshRecoverableBackup: false,
+        appliedMigrationCount: 16,
+      },
+    )
+    expect(policy.migrations).toHaveLength(16)
+    expect(() =>
+      validateMigrationPolicy('drizzle/migration-policy.json', 'drizzle/meta/_journal.json', {
+        allowContract: false,
+        hasFreshRecoverableBackup: false,
+        appliedMigrationCount: 14,
+        hasHealthCompatiblePreviousRelease: true,
+        hasTechV3CompatiblePreviousRelease: true,
+      }),
+    ).toThrow('fresh recoverable backup')
+    expect(() =>
+      validateMigrationPolicy('drizzle/migration-policy.json', 'drizzle/meta/_journal.json', {
+        allowContract: false,
+        hasFreshRecoverableBackup: false,
+        appliedMigrationCount: 17,
+      }),
+    ).toThrow()
+  })
+
   it('covers every checked-in migration through Phase 18 and permits the expand set', () => {
     const policy = validateMigrationPolicy(
       'drizzle/migration-policy.json',
