@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { LegacyHealthRepository } from '../health/legacy'
 import { startPayloadSchema } from '../start/contracts'
 import { defaultStartPayload } from '../start/defaults'
 import type { ApplicationJobRepository } from './application-jobs'
@@ -58,14 +59,17 @@ export function createAccountHttpHandler(
     ): Promise<{ payload: unknown; revision: number } | undefined>
   } | null,
   datasets: Pick<ApplicationJobRepository, 'updateOwnerDataset'> | null,
+  health: Pick<LegacyHealthRepository, 'read'> | null = null,
 ) {
   const loginLimiter = new FixedWindowRateLimiter(5)
   let deriving = false
   return async (path: string, method: string, headers: Headers, body: Uint8Array) => {
     const isAuth = path === '/api/ops/auth/session'
+    const isHealth = path === '/api/ops/health/legacy'
     const isStart = path === '/api/ops/start/data'
     const datasetKey = /^\/api\/ops\/site\/datasets\/(tech_footprint|weight_loss)$/.exec(path)?.[1]
-    if (!isAuth && !isStart && !datasetKey) return { status: 404, body: { error: 'not_found' } }
+    if (!isAuth && !isStart && !datasetKey && !isHealth)
+      return { status: 404, body: { error: 'not_found' } }
     if (method !== 'GET' && !originAllowed(headers, configuration.mode))
       return { status: 403, body: { error: 'origin_denied' } }
     if (!sessions) return { status: 503, body: { error: 'account_store_unavailable' } }
@@ -134,10 +138,22 @@ export function createAccountHttpHandler(
         headers: { 'set-cookie': cookie(created, configuration.mode === 'production') },
       }
     }
+    if (isHealth) {
+      if (account?.role !== 'owner') return { status: 403, body: { error: 'owner_required' } }
+      if (method !== 'GET') return { status: 405, body: { error: 'method_not_allowed' } }
+      if (!health) return { status: 503, body: { error: 'health_store_unavailable' } }
+      return {
+        status: 200,
+        body: await health.read(),
+        headers: { 'cache-control': 'private, no-store' },
+      }
+    }
     if (datasetKey) {
       if (method !== 'PUT')
         return { status: 405, body: { error: 'method_not_allowed' }, headers: { allow: 'PUT' } }
       if (account?.role !== 'owner') return { status: 403, body: { error: 'owner_required' } }
+      if (datasetKey === 'weight_loss' && health && (await health.read()).migrated)
+        return { status: 409, body: { error: 'health_migrated' } }
       if (!datasets) return { status: 503, body: { error: 'dataset_store_unavailable' } }
       const input = z
         .object({ expectedRevision: z.number().int().nonnegative(), payload: z.unknown() })

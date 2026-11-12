@@ -9,6 +9,11 @@ export async function GET(_request: Request, context: { params: Promise<{ datase
   const parsed = ownerDatasetKeySchema.safeParse((await context.params).dataset)
   if (!parsed.success)
     return Response.json({ error: 'not_found' }, { status: 404, headers: apiSecurityHeaders })
+  if (parsed.data === 'weight_loss')
+    return Response.json(
+      { error: 'owner_required' },
+      { status: 403, headers: { ...apiSecurityHeaders, 'cache-control': 'private, no-store' } },
+    )
   try {
     const dataset = await getPublicContentRepository().readOwnerDataset(parsed.data)
     return Response.json({ dataset: dataset ?? null }, { headers: apiSecurityHeaders })

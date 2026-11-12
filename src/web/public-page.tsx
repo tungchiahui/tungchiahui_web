@@ -30,7 +30,7 @@ import { WeightTracker } from '@/components/personal/weight-tracker'
 import { SiteShell } from '@/components/site-shell'
 import { StatsDashboard } from '@/components/stats-dashboard'
 import { TrafficMetrics } from '@/components/traffic-metrics'
-import { techFootprintPayloadSchema, weightLossPayloadSchema } from '@/control-plane/contracts'
+import { techFootprintPayloadSchema } from '@/control-plane/contracts'
 import { contentTypeSchema } from '@/domain/persistence'
 import { localizeContentText } from '@/i18n/content'
 import type { AppLocale } from '@/i18n/locales'
@@ -831,12 +831,11 @@ async function SpecialPage({
       )
     }
     case 'weight-loss': {
-      const dataset = await readCachedOwnerDataset('weight_loss')
       return (
         <WeightTracker
           initial={{
-            payload: dataset ? weightLossPayloadSchema.parse(dataset.payload) : emptyWeightPayload,
-            revision: dataset?.revision ?? 0,
+            payload: emptyWeightPayload,
+            revision: 0,
           }}
         />
       )

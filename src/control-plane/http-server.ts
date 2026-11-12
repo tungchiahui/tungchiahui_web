@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 
 import { z } from 'zod'
+import { LegacyHealthRepository } from '../health/legacy'
 import { readHostExecutorStatus } from '../host-release/state'
 import { createMusicHttpHandler } from '../music/http'
 import { MusicLibraryRepository } from '../music/library-repository'
@@ -302,7 +303,15 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
   const accountSessions = configuration.databaseUrl
     ? new AccountSessionRepository(configuration.databaseUrl)
     : null
-  const accountHandler = createAccountHttpHandler(configuration, accountSessions, applicationJobs)
+  const legacyHealth = configuration.databaseUrl
+    ? new LegacyHealthRepository(configuration.databaseUrl)
+    : null
+  const accountHandler = createAccountHttpHandler(
+    configuration,
+    accountSessions,
+    applicationJobs,
+    legacyHealth,
+  )
   const musicLibrary = configuration.databaseUrl
     ? new MusicLibraryRepository(configuration.databaseUrl)
     : null
@@ -408,6 +417,7 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
       return
     }
     if (
+      url.pathname === '/api/ops/health/legacy' ||
       url.pathname.startsWith('/api/ops/auth/') ||
       url.pathname.startsWith('/api/ops/start/') ||
       url.pathname.startsWith('/api/ops/site/datasets/')
@@ -973,6 +983,7 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
         applicationJobs?.close(),
         translationJobs?.close(),
         accountSessions?.close(),
+        legacyHealth?.close(),
         legacyOwnerSessions?.close(),
       ])
       musicStorage?.destroy()

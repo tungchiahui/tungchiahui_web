@@ -42,6 +42,7 @@ export function useOwnerDataset<T>(
   const draftKey = `personal-draft-v1:${key}`
 
   const saveDraft = useCallback(() => {
+    if (key === 'weight_loss') return
     try {
       sessionStorage.setItem(
         draftKey,
@@ -50,7 +51,7 @@ export function useOwnerDataset<T>(
     } catch {
       /* Export remains available when browser storage is full/disabled. */
     }
-  }, [draftKey])
+  }, [draftKey, key])
 
   const checkSession = useCallback(async () => {
     const request = ++sessionRequest.current
@@ -61,29 +62,46 @@ export function useOwnerDataset<T>(
       if (request !== sessionRequest.current) return
       owner.current =
         session.authenticated &&
-        (session.account?.role === undefined || session.account.role === 'owner')
+        (session.account?.role === 'owner' ||
+          (key !== 'weight_loss' && session.account?.role === undefined))
       setAuthenticated(owner.current)
+      if (key === 'weight_loss' && !owner.current) {
+        latest.current = initial.payload
+        dirty.current = false
+        setPayload(initial.payload)
+        sessionStorage.removeItem(draftKey)
+      }
       setEnabled(session.enabled !== false)
       if (!session.authenticated && dirty.current) setState('expired')
     } catch {
       if (request !== sessionRequest.current) return
       owner.current = false
       setAuthenticated(false)
+      if (key === 'weight_loss') setPayload(initial.payload)
       if (dirty.current) setState('expired')
     } finally {
       if (request === sessionRequest.current) setChecking(false)
     }
-  }, [])
+  }, [key, initial.payload, draftKey])
 
   const reload = useCallback(
     async (discardDraft = false) => {
+      if (key === 'weight_loss' && !owner.current) return
       const startingPayload = latest.current
-      const response = await fetchTracker(`/api/personal-data/${key}`, { cache: 'no-store' })
+      const response = await fetchTracker(
+        key === 'weight_loss' ? '/api/ops/health/legacy' : `/api/personal-data/${key}`,
+        { cache: 'no-store' },
+      )
       if (!response.ok) throw new Error('dataset_unavailable')
       const data = datasetResponseSchema(schema).parse(await response.json()).dataset
       if (!data) throw new Error('dataset_missing')
       // A focus refresh must not replace edits made while its request was in flight.
-      if (latest.current !== startingPayload || sending.current) return
+      if (
+        (key === 'weight_loss' && !owner.current) ||
+        latest.current !== startingPayload ||
+        sending.current
+      )
+        return
       current.current = data
       latest.current = data.payload
       dirty.current = false
@@ -102,22 +120,26 @@ export function useOwnerDataset<T>(
   )
 
   useEffect(() => {
-    void checkSession()
+    void checkSession().then(() => {
+      if (key === 'weight_loss') void reload().catch(() => setState('error'))
+    })
     try {
       setDraftAvailable(Boolean(sessionStorage.getItem(draftKey)))
     } catch {
       /* Optional browser draft. */
     }
     const focus = () => {
-      void checkSession()
-      if (!dirty.current && !sending.current) void reload().catch(() => setState('error'))
+      void checkSession().then(() => {
+        if (!dirty.current && !sending.current) void reload().catch(() => setState('error'))
+      })
     }
     const storage = (event: StorageEvent) => {
       if (event.key === 'personal-auth-change') void checkSession()
     }
     const authChange = () => {
-      void checkSession()
-      if (!dirty.current && !sending.current) void reload().catch(() => setState('error'))
+      void checkSession().then(() => {
+        if (!dirty.current && !sending.current) void reload().catch(() => setState('error'))
+      })
     }
     window.addEventListener('focus', focus)
     window.addEventListener('storage', storage)
@@ -127,7 +149,7 @@ export function useOwnerDataset<T>(
       window.removeEventListener('storage', storage)
       window.removeEventListener('personal-auth-change', authChange)
     }
-  }, [checkSession, draftKey, reload])
+  }, [checkSession, draftKey, reload, key])
 
   const change = useCallback(
     (value: T) => {
@@ -244,7 +266,12 @@ export function useOwnerDataset<T>(
     sessionRequest.current += 1
     owner.current = false
     setAuthenticated(false)
-    if (dirty.current) {
+    if (key === 'weight_loss') {
+      dirty.current = false
+      latest.current = initial.payload
+      setPayload(initial.payload)
+      sessionStorage.removeItem(draftKey)
+    } else if (dirty.current) {
       saveDraft()
       setState('expired')
     }

@@ -1,5 +1,14 @@
 # Website V2 Current Implementation State
 
+## 2026-11-12 — S400 health privacy compatibility release
+
+Owner approved the complete health implementation, versioned JSON exchange and direct main delivery.
+The privacy bridge removes health from anonymous SSR/public API, uses current account Owner sessions
+for legacy private reads and prepares a retained rollback version that reads the future unified-table
+projection. The next additive migration must create `app.weight_loss_private_compat` and freeze old
+writes. Formal JSON replaces CSV in the health UI. No health values belong in repository fixtures.
+
+
 ## 2026-10-26：音乐诊断 v3 发布授权
 
 Owner 在完成本地验收后明确要求上线本次音乐管理整理、实际播放抽检、Meting/CDN 来源分离
