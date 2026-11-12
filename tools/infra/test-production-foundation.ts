@@ -1523,7 +1523,7 @@ async function verifyCompleteServerReleases() {
   const legacyBefore = captureHostConvergence(settings)
   try {
     start()
-    compose(['up', '--detach', '--no-deps', '--wait', 'deploy-agent'], false, {
+    compose(['up', '--detach', '--no-deps', '--wait', '--force-recreate', 'deploy-agent'], false, {
       TUNGCHIAHUI_DEPLOYMENT_POLLING_ENABLED: 'false',
     })
     const created = await request('server-complete-release-001')
@@ -1580,6 +1580,13 @@ async function verifyCompleteServerReleases() {
     // 2026-11-12 state; recovery must use the same engine and must not replay an older
     // release's migration journal.
     restoreHostGeneration(path, legacyBefore.hostSha, legacyBefore.hostPreviousSha)
+    // The fixture represents a host-supervised release: Deployment Polling must be off,
+    // otherwise the standalone deploy-agent can claim the later retry before the supervisor.
+    const recoveryBefore = captureHostConvergence(settings)
+    expect(
+      !recoveryBefore.deploymentPollingEnabled,
+      'Recovery fixture left Deployment Polling enabled on the deploy-agent',
+    )
     const failedRecovery = createInfrastructureOperation(
       path,
       {
@@ -1614,7 +1621,7 @@ async function verifyCompleteServerReleases() {
       failedRecovery.id,
       recoveryLease,
       candidate,
-      legacyBefore,
+      recoveryBefore,
       'prepared',
     )
     // The recreated deploy-agent health includes the host executor lease. Keep the
@@ -1627,13 +1634,13 @@ async function verifyCompleteServerReleases() {
       readHostExecutorStatus(path).healthy,
       'Host executor did not become ready before the recovery fixture',
     )
-    provisionHost(releaseProvisionRequest(settings, registryRepository, candidate, legacyBefore))
+    provisionHost(releaseProvisionRequest(settings, registryRepository, candidate, recoveryBefore))
     checkpointHostRelease(
       path,
       failedRecovery.id,
       recoveryLease,
       candidate,
-      legacyBefore,
+      recoveryBefore,
       'compensating',
     )
     finishInfrastructureOperation(path, failedRecovery.id, recoveryLease, {
@@ -1667,7 +1674,7 @@ async function verifyCompleteServerReleases() {
       'Recovery rewrote the original failed operation or its checkpoint',
     )
     expect(
-      convergenceDifferences(legacyBefore, captureHostConvergence(settings)).length === 0,
+      convergenceDifferences(recoveryBefore, captureHostConvergence(settings)).length === 0,
       'Recovery did not restore the durable convergence baseline',
     )
     expect(
