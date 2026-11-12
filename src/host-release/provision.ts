@@ -175,6 +175,17 @@ function ensureDirectory(path: string, uid: number, gid: number, mode: number) {
   if ((statSync(path).mode & 0o7777) !== mode) chmodSync(path, mode)
 }
 
+/**
+ * Only rebind a service for atomically replaced config files.
+ * Compose tracks changes to its own service definition without --force-recreate.
+ */
+export function requiresHostConfigRebind(
+  service: 'pgbouncer' | 'openresty',
+  rewrittenFiles: ReadonlySet<string>,
+) {
+  return rewrittenFiles.has(service === 'pgbouncer' ? 'pgbouncer.ini' : 'openresty.conf')
+}
+
 export function writeHostFile(
   path: string,
   contents: string | Buffer,
@@ -339,6 +350,7 @@ export function provisionHost(input: ProvisionRequest) {
       ),
     )
   }
+  const rewrittenTopology = new Set<string>()
   for (const file of topologyFiles) {
     const source = join(request.sourceRoot, 'ops/production', file)
     if (!lstatSync(source).isFile() || lstatSync(source).isSymbolicLink())
@@ -349,7 +361,9 @@ export function provisionHost(input: ProvisionRequest) {
         throw new Error('Source bootstrap requires a patched immutable PgBouncer image')
       contents = bindPgBouncerImage(contents, request.pgbouncerImage)
     }
-    changed += Number(writeHostFile(join(settings.configRoot, file), contents, 0, gid, 0o640))
+    const rewritten = writeHostFile(join(settings.configRoot, file), contents, 0, gid, 0o640)
+    changed += Number(rewritten)
+    if (rewritten) rewrittenTopology.add(file)
   }
   const activeSlot = join(settings.configRoot, 'deployment', 'active-slot.conf')
   if (!existsSync(activeSlot))
@@ -444,9 +458,13 @@ export function provisionHost(input: ProvisionRequest) {
       '-t',
     ])
     if (request.mode !== 'configuration')
-      changed += Number(servicesChanged(request, ['pgbouncer'], true))
-    // Atomic replacement changes the inode of the read-only bind; HUP alone is insufficient.
-    changed += Number(servicesChanged(request, ['openresty'], true))
+      changed += Number(
+        servicesChanged(request, ['pgbouncer'], requiresHostConfigRebind('pgbouncer', rewrittenTopology)),
+      )
+    // Recreate only when an atomic config-file replacement changes the bind inode.
+    changed += Number(
+      servicesChanged(request, ['openresty'], requiresHostConfigRebind('openresty', rewrittenTopology)),
+    )
     changed += Number(writeHostFile(fingerprintPath, `${fingerprint}\n`, 0, gid, 0o640))
   }
   if (request.mode === 'bootstrap')

@@ -184,3 +184,11 @@ sudo sqlite3 -readonly /var/lib/tungchiahui/control-state/control.db \
 **代码诊断修复不能自动恢复已经失败的生产 Operation。** 应先验证 Active Web、
 实际数据库迁移、备份及现有配置，再由受控恢复机制根据持久 Checkpoint 恢复。
 禁止直接修改 SQLite phase、强制切换 Green、跳过健康检查或盲目重跑发布。
+
+### 避免无谓的依赖服务强制重建
+
+旧实现把 `compose.yaml` 的任意变化当成 `--force-recreate pgbouncer/openresty` 的理由，
+包括仅针对 Content Worker 的 S400 挂载修改。这样可能中断正在使用 PgBouncer 的连接。
+新实现仅在 `pgbouncer.ini` 或 `openresty.conf` 文件被原子替换时强制重建相应服务；
+仅 Compose 变更仍调用 `docker compose up --wait`，由 Compose 根据每个服务自身
+的配置差异决定是否重建，Health Gate 不变。

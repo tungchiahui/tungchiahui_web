@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { describeHostReleaseFailure } from '../../src/host-release/coordinator'
-import { describeHostActionFailure } from '../../src/host-release/provision'
+import {
+  describeHostActionFailure,
+  requiresHostConfigRebind,
+} from '../../src/host-release/provision'
 
 describe('host release diagnostics', () => {
   it('reports Compose failures without emitting secrets from child output or args', () => {
@@ -55,5 +58,11 @@ describe('host release diagnostics', () => {
       error_type: 'Error',
       message: 'connection [REDACTED] failed',
     })
+  })
+  it('avoids forced PgBouncer/OpenResty restarts for unrelated Compose changes', () => {
+    expect(requiresHostConfigRebind('pgbouncer', new Set(['compose.yaml']))).toBe(false)
+    expect(requiresHostConfigRebind('openresty', new Set(['compose.yaml']))).toBe(false)
+    expect(requiresHostConfigRebind('pgbouncer', new Set(['pgbouncer.ini']))).toBe(true)
+    expect(requiresHostConfigRebind('openresty', new Set(['openresty.conf']))).toBe(true)
   })
 })
