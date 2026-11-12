@@ -89,13 +89,11 @@ test('Owner manages partial measurements and versioned JSON with private anonymo
     measurements: [automatic],
     planOverrides: [],
   })
-  await page
-    .locator('input[type="file"]')
-    .setInputFiles({
-      name: 'synthetic-s400.json',
-      mimeType: 'application/json',
-      buffer: Buffer.from(JSON.stringify(automaticFile)),
-    })
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'synthetic-s400.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(automaticFile)),
+  })
   await expect(page.getByText(/新增 1 条/)).toBeVisible()
   await page.getByRole('button', { name: '确认导入', exact: true }).click()
   await expect(page.getByRole('button', { name: '确认导入', exact: true })).toHaveCount(0)
