@@ -39,7 +39,8 @@ function gitSource(sha: string, path: string) {
 }
 
 function getJournal(sha: string) {
-  return journalSchema.parse(JSON.parse(gitSource(sha, 'drizzle/meta/_journal.json')) as unknown)
+  return journalSchema
+    .parse(JSON.parse(gitSource(sha, 'drizzle/meta/_journal.json')) as unknown)
     .entries.map((entry) => entry.tag)
 }
 
@@ -114,8 +115,7 @@ async function main() {
       currentSha,
       targetSha: sha,
       sourceMigrationTransitions: plan.transitions.length,
-      note:
-        'Source-only screening; the deployment engine and PostgreSQL ledger remain authoritative',
+      note: 'Source-only screening; the deployment engine and PostgreSQL ledger remain authoritative',
     }),
   )
 }

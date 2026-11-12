@@ -45,7 +45,6 @@ export async function runPostgresMigrations(
     ? null
     : readFileSync(resolve(options.repositoryRoot, 'ops/database/runtime-grants.sql'), 'utf8')
 
-
   const client = new Client({
     application_name: configuration.applicationName,
     connectionTimeoutMillis: configuration.connectionTimeoutMilliseconds,
