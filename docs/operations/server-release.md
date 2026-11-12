@@ -267,8 +267,10 @@ sudo sqlite3 -readonly /var/lib/tungchiahui/control-state/control.db \
 - 只读 `--check`：`checkpointPhase=compensating`、`convergenceDifferences=[]`、
   `webRollbackRequired=false`、`topologyRebindPlan={openresty:true,pgbouncer:false}`、
   `healthDataDirectoryPresent=false`，与现场诊断完全一致。
-- 受控恢复 Operation `9d0c08fc-65f1-4f93-bf28-45b19516999e` 以
-  `host-release-recovered` 完成：`convergenceVerified=true`、
+- 受控恢复使用 Main Release `43266852066` 构建的 Recovery Image
+  `sha256:c19f54577beea6db3aa2879d8ca6f3c8fcc949f2865c1899ad6d7fb6e20b3ee1`
+  （OCI revision `b41320057`）。恢复 Operation `9d0c08fc-65f1-4f93-bf28-45b19516999e`
+  以 `host-release-recovered` 完成：`convergenceVerified=true`、
   `webRestoredByEngine=false`、`openresty` 已 Rebind、`pgbouncer` 未重建、
   `health-data` 已创建；原 Operation `c6dee55b...` 仍为
   `failed/host-release-recovery-required`，Checkpoint 仍为 `compensating`，

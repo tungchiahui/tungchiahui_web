@@ -27,8 +27,10 @@ Migration 与 Blue/Green Slot 均不修改。Foundation 测试覆盖“补偿不
 
 最终修复提交 `20ba73e2a` 经分支 CI `43263355789` 六项全绿；合并提交
 `b4132005798f66e5464f3c8adb4d5bbc52f7ccc4` 的 Main Release `43266852066` 在临时关闭
-部署时完成全部 Quality 与不可变镜像构建（deploy 按预期跳过）。服务器只读 `--check`
-输出与预期完全一致；受控恢复 Operation `9d0c08fc-65f1-4f93-bf28-45b19516999e` 以
+部署时完成全部 Quality 与不可变镜像构建（deploy 按预期跳过）。受控恢复使用该 Run
+构建的 Recovery Image `sha256:c19f54577beea6db3aa2879d8ca6f3c8fcc949f2865c1899ad6d7fb6e20b3ee1`
+（OCI revision `b41320057`）。服务器只读 `--check` 输出与预期完全一致；受控恢复
+Operation `9d0c08fc-65f1-4f93-bf28-45b19516999e` 以
 `host-release-recovered` 完成，`convergenceDifferences=[]`、`webRestoredByEngine=false`、
 `topologyRebound={openresty:true,pgbouncer:false}`、`preparedHealthDataDirectory=true`。
 原 Operation `c6dee55b...` 仍为 `failed/host-release-recovery-required`，Checkpoint 仍为
