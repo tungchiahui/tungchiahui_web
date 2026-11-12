@@ -22,7 +22,7 @@ describe('Phase 2 Compose policy', () => {
       'adobe/s3mock:5.1.0@sha256:65cf60155a2e235fe7d5bf6c633747d6fc7ed93f9f5a6727d86470026b83c2a2',
     )
     expect(compose).toContain(
-      'openresty/openresty:1.31.1.1-2-alpine-fat@sha256:427d94fea0c24b099e7891e8d1b7976f6d008e2d427e56bab725c8b8b293795b',
+      'openresty/openresty:1.31-alpine-slim@sha256:ff857feb5c15c29a1a4c1e5be326f65c29ac54c3ba5e01d69ad5a310081b19c2',
     )
     expect(compose).not.toMatch(/image:\s+\S+:latest(?:\s|$)/)
   })
