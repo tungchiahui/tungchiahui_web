@@ -200,12 +200,12 @@ services:
       - next-cache:/workspace/.next
 
   openresty:
-    image: openresty/openresty:1.31.8.1-alpine-fat@sha256:f104df1e34d48308aeec2b0c8dcda405a6e5aa1910c6dd8311d772aa8e70ee39
+    image: openresty/openresty:1.31-alpine-slim@sha256:ff857feb5c15c29a1a4c1e5be326f65c29ac54c3ba5e01d69ad5a310081b19c2
     depends_on:
       control-api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8082/openresty-health"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8082/openresty-health"]
       interval: 2s
       timeout: 3s
       retries: 30
