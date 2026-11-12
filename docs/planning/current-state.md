@@ -1,5 +1,31 @@
 # Website V2 Current Implementation State
 
+## 2026-11-12 — Host Release 故障诊断与受控恢复
+
+生产 Operation `c6dee55b-ee63-4e7a-a14f-bc92ac7278c9`（目标
+`269129479c196b19be213af4b1ceadbe4833f6c3`，完整 S400）在 `converge-services` 失败，
+自动补偿停在 `compensating`，状态为 `failed/host-release-recovery-required`。只读诊断
+确认：目标 `compose.yaml` 为 `content-worker` 新增 `health-data` 只读 Bind，而当时运行的
+`3fedee1b` Coordinator 尚未创建该目录；旧实现因 Compose 变化强制重建
+PgBouncer/OpenResty，造成连接中断。补偿的 Web Rollback 成功，但 `restoreHostConvergence`
+用旧镜像再次运行 `database-migrate`，PostgreSQL 已有 16 条 Migration 而旧 Journal 只有
+14 条，Runner 以 Journal mismatch 拒绝，因此停在 `compensating`。
+
+现场核对：Web Blue 为兼容版、Green 为失败目标并保留为 Previous；四份配置与失败前
+Checkpoint MATCH；Host Executor/Generation 仍为 `3fedee1b`；数据库 16 条 Migration；
+`health-data` 不存在；独立服务仍为兼容版镜像；OpenResty 进程在 20:31:39 载入目标配置，
+磁盘配置在 20:31:48 被恢复，指纹文件仍是目标指纹；PgBouncer INI 两版相同；
+最近 Valid Backup 完成于 2026-11-11T19:28Z，Primary/R2 均 fresh（36 小时策略内）。
+
+本轮新增：补偿/恢复显式 `applyMigrations=false`，不重放旧镜像 Journal；按容器启动时间
+与配置 mtime 检测过期 PgBouncer/OpenResty 并定向 Rebind；新增服务器控制台
+`host-recovery.cjs`，创建独立的排他 `server-migration/host-release-recovery` Operation，
+校验 Checkpoint 基线后复用同一 Provision/Deployment Engine 恢复，并以
+`host_release_recovery_verified` 审计原 Operation；原失败记录、Checkpoint phase、数据库
+Migration 与 Blue/Green Slot 均不修改。Foundation 测试覆盖“补偿不重跑 Migration”和
+“compensating 检查点受控恢复”。生产恢复与新 main 发布尚未执行；必须先经 CI，再按
+`docs/operations/server-release.md` 的受控恢复步骤执行，最后走正常 Main Release。
+
 ## 2026-11-12 — 统一健康数据实施
 
 Owner 已授权完整 S400/手动记录实现、JSON 正式导入导出和直接推送 main，另要求 SSH/1Panel

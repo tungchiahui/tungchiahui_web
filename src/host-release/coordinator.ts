@@ -158,7 +158,7 @@ export function parseReleaseJobFailure(logs: string) {
   return null
 }
 
-function executeWebJob(
+export function executeWebJob(
   request: ProvisionRequest,
   operation: InfrastructureOperation,
   owner: string,
@@ -217,11 +217,66 @@ export function restoreHostConvergence(
     recoveryImage: before.recoveryImage,
     postgresImage: before.postgresImage,
     mode: 'services',
+    // The failed release may already have recorded expand migrations. Restore the previous
+    // topology/services without replaying that release's now-stale migration journal.
+    applyMigrations: false,
     deploymentPollingEnabled: before.deploymentPollingEnabled,
     backupScheduleEnabled: before.backupScheduleEnabled,
     maintenanceScheduleEnabled: before.maintenanceScheduleEnabled,
   }
   provisionHost(request)
+}
+
+/** Ordered list of fixed, nonsecret convergence fields that differ from the durable snapshot. */
+export function convergenceDifferences(
+  before: ConvergenceSnapshot,
+  after: ConvergenceSnapshot,
+): string[] {
+  const differences: string[] = []
+  for (const field of [
+    'sha',
+    'webDigest',
+    'webImage',
+    'serviceImage',
+    'recoveryImage',
+    'postgresImage',
+    'hostSha',
+    'hostPreviousSha',
+    'deploymentPollingEnabled',
+    'backupScheduleEnabled',
+    'maintenanceScheduleEnabled',
+  ] as const) {
+    if (before[field] !== after[field]) differences.push(field)
+  }
+  for (const file of topologyFiles)
+    if (before.files[file] !== after.files[file]) differences.push(`files.${file}`)
+  return differences
+}
+
+/**
+ * Restore Web traffic to the snapshot's release through the shared deployment engine.
+ * The engine already records this as a synthetic rollback against the retained previous slot.
+ */
+export function compensateStaleWebRelease(input: {
+  settings: HostSettings
+  repository: string
+  release: HostRelease
+  before: ConvergenceSnapshot
+  operation: InfrastructureOperation
+  owner: string
+}) {
+  const current = readDeploymentState(hostControlPath(input.settings))
+  if (current.currentSha === input.before.sha && current.currentDigest === input.before.webDigest)
+    return false
+  if (current.lastSha !== input.before.sha || current.lastDigest !== input.before.webDigest)
+    throw new Error('Previous Web release unavailable for compensation')
+  executeWebJob(
+    releaseProvisionRequest(input.settings, input.repository, input.release, input.before),
+    input.operation,
+    input.owner,
+    'compensate',
+  )
+  return true
 }
 
 export async function coordinateNextHostRelease(input: HostSettings, owner: string) {
@@ -363,23 +418,14 @@ export async function coordinateNextHostRelease(input: HostSettings, owner: stri
         )
         const environment = readHostEnvironment({ settings })
         const repository = z.string().parse(environment.TUNGCHIAHUI_DEPLOYMENT_IMAGE_REPOSITORY)
-        const current = readDeploymentState(path)
-        if (
-          current.currentSha !== checkpoint.before.sha ||
-          current.currentDigest !== checkpoint.before.webDigest
-        ) {
-          if (
-            current.lastSha !== checkpoint.before.sha ||
-            current.lastDigest !== checkpoint.before.webDigest
-          )
-            throw new Error('Previous Web release unavailable for compensation')
-          executeWebJob(
-            releaseProvisionRequest(settings, repository, checkpoint.release, checkpoint.before),
-            getInfrastructureOperation(path, operation.id) ?? operation,
-            owner,
-            'compensate',
-          )
-        }
+        compensateStaleWebRelease({
+          settings,
+          repository,
+          release: checkpoint.release,
+          before: checkpoint.before,
+          operation: getInfrastructureOperation(path, operation.id) ?? operation,
+          owner,
+        })
         restoreHostConvergence(settings, checkpoint.before, operation.id)
         restoreHostGeneration(path, checkpoint.before.hostSha, checkpoint.before.hostPreviousSha, {
           operationId: operation.id,
