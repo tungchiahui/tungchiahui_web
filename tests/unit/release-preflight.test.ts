@@ -26,6 +26,18 @@ describe('release source compatibility preflight', () => {
     ).toEqual(['0014_private_body_measurements'])
   })
 
+  it('treats absent migration compatibility flags as false', () => {
+    expect(
+      planReleaseCompatibility(
+        v13,
+        v15,
+        { migrations: [{ tag: '0014_private_body_measurements' }] },
+        { health: false, tech: false },
+        { health: true, tech: true },
+      ).missing,
+    ).toEqual([])
+  })
+
   it('allows a verified compatibility bridge to precede an expanded release', () => {
     expect(
       planReleaseCompatibility(

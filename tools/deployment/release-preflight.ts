@@ -10,8 +10,8 @@ const policySchema = z.object({
   migrations: z.array(
     z.object({
       tag: z.string(),
-      requiresHealthCompatiblePreviousRelease: z.boolean().optional(),
-      requiresTechV3CompatiblePreviousRelease: z.boolean().optional(),
+      requiresHealthCompatiblePreviousRelease: z.boolean().default(false),
+      requiresTechV3CompatiblePreviousRelease: z.boolean().default(false),
     }),
   ),
 })
