@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { existsSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
 import {
@@ -16,7 +16,12 @@ import {
   reconcileInfrastructureOperations,
   startInfrastructureOperation,
 } from '../control-plane/control-state'
-import { type HostSettings, hostSettingsSchema } from './contracts'
+import {
+  type HostSettings,
+  hostSettingsSchema,
+  releaseDigestSchema,
+  releaseShaSchema,
+} from './contracts'
 import {
   captureHostConvergence,
   compensateStaleWebRelease,
@@ -29,6 +34,7 @@ import {
 } from './coordinator'
 import {
   containerConfigRebindRequired,
+  hostTopologyConfigStale,
   inspectHostContainer,
   readHostEnvironment,
 } from './provision'
@@ -134,6 +140,7 @@ function topologyContainerIds(settings: HostSettings) {
 export async function recoverHostRelease(
   settingsInput: HostSettings,
   originalOperationIdInput: string,
+  options: Readonly<{ checkOnly?: boolean }> = {},
 ) {
   if (process.getuid?.() !== 0)
     throw new Error('Run the one-time recovery as administrator on the production server')
@@ -141,9 +148,11 @@ export async function recoverHostRelease(
   const settings = hostSettingsSchema.parse(settingsInput)
   const originalOperationId = z.uuid().parse(originalOperationIdInput)
   const path = hostControlPath(settings)
-  initializeControlState(path, 'production')
-  initializeHostReleaseState(path)
-  reconcileInfrastructureOperations(path)
+  if (options.checkOnly !== true) {
+    initializeControlState(path, 'production')
+    initializeHostReleaseState(path)
+    reconcileInfrastructureOperations(path)
+  }
 
   const original = getInfrastructureOperation(path, originalOperationId)
   if (!original) throw new Error('The original infrastructure operation does not exist')
@@ -159,6 +168,51 @@ export async function recoverHostRelease(
   if (rejection !== null || !checkpoint)
     throw new Error(`Host release recovery refused: ${rejection ?? 'missing checkpoint'}`)
   const before = checkpoint.before
+  const failedTarget =
+    original.operationType === 'deploy'
+      ? z
+          .object({ gitSha: releaseShaSchema, imageDigest: releaseDigestSchema })
+          .strict()
+          .parse(original.target)
+      : (() => {
+          const target = z
+            .object({ targetDigest: releaseDigestSchema, targetSha: releaseShaSchema })
+            .strict()
+            .parse(original.target)
+          return { gitSha: target.targetSha, imageDigest: target.targetDigest }
+        })()
+  if (
+    checkpoint.release.sha !== failedTarget.gitSha ||
+    checkpoint.release.webDigest !== failedTarget.imageDigest
+  )
+    throw new Error(
+      'Host release recovery refused: checkpoint release does not match the failed target',
+    )
+
+  const healthDataPath = join(settings.dataRoot, 'health-data')
+  if (options.checkOnly === true) {
+    const current = captureHostConvergence(settings)
+    const stale = hostTopologyConfigStale(settings)
+    const currentTopologyFile = (file: string) =>
+      readFileSync(join(settings.configRoot, file), 'utf8')
+    return {
+      checkOnly: true,
+      checkpointPhase: checkpoint.phase,
+      convergenceDifferences: convergenceDifferences(before, current),
+      healthDataDirectoryPresent: existsSync(healthDataPath),
+      originalOperationId,
+      topologyRebindPlan: {
+        openresty:
+          stale.openresty ||
+          currentTopologyFile('openresty.conf') !== before.files['openresty.conf'],
+        pgbouncer:
+          stale.pgbouncer || currentTopologyFile('pgbouncer.ini') !== before.files['pgbouncer.ini'],
+      },
+      webRollbackRequired: !(
+        deployment.currentSha === before.sha && deployment.currentDigest === before.webDigest
+      ),
+    }
+  }
 
   const environment = readHostEnvironment({ settings })
   const repository = z
@@ -225,8 +279,7 @@ export async function recoverHostRelease(
     throw new Error('Exclusive host release recovery operation could not be claimed')
   const lease = { leaseOwner: owner, fencingToken: claimed.fencingToken }
   const operation = startInfrastructureOperation(path, claimed.id, lease)
-  const healthData = join(settings.dataRoot, 'health-data')
-  const healthDataExisted = existsSync(healthData)
+  const healthDataExisted = existsSync(healthDataPath)
   const topologyBefore = topologyContainerIds(settings)
   let finished = false
   try {
@@ -266,7 +319,7 @@ export async function recoverHostRelease(
         convergenceVerified: true,
         originalOperationId,
         originalOperationPhase: original.phase,
-        preparedHealthDataDirectory: !healthDataExisted && existsSync(healthData),
+        preparedHealthDataDirectory: !healthDataExisted && existsSync(healthDataPath),
         restoredHostSha: before.hostSha,
         restoredSha: before.sha,
         topologyRebound: {

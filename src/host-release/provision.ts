@@ -214,6 +214,14 @@ function hostServiceConfigStale(
   )
 }
 
+/** Read-only view of the topology services whose running process predates its config. */
+export function hostTopologyConfigStale(settings: ProvisionRequest['settings']) {
+  return {
+    openresty: hostServiceConfigStale(settings, 'openresty'),
+    pgbouncer: hostServiceConfigStale(settings, 'pgbouncer'),
+  }
+}
+
 export function writeHostFile(
   path: string,
   contents: string | Buffer,

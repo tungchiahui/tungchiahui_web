@@ -133,7 +133,15 @@ Blue/Green Slot，而是创建一个新的、排他的 `server-migration` Operat
 6. 追加 `host_release_recovery_verified` 审计事件到原 Operation，并以
    `host-release-recovered` 完成恢复 Operation；原失败记录与 Checkpoint 保留为审计证据。
 
-服务器控制台执行（Recovery Image 必须是已通过 CI 的不可变 Digest）：
+恢复使用当前已审核的 Provision 代码，因此会在缺失时创建受管的
+`${TUNGCHIAHUI_DATA_ROOT}/health-data` 目录（空目录，root:runtime-group，2750）。
+这是下一次 S400 发布所需的固定挂载源，不是业务数据回滚；恢复结果通过
+`preparedHealthDataDirectory` 如实记录。
+
+服务器控制台执行（Recovery Image 必须是已通过 CI 的不可变 Digest）。先运行只读
+`--check`，确认 `convergenceDifferences`、`topologyRebindPlan`、`webRollbackRequired`
+与 `healthDataDirectoryPresent` 符合预期；该模式不初始化/Reconcile Control-state、
+不创建 Operation、不写审计、不修改 Host：
 
 ```bash
 sudo docker pull ghcr.io/tungchiahui/tungchiahui_web-recovery@sha256:<digest>
@@ -146,12 +154,12 @@ sudo docker cp tungchiahui-recovery-artifact:/app/host/host-recovery.cjs \
 sudo docker rm tungchiahui-recovery-artifact
 sudo /root/tungchiahui-host-recovery/node \
   /root/tungchiahui-host-recovery/host-recovery.cjs \
-  <original-operation-id> /etc/tungchiahui/host-runtime/settings.json
+  <original-operation-id> /etc/tungchiahui/host-runtime/settings.json --check
 ```
 
-恢复成功后，先只读核对恢复 Operation 结果、原 Operation 审计、两个 Slot 与备份新鲜度，
-再通过正常工作流部署目标 main SHA。恢复本身不会安装新的 Host Generation；新的
-Coordinator 仍在下一次正常发布收敛成功后提交。
+确认后去掉 `--check` 执行受控恢复。恢复成功后，先只读核对恢复 Operation 结果、
+原 Operation 审计、两个 Slot 与备份新鲜度，再通过正常工作流部署目标 main SHA。
+恢复本身不会安装新的 Host Generation；新的 Coordinator 仍在下一次正常发布收敛成功后提交。
 
 `./site status` 报告 Host Executor 的版本和租约健康。安装后租约失效会使 deploy-agent
 健康检查降级；现有观测和健康检查能够发现执行器停止。

@@ -1643,6 +1643,7 @@ async function verifyCompleteServerReleases() {
     const reboundAt = new Date()
     utimesSync(join(configRoot, 'openresty.conf'), reboundAt, reboundAt)
     const recovered = await recoverHostRelease(settings, failedRecovery.id)
+    if ('checkOnly' in recovered) throw new Error('Recovery unexpectedly ran in check-only mode')
     expect(
       recovered.status === 'completed' && recovered.phase === 'host-release-recovered',
       `Audited host recovery did not complete: ${JSON.stringify(recovered)}`,
