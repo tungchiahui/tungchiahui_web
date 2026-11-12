@@ -442,7 +442,6 @@ export async function coordinateNextHostRelease(input: HostSettings, owner: stri
         event: 'host_release_failed',
         operationId: operation.id,
         restored,
-        failureStep,
         ...failure,
       }),
     )
