@@ -576,7 +576,7 @@ function verifyImageSecurity() {
     serviceImage,
     recoveryImage,
     postgresImage,
-    'openresty/openresty:1.31.8.1-alpine-fat@sha256:f104df1e34d48308aeec2b0c8dcda405a6e5aa1910c6dd8311d772aa8e70ee39',
+    'openresty/openresty:1.31-alpine-slim@sha256:ff857feb5c15c29a1a4c1e5be326f65c29ac54c3ba5e01d69ad5a310081b19c2',
     pgbouncerImage,
   ]
   for (const image of images) {
