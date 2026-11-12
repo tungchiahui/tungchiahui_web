@@ -134,6 +134,7 @@ test('Start pauses conflicts and exports a complete draft before a guarded reloa
   })
   await expect.poll(() => saved.dataset.revision).toBe(3)
   expect(saved.dataset.payload).toEqual(draft)
+  await expect(page.getByRole('status')).toHaveCount(0)
   await page.reload({ waitUntil: 'domcontentloaded' })
   await expect(
     page.getByRole('button', { name: copy.switchEngine.replace('{engine}', 'Bing') }),
