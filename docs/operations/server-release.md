@@ -261,3 +261,22 @@ sudo sqlite3 -readonly /var/lib/tungchiahui/control-state/control.db \
   `health-data` 不存在；独立服务与 Web 仍是兼容版镜像；数据库 16 条 Migration 已完成。
 - 修复后补偿与恢复均不重放旧镜像 Migration；按进程启动时间与配置 mtime 检测过期
   运行配置并定向 Rebind；`host-recovery.cjs` 提供不修改原 Operation 的受控恢复。
+
+### 2026-11-13 实际恢复与发布结果
+
+- 只读 `--check`：`checkpointPhase=compensating`、`convergenceDifferences=[]`、
+  `webRollbackRequired=false`、`topologyRebindPlan={openresty:true,pgbouncer:false}`、
+  `healthDataDirectoryPresent=false`，与现场诊断完全一致。
+- 受控恢复 Operation `9d0c08fc-65f1-4f93-bf28-45b19516999e` 以
+  `host-release-recovered` 完成：`convergenceVerified=true`、
+  `webRestoredByEngine=false`、`openresty` 已 Rebind、`pgbouncer` 未重建、
+  `health-data` 已创建；原 Operation `c6dee55b...` 仍为
+  `failed/host-release-recovery-required`，Checkpoint 仍为 `compensating`，
+  仅追加 `host_release_recovery_verified` 审计。
+- 合并提交 `b4132005798f66e5464f3c8adb4d5bbc52f7ccc4` 的 Main Release
+  `43271881580` 全部 Job success。公网 `/api/version` 返回该 SHA、slot=green；
+  Deployment Runtime current 同上、previous/last=`3fedee1b`、无 Pending；
+  Host Executor current 同上、previous=`3fedee1b`；四个独立服务与 web-green 均为
+  新 SHA，web-blue 保留 `3fedee1b`；PostgreSQL 镜像未变；`hostRelease.status=converged`。
+- 数据库仍为 16 条 Migration；匿名 Health API 返回 401/403；content-worker 只读挂载
+  `health-data` 且 `HEALTH_SYNC_ENABLED=false`；备份双副本 fresh，Timer 正常。

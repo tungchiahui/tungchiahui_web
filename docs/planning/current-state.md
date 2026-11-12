@@ -23,8 +23,28 @@ Checkpoint MATCH；Host Executor/Generation 仍为 `3fedee1b`；数据库 16 条
 校验 Checkpoint 基线后复用同一 Provision/Deployment Engine 恢复，并以
 `host_release_recovery_verified` 审计原 Operation；原失败记录、Checkpoint phase、数据库
 Migration 与 Blue/Green Slot 均不修改。Foundation 测试覆盖“补偿不重跑 Migration”和
-“compensating 检查点受控恢复”。生产恢复与新 main 发布尚未执行；必须先经 CI，再按
-`docs/operations/server-release.md` 的受控恢复步骤执行，最后走正常 Main Release。
+“compensating 检查点受控恢复”。
+
+最终修复提交 `20ba73e2a` 经分支 CI `43263355789` 六项全绿；合并提交
+`b4132005798f66e5464f3c8adb4d5bbc52f7ccc4` 的 Main Release `43266852066` 在临时关闭
+部署时完成全部 Quality 与不可变镜像构建（deploy 按预期跳过）。服务器只读 `--check`
+输出与预期完全一致；受控恢复 Operation `9d0c08fc-65f1-4f93-bf28-45b19516999e` 以
+`host-release-recovered` 完成，`convergenceDifferences=[]`、`webRestoredByEngine=false`、
+`topologyRebound={openresty:true,pgbouncer:false}`、`preparedHealthDataDirectory=true`。
+原 Operation `c6dee55b...` 仍为 `failed/host-release-recovery-required`，Checkpoint 仍为
+`compensating`，仅新增 `host_release_recovery_verified` 审计。
+
+随后 Main Release `43271881580` 全部 Job success（Quality、五镜像、共享 Blue-Green、
+Host Convergence、release-result）。公网 `/api/version` 为 `b41320057...`、slot=green；
+Deployment Runtime current=`b41320057`、previous/last=`3fedee1b`、无 Pending；Host
+Executor current=`b41320057`、previous=`3fedee1b`；四个独立服务与 web-green 均为
+`b41320057`，web-blue 保留 `3fedee1b`；PostgreSQL 镜像未变；`hostRelease.status=converged`。
+数据库仍为 16 条 Migration，`app.body_measurements`、`app.weight_loss_private_compat` 与
+`health_sync` Enum 存在；匿名 `/api/ops/health/snapshot` 返回 401、
+`/api/ops/health/legacy` 返回 403；content-worker 只读挂载 `health-data`，
+`HEALTH_SYNC_ENABLED=false`。备份 `20261107-190514F_20261111-190514D` 双副本 fresh，
+下一次 03:05 Timer 正常。Owner 登录后的健康数据 UI 抽检仍待 Owner 执行；其余 S400
+服务、Schema、路由与匿名隐私边界已验证。
 
 ## 2026-11-12 — 统一健康数据实施
 
