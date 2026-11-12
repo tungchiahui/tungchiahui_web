@@ -44,6 +44,87 @@ const containerSchema = z
   )
   .length(1)
 
+const knownHostServices = new Set([
+  ...independentServices,
+  'database-migrate',
+  'database-role-bootstrap',
+  'postgres',
+  'pgbouncer',
+  'openresty',
+  'web-blue',
+  'web-green',
+])
+const knownHostActions = new Set([
+  'config',
+  'create',
+  'exec',
+  'up',
+  'run',
+  'pull',
+  'inspect',
+  'logs',
+  'rm',
+  'version',
+  'enable',
+  'disable',
+  'is-active',
+  'is-enabled',
+  'daemon-reload',
+  'restart',
+  'start',
+  'stop',
+  'group',
+])
+
+/**
+ * Produce a bounded diagnostic without reproducing child output, arbitrary
+ * arguments, production environment values or secrets.
+ */
+export function describeHostActionFailure(
+  command: 'docker' | 'systemctl' | 'getent' | 'groupadd',
+  args: readonly string[],
+  result: Readonly<{
+    status: number | null
+    stdout: string | null
+    stderr: string | null
+    timedOut?: boolean
+  }>,
+) {
+  const action = args.find((arg) => knownHostActions.has(arg)) ?? 'unknown'
+  const kind = command === 'docker' && args[0] === 'compose' ? 'docker compose' : command
+  const services = [...new Set(args.filter((arg) => knownHostServices.has(arg)))]
+  const output = [result.stderr ?? '', result.stdout ?? ''].join('\n')
+  const category = result.timedOut
+    ? 'timeout'
+    : /unhealthy|healthcheck|health check|dependency failed/iu.test(output)
+      ? 'healthcheck-or-dependency'
+      : /permission denied|access denied|unauthorized|forbidden/iu.test(output)
+        ? 'permission'
+        : /no such file|not found|invalid mount|bind source path/iu.test(output)
+          ? 'resource-or-mount'
+          : /context canceled|context cancelled|timed out|timeout|connection refused|network is unreachable/iu.test(
+                output,
+              )
+            ? 'network-or-timeout'
+            : /conflict|already in use/iu.test(output)
+              ? 'resource-conflict'
+              : /exited with|exit code|exit status/iu.test(output)
+                ? 'child-exit'
+                : 'unclassified'
+  const code = result.status === null ? 'unknown' : String(result.status)
+  return [
+    'Host action failed: ',
+    kind,
+    ' ',
+    action,
+    '; exit_code=',
+    code,
+    '; category=',
+    category,
+    services.length > 0 ? '; services=' + services.join(',') : '',
+  ].join('')
+}
+
 // Never report a child environment or raw output: Compose and bootstrap see production secrets.
 export function runHostCommand(
   command: 'docker' | 'systemctl' | 'getent' | 'groupadd',
@@ -59,7 +140,14 @@ export function runHostCommand(
     timeout: 1_200_000,
   })
   if (result.error || (result.status !== 0 && !allowFailure))
-    throw new Error(`Host action failed: ${command} ${args[0] ?? ''}`)
+    throw new Error(
+      describeHostActionFailure(command, args, {
+        status: result.status,
+        stdout: result.stdout,
+        stderr: result.stderr,
+        timedOut: result.error?.message.includes('ETIMEDOUT') ?? false,
+      }),
+    )
   return { status: result.status ?? 1, stdout: result.stdout, stderr: result.stderr }
 }
 

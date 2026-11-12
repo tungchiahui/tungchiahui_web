@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
 import {
+  appendControlAuditEvent,
   claimNextInfrastructureOperation,
   finishInfrastructureOperation,
   getInfrastructureOperation,
@@ -43,6 +44,11 @@ import {
   restoreHostGeneration,
   stageHostGeneration,
 } from './state'
+
+/** Redacted context suitable for durable audit and the host journal. */
+export function describeHostReleaseFailure(step: string, error: unknown) {
+  return { failureStep: step, ...safeErrorAttributes(error) }
+}
 
 export function hostControlPath(settings: HostSettings) {
   return join(settings.dataRoot, 'control-state/control.db')
@@ -326,8 +332,24 @@ export async function coordinateNextHostRelease(input: HostSettings, owner: stri
       }),
     )
   } catch (error: unknown) {
-    const failure = safeErrorAttributes(error)
+    const failure = describeHostReleaseFailure(failureStep, error)
     checkpoint = readHostCheckpoint(path, operation.id)
+    if (checkpoint) {
+      try {
+        appendControlAuditEvent(path, {
+          actorId: owner,
+          createdAt: new Date().toISOString(),
+          details: failure,
+          eventType: 'host_release_execution_failed',
+          operationId: operation.id,
+          outcome: 'failed',
+        })
+      } catch {
+        console.error(
+          JSON.stringify({ event: 'host_release_failure_audit_failed', operationId: operation.id }),
+        )
+      }
+    }
     let restored = false
     if (checkpoint) {
       try {
@@ -373,8 +395,33 @@ export async function coordinateNextHostRelease(input: HostSettings, owner: stri
           'reverted',
         )
         restored = true
-      } catch {
-        /* Retain the fenced operation and snapshot for an audited server-console retry. */
+      } catch (compensationError: unknown) {
+        const diagnostic = describeHostReleaseFailure('compensating', compensationError)
+        console.error(
+          JSON.stringify({
+            event: 'host_release_compensation_failed',
+            operationId: operation.id,
+            ...diagnostic,
+          }),
+        )
+        try {
+          appendControlAuditEvent(path, {
+            actorId: owner,
+            createdAt: new Date().toISOString(),
+            details: diagnostic,
+            eventType: 'host_release_compensation_failed',
+            operationId: operation.id,
+            outcome: 'failed',
+          })
+        } catch {
+          console.error(
+            JSON.stringify({
+              event: 'host_release_compensation_audit_failed',
+              operationId: operation.id,
+            }),
+          )
+        }
+        // Preserve the durable checkpoint and recovery-required status.
       }
     }
     finishInfrastructureOperation(path, operation.id, lease, {

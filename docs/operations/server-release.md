@@ -159,3 +159,28 @@ Migration Journal 与镜像 Dockerfile 能力标记做保守兼容性筛查。
 
 此检查依据 Git 历史预测版本兼容性，无法取代 PostgreSQL 实际迁移记录、可恢复备份
 或 Deployment Engine 的最终门禁。高风险迁移仍需人工确认过渡版本已上线。
+
+## 2026-11-12 Host Action 脱敏诊断
+
+完整 S400 的 Operation `c6dee55b-ee63-4e7a-a14f-bc92ac7278c9` 在
+`converge-services` 失败，自动补偿停在 `compensating`，状态仍为
+`host-release-recovery-required`。蓝色隐私兼容版是记录中的 Active。
+
+新 Host Coordinator 对 Compose 故障仅报告受控子命令、退出码、错误类别、
+白名单服务名；不转发原始 stdout/stderr、命令参数或环境值。失败和补偿错误
+分别追加 `host_release_execution_failed` 与 `host_release_compensation_failed`
+审计事件。审计写入失败也单独记录脱敏告警。
+
+只读查看新版本追加的诊断（旧已失败 Operation 不会自动生成该记录）：
+
+```bash
+sudo sqlite3 -readonly /var/lib/tungchiahui/control-state/control.db \
+  "SELECT created_at,event_type,details_json FROM control_audit_events
+   WHERE operation_id='c6dee55b-ee63-4e7a-a14f-bc92ac7278c9'
+   AND event_type IN ('host_release_execution_failed','host_release_compensation_failed')
+   ORDER BY event_id;"
+```
+
+**代码诊断修复不能自动恢复已经失败的生产 Operation。** 应先验证 Active Web、
+实际数据库迁移、备份及现有配置，再由受控恢复机制根据持久 Checkpoint 恢复。
+禁止直接修改 SQLite phase、强制切换 Green、跳过健康检查或盲目重跑发布。
