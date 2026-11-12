@@ -1740,12 +1740,32 @@ async function verifyCompleteServerReleases() {
       'Compensation replaced PostgreSQL',
     )
     const retried = await request('server-complete-release-retry-001')
+    const retriedOperation = await waitForOperation(retried.id)
     expect(
-      (await waitForOperation(retried.id)).status === 'completed',
+      retriedOperation.status === 'completed',
       'Clean immutable candidate could not recover after failed startup',
     )
+    const retriedShas = serviceShas()
+    if (!retriedShas.every((sha) => sha === candidate.sha))
+      console.error(
+        JSON.stringify({
+          audit: listControlAuditEvents(path, retried.id).slice(-10),
+          images: ['control-api', 'content-worker', 'deploy-agent', 'observability-agent'].map(
+            (service) =>
+              execute('docker', [
+                'inspect',
+                '--format',
+                '{{.Config.Image}}|{{index .Config.Labels "org.opencontainers.image.revision"}}',
+                `${projectName}-${service}-1`,
+              ]).stdout.trim(),
+          ),
+          retried: retriedOperation,
+          shas: retriedShas,
+          supervisor: supervisorEvents.slice(-4_000),
+        }),
+      )
     expect(
-      serviceShas().every((sha) => sha === candidate.sha),
+      retriedShas.every((sha) => sha === candidate.sha),
       'Retry did not complete independent-service upgrade',
     )
 
