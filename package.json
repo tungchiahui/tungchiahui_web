@@ -10,7 +10,7 @@
   },
   "scripts": {
     "build": "next build --webpack",
-    "check:biome": "biome check .",
+    "check:biome": "biome check . --max-diagnostics=100",
     "check:drizzle": "drizzle-kit check",
     "check:source": "tsx tools/quality/source-policy.ts",
     "check:security": "tsx tools/security/readiness-scan.ts",
