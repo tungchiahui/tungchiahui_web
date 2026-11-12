@@ -27,6 +27,7 @@ RUN mkdir -p /workspace/dist \
   && pnpm exec esbuild services/host-coordinator/main.ts --bundle --format=cjs --platform=node --target=node24 --outfile=dist/host-coordinator.cjs \
   && pnpm exec esbuild services/release-supervisor/main.ts --bundle --format=cjs --platform=node --target=node24 --outfile=dist/release-supervisor.cjs \
   && pnpm exec esbuild services/host-bootstrap/main.ts --bundle --format=cjs --platform=node --target=node24 --outfile=dist/host-bootstrap.cjs \
+  && pnpm exec esbuild services/host-recovery/main.ts --bundle --format=cjs --platform=node --target=node24 --outfile=dist/host-recovery.cjs \
   && pnpm exec esbuild tools/production/bind-pgbouncer-image.ts --bundle --format=cjs --platform=node --target=node24 --outfile=dist/bind-pgbouncer-image.cjs \
   && node dist/bind-pgbouncer-image.cjs "$SITE_PGBOUNCER_IMAGE" "$SITE_PGBOUNCER_SHA"
 
@@ -70,7 +71,7 @@ COPY --from=node-build --chown=70:10050 /workspace/dist ./dist
 COPY --from=node-build --chown=70:10050 /workspace/drizzle ./deployment/drizzle
 
 COPY --from=node-build /usr/local/bin/node /app/host/node
-COPY --from=node-build /workspace/dist/host-coordinator.cjs /workspace/dist/release-supervisor.cjs /workspace/dist/host-bootstrap.cjs /app/host/
+COPY --from=node-build /workspace/dist/host-coordinator.cjs /workspace/dist/release-supervisor.cjs /workspace/dist/host-bootstrap.cjs /workspace/dist/host-recovery.cjs /app/host/
 COPY --from=node-build /workspace/ops/production/compose.yaml /workspace/ops/production/openresty.conf /workspace/ops/production/pgbouncer.ini /workspace/ops/production/pgbackrest.conf /workspace/ops/production/active-slot.conf /app/host/ops/production/
 COPY --from=node-build /workspace/ops/production/pgbouncer-image.json /app/host/ops/production/pgbouncer-image.json
 

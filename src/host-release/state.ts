@@ -410,6 +410,38 @@ export function restoreHostGeneration(
   }
 }
 
+export function requeueHostRecovery(path: string, id: string) {
+  const db = database(path)
+  try {
+    db.exec('BEGIN IMMEDIATE')
+    const operation = z
+      .object({
+        operation_type: z.literal('server-migration'),
+        status: z.literal('needs-attention'),
+        idempotency_key: z.string().startsWith('host-release-recovery:'),
+      })
+      .parse(
+        db
+          .prepare(
+            'SELECT operation_type,status,idempotency_key FROM infrastructure_operations WHERE id=?',
+          )
+          .get(z.uuid().parse(id)),
+      )
+    db.prepare(
+      "UPDATE infrastructure_operations SET status='queued',lease_owner=NULL,lease_expires_at=NULL,updated_at=? WHERE id=?",
+    ).run(new Date().toISOString(), id)
+    db.prepare(
+      "INSERT INTO control_audit_events(operation_id,actor_id,event_type,outcome,details_json,created_at) VALUES(?,'server-console:host-recovery','host_release_recovery_requeued','accepted',?,?)",
+    ).run(id, JSON.stringify({ identity: operation.idempotency_key }), new Date().toISOString())
+    db.exec('COMMIT')
+  } catch (error: unknown) {
+    db.exec('ROLLBACK')
+    throw error
+  } finally {
+    db.close()
+  }
+}
+
 export function requeueHostBootstrap(path: string, id: string) {
   const db = database(path)
   try {

@@ -38,6 +38,7 @@ const containerSchema = z
       }),
       State: z.object({
         Running: z.boolean(),
+        StartedAt: z.string(),
         Health: z.object({ Status: z.string() }).optional(),
       }),
     }),
@@ -186,6 +187,41 @@ export function requiresHostConfigRebind(
   return rewrittenFiles.has(service === 'pgbouncer' ? 'pgbouncer.ini' : 'openresty.conf')
 }
 
+/**
+ * An atomic config replacement changes the bound inode without changing the running process.
+ * A process started at or before the file's modification time may still hold the prior config.
+ */
+export function containerConfigRebindRequired(startedAt: string, configModifiedAt: number) {
+  const started = Date.parse(startedAt)
+  return !Number.isFinite(started) || started <= configModifiedAt
+}
+
+function hostServiceConfigStale(
+  settings: ProvisionRequest['settings'],
+  service: 'pgbouncer' | 'openresty',
+) {
+  const container = inspectHostContainer(`${settings.projectName}-${service}-1`)
+  if (!container) return true
+  const files =
+    service === 'pgbouncer'
+      ? ['pgbouncer.ini', 'secrets/pgbouncer-userlist.txt']
+      : ['openresty.conf']
+  return files.some((file) =>
+    containerConfigRebindRequired(
+      container.startedAt,
+      statSync(join(settings.configRoot, file)).mtimeMs,
+    ),
+  )
+}
+
+/** Read-only view of the topology services whose running process predates its config. */
+export function hostTopologyConfigStale(settings: ProvisionRequest['settings']) {
+  return {
+    openresty: hostServiceConfigStale(settings, 'openresty'),
+    pgbouncer: hostServiceConfigStale(settings, 'pgbouncer'),
+  }
+}
+
 export function writeHostFile(
   path: string,
   contents: string | Buffer,
@@ -278,6 +314,7 @@ export function inspectHostContainer(name: string) {
     Id: parsed.Id,
     Config: { Image: parsed.Config.Image, Labels: parsed.Config.Labels },
     State: parsed.State,
+    startedAt: parsed.State.StartedAt,
     deploymentPollingEnabled:
       parsed.Config.Env?.includes('DEPLOYMENT_POLLING_ENABLED=true') ?? false,
   }
@@ -398,8 +435,17 @@ export function provisionHost(input: ProvisionRequest) {
     )
     .digest('hex')
   const fingerprintPath = join(settings.configRoot, 'openresty-topology.sha256')
-  const topologyChanged =
+  const fingerprintChanged =
     !existsSync(fingerprintPath) || readFileSync(fingerprintPath, 'utf8').trim() !== fingerprint
+  // A restored file can equal the desired content while the running pool/proxy still holds the
+  // config it loaded before that restore. Rebind only the service whose loaded config is stale.
+  const rebindPgbouncer =
+    requiresHostConfigRebind('pgbouncer', rewrittenTopology) ||
+    hostServiceConfigStale(settings, 'pgbouncer')
+  const rebindOpenresty =
+    requiresHostConfigRebind('openresty', rewrittenTopology) ||
+    hostServiceConfigStale(settings, 'openresty')
+  const topologyChanged = fingerprintChanged || rebindPgbouncer || rebindOpenresty
 
   if (request.mode === 'bootstrap') {
     hostCompose(request, ['up', '--detach', '--wait', 'postgres', 'pgbouncer'])
@@ -430,7 +476,7 @@ export function provisionHost(input: ProvisionRequest) {
       changed += Number(writeHostFile(roleMarker, roleFingerprint, 0, gid, 0o640))
     }
   }
-  if (request.mode !== 'configuration') {
+  if (request.mode !== 'configuration' && request.applyMigrations !== false) {
     hostCompose(request, [
       '--profile',
       'deployment',
@@ -458,21 +504,9 @@ export function provisionHost(input: ProvisionRequest) {
       '-t',
     ])
     if (request.mode !== 'configuration')
-      changed += Number(
-        servicesChanged(
-          request,
-          ['pgbouncer'],
-          requiresHostConfigRebind('pgbouncer', rewrittenTopology),
-        ),
-      )
-    // Recreate only when an atomic config-file replacement changes the bind inode.
-    changed += Number(
-      servicesChanged(
-        request,
-        ['openresty'],
-        requiresHostConfigRebind('openresty', rewrittenTopology),
-      ),
-    )
+      changed += Number(servicesChanged(request, ['pgbouncer'], rebindPgbouncer))
+    // Recreate only when an atomic config replacement or a stale running config requires it.
+    changed += Number(servicesChanged(request, ['openresty'], rebindOpenresty))
     changed += Number(writeHostFile(fingerprintPath, `${fingerprint}\n`, 0, gid, 0o640))
   }
   if (request.mode === 'bootstrap')

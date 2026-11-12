@@ -111,6 +111,56 @@ Expand Migration、不覆盖 `.env`、不删除数据库或备份。
 与审计，保留现场和证据。禁止删除失败记录或编造可恢复备份。公网控制不可达时依旧使用
 授权的服务器控制台调用同一恢复 Engine，现有 Break-glass 审计要求保持有效。
 
+### 受控 Host Release 恢复
+
+当原 Operation 为 `failed` / `host-release-recovery-required` 且持久 Checkpoint 为
+`compensating` 或 `reverted` 时，使用仓库内的服务器控制台入口
+`host-recovery.cjs`。它不修改原 Operation、原 Checkpoint phase、数据库 Migration 或
+Blue/Green Slot，而是创建一个新的、排他的 `server-migration` Operation
+（`action=host-release-recovery`）记录受控恢复：
+
+1. 校验原 Operation 的失败状态、Checkpoint 阶段、Active Web SHA/Digest、Host
+   Runtime Current/Previous/Pending 与 Checkpoint 完全一致；任一漂移即拒绝。
+2. 如 Web 仍在失败目标上，调用同一个 Deployment Engine 的合成 Rollback 回到
+   Checkpoint 的 Active Slot；不手工切换 Blue/Green。
+3. 用 Checkpoint 的固定文件与镜像重新收敛 Host，但显式关闭 Migration：
+   `applyMigrations=false`。目标 Release 的 Expand Migration 已记录在
+   PostgreSQL，恢复旧镜像时不得重放其较短的 Journal。
+4. 若 PgBouncer/OpenResty 进程启动时间早于其配置文件最后替换时间，则强制 Rebind，
+   确保运行中的进程确实加载了恢复后的配置；否则不无谓重启连接池或代理。
+5. 复核固定 Convergence 字段、服务健康、配置文件与进程代际，并调用同一个
+   Release Job 的 `verify` Smoke。
+6. 追加 `host_release_recovery_verified` 审计事件到原 Operation，并以
+   `host-release-recovered` 完成恢复 Operation；原失败记录与 Checkpoint 保留为审计证据。
+
+恢复使用当前已审核的 Provision 代码，因此会在缺失时创建受管的
+`${TUNGCHIAHUI_DATA_ROOT}/health-data` 目录（空目录，root:runtime-group，2750）。
+这是下一次 S400 发布所需的固定挂载源，不是业务数据回滚；恢复结果通过
+`preparedHealthDataDirectory` 如实记录。
+
+服务器控制台执行（Recovery Image 必须是已通过 CI 的不可变 Digest）。先运行只读
+`--check`，确认 `convergenceDifferences`、`topologyRebindPlan`、`webRollbackRequired`
+与 `healthDataDirectoryPresent` 符合预期；该模式不初始化/Reconcile Control-state、
+不创建 Operation、不写审计、不修改 Host：
+
+```bash
+sudo docker pull ghcr.io/tungchiahui/tungchiahui_web-recovery@sha256:<digest>
+sudo docker create --name tungchiahui-recovery-artifact \
+  ghcr.io/tungchiahui/tungchiahui_web-recovery@sha256:<digest>
+sudo install -d -m 0700 /root/tungchiahui-host-recovery
+sudo docker cp tungchiahui-recovery-artifact:/app/host/node /root/tungchiahui-host-recovery/node
+sudo docker cp tungchiahui-recovery-artifact:/app/host/host-recovery.cjs \
+  /root/tungchiahui-host-recovery/host-recovery.cjs
+sudo docker rm tungchiahui-recovery-artifact
+sudo /root/tungchiahui-host-recovery/node \
+  /root/tungchiahui-host-recovery/host-recovery.cjs \
+  <original-operation-id> /etc/tungchiahui/host-runtime/settings.json --check
+```
+
+确认后去掉 `--check` 执行受控恢复。恢复成功后，先只读核对恢复 Operation 结果、
+原 Operation 审计、两个 Slot 与备份新鲜度，再通过正常工作流部署目标 main SHA。
+恢复本身不会安装新的 Host Generation；新的 Coordinator 仍在下一次正常发布收敛成功后提交。
+
 `./site status` 报告 Host Executor 的版本和租约健康。安装后租约失效会使 deploy-agent
 健康检查降级；现有观测和健康检查能够发现执行器停止。
 
@@ -192,3 +242,22 @@ sudo sqlite3 -readonly /var/lib/tungchiahui/control-state/control.db \
 新实现仅在 `pgbouncer.ini` 或 `openresty.conf` 文件被原子替换时强制重建相应服务；
 仅 Compose 变更仍调用 `docker compose up --wait`，由 Compose 根据每个服务自身
 的配置差异决定是否重建，Health Gate 不变。
+
+### 2026-11-12 生产只读诊断结论
+
+- 失败目标 `269129479` 的 `compose.yaml` 为 `content-worker` 新增
+  `${TUNGCHIAHUI_DATA_ROOT}/health-data` 只读 Bind（`create_host_path: false`），
+  而当时运行的 `3fedee1b` Host Coordinator 尚未创建该目录。独立服务收敛在
+  `content-worker` 挂载处失败；兼容版本身不需要该挂载。
+- 旧实现因 `compose.yaml` 变化强制重建 PgBouncer/OpenResty。PgBouncer 停止导致
+  Content Worker 连接中断（与 20:31:32 的 `Connection terminated unexpectedly` 一致）；
+  OpenResty 于 20:31:39 载入目标配置。独立服务未被重建，仍运行兼容版镜像。
+- 自动补偿的 Web Rollback 成功（12:31:47），随后 `restoreHostConvergence` 用
+  `3fedee1b` 旧服务镜像再次运行 `database-migrate`。PostgreSQL 已由目标 Release 记录
+  16 条 Migration，而旧镜像 Journal 只有 14 条；Runner 以
+  `Migration journal mismatch` 拒绝，补偿停在 `compensating`（12:31:50 结束）。
+- 补偿在失败前已把四份配置恢复为 Checkpoint 内容，因此磁盘文件 MATCH；但
+  `openresty-topology.sha256` 仍是目标指纹，OpenResty 进程仍持有目标配置。
+  `health-data` 不存在；独立服务与 Web 仍是兼容版镜像；数据库 16 条 Migration 已完成。
+- 修复后补偿与恢复均不重放旧镜像 Migration；按进程启动时间与配置 mtime 检测过期
+  运行配置并定向 Rebind；`host-recovery.cjs` 提供不修改原 Operation 的受控恢复。

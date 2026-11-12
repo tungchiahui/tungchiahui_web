@@ -164,12 +164,22 @@ const infrastructureTargetSchemas = {
       targetSha: gitShaSchema,
     })
     .strict(),
-  'server-migration': z
-    .object({
-      action: z.enum(['planned-migration', 'provision-only']).default('planned-migration'),
-      inventoryHost: z.string().regex(/^[a-zA-Z][a-zA-Z0-9._-]{0,252}$/),
-    })
-    .strict(),
+  'server-migration': z.union([
+    z
+      .object({
+        action: z.enum(['planned-migration', 'provision-only']).default('planned-migration'),
+        inventoryHost: z.string().regex(/^[a-zA-Z][a-zA-Z0-9._-]{0,252}$/),
+      })
+      .strict(),
+    // Server-console recovery of a failed host release. The original operation and its
+    // checkpoint remain immutable; this operation records the verified recovery.
+    z
+      .object({
+        action: z.literal('host-release-recovery'),
+        originalOperationId: z.uuid(),
+      })
+      .strict(),
+  ]),
 } as const
 
 export const infrastructureOperationRequestSchema = z.discriminatedUnion('operationType', [

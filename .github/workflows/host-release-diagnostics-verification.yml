@@ -2,7 +2,7 @@ name: Host Release Diagnostics Verification
 
 on:
   push:
-    branches: [fix/host-release-diagnostics]
+    branches: [fix/host-release-diagnostics, fix/host-release-recovery]
 
 permissions:
   contents: read

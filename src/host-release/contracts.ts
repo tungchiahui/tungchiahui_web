@@ -53,6 +53,9 @@ export const provisionRequestSchema = z
     postgresImage: immutableImageSchema,
     pgbouncerImage: immutableImageSchema.optional(),
     mode: z.enum(['bootstrap', 'services', 'configuration']),
+    // Compensation/recovery restores a previous release after expand migrations have already
+    // been recorded; replaying that release's older migration journal would be rejected.
+    applyMigrations: z.boolean().optional(),
     deploymentPollingEnabled: z.boolean().optional(),
     backupScheduleEnabled: z.boolean().default(false),
     maintenanceScheduleEnabled: z.boolean().default(false),

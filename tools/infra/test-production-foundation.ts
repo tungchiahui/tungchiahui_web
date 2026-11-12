@@ -1,6 +1,6 @@
 import { type ChildProcess, spawn, spawnSync } from 'node:child_process'
 import { generateKeyPairSync } from 'node:crypto'
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, readFileSync, utimesSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { parseEnv } from 'node:util'
 
@@ -25,17 +25,25 @@ import { createPostgresScramVerifier } from '../../src/database/postgres-scram'
 import { seedDevelopmentDatabase } from '../../src/database/seed'
 import { extractHostGeneration, hostGenerationDirectory } from '../../src/host-release/artifacts'
 import { hostSettingsSchema } from '../../src/host-release/contracts'
-import { captureHostConvergence, hostControlPath } from '../../src/host-release/coordinator'
+import {
+  captureHostConvergence,
+  convergenceDifferences,
+  hostControlPath,
+  releaseProvisionRequest,
+} from '../../src/host-release/coordinator'
 import { provisionHost } from '../../src/host-release/provision'
+import { recoverHostRelease } from '../../src/host-release/recovery'
 import {
   acquireHostExecutor,
   checkpointHostRelease,
   commitHostGeneration,
   initializeHostReleaseState,
   readHostCheckpoint,
+  readHostExecutorStatus,
   readHostRuntime,
   recordHostBootstrapBaseline,
   releaseHostExecutor,
+  restoreHostGeneration,
   stageHostGeneration,
 } from '../../src/host-release/state'
 import { SearchIndexRepository } from '../../src/search/repository'
@@ -1515,7 +1523,7 @@ async function verifyCompleteServerReleases() {
   const legacyBefore = captureHostConvergence(settings)
   try {
     start()
-    compose(['up', '--detach', '--no-deps', '--wait', 'deploy-agent'], false, {
+    compose(['up', '--detach', '--no-deps', '--wait', '--force-recreate', 'deploy-agent'], false, {
       TUNGCHIAHUI_DEPLOYMENT_POLLING_ENABLED: 'false',
     })
     const created = await request('server-complete-release-001')
@@ -1567,6 +1575,123 @@ async function verifyCompleteServerReleases() {
     )
     await stop()
 
+    // Simulate a failed release whose Web slot was already compensated but whose host
+    // convergence stopped with a durable `compensating` checkpoint. This is the production
+    // 2026-11-12 state; recovery must use the same engine and must not replay an older
+    // release's migration journal.
+    restoreHostGeneration(path, legacyBefore.hostSha, legacyBefore.hostPreviousSha)
+    // The fixture represents a host-supervised release: Deployment Polling must be off,
+    // otherwise the standalone deploy-agent can claim the later retry before the supervisor.
+    const recoveryBefore = captureHostConvergence(settings)
+    expect(
+      !recoveryBefore.deploymentPollingEnabled,
+      'Recovery fixture left Deployment Polling enabled on the deploy-agent',
+    )
+    const failedRecovery = createInfrastructureOperation(
+      path,
+      {
+        operationType: 'deploy',
+        reason: 'Simulate a host release requiring audited recovery',
+        target: { gitSha: candidate.sha, imageDigest: candidate.webDigest },
+      },
+      {
+        id: 'server-console:host-recovery-fixture',
+        kind: 'operator',
+        capabilities: ['infrastructure-operation:create', 'infrastructure-operation:read'],
+      },
+      'host-recovery-fixture-001',
+    ).operation
+    const recoveryFixtureOwner = 'deploy-agent:host-recovery-fixture'
+    const recoveryClaim = claimNextInfrastructureOperation(
+      path,
+      recoveryFixtureOwner,
+      3600,
+      new Date(),
+      ['deploy'],
+    )
+    if (!recoveryClaim || recoveryClaim.id !== failedRecovery.id)
+      throw new Error('Missing failed host recovery fixture claim')
+    const recoveryLease = {
+      leaseOwner: recoveryFixtureOwner,
+      fencingToken: recoveryClaim.fencingToken,
+    }
+    startInfrastructureOperation(path, failedRecovery.id, recoveryLease)
+    checkpointHostRelease(
+      path,
+      failedRecovery.id,
+      recoveryLease,
+      candidate,
+      recoveryBefore,
+      'prepared',
+    )
+    // The recreated deploy-agent health includes the host executor lease. Keep the
+    // supervisor running so host convergence does not fail on a lease-only health check.
+    start()
+    const executorDeadline = Date.now() + 30_000
+    while (!readHostExecutorStatus(path).healthy && Date.now() < executorDeadline)
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 250))
+    expect(
+      readHostExecutorStatus(path).healthy,
+      'Host executor did not become ready before the recovery fixture',
+    )
+    provisionHost(releaseProvisionRequest(settings, registryRepository, candidate, recoveryBefore))
+    checkpointHostRelease(
+      path,
+      failedRecovery.id,
+      recoveryLease,
+      candidate,
+      recoveryBefore,
+      'compensating',
+    )
+    finishInfrastructureOperation(path, failedRecovery.id, recoveryLease, {
+      status: 'failed',
+      phase: 'host-release-recovery-required',
+      errorSummary: 'Fixture host release requires audited recovery',
+    })
+    const openrestyName = `${projectName}-openresty-1`
+    const migrateContainerId = compose(['ps', '--all', '--quiet', 'database-migrate']).stdout.trim()
+    const openrestyBeforeRecovery = execute('docker', [
+      'inspect',
+      '--format',
+      '{{.Id}}',
+      openrestyName,
+    ]).stdout.trim()
+    // Leave the running proxy config older than the restored file it is bound to.
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 1_100))
+    const reboundAt = new Date()
+    utimesSync(join(configRoot, 'openresty.conf'), reboundAt, reboundAt)
+    const recovered = await recoverHostRelease(settings, failedRecovery.id)
+    if ('checkOnly' in recovered) throw new Error('Recovery unexpectedly ran in check-only mode')
+    expect(
+      recovered.status === 'completed' && recovered.phase === 'host-release-recovered',
+      `Audited host recovery did not complete: ${JSON.stringify(recovered)}`,
+    )
+    expect(
+      getInfrastructureOperation(path, failedRecovery.id)?.status === 'failed' &&
+        getInfrastructureOperation(path, failedRecovery.id)?.phase ===
+          'host-release-recovery-required' &&
+        readHostCheckpoint(path, failedRecovery.id)?.phase === 'compensating',
+      'Recovery rewrote the original failed operation or its checkpoint',
+    )
+    expect(
+      convergenceDifferences(recoveryBefore, captureHostConvergence(settings)).length === 0,
+      'Recovery did not restore the durable convergence baseline',
+    )
+    expect(
+      serviceShas().every((sha) => sha === initial.sha) && publicVersion().gitSha === initial.sha,
+      'Recovery did not restore the previous services and Web release',
+    )
+    expect(
+      compose(['ps', '--all', '--quiet', 'database-migrate']).stdout.trim() === migrateContainerId,
+      'Recovery replayed the previous release migration journal',
+    )
+    expect(
+      execute('docker', ['inspect', '--format', '{{.Id}}', openrestyName]).stdout.trim() !==
+        openrestyBeforeRecovery,
+      'Recovery did not rebind the stale OpenResty configuration',
+    )
+    await stop()
+
     // Persist a prepared operation, then corrupt only its candidate startup artifact.
     // Restart must use the healthy current generation, replay the job, and compensate on failed probe.
     const failed = await request('server-bad-executor-001')
@@ -1595,6 +1720,19 @@ async function verifyCompleteServerReleases() {
     releaseHostExecutor(path, fixtureOwner)
     start()
     const rejected = await waitForOperation(failed.id)
+    if (
+      rejected.status !== 'failed' ||
+      getInfrastructureOperation(path, failed.id)?.phase !== 'host-release-reverted'
+    )
+      console.error(
+        JSON.stringify({
+          audit: listControlAuditEvents(path, failed.id).slice(-12),
+          checkpointPhase: readHostCheckpoint(path, failed.id)?.phase,
+          operation: getInfrastructureOperation(path, failed.id),
+          rejected,
+          supervisor: supervisorEvents.slice(-4_000),
+        }),
+      )
     expect(
       rejected.status === 'failed' &&
         getInfrastructureOperation(path, failed.id)?.phase === 'host-release-reverted',
@@ -1609,12 +1747,32 @@ async function verifyCompleteServerReleases() {
       'Compensation replaced PostgreSQL',
     )
     const retried = await request('server-complete-release-retry-001')
+    const retriedOperation = await waitForOperation(retried.id)
     expect(
-      (await waitForOperation(retried.id)).status === 'completed',
+      retriedOperation.status === 'completed',
       'Clean immutable candidate could not recover after failed startup',
     )
+    const retriedShas = serviceShas()
+    if (!retriedShas.every((sha) => sha === candidate.sha))
+      console.error(
+        JSON.stringify({
+          audit: listControlAuditEvents(path, retried.id).slice(-10),
+          images: ['control-api', 'content-worker', 'deploy-agent', 'observability-agent'].map(
+            (service) =>
+              execute('docker', [
+                'inspect',
+                '--format',
+                '{{.Config.Image}}|{{index .Config.Labels "org.opencontainers.image.revision"}}',
+                `${projectName}-${service}-1`,
+              ]).stdout.trim(),
+          ),
+          retried: retriedOperation,
+          shas: retriedShas,
+          supervisor: supervisorEvents.slice(-4_000),
+        }),
+      )
     expect(
-      serviceShas().every((sha) => sha === candidate.sha),
+      retriedShas.every((sha) => sha === candidate.sha),
       'Retry did not complete independent-service upgrade',
     )
 
