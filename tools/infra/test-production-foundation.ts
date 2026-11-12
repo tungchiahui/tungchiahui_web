@@ -1713,6 +1713,19 @@ async function verifyCompleteServerReleases() {
     releaseHostExecutor(path, fixtureOwner)
     start()
     const rejected = await waitForOperation(failed.id)
+    if (
+      rejected.status !== 'failed' ||
+      getInfrastructureOperation(path, failed.id)?.phase !== 'host-release-reverted'
+    )
+      console.error(
+        JSON.stringify({
+          audit: listControlAuditEvents(path, failed.id).slice(-12),
+          checkpointPhase: readHostCheckpoint(path, failed.id)?.phase,
+          operation: getInfrastructureOperation(path, failed.id),
+          rejected,
+          supervisor: supervisorEvents.slice(-4_000),
+        }),
+      )
     expect(
       rejected.status === 'failed' &&
         getInfrastructureOperation(path, failed.id)?.phase === 'host-release-reverted',
