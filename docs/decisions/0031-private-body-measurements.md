@@ -21,3 +21,23 @@ for the unified records without reverting the authoritative store to obsolete JS
 Versioned website JSON is the formal exchange format. SmartScaleConnect 0.4.2 remains independent
 and its export uses a separate validated ingestion contract. Health data and export files remain
 outside Git. Production credentials and activation follow existing server-managed release policy.
+
+## Unified storage and execution
+
+Migration 0014 adds normalized app.body_measurements plus isolated health plan, snapshot and sync
+state tables. Data backfill uses validated TypeScript inside one transaction, retains the original
+JSONB, freezes its writes, preserves date-only Beijing midnight and complete custom target metadata.
+Migration 0015 adds health_sync to the existing durable application-job enum. The content-worker
+executes imports with source-only row policies and column grants. Its isolated read-only directory
+lives under the managed production dataRoot, separate from exporter credentials and all web slots.
+Polling defaults disabled until the Owner authorizes one-time producer configuration and activation.
+
+Formal version-1 website JSON supports validated preview and revision-checked atomic merge. Raw
+source fields, independent annotations and plan metadata retain their provenance. Automatic source
+metrics remain protected when merging files. New absent automatic rows require raw-source identity
+and metric reconciliation. Old CSV utilities remain available as offline compatibility code.
+
+The compatibility release SHA is explicitly recognized by deployment compatibility checks. New web
+images advertise health-data-versions=1. Migration and rollback fail closed when the retained release
+cannot serve owner-only unified data. Backup/PITR and restore drills cover all added PostgreSQL data.
+Operational details and recovery validation are in ../operations/body-measurements.md.

@@ -40,6 +40,7 @@ export type DeploymentSmokeEvidence = Readonly<{
 }>
 
 export interface DeploymentPlatform {
+  verifyHealthMigrationCompatibility?(release?: DeploymentRelease): Promise<boolean>
   verifyTechV3MigrationCompatibility?(release?: DeploymentRelease): Promise<boolean>
   cleanupFailedCandidate(release: DeploymentRelease): Promise<void>
   inspectActiveRelease(): Promise<DeploymentRelease>
@@ -48,6 +49,7 @@ export interface DeploymentPlatform {
   runMigrations(
     input: Readonly<{
       hasFreshRecoverableBackup: boolean
+      hasHealthCompatiblePreviousRelease?: boolean
       hasTechV3CompatiblePreviousRelease?: boolean
       target: DeploymentRelease
     }>,
@@ -231,6 +233,10 @@ export async function executeDeploymentOperation(
         allowContract: false,
         hasFreshRecoverableBackup: freshBackup,
         applyMigrations: operation.operationType === 'deploy',
+        hasHealthCompatiblePreviousRelease:
+          (await platform.verifyHealthMigrationCompatibility?.(
+            operation.operationType === 'rollback' ? target : undefined,
+          )) ?? false,
         hasTechV3CompatiblePreviousRelease:
           (await platform.verifyTechV3MigrationCompatibility?.(
             operation.operationType === 'rollback' ? target : undefined,
@@ -262,6 +268,8 @@ export async function executeDeploymentOperation(
       if (phase < phaseIndex('migration-complete')) {
         await platform.runMigrations({
           hasFreshRecoverableBackup: freshBackup,
+          hasHealthCompatiblePreviousRelease:
+            (await platform.verifyHealthMigrationCompatibility?.()) ?? false,
           hasTechV3CompatiblePreviousRelease:
             (await platform.verifyTechV3MigrationCompatibility?.()) ?? false,
           target,

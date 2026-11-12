@@ -15,6 +15,8 @@ import { seedDevelopmentDatabase } from '../../src/database/seed'
 import { techFootprintPayloadSchema } from '../../src/personal/contracts'
 import { legacyRecordIdMap } from '../../src/personal/legacy-migration'
 import { assertDockerPrerequisites, ComposeProject } from '../dev/compose'
+import { verifyUnifiedHealth } from '../health/verify-health'
+import { verifyLegacyHealth } from '../health/verify-legacy'
 
 const journalSchema = z.object({
   version: z.string(),
@@ -413,6 +415,7 @@ async function run() {
       repositoryRoot,
       hasFreshRecoverableBackup: true,
       hasTechV3CompatiblePreviousRelease: true,
+      hasHealthCompatiblePreviousRelease: true,
     })
     if (clean.migrationCount !== expectedMigrationCount) {
       throw new Error('Empty database did not reach the latest migration')
@@ -421,6 +424,7 @@ async function run() {
       repositoryRoot,
       hasFreshRecoverableBackup: true,
       hasTechV3CompatiblePreviousRelease: true,
+      hasHealthCompatiblePreviousRelease: true,
     })
     if (repeated.migrationCount !== clean.migrationCount) {
       throw new Error('Repeated migration changed the applied migration count')
@@ -436,15 +440,33 @@ async function run() {
     await assertSearchMigration(cleanUrl)
     await assertRoleBoundary(cleanUrl)
     await assertOwnerSessionLifecycle(cleanUrl)
+    await verifyUnifiedHealth(cleanUrl)
 
     const admin = new Client({ connectionString: cleanUrl })
     await admin.connect()
     try {
       await admin.query('CREATE DATABASE tungchiahui_previous')
       await admin.query('CREATE DATABASE tungchiahui_tech_v2')
+      await admin.query('CREATE DATABASE tungchiahui_health_legacy')
     } finally {
       await admin.end()
     }
+
+    const healthPrevious = stagePreviousMigrationFixture(
+      repositoryRoot,
+      temporaryRoot,
+      '0013_music_library',
+    )
+    const healthUrl = databaseUrl(postgresPort, 'tungchiahui_health_legacy')
+    await runPostgresMigrations(healthUrl, {
+      repositoryRoot,
+      migrationsDirectory: healthPrevious.migrationsDirectory,
+      policyPath: healthPrevious.policyPath,
+      hasFreshRecoverableBackup: true,
+      hasTechV3CompatiblePreviousRelease: true,
+      hasHealthCompatiblePreviousRelease: true,
+    })
+    await verifyLegacyHealth(healthUrl, repositoryRoot)
 
     if (expectedMigrationCount >= 10) {
       const techV2 = stagePreviousMigrationFixture(
@@ -470,6 +492,7 @@ async function run() {
             repositoryRoot,
             hasFreshRecoverableBackup: true,
             hasTechV3CompatiblePreviousRelease: true,
+            hasHealthCompatiblePreviousRelease: true,
           })
         } catch {
           rejectedUnknown = true
@@ -502,6 +525,7 @@ async function run() {
           repositoryRoot,
           hasFreshRecoverableBackup: true,
           hasTechV3CompatiblePreviousRelease: true,
+          hasHealthCompatiblePreviousRelease: true,
         })
         const migrated = await techClient.query<{ payload: unknown; revision: number }>(
           `SELECT payload, revision::integer AS revision FROM app.owner_managed_datasets WHERE dataset_key = 'tech_footprint'`,
@@ -574,6 +598,7 @@ async function run() {
       repositoryRoot,
       hasFreshRecoverableBackup: true,
       hasTechV3CompatiblePreviousRelease: true,
+      hasHealthCompatiblePreviousRelease: true,
     })
     const upgradedClient = new Client({ connectionString: previousUrl })
     await upgradedClient.connect()
@@ -618,6 +643,7 @@ async function run() {
           repositoryRoot,
           hasFreshRecoverableBackup: true,
           hasTechV3CompatiblePreviousRelease: true,
+          hasHealthCompatiblePreviousRelease: true,
         })
       } catch (error) {
         if (

@@ -24,6 +24,7 @@ export const applicationJobTypeValues = [
   'translation',
   'search_reindex',
   'cache_revalidation',
+  'health_sync',
 ] as const
 export const applicationJobStatusValues = [
   'queued',
@@ -113,6 +114,7 @@ export const applicationJobRequestSchema = z.discriminatedUnion('jobType', [
   translationJobPayloadSchema,
   searchReindexJobSchema,
   cacheRevalidationJobSchema,
+  z.object({ jobType: z.literal('health_sync'), payload: z.object({}).strict() }),
 ])
 
 export type DocumentWrite = z.infer<typeof documentWriteSchema>

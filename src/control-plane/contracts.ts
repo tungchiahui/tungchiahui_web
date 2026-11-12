@@ -415,6 +415,7 @@ export const serviceIdentityContracts = Object.freeze({
       'translation',
       'search_reindex',
       'cache_revalidation',
+      'health_sync',
     ]),
     controlStateWrite: false,
     dockerSocket: false,

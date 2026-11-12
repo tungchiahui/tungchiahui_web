@@ -274,3 +274,10 @@ Content Ingestion 可以识别缺失翻译，但不得隐式消耗付费 AI Toke
 - Production-to-GitHub Content Writeback
 
 这些不是为了省事而省略；当前问题并不需要它们。
+
+## Owner 身体测量
+
+ADR 0031 将旧减重 JSONB、手动记录与 S400 导出统一到 PostgreSQL 测量表。实际数据只通过
+独立 control-api 的 Owner 私有接口提供。公开减重页面保留静态计划。content-worker 复用
+PostgreSQL Durable Job 导入隔离目录中的只读 JSON；蓝绿 Web Slot 没有文件挂载。
+生产接入、JSON 交换、迁移对账与恢复验证见 `../operations/body-measurements.md`。

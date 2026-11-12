@@ -1,11 +1,8 @@
 import { readFile } from 'node:fs/promises'
 import { expect, test } from '@playwright/test'
 import { z } from 'zod'
-import {
-  datasetResponseSchema,
-  techFootprintPayloadSchema,
-  weightLossPayloadSchema,
-} from '../../src/personal/contracts'
+import { healthSnapshotSchema } from '../../src/health/contracts'
+import { datasetResponseSchema, techFootprintPayloadSchema } from '../../src/personal/contracts'
 import { roadmapExchangeSchema } from '../../src/personal/exchange'
 
 test('owner login directly enables both trackers; saves survive reload and health stays private', async ({
@@ -98,23 +95,25 @@ test('owner login directly enables both trackers; saves survive reload and healt
 
   await page.goto('/weight-loss')
   await expect(page.getByRole('heading', { name: '减脂计划与进度记录' })).toBeVisible()
-  const weight = page.getByRole('spinbutton', { name: '7 日平均体重 (kg)' })
+  const weight = page.getByRole('spinbutton', { name: '体重 (kg)', exact: true })
   await expect(weight).toBeEnabled()
   await weight.fill('96.5')
-  await page.getByRole('spinbutton', { name: '体脂率 (%)' }).fill('26.4')
+  await page.getByRole('spinbutton', { name: '体脂率 (%)', exact: true }).fill('26.4')
   await page.getByRole('textbox', { name: '备注', exact: true }).fill('Weekly measurement')
-  await expect(page.getByTestId('save-state')).toContainText('已载入公开记录', { timeout: 15_000 })
-  const weights = datasetResponseSchema(weightLossPayloadSchema).parse(
-    await (await page.request.get('/api/ops/health/legacy')).json(),
-  ).dataset
-  expect(weights?.payload.records[0]).toMatchObject({
-    weight: '96.5',
-    bodyFat: '26.4',
-    note: 'Weekly measurement',
-  })
+  await page.getByRole('button', { name: '保存记录', exact: true }).click()
+  await expect(page.getByRole('cell', { name: 'Weekly measurement', exact: true })).toBeVisible()
+  const weights = healthSnapshotSchema.parse(
+    await (await page.request.get('/api/ops/health/snapshot')).json(),
+  )
+  expect(
+    weights.measurements.some(
+      (row) => row.weight === 96.5 && row.bodyFat === 26.4 && row.note === 'Weekly measurement',
+    ),
+  ).toBe(true)
+  expect((await page.request.get('/api/personal-data/weight_loss')).status()).toBe(403)
   await page.reload()
-  await expect(weight).toHaveValue('96.5')
-  await expect(page.getByRole('img', { name: '目标与实际趋势' })).toBeVisible()
+  await expect(page.getByRole('cell', { name: 'Weekly measurement', exact: true })).toBeVisible()
+  await expect(page.getByRole('img', { name: '身体指标趋势' })).toBeVisible()
   expect(
     (
       await page.request.put('/api/ops/site/datasets/weight_loss', {
@@ -134,10 +133,12 @@ test('owner login directly enables both trackers; saves survive reload and healt
   try {
     const publicPage = await visitor.newPage()
     await publicPage.goto('/weight-loss')
-    await expect(publicPage.getByRole('spinbutton', { name: '7 日平均体重 (kg)' })).toHaveValue('')
+    await expect(publicPage.getByRole('spinbutton')).toHaveCount(0)
     expect((await publicPage.request.get('/api/personal-data/weight_loss')).status()).toBe(403)
-    expect((await publicPage.request.get('/api/ops/health/legacy')).status()).toBe(403)
-    await expect(publicPage.getByRole('spinbutton', { name: '7 日平均体重 (kg)' })).toBeDisabled()
+    expect((await publicPage.request.get('/api/ops/health/snapshot')).status()).toBe(401)
+    expect(await publicPage.content()).not.toContain('Weekly measurement')
+    const anonymousHtml = await publicPage.request.get('/weight-loss')
+    expect(await anonymousHtml.text()).not.toContain('Weekly measurement')
     await publicPage.setViewportSize({ width: 390, height: 844 })
     for (const route of [
       '/weight-loss',
@@ -156,10 +157,10 @@ test('owner login directly enables both trackers; saves survive reload and healt
   } finally {
     await visitor.close()
   }
-  const logoutButton = page.getByRole('button', { name: '退出登录', exact: true })
+  const logoutButton = page.getByRole('button', { name: 'owner', exact: true })
   await expect(logoutButton).toBeVisible()
   await logoutButton.click()
-  await expect(weight).toBeDisabled()
+  await expect(weight).toHaveCount(0)
   expect(
     z
       .object({ authenticated: z.boolean() })
@@ -170,7 +171,7 @@ test('owner login directly enables both trackers; saves survive reload and healt
     await page.request
       .put('/api/ops/site/datasets/weight_loss', {
         headers: replayHeaders,
-        data: { expectedRevision: weights?.revision, payload: weights?.payload },
+        data: {},
       })
       .then((response) => response.status()),
   )

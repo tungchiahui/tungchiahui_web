@@ -301,6 +301,7 @@ describe('Docker migration image identity', () => {
           await migration
           expect(JSON.parse(createdBody)).toMatchObject({
             Env: [
+              'DEPLOYMENT_HEALTH_COMPATIBLE_PREVIOUS_RELEASE=false',
               'DEPLOYMENT_HAS_FRESH_RECOVERABLE_BACKUP=true',
               'DEPLOYMENT_TECH_V3_COMPATIBLE_PREVIOUS_RELEASE=false',
             ],

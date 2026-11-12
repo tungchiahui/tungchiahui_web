@@ -7,6 +7,7 @@ const configuration = z
   .object({
     DATABASE_URL: z.string().startsWith('postgresql://'),
     DEPLOYMENT_HAS_FRESH_RECOVERABLE_BACKUP: z.enum(['true', 'false']),
+    DEPLOYMENT_HEALTH_COMPATIBLE_PREVIOUS_RELEASE: z.enum(['true', 'false']).default('false'),
     DEPLOYMENT_TECH_V3_COMPATIBLE_PREVIOUS_RELEASE: z.enum(['true', 'false']).default('false'),
     SITE_RUNTIME_MODE: z.literal('production'),
   })
@@ -16,6 +17,8 @@ runPostgresMigrations(configuration.DATABASE_URL, {
   allowContract: false,
   bootstrapRoles: false,
   hasFreshRecoverableBackup: configuration.DEPLOYMENT_HAS_FRESH_RECOVERABLE_BACKUP === 'true',
+  hasHealthCompatiblePreviousRelease:
+    configuration.DEPLOYMENT_HEALTH_COMPATIBLE_PREVIOUS_RELEASE === 'true',
   hasTechV3CompatiblePreviousRelease:
     configuration.DEPLOYMENT_TECH_V3_COMPATIBLE_PREVIOUS_RELEASE === 'true',
   repositoryRoot: '/app/deployment',

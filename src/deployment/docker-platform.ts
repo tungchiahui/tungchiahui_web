@@ -246,6 +246,28 @@ function requestHttp(url: URL) {
 }
 
 export class DockerDeploymentPlatform implements DeploymentPlatform {
+  async verifyHealthMigrationCompatibility(retainedRelease?: DeploymentRelease) {
+    const release = retainedRelease ?? (await this.inspectActiveRelease())
+    if (
+      [
+        '09db1c9a90e41c0d2d65e72056eaa246684bbf56',
+        'a184bb2e7213e2094eb770fb38ba0a243a25b452',
+        '416fb9501f70ba1da6dd7e482564eda20a0a5192',
+      ].includes(release.sha)
+    )
+      return true
+    const container = await this.inspectContainer(this.containerName(release.slot))
+    const image = dockerImageSchema.parse(
+      await requireDocker(
+        this.socketPath,
+        'GET',
+        `/images/${encodeURIComponent(container.Image)}/json`,
+        [200],
+      ),
+    )
+    return image.Config.Labels?.['cn.tungchiahui.health-data-versions'] === '1'
+  }
+
   async verifyTechV3MigrationCompatibility(retainedRelease?: DeploymentRelease) {
     const release = retainedRelease ?? (await this.inspectActiveRelease())
     const container = await this.inspectContainer(this.containerName(release.slot))
@@ -596,6 +618,7 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
   async runMigrations(
     input: Readonly<{
       hasFreshRecoverableBackup: boolean
+      hasHealthCompatiblePreviousRelease?: boolean
       hasTechV3CompatiblePreviousRelease?: boolean
       target: DeploymentRelease
     }>,
@@ -621,9 +644,11 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
     const environment = (container.Config.Env ?? []).filter(
       (entry) =>
         !entry.startsWith('DEPLOYMENT_HAS_FRESH_RECOVERABLE_BACKUP=') &&
-        !entry.startsWith('DEPLOYMENT_TECH_V3_COMPATIBLE_PREVIOUS_RELEASE='),
+        !entry.startsWith('DEPLOYMENT_TECH_V3_COMPATIBLE_PREVIOUS_RELEASE=') &&
+        !entry.startsWith('DEPLOYMENT_HEALTH_COMPATIBLE_PREVIOUS_RELEASE='),
     )
     environment.push(
+      `DEPLOYMENT_HEALTH_COMPATIBLE_PREVIOUS_RELEASE=${String(input.hasHealthCompatiblePreviousRelease ?? false)}`,
       `DEPLOYMENT_HAS_FRESH_RECOVERABLE_BACKUP=${String(input.hasFreshRecoverableBackup)}`,
       `DEPLOYMENT_TECH_V3_COMPATIBLE_PREVIOUS_RELEASE=${String(input.hasTechV3CompatiblePreviousRelease ?? false)}`,
     )

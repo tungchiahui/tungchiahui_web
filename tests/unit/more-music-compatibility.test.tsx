@@ -251,29 +251,10 @@ describe('Phase 18 More and music compatibility', () => {
 
     render(
       <NextIntlClientProvider locale="zh-cn" messages={zhCn}>
-        <WeightTracker
-          initial={{
-            revision: 1,
-            payload: {
-              version: 2,
-              records: [
-                {
-                  bodyFat: '',
-                  date: '2026-06-11',
-                  muscleMass: '',
-                  note: '起点',
-                  targetMax: 98,
-                  targetMin: 98,
-                  waist: '',
-                  weight: '98',
-                },
-              ],
-            },
-          }}
-        />
+        <WeightTracker />
       </NextIntlClientProvider>,
     )
-    expect(screen.getByRole('img', { name: '目标与实际趋势' })).toBeVisible()
-    expect(screen.getByRole('textbox', { name: '备注' })).toHaveValue('起点')
+    expect(screen.getByRole('heading', { name: '减脂计划与进度记录' })).toBeVisible()
+    expect(screen.queryByRole('textbox', { name: '备注' })).toBeNull()
   })
 })

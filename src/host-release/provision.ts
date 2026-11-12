@@ -235,6 +235,8 @@ export function provisionHost(input: ProvisionRequest) {
     [join(settings.dataRoot, 'backup-work'), 70, 0o750],
   ] as const)
     ensureDirectory(path, uid, path.endsWith('/postgres') ? 70 : gid, mode)
+  const healthData = join(settings.dataRoot, 'health-data')
+  ensureDirectory(healthData, existsSync(healthData) ? statSync(healthData).uid : 0, gid, 0o2750)
   for (const [key, name] of [
     ['BACKUP_AGE_IDENTITY_BASE64', 'backup-age-identity.txt'],
     ['PGBOUNCER_USERLIST_BASE64', 'pgbouncer-userlist.txt'],

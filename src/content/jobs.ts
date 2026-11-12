@@ -9,26 +9,30 @@ const claimedJobSchema = z.object({
   claim_expires_at: z.date(),
   claimed_by: z.string().min(1),
   id: z.uuid(),
-  job_type: z.literal('content_sync'),
+  job_type: z.enum(['content_sync', 'health_sync']),
   max_attempts: z.number().int().positive(),
   payload: z.unknown(),
   progress: z.unknown(),
 })
 
-export type ClaimedContentJob = Readonly<{
+type WorkerJobType = 'content_sync' | 'health_sync'
+export type ClaimedContentJob<T extends WorkerJobType = 'content_sync'> = Readonly<{
   attemptCount: number
   claimExpiresAt: Date
   claimedBy: string
   id: string
   maxAttempts: number
   progress: unknown
-  request: Extract<z.infer<typeof applicationJobRequestSchema>, { jobType: 'content_sync' }>
+  request: Extract<z.infer<typeof applicationJobRequestSchema>, { jobType: T }>
 }>
 
-export class ContentJobRepository {
+export class ContentJobRepository<T extends WorkerJobType = 'content_sync'> {
   readonly #client: ReturnType<typeof createDatabaseClient>
 
-  constructor(connectionString: string) {
+  constructor(
+    connectionString: string,
+    readonly jobType: T = 'content_sync' as T,
+  ) {
     this.#client = createDatabaseClient({
       applicationName: 'content-worker-jobs',
       connectionString,
@@ -57,7 +61,10 @@ export class ContentJobRepository {
     }
   }
 
-  async claimNext(workerId: string, leaseMilliseconds: number): Promise<ClaimedContentJob | null> {
+  async claimNext(
+    workerId: string,
+    leaseMilliseconds: number,
+  ): Promise<ClaimedContentJob<T> | null> {
     const claimedBy = z.string().min(1).max(200).parse(workerId)
     const lease = z.number().int().min(1_000).max(3_600_000).parse(leaseMilliseconds)
     return this.#transaction(async (client) => {
@@ -70,15 +77,16 @@ export class ContentJobRepository {
              claim_expires_at = NULL,
              finished_at = CASE WHEN attempt_count >= max_attempts THEN clock_timestamp() ELSE NULL END,
              error_summary = 'content-worker claim expired before completion'
-         WHERE job_type = 'content_sync'
+         WHERE job_type = $1
            AND status = 'running'
            AND claim_expires_at <= clock_timestamp()`,
+        [this.jobType],
       )
       const result = await client.query(
         `WITH candidate AS (
            SELECT id
            FROM app.operational_jobs
-           WHERE job_type = 'content_sync'
+           WHERE job_type = $3
              AND status IN ('queued', 'retry_wait')
              AND available_at <= clock_timestamp()
              AND attempt_count < max_attempts
@@ -99,7 +107,7 @@ export class ContentJobRepository {
          WHERE jobs.id = candidate.id
          RETURNING jobs.id, jobs.job_type, jobs.payload, jobs.progress, jobs.attempt_count, jobs.max_attempts,
                    jobs.claimed_by, jobs.claim_expires_at`,
-        [claimedBy, lease],
+        [claimedBy, lease, this.jobType],
       )
       const row = result.rows[0]
       if (row === undefined) return null
@@ -108,7 +116,7 @@ export class ContentJobRepository {
         jobType: claimed.job_type,
         payload: claimed.payload,
       })
-      if (request.jobType !== 'content_sync') {
+      if (request.jobType !== this.jobType) {
         throw new Error('Content worker claimed a non-content job')
       }
       return Object.freeze({
@@ -118,12 +126,12 @@ export class ContentJobRepository {
         id: claimed.id,
         maxAttempts: claimed.max_attempts,
         progress: claimed.progress,
-        request,
+        request: request as ClaimedContentJob<T>['request'],
       })
     })
   }
 
-  async updateProgress(job: ClaimedContentJob, progress: Readonly<Record<string, unknown>>) {
+  async updateProgress(job: ClaimedContentJob<T>, progress: Readonly<Record<string, unknown>>) {
     const result = await this.#transaction((client) =>
       client.query(
         `UPDATE app.operational_jobs
@@ -135,7 +143,7 @@ export class ContentJobRepository {
     if (result.rowCount !== 1) throw new Error('Content job claim was lost while updating progress')
   }
 
-  async renewClaim(job: ClaimedContentJob, leaseMilliseconds: number) {
+  async renewClaim(job: ClaimedContentJob<T>, leaseMilliseconds: number) {
     const result = await this.#transaction((client) =>
       client.query(
         `UPDATE app.operational_jobs SET claim_expires_at = clock_timestamp() + ($3 * interval '1 millisecond')
@@ -150,7 +158,7 @@ export class ContentJobRepository {
     if (result.rowCount !== 1) throw new Error('Content job lease was lost')
   }
 
-  async complete(job: ClaimedContentJob, progress: Readonly<Record<string, unknown>>) {
+  async complete(job: ClaimedContentJob<T>, progress: Readonly<Record<string, unknown>>) {
     const result = await this.#transaction((client) =>
       client.query(
         `UPDATE app.operational_jobs
@@ -164,7 +172,7 @@ export class ContentJobRepository {
   }
 
   async fail(
-    job: ClaimedContentJob,
+    job: ClaimedContentJob<T>,
     error: unknown,
     options: Readonly<{
       progress?: Readonly<Record<string, unknown>> | undefined

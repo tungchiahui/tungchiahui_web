@@ -16,6 +16,7 @@ export async function runInfrastructureHooks(repositoryRoot: string, compose: Co
     // Disposable local database: there is no production recovery state to protect.
     hasFreshRecoverableBackup: true,
     hasTechV3CompatiblePreviousRelease: true,
+    hasHealthCompatiblePreviousRelease: true,
     repositoryRoot,
   })
   const seedResult = await seedDevelopmentDatabase(databaseUrl(compose, 'pgbouncer'))

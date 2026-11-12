@@ -31,6 +31,7 @@ export async function verifyEnglishTitles(connectionString: string) {
     repositoryRoot: process.cwd(),
     hasFreshRecoverableBackup: true,
     hasTechV3CompatiblePreviousRelease: true,
+    hasHealthCompatiblePreviousRelease: true,
   })
   const client = new Client({ connectionString: url.toString() })
   await client.connect()

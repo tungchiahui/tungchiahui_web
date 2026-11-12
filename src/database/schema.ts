@@ -33,6 +33,7 @@ import {
   startDatasets,
 } from './schema-core'
 
+export * from './health-schema'
 export * from './music-schema'
 export * from './schema-core'
 

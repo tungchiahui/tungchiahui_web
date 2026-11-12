@@ -2,7 +2,6 @@ import { createServer, type ServerResponse } from 'node:http'
 import { hostname } from 'node:os'
 
 import { z } from 'zod'
-
 import { GitHubContentSource } from '../../src/content/github-source'
 import { CompositeContentHooks } from '../../src/content/hooks'
 import { ContentIngestionRepository } from '../../src/content/ingestion'
@@ -10,6 +9,7 @@ import { ContentJobRepository } from '../../src/content/jobs'
 import { PublicContentHooks } from '../../src/content/revalidation'
 import { ContentWorker } from '../../src/content/worker'
 import { serviceIdentityContracts } from '../../src/control-plane/contracts'
+import { HealthSyncWorker } from '../../src/health/worker'
 import { apiSecurityHeaders } from '../../src/observability/security'
 import { safeErrorAttributes } from '../../src/observability/telemetry'
 import { SearchRefreshContentHook } from '../../src/search/hooks'
@@ -20,6 +20,15 @@ import { createFakeTranslationProvider } from '../../src/translation/provider'
 
 const configuration = z
   .object({
+    HEALTH_SYNC_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
+    HEALTH_SYNC_FILE: z.string().startsWith('/').default('/health-data/s400.json'),
+    HEALTH_SYNC_USER: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      z.string().min(1).max(300).optional(),
+    ),
     CONTENT_WORKER_HOST: z.enum(['0.0.0.0', '127.0.0.1']),
     CONTENT_WORKER_ID: z.string().min(1).optional(),
     CONTENT_WORKER_POLLING_ENABLED: z
@@ -118,6 +127,8 @@ const server = createServer((request, response) => {
 })
 
 let stopping = false
+let healthWorker: HealthSyncWorker | undefined
+let healthPolling: Promise<void> | undefined
 let jobs: ContentJobRepository | undefined
 let ingestion: ContentIngestionRepository | undefined
 let translationJobs: TranslationJobRepository | undefined
@@ -198,6 +209,27 @@ async function pollSearch(worker: SearchWorker) {
       setTimeout(resolveWait, configuration.CONTENT_WORKER_POLL_INTERVAL_MS),
     )
   }
+}
+
+if (configuration.HEALTH_SYNC_ENABLED) {
+  healthWorker = new HealthSyncWorker(
+    configuration.DATABASE_URL,
+    configuration.HEALTH_SYNC_FILE,
+    configuration.HEALTH_SYNC_USER,
+  )
+  const worker = healthWorker
+  healthPolling = (async () => {
+    while (!stopping) {
+      try {
+        const result = await worker.runOnce()
+        if (result.claimed)
+          console.log(JSON.stringify({ event: 'health_sync_processed', ...result }))
+      } catch {
+        console.error(JSON.stringify({ event: 'health_sync_poll_failed' }))
+      }
+      await new Promise<void>((done) => setTimeout(done, 1000))
+    }
+  })()
 }
 
 if (configuration.CONTENT_WORKER_POLLING_ENABLED) {
@@ -301,6 +333,8 @@ server.listen(configuration.CONTENT_WORKER_PORT, configuration.CONTENT_WORKER_HO
 function shutdown() {
   stopping = true
   server.close(async (error) => {
+    await healthPolling
+    await healthWorker?.close()
     await Promise.all([
       jobs?.close(),
       ingestion?.close(),

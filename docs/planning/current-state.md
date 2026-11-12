@@ -1,5 +1,20 @@
 # Website V2 Current Implementation State
 
+## 2026-11-12 — 统一健康数据实施
+
+Owner 已授权完整 S400/手动记录实现、JSON 正式导入导出和直接推送 main，另要求 SSH/1Panel
+操作前先说明动作并由 Owner 决定执行者。先交付隐私兼容 SHA 416fb950，再交付统一表版本。
+0014/0015 为正式 Expand Migration，旧 JSONB 在事务备份和逐字段对账后冻结；新表唯一权威。
+自定义目标元数据独立保存，旧日期为北京时间午夜并标 date。新接口严格使用当前账号 Owner
+权限，匿名 SSR 与旧公开 API 不携带测量数据，退出时清理内存与旧浏览器草稿。
+
+导入命令在现有 Service Image，持续执行复用 content-worker 和既有 PostgreSQL Durable Job。
+每五分钟调度，来源键独立于指标值，文件不稳定/多用户未选择/冲突会安全失败并重试。
+默认关闭生产健康轮询。独立目录位于 managed dataRoot/health-data，只有 content-worker
+只读挂载。SmartScaleConnect 生产者输出位置、UID/权限和启用开关需要一次性现场确认，
+详细步骤与测试/恢复要求见 docs/operations/body-measurements.md。所有开发测试使用合成数据。Owner 已追加授权新功能上线，服务器接入仍留待代码交付后安排。
+
+
 ## 2026-11-12 — S400 health privacy compatibility release
 
 Owner approved the complete health implementation, versioned JSON exchange and direct main delivery.
@@ -1283,3 +1298,5 @@ Primary/Off-site Fresh，Backup 与 Retention-cleanup Timer 均 active/enabled�
 预先获取的镜像当作后续自动冷镜像发布的证据，也不得为重试重建同 SHA 的镜像集合。
 正常失败重试通过同一 Control API/Engine 或仅重跑保留原 Digest 的 Deploy Job 执行。
 实现、运行与故障处理上下文已沉淀至本文件、ADR 0027 和服务器发布 Runbook。
+
+本次 CI 暴露原 PostgreSQL Image 的 Brotli CVE-2026-111497，已将运行时 brotli-libs 固定为安全修复 1.2.1-r0。兼容发布使用 416fb950，完整功能发布必须在该兼容版本验收后执行。

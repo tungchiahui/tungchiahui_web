@@ -34,7 +34,7 @@ import { techFootprintPayloadSchema } from '@/control-plane/contracts'
 import { contentTypeSchema } from '@/domain/persistence'
 import { localizeContentText } from '@/i18n/content'
 import type { AppLocale } from '@/i18n/locales'
-import { emptyTechPayload, emptyWeightPayload } from '@/personal/contracts'
+import { emptyTechPayload } from '@/personal/contracts'
 import { readCachedSearch } from '@/search/cache'
 import { type SearchResult, searchQuerySchema } from '@/search/contracts'
 import {
@@ -831,14 +831,7 @@ async function SpecialPage({
       )
     }
     case 'weight-loss': {
-      return (
-        <WeightTracker
-          initial={{
-            payload: emptyWeightPayload,
-            revision: 0,
-          }}
-        />
-      )
+      return <WeightTracker />
     }
   }
 }

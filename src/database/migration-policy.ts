@@ -10,6 +10,7 @@ const migrationPolicySchema = z.object({
       changeKind: z.enum(['expand', 'contract']),
       risk: z.enum(['low', 'medium', 'high']),
       requiresFreshRecoverableBackup: z.boolean(),
+      requiresHealthCompatiblePreviousRelease: z.boolean().default(false),
       requiresTechV3CompatiblePreviousRelease: z.boolean().default(false),
       reason: z.string().min(1),
       recovery: z.string().min(1),
@@ -25,6 +26,7 @@ export type MigrationPolicyOptions = Readonly<{
   allowContract: boolean
   hasFreshRecoverableBackup: boolean
   hasTechV3CompatiblePreviousRelease?: boolean
+  hasHealthCompatiblePreviousRelease?: boolean
   throughMigration?: string
   applyMigrations?: boolean
 }>
@@ -61,6 +63,13 @@ export function validateMigrationPolicy(
         `Migration requires a V3-compatible active/rollback release: ${migration.tag}`,
       )
     }
+    if (
+      migration.requiresHealthCompatiblePreviousRelease &&
+      !options.hasHealthCompatiblePreviousRelease
+    )
+      throw new Error(
+        `Migration requires a health-compatible active/rollback release: ${migration.tag}`,
+      )
     if (migration.changeKind === 'contract' && !options.allowContract) {
       throw new Error(`Contract migration requires a later-release authorization: ${migration.tag}`)
     }

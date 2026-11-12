@@ -43,10 +43,11 @@ describe('migration policy', () => {
         allowContract: false,
         hasFreshRecoverableBackup: true,
         hasTechV3CompatiblePreviousRelease: true,
+        hasHealthCompatiblePreviousRelease: true,
       },
     )
 
-    expect(policy.migrations).toHaveLength(14)
+    expect(policy.migrations).toHaveLength(16)
     expect(policy.migrations.every((migration) => migration.changeKind === 'expand')).toBe(true)
   })
 

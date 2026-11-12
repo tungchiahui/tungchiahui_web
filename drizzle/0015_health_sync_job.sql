@@ -1,0 +1,1 @@
+ALTER TYPE "app"."application_job_type" ADD VALUE 'health_sync';

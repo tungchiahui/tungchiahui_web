@@ -41,6 +41,6 @@ COPY --from=build --chown=site:site /workspace/.next/static ./.next/static
 COPY --from=build --chown=site:site /workspace/public ./public
 
 USER 10001:10001
-LABEL cn.tungchiahui.tech-payload-versions="3"
+LABEL cn.tungchiahui.tech-payload-versions="3" cn.tungchiahui.health-data-versions="1"
 EXPOSE 3000
 CMD ["node", "server.js"]

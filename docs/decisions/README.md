@@ -51,3 +51,5 @@ ADR 是不可变的历史记录。
 - `0027-server-managed-release-and-bootstrap.md`
 - `0028-git-translation-memory-and-local-execution.md`
 - `0029-multilingual-project-portfolio.md`
+
+- [0031 — Owner-only unified body measurements](0031-private-body-measurements.md)

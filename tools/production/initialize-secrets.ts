@@ -176,6 +176,8 @@ const productionEnvironmentSchema = z
     SITE_REVALIDATION_SECRET: z.string().min(32),
     TUNGCHIAHUI_BACKUP_REPLICATION_CONCURRENCY: z.coerce.number().int().min(1).max(32),
     TUNGCHIAHUI_CONTENT_POLLING_ENABLED: z.enum(['true', 'false']),
+    TUNGCHIAHUI_HEALTH_SYNC_ENABLED: z.enum(['true', 'false']).default('false'),
+    TUNGCHIAHUI_HEALTH_SYNC_USER: z.string().max(300).default(''),
     TUNGCHIAHUI_CONTROL_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).max(10_000),
     TUNGCHIAHUI_DEPLOYMENT_ARTICLE_PATH: z.string().startsWith('/'),
     TUNGCHIAHUI_DEPLOYMENT_ASSET_PATH: z.string().startsWith('/'),

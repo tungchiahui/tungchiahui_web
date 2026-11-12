@@ -22,6 +22,7 @@ RUN mkdir -p /workspace/dist \
   && pnpm exec esbuild services/deploy-agent/main.ts --bundle --format=cjs --platform=node --target=node24 --outfile=dist/deploy-agent.cjs \
   && pnpm exec esbuild services/database-migrate/main.ts --bundle --format=cjs --platform=node --target=node24 --outfile=dist/database-migrate.cjs \
   && pnpm exec esbuild services/database-role-bootstrap/main.ts --bundle --format=cjs --platform=node --target=node24 --outfile=dist/database-role-bootstrap.cjs \
+  && pnpm exec esbuild services/health-import/main.ts --bundle --format=cjs --platform=node --target=node24 --outfile=dist/health-import.cjs \
   && mkdir -p dist/bootstrap \
   && cp ops/database/roles.sql dist/bootstrap/roles.sql \
   && mkdir -p deployment/ops/database \

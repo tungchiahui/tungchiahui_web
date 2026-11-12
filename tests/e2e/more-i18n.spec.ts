@@ -113,7 +113,7 @@ for (const locale of locales) {
           page.getByRole('button', { name: copy.Personal.login, exact: true }).first(),
         ).toBeVisible()
       if (slug === 'weight-loss')
-        await expect(page.getByRole('img', { name: copy.Weight.trendTitle })).toBeVisible()
+        await expect(page.getByText(copy.Health.ownerOnly)).toBeVisible({ timeout: 20000 })
     }
   })
 }

@@ -209,11 +209,11 @@ describe('Phase 12 production foundation policy', () => {
     expect(openRestySource).toContain('server_name www.tungchiahui.cn ddns.tungchiahui.cn;')
     expect(openRestySource).toContain('location ^~ /api/ops/')
     expect(openRestySource).toContain(
-      'if ($request_method !~ ^(GET|POST|PUT|DELETE)$) { return 405; }',
+      'if ($request_method !~ ^(GET|POST|PUT|PATCH|DELETE)$) { return 405; }',
     )
     expect(openRestySource).toContain('set $control_upstream control-api:8080;')
     expect(openRestySource).toContain('include /etc/tungchiahui/deployment/active-slot.conf;')
-    expect(openRestySource).toContain('add_header Cache-Control "no-store" always;')
+    expect(openRestySource).toContain('add_header Cache-Control $control_cache_control always;')
     expect(openRestySource).toContain('log_format structured escape=json')
     expect(openRestySource).toContain('limit_req zone=public_origin')
     expect(openRestySource).toContain('limit_req zone=control_origin')

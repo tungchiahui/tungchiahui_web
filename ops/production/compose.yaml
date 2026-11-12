@@ -155,6 +155,9 @@ services:
     user: "10003:10050"
     command: [node, dist/content-worker.cjs]
     environment:
+      HEALTH_SYNC_ENABLED: ${TUNGCHIAHUI_HEALTH_SYNC_ENABLED:-false}
+      HEALTH_SYNC_FILE: /health-data/s400.json
+      HEALTH_SYNC_USER: ${TUNGCHIAHUI_HEALTH_SYNC_USER:-}
       CONTENT_WORKER_HOST: 0.0.0.0
       CONTENT_WORKER_POLLING_ENABLED: ${TUNGCHIAHUI_CONTENT_POLLING_ENABLED:-false}
       CONTENT_WORKER_PORT: "8083"
@@ -172,6 +175,13 @@ services:
       interval: 5s
       timeout: 3s
       retries: 30
+    volumes:
+      - type: bind
+        source: ${TUNGCHIAHUI_DATA_ROOT:?data root is required}/health-data
+        target: /health-data
+        read_only: true
+        bind:
+          create_host_path: false
     networks: [application, content-egress, deployment-probe]
     tmpfs: *node-tmpfs
 

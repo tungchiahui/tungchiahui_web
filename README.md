@@ -305,3 +305,7 @@ Operator 不需要记忆底层 Docker、PostgreSQL、OpenResty、Backup 或 Work
 ```
 
 `./site` 背后的实现可以演进。除非明确进行版本化，否则命令契约必须保持稳定。
+
+### S400 与健康数据
+
+Owner 私有身体测量、历史迁移、JSON 导入导出和自动同步配置见 [身体测量运维说明](docs/operations/body-measurements.md)。

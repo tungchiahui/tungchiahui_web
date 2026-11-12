@@ -89,6 +89,10 @@ function statePath() {
 }
 
 class FakePlatform implements DeploymentPlatform {
+  healthCompatible = true
+  async verifyHealthMigrationCompatibility() {
+    return this.healthCompatible
+  }
   techV3Compatible = true
   async verifyTechV3MigrationCompatibility() {
     return this.techV3Compatible

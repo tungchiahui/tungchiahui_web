@@ -7,6 +7,7 @@ import { migrate } from 'drizzle-orm/node-postgres/migrator'
 import { Client } from 'pg'
 import { z } from 'zod'
 
+import { migrateLegacyHealth } from '../health/migrate'
 import { parseDatabaseConnectionConfig } from './config'
 import { validateMigrationPolicy } from './migration-policy'
 
@@ -15,6 +16,7 @@ export type MigrationRunOptions = Readonly<{
   bootstrapRoles?: boolean
   hasFreshRecoverableBackup?: boolean
   hasTechV3CompatiblePreviousRelease?: boolean
+  hasHealthCompatiblePreviousRelease?: boolean
   migrationsDirectory?: string
   policyPath?: string
   repositoryRoot: string
@@ -46,6 +48,7 @@ export async function runPostgresMigrations(
   const policy = validateMigrationPolicy(policyPath, journalPath, {
     allowContract: options.allowContract ?? false,
     hasFreshRecoverableBackup: options.hasFreshRecoverableBackup ?? false,
+    hasHealthCompatiblePreviousRelease: options.hasHealthCompatiblePreviousRelease ?? false,
     hasTechV3CompatiblePreviousRelease: options.hasTechV3CompatiblePreviousRelease ?? false,
     ...(options.scope === 'control-schema'
       ? { throughMigration: '0008_accounts_and_start_data' }
@@ -90,6 +93,10 @@ export async function runPostgresMigrations(
       migrationsSchema: 'drizzle',
       migrationsTable: '__drizzle_migrations',
     })
+    if (policy.migrations.some((migration) => migration.tag === '0014_private_body_measurements')) {
+      const report = await migrateLegacyHealth(client)
+      console.log(JSON.stringify({ event: 'health_legacy_migration_completed', ...report }))
+    }
     if (runtimeGrantsSql !== null) await client.query(runtimeGrantsSql)
     await client.query('RESET ROLE')
     if (rolesSql !== null) await client.query(rolesSql)

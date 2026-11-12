@@ -1,137 +1,44 @@
 'use client'
-
-import { useTranslations } from 'next-intl'
+import { useLocale, useTranslations } from 'next-intl'
 import { useState } from 'react'
+import { Button } from '@/components/ui/button'
 import {
-  type DatasetSnapshot,
-  emptyWeightPayload,
-  type WeightPayload,
-  type WeightRecord,
-  weightLossPayloadSchema,
-} from '@/personal/contracts'
-import { exportWeightCsv, importWeightCsv } from '@/personal/weight-csv'
-import {
-  createWeeklyRecords,
-  GOAL_WEIGHT,
-  START_WEIGHT,
-  weightMilestones,
-} from '@/personal/weight-plan'
-import { fieldClass, panelClass, TrackerToolbar } from './tracker-toolbar'
-import { useOwnerDataset } from './use-owner-dataset'
+  type HealthExchange,
+  type HealthSnapshot,
+  healthExchangeSchema,
+  healthImportPreviewSchema,
+  healthTimeZone,
+  type Measurement,
+  measurementDay,
+  metricDefinitions,
+} from '@/health/contracts'
+import { GOAL_WEIGHT, getTargetRange, START_WEIGHT, weightMilestones } from '@/personal/weight-plan'
+import { HealthRecordForm } from './health-record-form'
+import { HealthTrend } from './health-trend'
+import { downloadFile, fieldClass, panelClass } from './tracker-toolbar'
+import { healthRequest, useHealthData } from './use-health-data'
 
-const planned = createWeeklyRecords()
-const metricFields = [
-  { field: 'weight', label: 'averageWeight', min: 35, max: 250, unit: 'weightUnit' },
-  { field: 'bodyFat', label: 'bodyFat', min: 2, max: 70, unit: 'percentUnit' },
-  { field: 'muscleMass', label: 'muscleMass', min: 10, max: 100, unit: 'weightUnit' },
-  { field: 'waist', label: 'waist', min: 40, max: 200, unit: 'waistUnit' },
-] as const
-
-export function WeightTracker({ initial }: { initial: DatasetSnapshot<WeightPayload> }) {
+export function WeightTracker() {
   const t = useTranslations('Weight')
-  const store = useOwnerDataset('weight_loss', weightLossPayloadSchema, initial)
-  const [selected, setSelected] = useState(planned[0]?.date ?? '')
-  const map = new Map(planned.map((record) => [record.date, record]))
-  for (const record of store.payload.records) map.set(record.date, record)
-  const records = [...map.values()].sort((a, b) => a.date.localeCompare(b.date))
-  const active = records.find((record) => record.date === selected) ?? records[0]
-  const measured = records.filter(
-    (record) => record.weight !== '' && Number.isFinite(Number(record.weight)),
-  )
-  const latest = measured.at(-1)
-  const latestWeight = latest ? Number(latest.weight) : null
-  const progress =
-    latestWeight === null
-      ? 0
-      : Math.max(
-          0,
-          Math.min(100, ((START_WEIGHT - latestWeight) / (START_WEIGHT - GOAL_WEIGHT)) * 100),
-        )
-  const next =
-    weightMilestones.find((item) => item.date > (latest?.date ?? records[0]?.date ?? '')) ??
-    weightMilestones.at(-1)
-  const comparison = (record: WeightRecord) =>
-    record.weight === ''
-      ? t('statusPending')
-      : Number(record.weight) < record.targetMin
-        ? t('statusAhead')
-        : Number(record.weight) <= record.targetMax
-          ? t('statusOnTarget')
-          : t('statusBehind', { difference: (Number(record.weight) - record.targetMax).toFixed(1) })
-  const update = (field: 'weight' | 'bodyFat' | 'muscleMass' | 'waist' | 'note', value: string) => {
-    if (!active) return
-    const edited = { ...active, [field]: value }
-    const nextRecords = new Map(store.payload.records.map((record) => [record.date, record]))
-    nextRecords.set(edited.date, edited)
-    store.change({
-      version: 2,
-      records: [...nextRecords.values()].sort((a, b) => a.date.localeCompare(b.date)),
-    })
-  }
-  const values = [
-    ...records.flatMap((record) => [record.targetMin, record.targetMax]),
-    ...measured.map((record) => Number(record.weight)),
-  ]
-  const min = Math.floor(Math.min(...values) - 2),
-    max = Math.ceil(Math.max(...values) + 2)
-  const startDate = Date.parse(`${records[0]?.date}T00:00:00Z`)
-  const endDate = Date.parse(`${records.at(-1)?.date}T00:00:00Z`)
-  const x = (date: string) =>
-    50 + ((Date.parse(`${date}T00:00:00Z`) - startDate) / Math.max(1, endDate - startDate)) * 830
-  const y = (value: number) => 260 - ((value - min) / Math.max(1, max - min)) * 225
+  const h = useTranslations('Health')
+  const store = useHealthData()
   return (
-    <>
-      <header className={`${panelClass} mb-6 bg-gradient-to-br from-blue-500/10 to-card`}>
+    <div className="space-y-6">
+      <header className={`${panelClass} bg-gradient-to-br from-blue-500/10 to-card`}>
         <p className="text-primary text-sm">{t('eyebrow')}</p>
         <h1 className="mt-3 font-bold text-3xl sm:text-4xl">{t('title')}</h1>
         <p className="mt-4 text-muted-foreground leading-7">{t('intro')}</p>
-        <dl className="mt-6 grid grid-cols-2 gap-5 sm:grid-cols-4">
-          {(
-            [
-              [t('startWeight'), `${START_WEIGHT} kg`],
-              [t('firstGoal'), '90 kg'],
-              [t('finalGoal'), `${GOAL_WEIGHT} kg`],
-              [t('planDuration'), `${planned.length - 1} ${t('weeks')}`],
-            ] as const
-          ).map(([label, value]) => (
-            <div key={label}>
-              <dt className="text-muted-foreground text-sm">{label}</dt>
-              <dd className="mt-2 font-bold text-2xl">{value}</dd>
-            </div>
-          ))}
-        </dl>
       </header>
-      <TrackerToolbar
-        store={store}
-        schema={weightLossPayloadSchema}
-        empty={emptyWeightPayload}
-        filename="weight-loss"
-        importCsv={importWeightCsv}
-        exportCsv={exportWeightCsv}
-      />
-      <dl className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {(
-          [
-            [
-              t('currentWeight'),
-              latestWeight === null ? t('noRecord') : `${latestWeight.toFixed(1)} kg`,
-            ],
-            [
-              t('totalChange'),
-              latestWeight === null
-                ? t('noRecord')
-                : `${(latestWeight - START_WEIGHT).toFixed(1)} kg`,
-            ],
-            [t('goalProgress'), `${Math.round(progress)}%`],
-            [t('nextMilestone'), next ? `${next.min}–${next.max} kg` : t('noRecord')],
-          ] as const
-        ).map(([label, value]) => (
-          <div key={label} className={panelClass}>
-            <dt className="text-muted-foreground text-sm">{label}</dt>
-            <dd className="mt-2 font-bold text-2xl tabular-nums">{value}</dd>
-          </div>
-        ))}
-      </dl>
+      {store.snapshot ? (
+        <HealthDashboard snapshot={store.snapshot} reload={() => store.reload()} />
+      ) : (
+        <section className={panelClass}>
+          <p role="status">
+            {h(store.checking ? 'checking' : store.error ? 'loadFailed' : 'ownerOnly')}
+          </p>
+          {store.error && <Button onClick={() => void store.reload()}>{h('retry')}</Button>}
+        </section>
+      )}
       <aside className={`${panelClass} mb-6 border-amber-500/40`}>
         <h2 className="font-semibold">{t('healthTitle')}</h2>
         <p className="mt-2 text-muted-foreground text-sm leading-6">{t('healthBody')}</p>
@@ -170,222 +77,395 @@ export function WeightTracker({ initial }: { initial: DatasetSnapshot<WeightPayl
           ))}
         </div>
       </section>
-      {active && (
-        <section className={`${panelClass} mb-6`}>
-          <h2 className="font-bold text-2xl">{t('recordTitle')}</h2>
-          <p className="mt-2 text-muted-foreground text-sm">{t('recordDescription')}</p>
-          <div className="my-5 grid gap-4 sm:grid-cols-3">
-            <label className="text-sm">
-              <span>{t('selectWeek')}</span>
-              <select
-                className={`${fieldClass} mt-2`}
-                value={active.date}
-                onChange={(event) => setSelected(event.target.value)}
-              >
-                {records.map((record) => (
-                  <option key={record.date} value={record.date}>
-                    {record.date}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div>
-              <p className="text-sm text-muted-foreground">{t('targetRange')}</p>
-              <p className="mt-3 font-semibold">
-                {active.targetMin}–{active.targetMax} kg
-              </p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">{t('recordStatus')}</p>
-              <p className="mt-3 font-semibold">{comparison(active)}</p>
-            </div>
-          </div>
-          <fieldset
-            disabled={!store.authenticated}
-            className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
-          >
-            <legend className="sr-only">{t('recordTitle')}</legend>
-            {metricFields.map((metric) => (
-              <label key={metric.field} className="text-sm">
-                <span>
-                  {t(metric.label)} ({t(metric.unit)})
-                </span>
-                <input
-                  className={`${fieldClass} mt-2`}
-                  type="number"
-                  min={metric.min}
-                  max={metric.max}
-                  step="0.1"
-                  inputMode="decimal"
-                  value={active[metric.field]}
-                  onChange={(event) => update(metric.field, event.target.value)}
-                />
-              </label>
+      {!store.snapshot && (
+        <section className={panelClass}>
+          <h2 className="font-bold text-2xl">{t('milestoneTitle')}</h2>
+          <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {weightMilestones.map((row) => (
+              <li key={row.date} className="text-sm">
+                {row.date} · {row.min}–{row.max} kg
+              </li>
             ))}
-            <label className="text-sm sm:col-span-2 lg:col-span-4">
-              <span>{t('note')}</span>
-              <textarea
-                className={`${fieldClass} mt-2`}
-                rows={3}
-                maxLength={10000}
-                value={active.note}
-                placeholder={t('notePlaceholder')}
-                onChange={(event) => update('note', event.target.value)}
-              />
-            </label>
-          </fieldset>
+          </ul>
         </section>
       )}
-      <section className={`${panelClass} mb-6`}>
-        <h2 className="font-bold text-2xl">{t('trendTitle')}</h2>
-        <p className="mt-2 text-sm text-muted-foreground">{t('trendDescription')}</p>
-        <div className="mt-4 flex gap-5 text-sm">
-          <span className="text-emerald-600">{t('targetLine')}</span>
-          <span className="text-blue-600">{t('actualLine')}</span>
-        </div>
-        <div className="mt-3 overflow-x-auto">
-          <svg
-            className="min-w-[600px] w-full"
-            viewBox="0 0 920 310"
-            role="img"
-            aria-label={t('trendTitle')}
-          >
-            <title>{t('trendTitle')}</title>
-            {Array.from({ length: 6 }, (_, index) => min + ((max - min) * index) / 5).map(
-              (value) => (
-                <g key={value}>
-                  <line
-                    x1="50"
-                    x2="880"
-                    y1={y(value)}
-                    y2={y(value)}
-                    stroke="currentColor"
-                    opacity="0.12"
-                  />
-                  <text x="42" y={y(value) + 4} textAnchor="end" fill="currentColor" fontSize="11">
-                    {value.toFixed(1)}
-                  </text>
-                </g>
-              ),
-            )}
-            <polyline
-              fill="none"
-              stroke="#059669"
-              strokeWidth="2"
-              strokeDasharray="6 4"
-              points={records
-                .map(
-                  (record) => `${x(record.date)},${y((record.targetMin + record.targetMax) / 2)}`,
-                )
-                .join(' ')}
-            />
-            <polyline
-              fill="none"
-              stroke="#2563eb"
-              strokeWidth="3"
-              points={measured
-                .map((record) => `${x(record.date)},${y(Number(record.weight))}`)
-                .join(' ')}
-            />
-            {measured.map((record) => (
-              <circle
-                key={record.date}
-                cx={x(record.date)}
-                cy={y(Number(record.weight))}
-                r="4"
-                fill="#2563eb"
-              >
-                <title>
-                  {record.date}: {record.weight} kg
-                </title>
-              </circle>
-            ))}
-            {records
-              .filter((_, index) => index % 6 === 0 || index === records.length - 1)
-              .map((record) => (
-                <text
-                  key={record.date}
-                  x={x(record.date)}
-                  y="290"
-                  textAnchor="middle"
-                  fill="currentColor"
-                  fontSize="11"
-                >
-                  {record.date.slice(5)}
-                </text>
-              ))}
-          </svg>
-        </div>
+    </div>
+  )
+}
+
+function HealthDashboard({
+  snapshot,
+  reload,
+}: {
+  snapshot: HealthSnapshot
+  reload: () => Promise<void>
+}) {
+  const t = useTranslations('Health')
+  const w = useTranslations('Weight')
+  const locale = useLocale()
+  const [selected, setSelected] = useState<Measurement | undefined>()
+  const [formGeneration, setFormGeneration] = useState(0)
+  const [source, setSource] = useState('all')
+  const [from, setFrom] = useState(''),
+    [to, setTo] = useState('')
+  const [visible, setVisible] = useState(30)
+  const [pending, setPending] = useState<{
+    file: HealthExchange
+    preview: ReturnType<typeof healthImportPreviewSchema.parse>
+  } | null>(null)
+  const [exchangeError, setExchangeError] = useState('')
+  const [importing, setImporting] = useState(false)
+  const records = snapshot.measurements
+  const latest = records.find((row) => !row.excluded)
+  const latestWeight = records.find((row) => !row.excluded && row.weight !== null)
+  const dateTime = (row: Measurement) =>
+    row.timePrecision === 'date'
+      ? `${measurementDay(row.measuredAt)} · ${t('precision.date')}`
+      : new Date(row.measuredAt).toLocaleString(locale, { timeZone: healthTimeZone, hour12: false })
+  const syncTime = (value: string | null) =>
+    value ? new Date(value).toLocaleString(locale, { timeZone: healthTimeZone }) : t('noData')
+  const value = (number: number | null | undefined) =>
+    number === null || number === undefined
+      ? '—'
+      : new Intl.NumberFormat(locale, { maximumFractionDigits: 3 }).format(number)
+  const filtered = records.filter(
+    (row) =>
+      (source === 'all' || row.source === source) &&
+      (!from || measurementDay(row.measuredAt) >= from) &&
+      (!to || measurementDay(row.measuredAt) <= to),
+  )
+  const saved = async () => {
+    await reload()
+    setSelected(undefined)
+    setFormGeneration((old) => old + 1)
+  }
+  return (
+    <>
+      <section className={`${panelClass} space-y-5`}>
+        <h2 className="font-bold text-2xl">{t('overview')}</h2>
+        <dl className="grid grid-cols-2 gap-5 lg:grid-cols-4">
+          {(['weight', 'bodyFat', 'bmi', 'muscleMass'] as const).map((key) => (
+            <div key={key}>
+              <dt className="text-muted-foreground text-sm">{t(`metrics.${key}`)}</dt>
+              <dd className="mt-2 font-bold text-2xl tabular-nums">{value(latest?.[key])}</dd>
+            </div>
+          ))}
+          <div>
+            <dt>{t('startWeight')}</dt>
+            <dd>{START_WEIGHT} kg</dd>
+          </div>
+          <div>
+            <dt>{t('goalGap')}</dt>
+            <dd>
+              {value(
+                latestWeight?.weight === null || latestWeight?.weight === undefined
+                  ? null
+                  : latestWeight.weight - GOAL_WEIGHT,
+              )}{' '}
+              kg
+            </dd>
+          </div>
+          <div>
+            <dt>{t('change')}</dt>
+            <dd>
+              {value(
+                latestWeight?.weight === null || latestWeight?.weight === undefined
+                  ? null
+                  : latestWeight.weight - START_WEIGHT,
+              )}{' '}
+              kg
+            </dd>
+          </div>
+          <div>
+            <dt>{t('goal')}</dt>
+            <dd>{GOAL_WEIGHT} kg</dd>
+          </div>
+        </dl>
+        <p className="text-sm text-muted-foreground">
+          {t('measuredAt')} · {latest ? dateTime(latest) : t('noData')}
+        </p>
+        {latestWeight && latestWeight.id !== latest?.id && (
+          <p className="text-sm">
+            {t('lastWeight')} · {value(latestWeight.weight)} kg · {dateTime(latestWeight)}
+          </p>
+        )}
+        <p className="text-sm text-muted-foreground">
+          {t('lastSync')} · {syncTime(snapshot.sync.lastSuccessAt)}
+          <br />
+          {t('sourceUpdated')} · {syncTime(snapshot.sync.sourceUpdatedAt)}
+        </p>
+        {snapshot.sync.lastError && (
+          <p role="status" className="text-amber-600 dark:text-amber-400">
+            {t('syncFailed')}
+          </p>
+        )}
       </section>
-      <section className={`${panelClass} mb-6`}>
-        <h2 className="font-bold text-2xl">{t('milestoneTitle')}</h2>
-        <p className="mt-2 text-muted-foreground text-sm">{t('milestoneDescription')}</p>
-        <div className="mt-5 overflow-x-auto">
-          <table className="w-full min-w-[600px] text-left text-sm">
+      <HealthTrend records={records} plans={snapshot.planOverrides} />
+      <section className={`${panelClass} space-y-4`}>
+        <h2 className="font-bold text-2xl">{t('composition')}</h2>
+        <p className="text-muted-foreground text-sm">{latest ? dateTime(latest) : t('noData')}</p>
+        <dl className="grid grid-cols-2 gap-5 lg:grid-cols-4">
+          {metricDefinitions.map(({ key, unit }) => (
+            <div key={key}>
+              <dt className="text-muted-foreground text-sm">{t(`metrics.${key}`)}</dt>
+              <dd className="mt-1 font-semibold tabular-nums">
+                {value(latest?.[key])} {t(`units.${unit}`)}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+      <section className={`${panelClass} space-y-5`}>
+        <h2 className="font-bold text-2xl">{t('history')}</h2>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <label>
+            {t('source')}
+            <select
+              className={fieldClass}
+              value={source}
+              onChange={(e) => {
+                setSource(e.target.value)
+                setVisible(30)
+              }}
+            >
+              {(['all', 'manual_legacy', 'manual', 'smartscale'] as const).map((item) => (
+                <option key={item} value={item}>
+                  {t(`sources.${item}`)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            {t('from')}
+            <input
+              className={fieldClass}
+              type="date"
+              value={from}
+              onChange={(e) => setFrom(e.target.value)}
+            />
+          </label>
+          <label>
+            {t('to')}
+            <input
+              className={fieldClass}
+              type="date"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+            />
+          </label>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
             <thead>
               <tr>
-                {(['date', 'targetRange', 'actual', 'focus'] as const).map((label) => (
-                  <th className="border-b p-3" key={label}>
+                {(
+                  ['measuredAt', 'source', 'metrics.weight', 'metrics.bodyFat', 'note'] as const
+                ).map((label) => (
+                  <th key={label} className="border-b p-3">
                     {t(label)}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {weightMilestones.map((item) => (
-                <tr key={item.date}>
-                  <td className="border-b p-3 tabular-nums">{item.date}</td>
+              {filtered.slice(0, visible).map((row) => (
+                <tr key={row.id} className={row.excluded ? 'opacity-60' : ''}>
                   <td className="border-b p-3">
-                    {item.min}–{item.max} kg
+                    <button
+                      type="button"
+                      className="text-primary underline text-left"
+                      onClick={() => {
+                        setSelected(row)
+                        setFormGeneration((old) => old + 1)
+                      }}
+                    >
+                      {dateTime(row)}
+                    </button>
+                    {row.excluded && <span className="block">{t('excluded')}</span>}
                   </td>
-                  <td className="border-b p-3">{map.get(item.date)?.weight || t('noRecord')}</td>
-                  <td className="border-b p-3">{t(`milestoneFocus.${item.stage}`)}</td>
+                  <td className="border-b p-3">{t(`sources.${row.source}`)}</td>
+                  <td className="border-b p-3 tabular-nums">{value(row.weight)}</td>
+                  <td className="border-b p-3 tabular-nums">{value(row.bodyFat)}</td>
+                  <td className="max-w-48 break-words border-b p-3">{row.note}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+        {!filtered.length && <p>{t('noData')}</p>}
+        {filtered.length > visible && (
+          <Button onClick={() => setVisible((old) => old + 30)}>{t('more')}</Button>
+        )}
+        <Button
+          onClick={() => {
+            setSelected(undefined)
+            setFormGeneration((old) => old + 1)
+          }}
+        >
+          {t('addRecord')}
+        </Button>
       </section>
-      <details className={panelClass}>
-        <summary className="cursor-pointer font-semibold text-lg">{t('allRecords')}</summary>
-        <div className="mt-5 overflow-x-auto">
-          <table className="w-full min-w-[700px] text-left text-sm">
+      {selected && (
+        <section className={`${panelClass} space-y-4`}>
+          <h2 className="font-bold text-2xl">{t('details')}</h2>
+          <p>
+            {dateTime(selected)} · {t(`sources.${selected.source}`)} ·{' '}
+            {t(`precision.${selected.timePrecision}`)}
+          </p>
+          <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            {metricDefinitions.map(({ key, unit }) => (
+              <div key={key}>
+                <dt className="text-muted-foreground text-sm">{t(`metrics.${key}`)}</dt>
+                <dd>
+                  {value(selected[key])} {t(`units.${unit}`)}
+                </dd>
+              </div>
+            ))}
+          </dl>
+          <p className="whitespace-pre-wrap break-words">{selected.note}</p>
+        </section>
+      )}
+      <HealthRecordForm
+        key={`${selected?.id ?? 'new'}:${formGeneration}`}
+        record={selected}
+        saved={saved}
+      />
+      <section className={`${panelClass} space-y-4`}>
+        <h2 className="font-bold text-2xl">{w('milestoneTitle')}</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
             <thead>
               <tr>
-                {(['date', 'averageWeight', 'bodyFat', 'muscleMass', 'waist', 'note'] as const).map(
-                  (label) => (
-                    <th className="border-b p-3" key={label}>
-                      {t(label)}
-                    </th>
-                  ),
-                )}
+                {(['date', 'targetRange', 'actual', 'focus'] as const).map((key) => (
+                  <th key={key} className="border-b p-3">
+                    {w(key)}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {records.map((record) => (
-                <tr key={record.date}>
-                  {[
-                    record.date,
-                    record.weight || '—',
-                    record.bodyFat || '—',
-                    record.muscleMass || '—',
-                    record.waist || '—',
-                    record.note,
-                  ].map((value, index) => (
-                    <td
-                      className="max-w-80 whitespace-pre-wrap border-b p-3 break-words"
-                      key={['date', 'weight', 'bodyFat', 'muscleMass', 'waist', 'note'][index]}
-                    >
-                      {value}
+              {weightMilestones.map((row) => {
+                const override = snapshot.planOverrides.find((plan) => plan.date === row.date)
+                const target = override
+                  ? { min: override.targetMin, max: override.targetMax }
+                  : getTargetRange(row.date)
+                const weights = records.filter(
+                  (record) =>
+                    !record.excluded &&
+                    measurementDay(record.measuredAt) === row.date &&
+                    record.weight !== null,
+                )
+                const average = weights.length
+                  ? weights.reduce((sum, record) => sum + Number(record.weight), 0) / weights.length
+                  : null
+                return (
+                  <tr key={row.date}>
+                    <td className="border-b p-3">{row.date}</td>
+                    <td className="border-b p-3">
+                      {target.min}–{target.max} kg
                     </td>
-                  ))}
-                </tr>
-              ))}
+                    <td className="border-b p-3">{value(average)}</td>
+                    <td className="border-b p-3">{w(`milestoneFocus.${row.stage}`)}</td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
-      </details>
-      <p className="mt-5 text-muted-foreground text-sm">{t('dataNote')}</p>
+        <p className="text-muted-foreground text-sm">{t('dailyHelp')}</p>
+      </section>
+      <section className={`${panelClass} space-y-4`}>
+        <h2 className="font-bold text-2xl">{t('exchange')}</h2>
+        <p className="text-muted-foreground text-sm">{t('exchangeHelp')}</p>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            onClick={() =>
+              downloadFile(
+                JSON.stringify(
+                  healthExchangeSchema.parse({
+                    format: 'tungchiahui-health',
+                    schemaVersion: 1,
+                    exportedAt: new Date().toISOString(),
+                    timeZone: healthTimeZone,
+                    measurements: records,
+                    planOverrides: snapshot.planOverrides,
+                  }),
+                  null,
+                  2,
+                ),
+                'body-measurements.json',
+                'application/json',
+              )
+            }
+          >
+            {t('export')}
+          </Button>
+          <label>
+            {t('import')}
+            <input
+              className={fieldClass}
+              type="file"
+              accept=".json,application/json"
+              disabled={importing}
+              onChange={async (event) => {
+                setPending(null)
+                setExchangeError('')
+                try {
+                  const file = event.target.files?.[0]
+                  if (!file) return
+                  if (file.size > 32 * 1024 * 1024) throw new Error('too_large')
+                  const parsed = healthExchangeSchema.parse(
+                    JSON.parse(await file.text()) as unknown,
+                  )
+                  const preview = healthImportPreviewSchema.parse(
+                    await healthRequest('import', 'POST', { file: parsed }),
+                  )
+                  setPending({ file: parsed, preview })
+                } catch {
+                  setExchangeError(t('invalid'))
+                } finally {
+                  event.target.value = ''
+                }
+              }}
+            />
+          </label>
+        </div>
+        {pending && (
+          <div role="status" className="space-y-3">
+            <p>{t('importPreview', pending.preview)}</p>
+            <div className="flex gap-3">
+              <Button
+                disabled={importing || pending.preview.conflicts > 0}
+                onClick={async () => {
+                  setImporting(true)
+                  try {
+                    await healthRequest('import', 'POST', {
+                      file: pending.file,
+                      expectedRevision: pending.preview.revision,
+                    })
+                    setPending(null)
+                    await saved()
+                  } catch {
+                    setExchangeError(t('conflict'))
+                  } finally {
+                    setImporting(false)
+                  }
+                }}
+              >
+                {t('confirmImport')}
+              </Button>
+              <Button disabled={importing} onClick={() => setPending(null)}>
+                {t('cancel')}
+              </Button>
+            </div>
+          </div>
+        )}
+        {exchangeError && (
+          <p role="alert" className="text-destructive">
+            {exchangeError}
+          </p>
+        )}
+      </section>
     </>
   )
 }

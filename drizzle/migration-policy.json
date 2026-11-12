@@ -113,6 +113,23 @@
       "requiresFreshRecoverableBackup": false,
       "reason": "Add isolated music library, owner-only import and diagnostic records; seed the exact 25 existing CDN mappings without rewriting assets.",
       "recovery": "Retain additive music schema on rollback. Old application keeps its original mappings; new assets are immutable and retained. PostgreSQL backup/PITR includes music metadata. Revoke restored account sessions as documented after recovery."
+    },
+    {
+      "tag": "0014_private_body_measurements",
+      "changeKind": "expand",
+      "risk": "medium",
+      "requiresFreshRecoverableBackup": true,
+      "reason": "Add owner-only normalized measurements and protected legacy snapshots. Freeze old writes after transactional validated backfill. Retain a verified privacy compatibility release before deployment.",
+      "recovery": "Retain all tables and the legacy snapshot. Roll back only to the privacy compatibility release 09db1c9a or a newer health-aware release. It reads the unified private projection. Never restore frozen JSONB as the authority or reverse the backfill.",
+      "requiresHealthCompatiblePreviousRelease": true
+    },
+    {
+      "tag": "0015_health_sync_job",
+      "changeKind": "expand",
+      "risk": "low",
+      "requiresFreshRecoverableBackup": false,
+      "reason": "Add health_sync to the existing PostgreSQL durable application job enum.",
+      "recovery": "Retain the additive enum on rollback. The retained privacy release ignores health jobs. Disable health polling until health-capable code is restored."
     }
   ]
 }

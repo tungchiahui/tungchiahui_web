@@ -1,7 +1,9 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 
 import { z } from 'zod'
+import { createHealthHttpHandler } from '../health/http'
 import { LegacyHealthRepository } from '../health/legacy'
+import { HealthRepository } from '../health/repository'
 import { readHostExecutorStatus } from '../host-release/state'
 import { createMusicHttpHandler } from '../music/http'
 import { MusicLibraryRepository } from '../music/library-repository'
@@ -325,6 +327,10 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
     musicStorage,
     configuration.assetCdnBaseUrl,
   )
+  const healthRepository = configuration.databaseUrl
+    ? new HealthRepository(configuration.databaseUrl)
+    : null
+  const healthHandler = createHealthHttpHandler(configuration, accountSessions, healthRepository)
   const legacyOwnerSessions = configuration.databaseUrl
     ? new OwnerSessionRepository(configuration.databaseUrl)
     : null
@@ -345,7 +351,9 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
         attributes: {
           duration_ms: Number((performance.now() - startedAt).toFixed(2)),
           method: request.method ?? 'UNKNOWN',
-          route: url.pathname.slice(0, 500),
+          route: url.pathname.startsWith('/api/ops/health/')
+            ? '/api/ops/health/*'
+            : url.pathname.slice(0, 500),
           status: response.statusCode,
         },
         component: 'control-api',
@@ -399,6 +407,10 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
       return
     }
 
+    if (url.pathname.startsWith('/api/ops/health/') && url.pathname !== '/api/ops/health/legacy') {
+      sendJson(response, await healthHandler(request, requestHeaders(request)))
+      return
+    }
     if (url.pathname.startsWith('/api/ops/music/')) {
       try {
         const result = await musicHandler(request, requestHeaders(request))
@@ -984,6 +996,7 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
         translationJobs?.close(),
         accountSessions?.close(),
         legacyHealth?.close(),
+        healthRepository?.close(),
         legacyOwnerSessions?.close(),
       ])
       musicStorage?.destroy()

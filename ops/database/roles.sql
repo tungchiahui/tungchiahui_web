@@ -73,3 +73,23 @@ BEGIN
   END IF;
 END
 $schema_grants$;
+DO $health_grants$
+BEGIN
+  IF to_regclass('app.body_measurements') IS NOT NULL THEN
+    REVOKE ALL ON app.weight_loss_private_compat FROM PUBLIC, site_app, site_content_worker;
+    REVOKE ALL ON app.body_measurements FROM PUBLIC, site_app, site_content_worker;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON app.body_measurements TO site_control_api;
+    GRANT SELECT, INSERT ON app.body_measurements TO site_content_worker;
+    GRANT UPDATE (measured_at, time_precision, weight, bmi, body_fat, body_water, muscle_mass,
+      skeletal_muscle_mass, bone_mass, protein_mass, visceral_fat, heart_rate, basal_metabolism,
+      metabolic_age, physique_rating, body_score, height, waist, raw_payload, revision, updated_at)
+      ON app.body_measurements TO site_content_worker;
+    REVOKE ALL ON SCHEMA health FROM PUBLIC;
+    GRANT USAGE ON SCHEMA health TO site_control_api, site_content_worker, site_backup;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON health.plan_overrides, health.state TO site_control_api;
+    GRANT SELECT, UPDATE ON health.state TO site_content_worker;
+    GRANT SELECT ON ALL TABLES IN SCHEMA health TO site_backup;
+    REVOKE ALL ON health.legacy_snapshots FROM site_app, site_content_worker, site_control_api;
+  END IF;
+END
+$health_grants$;
