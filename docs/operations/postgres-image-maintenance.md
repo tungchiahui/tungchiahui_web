@@ -202,6 +202,13 @@ Recovery Generation 所需镜像。ADR 0032 的 PostgreSQL 清理保护继续生
 
 ### 入口契约
 
+维护的恢复子任务采用专用 90 分钟 Host 命令上限，Supervisor 在执行期间续租并校验
+Fence。生产约 276 MB、3,244 个对象的 Full 保护实际耗时约 36.5 分钟。两端只读复验并行，
+每端使用配置的有界并发并读回全部对象。普通 Host 命令默认上限为 20 分钟。
+备份遵循 AList 复制/验证 → R2 镜像/验证顺序。
+Execute 绑定成功 Preflight 的同一 Immutable Generation 读回证据，并重新核对全部 Host
+基线、Backup Identity 和新鲜度后进入维护。
+
 ```sh
 ./site postgres-image preflight \
   --old-digest <approved-old-sha256-digest> \

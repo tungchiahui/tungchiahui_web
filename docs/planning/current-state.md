@@ -18,7 +18,36 @@ Drizzle Ledger 16 项，主机根盘约 18 GB 可用。
 新增回归覆盖旧 Tag、错误 Image ID、停止状态和缺失容器，Unit 490 项与类型通过，
 Foundation 夹具改为从 SHA Tag 启动后按精确 Digest 维护。生产流水线将执行完整 Gate。
 
-生产执行结果与隔离恢复报告在完成后补入本记录。
+生产完整 Full `20261113-112533F` 于 12:02 UTC 完成双副本验证，Generation 为
+`20261113-112533F-4b959844-6901-4917-b023-5721e58300ab`，Manifest SHA-256 为
+`cb7732667f5f90a7c63913c2950f8f120b4f632941730c952f40e86195769b42`，制品
+276,267,712 bytes，数据库保护耗时约 36.5 分钟。对应 Operation 为
+`259ab5e0-a83a-4b68-86a6-f4a9ac30642a`，最终 `completed/recovery-verified`。
+Canonical `.env` 已经 age 加密导出，并在内存解密后核对原文件 SHA-256。加密制品受限保存于
+开发机 `.local/postgres-maintenance/production-config-before.env.age`。
+
+main `44066d33946a86c3c5038ac9d8c43d9c7b94ddc8` 的全部质量 Gate 通过，包含旧 SHA Tag
+运行引用的完整维护 Foundation 回归。正式 PostgreSQL 候选 Digest 为
+`sha256:6ce616e9a4ae1efe73827051a517b2b7f59ad58affd59897f3e897f663e176ed`，OCI Revision
+为组件实际 Source SHA `d6629b0cf4a3d791ee307bb363c4931de97e8b75`。
+首次发布在 `resolve-artifacts` 阶段拒绝，Recovery Image 未完成拉取，并伴随 GitHub JWKS
+验证不可用和 OIDC Policy Denial。补齐精确 Recovery Image 后，以既有 Operator 签名调用同一
+Control API/Host Engine 重试，Operation `f46e3ce6-aded-49a3-a297-6dd2802406d4` 于
+12:15:55 UTC 完成 `deployment-verified`。生产 Current Green、Web/独立服务/Host Executor
+均为 `44066d339`，Previous Blue 为 `3272b43da`，当前数据库运行 Digest 为 `a95122c0…`。
+
+真实备份恢复仅挂载 `backup-work/postgres-image-drill-20261113` 的隔离目录，沿用相同
+Recovery Engine 和真实 Generation。AList 顺序逐文件下载较慢，停止本次隔离容器后，在新
+隔离容器内通过精确 Endpoint Host Override 模拟 Primary 不可达，验证真实 R2 Fallback。
+该模拟写入隔离容器的 `HostConfig.ExtraHosts`。恢复完成后的镜像兼容报告继续补入本记录。
+数据库定向维护 Preflight `353efc72-22ca-4c89-9e87-5e3ceb596649` 在恢复复验子任务中
+触及通用 Host 命令 20 分钟上限，最终 `failed/postgres-image-rejected`，阶段 Audit 记录
+`category=timeout`。本轮将该恢复子任务设为专用 90 分钟上限，并让两端只读完整复验并行、
+各自使用已有有界并发。Supervisor 持续续租并校验 Fence。普通 Host 命令默认上限为 20 分钟。
+新增回归覆盖普通命令与定向维护 verify/backup 的实际超时参数，完整 Gate 将在 main 重跑。
+隔离恢复同时逐文件校验本地 Repository 与 R2 真实代际 Manifest 的 3,244 项对象，使用同一
+Recovery Engine 的目标准备与 pgBackRest Restore 生成独立数据目录，供新旧镜像核验。
+R2 Fallback 容器并行执行远端逐文件恢复。正式数据库切换等待核验与修复发布完成。
 
 
 ## 2026-11-13 — 受审计数据库镜像定向维护入口本地验收

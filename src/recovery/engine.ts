@@ -419,15 +419,17 @@ export async function verifyMaintenanceBackup(
   )
     throw new Error('Maintenance requires a verified full backup on both replicas')
   checkPgBackRest({ configPath: configuration.pgBackRestConfigPath, stanza: configuration.stanza })
-  for (const replica of [configuration.primary, configuration.offsite]) {
-    const manifest = await readRepositoryManifestFromReplica(record.repositoryGeneration, replica)
-    if (
-      manifest.backupId !== record.backupId ||
-      manifest.generation !== record.repositoryGeneration ||
-      repositoryManifestSha256(manifest) !== record.manifestSha256
-    )
-      throw new Error('Maintenance backup identity differs from the recorded generation')
-    await verifyRepositoryReplica(manifest, replica, configuration.replicationConcurrency)
-  }
+  await Promise.all(
+    [configuration.primary, configuration.offsite].map(async (replica) => {
+      const manifest = await readRepositoryManifestFromReplica(record.repositoryGeneration, replica)
+      if (
+        manifest.backupId !== record.backupId ||
+        manifest.generation !== record.repositoryGeneration ||
+        repositoryManifestSha256(manifest) !== record.manifestSha256
+      )
+        throw new Error('Maintenance backup identity differs from the recorded generation')
+      await verifyRepositoryReplica(manifest, replica, configuration.replicationConcurrency)
+    }),
+  )
   return record
 }

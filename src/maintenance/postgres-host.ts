@@ -268,21 +268,25 @@ export class HostPostgresMaintenance implements PostgresMaintenancePlatform {
     const name = `${this.settings.projectName}-postgres-maintenance-${this.operationId}`
     this.run('docker', ['rm', '--force', name], {}, true)
     try {
-      const output = this.compose([
-        'run',
-        '--rm',
-        '--no-deps',
-        '--name',
-        name,
-        'deploy-agent',
-        'node',
-        'dist/postgres-maintenance-recovery.cjs',
-        mode,
-        identity,
-        this.operationId,
-        lease.leaseOwner,
-        String(lease.fencingToken),
-      ]).stdout
+      const output = this.compose(
+        [
+          'run',
+          '--rm',
+          '--no-deps',
+          '--name',
+          name,
+          'deploy-agent',
+          'node',
+          'dist/postgres-maintenance-recovery.cjs',
+          mode,
+          identity,
+          this.operationId,
+          lease.leaseOwner,
+          String(lease.fencingToken),
+        ],
+        undefined,
+        { timeoutMilliseconds: 90 * 60 * 1000 },
+      ).stdout
       return z.record(z.string(), z.unknown()).parse(JSON.parse(output.trim()) as unknown)
     } finally {
       // Fencing prevents a stale child from deleting its successor's recovery job.
@@ -401,7 +405,9 @@ export class HostPostgresMaintenance implements PostgresMaintenancePlatform {
       Date.parse(backup.completedAt) > Date.now()
     )
       throw new Error('Fresh full backup evidence is required')
-    this.recovery('verify', target.backupId)
+    // Execute binds the completed preflight's immutable-generation readback receipt
+    // and compares the freshly captured Host baseline before entering maintenance.
+    if (target.mode === 'preflight') this.recovery('verify', target.backupId)
     const files = walkPostgresData(join(this.settings.dataRoot, 'postgres'))
     const size = files.reduce((total, file) => total + lstatSync(file).size, 0)
     const space = statfsSync(this.settings.dataRoot)
@@ -715,7 +721,11 @@ export class HostPostgresMaintenance implements PostgresMaintenancePlatform {
     this.compose(['config', '--quiet'], this.image(digest))
     this.compose(['up', '--detach', '--no-deps', '--wait', 'postgres'], this.image(digest))
   }
-  private compose(args: readonly string[], postgresImage?: string) {
+  private compose(
+    args: readonly string[],
+    postgresImage?: string,
+    options: Readonly<{ timeoutMilliseconds?: number }> = {},
+  ) {
     if (!this.lease) throw new Error('Maintenance execution lease is missing')
     heartbeatInfrastructureOperation(this.path, this.operationId, this.lease, 3600)
     const host = captureHostConvergence(this.settings)
@@ -730,7 +740,7 @@ export class HostPostgresMaintenance implements PostgresMaintenancePlatform {
       postgresImage: postgresImage ?? host.postgresImage,
       mode: 'configuration',
     })
-    return hostCompose(request, args)
+    return hostCompose(request, args, options)
   }
   async verify(digest: string, database: Readonly<Record<string, unknown>>) {
     const actual = inspectHostContainer(this.postgresName)

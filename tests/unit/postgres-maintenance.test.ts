@@ -20,6 +20,9 @@ import {
   retryPostgresMaintenanceOperation,
   startInfrastructureOperation,
 } from '../../src/control-plane/control-state'
+import { hostSettingsSchema } from '../../src/host-release/contracts'
+import * as hostCoordinator from '../../src/host-release/coordinator'
+import * as hostProvision from '../../src/host-release/provision'
 import {
   type PostgresMaintenanceProgress,
   type PostgresMaintenanceTarget,
@@ -31,6 +34,7 @@ import {
 } from '../../src/maintenance/postgres-engine'
 import {
   copyPostgresColdData,
+  HostPostgresMaintenance,
   runningPostgresMatchesDigest,
   verifyPostgresColdData,
 } from '../../src/maintenance/postgres-host'
@@ -38,6 +42,7 @@ import { parseSiteCommand } from '../../tools/site-command'
 
 const directories: string[] = []
 afterEach(() => {
+  vi.restoreAllMocks()
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true })
 })
 const actor: ActorIdentity = {
@@ -115,6 +120,67 @@ function fixture() {
 }
 
 describe('audited PostgreSQL image maintenance', () => {
+  it.each(['verify', 'backup'] as const)(
+    'allows real production %s transfers beyond the ordinary Host command timeout',
+    (mode) => {
+      const f = fixture()
+      f.create(target)
+      const claimed = f.claim()
+      vi.spyOn(hostCoordinator, 'hostControlPath').mockReturnValue(f.path)
+      vi.spyOn(hostCoordinator, 'captureHostConvergence').mockReturnValue({
+        hostSha: target.candidateSha,
+        hostPreviousSha: null,
+        sha: target.candidateSha,
+        webDigest: target.oldDigest,
+        webImage: `ghcr.io/example/site@${target.oldDigest}`,
+        serviceImage: `ghcr.io/example/site-service@${target.oldDigest}`,
+        recoveryImage: `ghcr.io/example/site-recovery@${target.oldDigest}`,
+        postgresImage: `ghcr.io/example/site-postgres@${target.oldDigest}`,
+        deploymentPollingEnabled: false,
+        backupScheduleEnabled: true,
+        maintenanceScheduleEnabled: true,
+        files: {
+          'compose.yaml': 'compose',
+          'openresty.conf': 'proxy',
+          'pgbouncer.ini': 'pool',
+          'pgbackrest.conf': 'backup',
+        },
+      })
+      vi.spyOn(hostProvision, 'readHostEnvironment').mockReturnValue({
+        TUNGCHIAHUI_DEPLOYMENT_IMAGE_REPOSITORY: 'ghcr.io/example/site',
+      })
+      vi.spyOn(hostProvision, 'runHostCommand').mockReturnValue({
+        status: 0,
+        stdout: '',
+        stderr: '',
+      })
+      const compose = vi.spyOn(hostProvision, 'hostCompose').mockReturnValue({
+        status: 0,
+        stdout: '{}',
+        stderr: '',
+      })
+      class RecoveryProbe extends HostPostgresMaintenance {
+        executeRecovery() {
+          return this.recovery(mode, target.backupId)
+        }
+      }
+      const platform = new RecoveryProbe(
+        hostSettingsSchema.parse({
+          configRoot: f.directory,
+          dataRoot: f.directory,
+          manageSystemd: false,
+        }),
+        claimed.operation.id,
+      )
+      platform.lease = claimed.lease
+      platform.executeRecovery()
+      expect(compose).toHaveBeenCalledWith(
+        expect.any(Object),
+        expect.arrayContaining(['run', 'deploy-agent', mode]),
+        { timeoutMilliseconds: 90 * 60 * 1000 },
+      )
+    },
+  )
   it('accepts a retained SHA-tagged runtime only when its real image matches the exact approved digest', () => {
     const current = {
       Id: 'retained-postgres',

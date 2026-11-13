@@ -22,7 +22,8 @@ Execute 另外绑定已成功的 Preflight Operation、明确 Confirmation 和�
 预检核对实际容器 Image ID/RepoDigest、候选 OCI Revision、二进制/扩展版本、
 Collation、四语言索引查询、私有角色边界、Compose 与实际数据/备份/配置/Socket 挂载、
 空间、Backup 新鲜度和双副本完整读回。预检保存 `.env` Hash、拓扑、Web Active/Previous
-状态、Consumer 容器身份与运行状态、Timer 原启用/活动状态。Execute 重新验证该基线。
+状态、Consumer 容器身份与运行状态、Timer 原启用/活动状态。Execute 重新验证该基线，并绑定
+成功 Preflight 的同一 Immutable Generation 完整读回证据及 Backup 新鲜度。
 
 执行前在共享 Deployment Config 目录写入维护标记。OpenResty 对业务入口返回 503、
 Retry-After 和 no-store，保留独立基础设施查询、Backup 与 Restore 控制。

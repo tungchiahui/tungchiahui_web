@@ -133,13 +133,14 @@ export function runHostCommand(
   args: readonly string[],
   environment: Readonly<Record<string, string>> = {},
   allowFailure = false,
+  options: Readonly<{ timeoutMilliseconds?: number }> = {},
 ) {
   const executable = command === 'groupadd' ? '/usr/sbin/groupadd' : `/usr/bin/${command}`
   const result = spawnSync(executable, args, {
     encoding: 'utf8',
     env: { ...process.env, ...environment },
     maxBuffer: 16 * 1024 * 1024,
-    timeout: 1_200_000,
+    timeout: options.timeoutMilliseconds ?? 1_200_000,
   })
   if (result.error || (result.status !== 0 && !allowFailure))
     throw new Error(
@@ -289,7 +290,11 @@ export function composeHostEnvironment(request: ProvisionRequest) {
   }
 }
 
-export function hostCompose(request: ProvisionRequest, args: readonly string[]) {
+export function hostCompose(
+  request: ProvisionRequest,
+  args: readonly string[],
+  options: Readonly<{ timeoutMilliseconds?: number }> = {},
+) {
   return runHostCommand(
     'docker',
     [
@@ -303,6 +308,8 @@ export function hostCompose(request: ProvisionRequest, args: readonly string[]) 
       ...args,
     ],
     composeHostEnvironment(request),
+    false,
+    options,
   )
 }
 
