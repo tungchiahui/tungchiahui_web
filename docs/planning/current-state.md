@@ -21,8 +21,13 @@ Digest 与原始 `sha256:a95122c0c897d7fb1fb19c3708ad7f6681d0cd1b80a87c08ab381ac
 完全相同。临时 Registry 已清理。可通过恢复同一个原始制品补齐 GHCR 拉取缺口，
 Owner 随后已单独批准 Registry 上传和读回校验。已执行归档加载、精确 Tag 和 Push，
 GHCR 拒绝当前本机 Docker 凭据，返回 `unauthenticated: User cannot be authenticated
-with the token provided`。实际 Registry 恢复仍待 Owner 在开发机完成具备
-`write:packages` 权限的 Docker 登录后继续，上传授权已具备。认证值通过交互方式处理。
+with the token provided`。Owner 随后在开发机完成 Docker 登录，重试已授权的 Push 成功，
+并完成 `imagetools inspect` 与 `docker pull` 读回。Registry Digest 精确恢复为
+`sha256:a95122c0c897d7fb1fb19c3708ad7f6681d0cd1b80a87c08ab381ac8c8b9deff`，Image ID 与
+Source SHA 均与归档一致，灾备镜像拉取缺口已补齐。认证值由 Owner 交互输入。
+数据库镜像安全升级和 SmartScaleConnect 生产接入继续作为待单独授权的维护事项。
+个人历史记录导入后，匿名 HTML 中的私有记录标识检查通过，新私有 API 返回 401、
+旧 weight_loss API 返回 403，均为 private/no-store。
 
 本地核对传输进度时曾过宽枚举 SSH 进程参数，包含无关终端会话元数据，后续已收窄为
 本次导出文件的大小、摘要和制品校验。私有会话信息保持在受限诊断上下文内。
