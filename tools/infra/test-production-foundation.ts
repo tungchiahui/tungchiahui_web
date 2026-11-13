@@ -1,12 +1,19 @@
 import { type ChildProcess, spawn, spawnSync } from 'node:child_process'
-import { generateKeyPairSync } from 'node:crypto'
-import { chmodSync, mkdirSync, readFileSync, utimesSync, writeFileSync } from 'node:fs'
+import { createHash, generateKeyPairSync } from 'node:crypto'
+import {
+  chmodSync,
+  copyFileSync,
+  mkdirSync,
+  readFileSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import { parseEnv } from 'node:util'
-
 import { z } from 'zod'
 import type { ActorIdentity } from '../../src/control-plane/contracts'
 import {
+  checkpointRecoveryOperation,
   claimNextInfrastructureOperation,
   createConsistentControlStateSnapshot,
   createInfrastructureOperation,
@@ -17,7 +24,9 @@ import {
   listControlAuditEvents,
   listRecoveryBackups,
   readDeploymentState,
+  reconcileInfrastructureOperations,
   recordRecoveryBackup,
+  requeueDeploymentOperationForReconciliation,
   restoreControlStateSnapshot,
   startInfrastructureOperation,
 } from '../../src/control-plane/control-state'
@@ -47,6 +56,9 @@ import {
   restoreHostGeneration,
   stageHostGeneration,
 } from '../../src/host-release/state'
+import { postgresMaintenanceTargetSchema } from '../../src/maintenance/postgres-contracts'
+import { executePostgresMaintenance } from '../../src/maintenance/postgres-engine'
+import { HostPostgresMaintenance } from '../../src/maintenance/postgres-host'
 import { SearchIndexRepository } from '../../src/search/repository'
 import {
   executeServerMigrationOperation,
@@ -57,6 +69,7 @@ import { selectImageRegistryReference } from './image-reference'
 
 const input = z
   .object({
+    PHASE12_TRIVY_CACHE_ROOT: z.literal('/trivy-cache').optional(),
     PHASE12_GIT_SHA: z.string().regex(/^[a-f0-9]{40}$/),
     PHASE12_HOST_GID: z.coerce.number().int().nonnegative(),
     PHASE12_HOST_ROOT: z.string().startsWith('/'),
@@ -99,6 +112,7 @@ const dataRoot = join(input.PHASE12_HOST_ROOT, 'var')
 const secretRoot = join(configRoot, 'secrets')
 const workRoot = join(input.PHASE12_HOST_ROOT, 'work')
 const identityPath = join(workRoot, 'age-identity.txt')
+let migrationBackupEnvironment: Record<string, string> = {}
 const migrationBackupS3 = `${projectName}-migration-backup-s3`
 const productionEnvPath = join(configRoot, '.env')
 const targetProjectName = `tungchiahui-phase17-target-${process.pid}`
@@ -609,9 +623,30 @@ function buildImages() {
   execute('docker', ['tag', postgresImage, initialPostgresImage])
 }
 
-function verifyImageSecurity() {
+async function verifyImageSecurity() {
   const cacheRoot = join(workRoot, 'trivy-cache')
   mkdirSync(cacheRoot, { mode: 0o755, recursive: true })
+  if (input.PHASE12_TRIVY_CACHE_ROOT) {
+    const databaseCache = join(cacheRoot, 'trivy/db')
+    mkdirSync(databaseCache, { recursive: true, mode: 0o755 })
+    for (const file of ['trivy.db', 'metadata.json'])
+      copyFileSync(
+        join(input.PHASE12_TRIVY_CACHE_ROOT, 'trivy/db', file),
+        join(databaseCache, file),
+      )
+    const metadata = z
+      .object({ UpdatedAt: z.iso.datetime(), NextUpdate: z.iso.datetime() })
+      .parse(JSON.parse(readFileSync(join(databaseCache, 'metadata.json'), 'utf8')) as unknown)
+    console.log(
+      JSON.stringify({
+        trivyDatabase: metadata,
+        sha256: createHash('sha256')
+          .update(readFileSync(join(databaseCache, 'trivy.db')))
+          .digest('hex'),
+      }),
+    )
+  }
+
   execute('docker', ['pull', trivyImage])
   const images = [
     webImage,
@@ -622,7 +657,7 @@ function verifyImageSecurity() {
     pgbouncerImage,
   ]
   for (const image of images) {
-    execute('docker', [
+    const scanArgs = [
       'run',
       '--rm',
       '--volume',
@@ -643,7 +678,14 @@ function verifyImageSecurity() {
       '1',
       '--quiet',
       image,
-    ])
+    ]
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const scan = execute('docker', scanArgs, { allowFailure: true })
+      if (scan.status === 0) break
+      if (attempt === 2 || !scan.stderr.includes('failed to download vulnerability DB'))
+        throw new Error(`Image security scan failed: ${scan.stderr}`)
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 2000))
+    }
     const sbom = execute('docker', [
       'run',
       '--rm',
@@ -1421,6 +1463,7 @@ async function prepareVerifiedMigrationBackup() {
     BACKUP_OFFSITE_S3_SECRET_ACCESS_KEY: 'migration-offsite-secret',
     BACKUP_OFFSITE_S3_FORCE_PATH_STYLE: 'true',
   }
+  migrationBackupEnvironment = backupEnvironment
   execute('docker', [
     'run',
     '--rm',
@@ -1940,6 +1983,347 @@ async function verifyCompleteServerReleases() {
     // that fixture's polling mode after stopping the host supervisor for this test scope.
     compose(['up', '--detach', '--no-deps', '--wait', 'deploy-agent'], false, {
       TUNGCHIAHUI_DEPLOYMENT_POLLING_ENABLED: 'true',
+    })
+  }
+}
+
+async function verifyPostgresImageMaintenance() {
+  const settings = hostSettingsSchema.parse({
+    configRoot,
+    dataRoot,
+    projectName,
+    manageSystemd: false,
+  })
+  const path = hostControlPath(settings),
+    owner = 'deploy-agent:host:postgres-maintenance-fixture'
+  if (!acquireHostExecutor(path, owner))
+    throw new Error('Maintenance fixture could not acquire Host Adapter')
+  const heartbeat = spawn(process.execPath, ['/maintenance-host-heartbeat.cjs', path, owner], {
+    stdio: ['ignore', 'inherit', 'inherit'],
+  })
+  try {
+    // The fixture uses a loopback-only registry and S3Mock through the same recovery helper.
+    const publish = (source: string, tag: string) => {
+      const reference = `${registryRepository}-postgres:${tag}`
+      execute('docker', ['tag', source, reference])
+      execute('docker', ['push', reference])
+      const digest = selectImageRegistryReference(
+        JSON.parse(
+          execute('docker', ['image', 'inspect', '--format', '{{json .RepoDigests}}', reference])
+            .stdout,
+        ) as unknown,
+        `${registryRepository}-postgres`,
+      ).split('@')[1]
+      return z
+        .string()
+        .regex(/^sha256:[a-f0-9]{64}$/)
+        .parse(digest)
+    }
+    const wrapper = join(workRoot, 'postgres-old-fixture')
+    mkdirSync(wrapper, { recursive: true })
+    writeFileSync(
+      join(wrapper, 'Dockerfile'),
+      `FROM ${postgresImage}\nLABEL cn.tungchiahui.maintenance-fixture="retained"\n`,
+    )
+    const oldTag = `${projectName}-postgres-retained:${initialSha}`
+    execute('docker', ['build', '--file', join(wrapper, 'Dockerfile'), '--tag', oldTag, wrapper])
+    const oldDigest = publish(oldTag, initialSha),
+      newDigest = publish(postgresImage, input.PHASE12_GIT_SHA)
+    compose(['up', '--detach', '--no-deps', '--wait', 'postgres'], false, {
+      TUNGCHIAHUI_POSTGRES_IMAGE: `${registryRepository}-postgres@${oldDigest}`,
+    })
+    compose(['up', '--detach', '--no-deps', '--wait', 'deploy-agent'], false, {
+      TUNGCHIAHUI_DEPLOYMENT_POLLING_ENABLED: 'false',
+      TUNGCHIAHUI_RECOVERY_IMAGE: recoveryImage,
+    })
+    const currentPostgresId = compose(['ps', '--quiet', 'postgres']).stdout.trim()
+    const gatewayStatus = (route: string) =>
+      Number(
+        execute('curl', [
+          '--noproxy',
+          '*',
+          '--silent',
+          '--output',
+          '/dev/null',
+          '--write-out',
+          '%{http_code}',
+          `http://127.0.0.1:${input.PHASE12_ORIGIN_PORT}${route}`,
+        ]).stdout,
+      )
+    const env = parseEnv(readFileSync(productionEnvPath, 'utf8'))
+    const databaseUrl = z.string().parse(env.DATABASE_ADMIN_URL)
+    const network = `${projectName}_database`
+    const ip = execute('docker', [
+      'inspect',
+      '--format',
+      `{{(index .NetworkSettings.Networks "${network}").IPAddress}}`,
+      `${projectName}-postgres-1`,
+    ]).stdout.trim()
+    const url = new URL(databaseUrl)
+    url.hostname = ip
+    url.port = '5432'
+    const search = new SearchIndexRepository(url.toString())
+    try {
+      await search.reindexLocales(['zh-cn', 'zh-hk', 'zh-tw', 'en-us'])
+    } finally {
+      await search.close()
+    }
+    const backup = listRecoveryBackups(path).find(
+      (record) => record.valid && record.backupType === 'full',
+    )
+    if (!backup) throw new Error('Maintenance fixture requires verified full backup')
+    const base = {
+      action: 'postgres-image-upgrade',
+      environment: 'production',
+      oldDigest,
+      newDigest,
+      candidateSha: input.PHASE12_GIT_SHA,
+      backupId: backup.backupId,
+      mode: 'preflight',
+    } as const
+    const request = async (target: unknown, key: string) =>
+      operationResponseSchema.parse(
+        await controlRequest('/api/ops/infrastructure-operations', {
+          body: {
+            operationType: 'server-migration',
+            reason: 'Disposable audited PostgreSQL maintenance',
+            target,
+          },
+          idempotencyKey: key,
+          method: 'POST',
+          purpose: 'postgres-maintenance-fixture',
+        }),
+      ).operation
+    function claim() {
+      const claimed = claimNextInfrastructureOperation(
+        path,
+        owner,
+        3600,
+        new Date(),
+        ['server-migration'],
+        'postgres-image-upgrade',
+      )
+      if (!claimed) throw new Error('Missing maintenance fixture claim')
+      const lease = { leaseOwner: owner, fencingToken: claimed.fencingToken }
+      return { operation: startInfrastructureOperation(path, claimed.id, lease), lease }
+    }
+    function platform(
+      operationId: string,
+      lease: { leaseOwner: string; fencingToken: number },
+      rejectCandidate = false,
+    ) {
+      class DisposableMaintenance extends HostPostgresMaintenance {
+        private rejected = false
+        protected override recovery(mode: 'verify' | 'backup', identity: string) {
+          return z.record(z.string(), z.unknown()).parse(
+            JSON.parse(
+              execute('docker', [
+                'run',
+                '--rm',
+                '--network',
+                'host',
+                '--volumes-from',
+                `${projectName}-deploy-agent-1`,
+                ...Object.entries({
+                  ...migrationBackupEnvironment,
+                  BACKUP_WORK_DIRECTORY: '/var/lib/tungchiahui-backup-work',
+                }).flatMap(([key, value]) => ['--env', `${key}=${value}`]),
+                recoveryImage,
+                'node',
+                'dist/postgres-maintenance-recovery.cjs',
+                mode,
+                identity,
+                operationId,
+                lease.leaseOwner,
+                String(lease.fencingToken),
+              ]).stdout.trim(),
+            ) as unknown,
+          )
+        }
+        override async quiesce(baseline: Readonly<Record<string, unknown>>) {
+          await super.quiesce(baseline)
+          expect(gatewayStatus('/') === 503, 'Website did not enter maintenance')
+          expect(
+            gatewayStatus('/api/ops/health/measurements') === 503,
+            'Private control route remained open during maintenance',
+          )
+          expect(
+            gatewayStatus(`/api/ops/infrastructure-operations/${operationId}`) !== 503,
+            'Recovery status route was blocked',
+          )
+        }
+        override async stop() {
+          await super.stop()
+          const status = operationResponseSchema.parse(
+            await controlRequest(`/api/ops/infrastructure-operations/${operationId}`, {
+              purpose: 'postgres-down-maintenance-status',
+            }),
+          )
+          expect(
+            status.operation.id === operationId,
+            'SQLite maintenance status failed while PostgreSQL was stopped',
+          )
+        }
+        override async verify(digest: string, database: Readonly<Record<string, unknown>>) {
+          if (rejectCandidate && digest === newDigest && !this.rejected) {
+            this.rejected = true
+            throw new Error('Injected candidate rejection')
+          }
+          await super.verify(digest, database)
+        }
+      }
+      const result = new DisposableMaintenance(settings, operationId)
+      result.lease = lease
+      return result
+    }
+    const planned = await request(base, 'postgres-maintenance-preflight-001')
+    const preflight = claim()
+    const checked = await executePostgresMaintenance(
+      path,
+      preflight.operation,
+      preflight.lease,
+      platform(planned.id, preflight.lease),
+    )
+    expect(
+      checked.status === 'completed',
+      `Maintenance preflight rejected: ${JSON.stringify(listControlAuditEvents(path, planned.id).slice(-5))}`,
+    )
+    expect(
+      compose(['ps', '--quiet', 'postgres']).stdout.trim() === currentPostgresId,
+      'Preflight replaced PostgreSQL',
+    )
+    const executeTarget = postgresMaintenanceTargetSchema.parse({
+      ...base,
+      mode: 'execute',
+      confirmation: 'POSTGRES-IMAGE-UPGRADE-PRODUCTION',
+      preflightOperationId: planned.id,
+      restoreEvidenceSha256: 'f'.repeat(64),
+    })
+    const failed = await request(executeTarget, 'postgres-maintenance-rollback-001')
+    const failing = claim()
+    const reverted = await executePostgresMaintenance(
+      path,
+      failing.operation,
+      failing.lease,
+      platform(failed.id, failing.lease, true),
+    )
+    expect(
+      reverted.phase === 'postgres-image-reverted',
+      `Candidate failure did not safely revert: ${JSON.stringify(listControlAuditEvents(path, failed.id).slice(-10))}`,
+    )
+    expect(gatewayStatus('/') === 200, 'Rollback left the website in maintenance')
+    // A new preflight binds the recreated old container and current topology.
+    const plannedAgain = await request(base, 'postgres-maintenance-preflight-002')
+    const recheck = claim()
+    const checkedAgain = await executePostgresMaintenance(
+      path,
+      recheck.operation,
+      recheck.lease,
+      platform(plannedAgain.id, recheck.lease),
+    )
+    expect(checkedAgain.status === 'completed', 'Repeated maintenance preflight failed')
+    const target = postgresMaintenanceTargetSchema.parse({
+      ...executeTarget,
+      preflightOperationId: plannedAgain.id,
+    })
+    const accepted = await request(target, 'postgres-maintenance-crash-001')
+    const running = claim(),
+      host = platform(accepted.id, running.lease)
+    const baseline = await host.prepare(target)
+    checkpointRecoveryOperation(
+      path,
+      accepted.id,
+      running.lease,
+      'quiescing',
+      { phase: 'quiescing', baseline, startedAt: new Date().toISOString() },
+      'postgres-image-upgrade',
+    )
+    await host.quiesce(baseline)
+    const database = await host.drain()
+    await host.stop()
+    const coldCopySha256 = await host.coldCopy(accepted.id)
+    checkpointRecoveryOperation(
+      path,
+      accepted.id,
+      running.lease,
+      'candidate-starting',
+      {
+        phase: 'candidate-starting',
+        baseline,
+        database,
+        coldCopySha256,
+        startedAt: new Date().toISOString(),
+      },
+      'postgres-image-upgrade',
+    )
+    await host.start(newDigest)
+    releaseHostExecutor(path, owner)
+    reconcileInfrastructureOperations(path)
+    requeueDeploymentOperationForReconciliation(path, accepted.id)
+    expect(acquireHostExecutor(path, owner), 'Host Adapter restart failed')
+    const resumed = claim()
+    const completed = await executePostgresMaintenance(
+      path,
+      resumed.operation,
+      resumed.lease,
+      platform(accepted.id, resumed.lease),
+    )
+    expect(
+      completed.status === 'completed',
+      `Interrupted image switch failed: ${JSON.stringify(listControlAuditEvents(path, accepted.id).slice(-10))}`,
+    )
+    expect(gatewayStatus('/') === 200, 'Completed maintenance left the public site unavailable')
+    const postBackup = z
+      .object({
+        backupId: z.string(),
+        valid: z.literal(true),
+        primaryReplicaStatus: z.literal('fresh'),
+        offsiteReplicaStatus: z.literal('fresh'),
+      })
+      .parse(completed.result?.postBackup)
+    expect(postBackup.backupId !== backup.backupId, 'Maintenance reused the pre-switch backup')
+    const converged = captureHostConvergence(settings)
+    expect(
+      converged.postgresImage === `${registryRepository}-postgres@${newDigest}`,
+      'Host convergence lost the maintained PostgreSQL reference',
+    )
+    const databaseContainer = compose(['ps', '--quiet', 'postgres']).stdout.trim()
+    const generationSha = readHostRuntime(path).current_sha
+    if (!generationSha) throw new Error('Missing host generation after maintenance')
+    provisionHost({
+      ...releaseProvisionRequest(
+        settings,
+        registryRepository,
+        readHostGeneration(path, generationSha),
+        converged,
+      ),
+      applyMigrations: false,
+    })
+    expect(
+      compose(['ps', '--quiet', 'postgres']).stdout.trim() === databaseContainer,
+      'Ordinary services convergence replaced the maintained database',
+    )
+
+    console.log(
+      JSON.stringify({
+        postgresImageMaintenance: 'pass',
+        candidateFailureRollback: 'pass',
+        maintenanceCrashResume: 'pass',
+        coldCopySha256,
+        postBackupId: postBackup.backupId,
+        productionTraffic: false,
+      }),
+    )
+  } finally {
+    const heartbeatExited = new Promise<void>((resolveExit) =>
+      heartbeat.once('exit', () => resolveExit()),
+    )
+    heartbeat.kill('SIGTERM')
+    await heartbeatExited
+    releaseHostExecutor(path, owner)
+    compose(['up', '--detach', '--no-deps', '--wait', 'deploy-agent'], false, {
+      TUNGCHIAHUI_DEPLOYMENT_POLLING_ENABLED: 'true',
+      TUNGCHIAHUI_RECOVERY_IMAGE: recoveryImage,
     })
   }
 }
@@ -2748,7 +3132,7 @@ async function main() {
   try {
     startRegistry()
     buildImages()
-    verifyImageSecurity()
+    await verifyImageSecurity()
     runProvision()
     inspectHardening()
     verifyDatabaseRoleBindings(productionEnv.workerPassword)
@@ -2757,6 +3141,7 @@ async function main() {
     prepareRetainedReleaseSchema()
     await verifyBlueGreenDeployment()
     await verifyCompleteServerReleases()
+    await verifyPostgresImageMaintenance()
     await verifyRoutingAndIpFamilies()
     await verifySecurityAndLoad()
     const migrationReadiness = await verifyServerMigrationRehearsal()

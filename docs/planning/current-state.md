@@ -1,5 +1,88 @@
 # Website V2 Current Implementation State
 
+
+## 2026-11-13 — 受审计数据库镜像定向维护入口本地验收
+
+从 `codex/release-pipeline-simplification` 的验收提交 `d6629b0cf` 接管。
+Owner 提供的 main/生产基线为 `3272b43`。本轮完成本地实现与完整验收。
+下一次 SSH、main 推送、Workflow 修改及生产操作继续逐项事前说明并取得授权。
+
+新增 `./site postgres-image preflight|execute|retry`，沿用既有独立 Control API、
+`server-migration/postgres-image-upgrade` 闭合 Target、Host Coordinator、SQLite 全局排他
+Claim/Lease/Fence/Audit 和 Recovery Engine。Core Schema 8 保持兼容。
+生产安装与操作契约见 [ADR 0033](../decisions/0033-audited-postgres-image-maintenance.md) 和
+[维护方案及授权清单](../operations/postgres-image-maintenance.md)。
+
+入口绑定旧/新精确 Registry Digest、候选 Source SHA、新鲜 Full Backup，Execute 再绑定
+成功 Preflight ID、显式 Confirmation 与单独授权的真实隔离恢复报告 SHA-256。
+该报告 SHA 为 Operator 提交并由 Owner/Operator 审阅的证据引用。自动预检另外验证
+运行 Image ID/RepoDigest、OCI Revision、固定二进制/扩展版本、挂载/Hardening、空间、
+Collation、四语言索引、角色边界与双副本完整读回。
+
+维护标记与 SQLite 状态分别关闭 OpenResty 和直接 Control API 的业务入口，保留独立
+基础设施状态、Backup/Restore 控制。记录并停止 Consumer/Timer，排空、干净停止并核对
+Control Data，生成逐文件/目录、所有权/权限及 SHA-256 冷副本，fsync 与完整读回后才切换。
+同一 Compose 定向重建 PostgreSQL，比较业务表/Migration Ledger、角色/ACL/RLS、四语言
+PGroonga 索引、临时写入读回、WAL Restore Point 与事务内 amcheck，随后执行新 Full Backup
+双副本验证、恢复原运行意图、PgBouncer/站点 Ready 和完整 Active/Previous Web State。
+
+每阶段保存 Intent/Result/Audit，Supervisor Fence 后接续原 Operation，清理旧固定 Recovery
+Job。冷副本按持久化 Hash 独立于当前数据目录校验；新 Full Backup 复用 Intent 之后的完成
+Label 和已保存 Receipt。候选失败会恢复旧精确 Digest 并重验。
+`recovery-required` 保持维护态与排他状态，Operator 可明确授权补偿 retry；数据恢复则由
+`./site restore ... --maintenance-operation <held-id>` 在同一 SQLite Transaction 中审计交接
+到既有 Restore Engine。恢复后继续保持业务关闭，完成 Session Verifier 轮换、业务核对和
+新鲜保护证据，再由新预检/维护继承原 Consumer/Timer 意图并解除保持状态。
+
+### 本地验收与证据
+
+完整格式/lint、源码与 Workflow 策略、Drizzle Check、类型、Renovate Validation、生产 Build、
+安全边界扫描、489 项 Unit、16 项 Migration、完整应用 Integration/S3Mock 和 54 项 E2E 通过。
+Recovery 的 Full/Diff/Incr、WAL/PITR、Off-site Fallback、重复/失败重试、每日 Protection、
+加密 Control-state/Host Generation 恢复通过，PITR 约 15.4 秒，数据为隔离合成夹具。
+
+Foundation 最终 `status=pass`、`productionTraffic=false`。新增入口完成真实精确 Digest
+替换、候选验证失败后的旧镜像回退、候选启动后中断接续、冷副本与业务/角色摘要、四语言
+索引、升级后 Full Backup 双副本、数据库停止时 SQLite 状态查询、维护 503/业务关闭、
+原运行状态恢复，以及普通 Host services 收敛保留维护后的数据库容器身份。
+既有整机发布/回滚、执行器恢复、六组件复用、IPv4/IPv6、负载/权限/泄漏、安全扫描、
+物理复制、迁机/提升/回退窗口和审计连续性亦通过。测试资源已按 Gate 清理。
+
+本地定向维护使用隔离 Registry 的旧 Digest
+`sha256:3d3518233470ab7938a6eb335123166adfba2ac1ff40c73947fcba72ccf6cec6` 与新 Digest
+`sha256:ce8c9f627803dfa08022236e7424a2f361d879a9b55c2f74bcceecf74b35119f`。
+冷副本 Hash 为 `23d0f6cbfce0aed7fb116d7ecb23ba782b3b0b362c563b3f69967de860d00a2e`。
+升级后 Full `20261113-110402F` 的双副本均 fresh/valid，Manifest SHA-256 为
+`24ef66d5452d04db44c43d37a3becac067ec01da35fe1c36d1bb0ef57dd5b4bb`。
+演练镜像按 Gate 入口 HEAD `d6629b0cf` 标注，包含本轮工作树实现；正式发布镜像须由已提交
+源码构建并绑定各组件 Source SHA、Registry Digest 与 OCI Revision。
+
+开发机证据位于 `.local/postgres-maintenance/`，主要文件如下。
+
+- `maintenance-foundation-final-verified.log`
+- `maintenance-recovery-final.log`
+- `maintenance-integration-verified.log`
+- `maintenance-unit-final.log`
+- `maintenance-migration-final.log`
+- `maintenance-check-final.log`
+- `maintenance-local-operation-evidence.json`
+
+首轮遇到官方漏洞库传输 EOF，随后按官方 OCI Layer 校验 SHA-256，载入当前公开数据库
+缓存，保留正常新鲜度与扫描失败条件。UpdatedAt 为 `2026-11-13T07:00:07.938173847Z`，
+DB SHA-256 为 `324ef75b4ba84ec45caf6e427bb3c7f57732beae1933afc6cbafd8fe1a85f441`。
+本机重启中断的一轮已清理并重跑。Foundation 维护夹具补齐独立 Host 心跳，匹配同步 Host
+动作期间由 Supervisor 续租的实际边界。Blog 搜索曾有一次 5 秒交互等待超时，完整重跑
+54 项 E2E 通过，首次失败日志保留供复核。
+
+### 下一步授权边界
+
+维护方案已列出精确对象、预期写入、停止条件、恢复点与结果核验清单。生产真实备份的
+隔离恢复和生产数据库切换分别授权；指定只读 SSH、main 发布和其他生产操作按清单
+逐项授权。生产候选 Digest 与恢复报告 SHA 在对应授权步骤产生后填写。
+数据库维护生产验收完成后，再安排 S400 自动同步接入。
+
+本阶段上下文已沉淀，可以授权/开启下一阶段。本轮在交接后停止，后续执行等待对应授权。
+
 ## 2026-11-13 — 数据库镜像系统库修补与本地跨镜像恢复
 
 本轮按 Owner 授权推进本地分析、实现和测试。工作分支继续为

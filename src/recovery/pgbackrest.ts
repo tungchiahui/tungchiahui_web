@@ -97,10 +97,11 @@ export function runPgBackRestBackup(
   configuration: PgBackRestCommandConfiguration,
   backupType: z.infer<typeof backupTypeSchema>,
   reuseCompletedDate?: string,
+  reuseCompletedAfter?: string,
 ) {
   const type = backupTypeSchema.parse(backupType)
   const reusable =
-    reuseCompletedDate === undefined
+    reuseCompletedDate === undefined && reuseCompletedAfter === undefined
       ? undefined
       : readPgBackRestInfo(configuration)
           .find(
@@ -109,15 +110,19 @@ export function runPgBackRestBackup(
           ?.backup.filter(
             (candidate) =>
               candidate.type === type &&
-              [candidate.timestamp.start, candidate.timestamp.stop].some(
-                (timestamp) =>
-                  new Intl.DateTimeFormat('en-CA', {
-                    timeZone: 'Asia/Hong_Kong',
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit',
-                  }).format(new Date(timestamp * 1_000)) === z.iso.date().parse(reuseCompletedDate),
-              ),
+              (reuseCompletedAfter !== undefined
+                ? candidate.timestamp.start >=
+                  Math.ceil(Date.parse(z.iso.datetime().parse(reuseCompletedAfter)) / 1000)
+                : [candidate.timestamp.start, candidate.timestamp.stop].some(
+                    (timestamp) =>
+                      new Intl.DateTimeFormat('en-CA', {
+                        timeZone: 'Asia/Hong_Kong',
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                      }).format(new Date(timestamp * 1_000)) ===
+                      z.iso.date().parse(reuseCompletedDate),
+                  )),
           )
           .sort((left, right) => right.timestamp.stop - left.timestamp.stop)[0]
   if (!reusable) runPgBackRest(configuration, [`--type=${type}`, '--start-fast', 'backup'])

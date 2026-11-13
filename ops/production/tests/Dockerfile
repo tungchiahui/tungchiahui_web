@@ -15,6 +15,7 @@ COPY tools/dev/control-auth-fixture.ts ./tools/dev/control-auth-fixture.ts
 COPY src ./src
 COPY messages ./messages
 RUN pnpm exec esbuild tools/infra/test-production-foundation.ts --bundle --format=cjs --platform=node --target=node24 --outfile=/runner.cjs
+RUN pnpm exec esbuild tools/infra/maintenance-host-heartbeat.ts --bundle --format=cjs --platform=node --target=node24 --outfile=/maintenance-host-heartbeat.cjs
 RUN pnpm exec esbuild tools/infra/test-recovery.ts --bundle --format=cjs --platform=node --target=node24 --outfile=/recovery-runner.cjs
 
 FROM node:24.19.0-bookworm-slim@sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03
@@ -44,5 +45,6 @@ RUN apt-get update \
 COPY --from=build /usr/local/bin/node /usr/local/bin/node
 COPY --from=build /runner.cjs /runner.cjs
 COPY --from=build /recovery-runner.cjs /recovery-runner.cjs
+COPY --from=build /maintenance-host-heartbeat.cjs /maintenance-host-heartbeat.cjs
 
 ENTRYPOINT ["node", "/runner.cjs"]

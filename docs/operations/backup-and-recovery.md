@@ -145,6 +145,17 @@ deploy-agent -> pgBackRest restore/PITR
 
 Break-glass 只在正常 Control API 不可用时使用。它通过稳定 SSH Alias 调用 `deploy-agent` 镜像中的授权入口，向同一个 SQLite Operation/Audit 写入请求；后续仍由同一个 Agent、Lease/Fencing 与 Recovery Engine 执行，不提供任意 Host Shell 或第二套 Restore 实现。
 
+## 数据库镜像维护中的恢复交接
+
+ADR 0033 的镜像维护在回退验证失败后保持维护态与排他窗口。Owner 单独批准精确 Backup/PITR
+恢复点及写入影响后，既有 Restore 命令增加 `--maintenance-operation <held-operation-id>`。
+Control API 在同一 SQLite Transaction 中审计交接，并由同一 deploy-agent/Recovery Engine
+执行 Restore。原维护 Target、Result 和失败证据保留；业务入口继续关闭。
+
+恢复完成后按本文件轮换 Session Verifier，核对业务摘要/测量/备注/计划与幂等重放，生成新鲜
+Full Backup 和隔离恢复证据，再由新的已授权预检/维护完成运行状态恢复。详细命令、状态与
+独立生产授权清单见 [数据库镜像维护方案](postgres-image-maintenance.md)。
+
 ## Control-state Backup/Recovery
 
 Control-state SQLite 不是业务 Database，但它保存 Active/Previous Slot、Deployment SHA 和进行中的 Recovery Phase，因此必须：

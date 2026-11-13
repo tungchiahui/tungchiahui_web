@@ -282,3 +282,15 @@ ADR 0031 将旧减重 JSONB、手动记录与 S400 导出统一到 PostgreSQL �
 独立 control-api 的 Owner 私有接口提供。公开减重页面保留静态计划。content-worker 复用
 PostgreSQL Durable Job 导入隔离目录中的只读 JSON；蓝绿 Web Slot 没有文件挂载。
 生产接入、JSON 交换、迁移对账与恢复验证见 `../operations/body-measurements.md`。
+
+
+### PostgreSQL 镜像定向维护
+
+ADR 0033 将固定版本系统库修补纳入既有 Host Coordinator 的
+`server-migration/postgres-image-upgrade` Operation。预检与切换使用同一 SQLite 排他租约、
+Fence 和 Audit，绑定精确旧/新 Digest、候选 Source SHA、新鲜 Full Backup 与独立恢复报告。
+OpenResty/Control API 维护态、Consumer 排空、干净停止、受限冷副本、定向 Compose 替换、
+数据库/索引/权限/WAL 核验、Full 双副本和原状态恢复均有持久化阶段。
+回退失败时显式授权交接既有 Restore Engine，并保持业务关闭直至重新验收。
+生产真实备份隔离恢复与数据库切换分别授权，完整契约见
+[ADR 0033](../decisions/0033-audited-postgres-image-maintenance.md)。

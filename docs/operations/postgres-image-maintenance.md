@@ -141,11 +141,10 @@ AList Primary 与 R2 Off-site 全量读回成功，并保存 Control-state 与�
 核对数据库连接与事务已排空。维护使用既有 Host Adapter/deploy-agent 权限边界，
 以同一 SQLite 排他租约和 Audit 保存旧/新 Digest、Phase、操作者与失败结果。
 
-当前 API 的闭合目标契约尚无 `postgres-image-upgrade`，`provisionHost` 的普通 services
-收敛保留运行数据库身份。后续实现同一 Host 执行边界中的定向维护入口，复用现有
-SQLite 租约、审计、Docker Adapter 与 Recovery Engine。按固定目标验证精确旧/新镜像，
-持久化 Phase，并覆盖重试、崩溃接续和回退。入口通过隔离验收后，再向 Owner 提交
-完整执行与授权清单。
+本地实现已增加 `server-migration` Target `postgres-image-upgrade`，通过同一 Host Coordinator、
+SQLite 排他租约与审计执行定向维护。`provisionHost` 的普通 services 收敛继续捕获实际运行的
+数据库引用。契约与边界见 [ADR 0033](../decisions/0033-audited-postgres-image-maintenance.md)。
+生产调用前须先按单独授权发布这些服务、执行器与 OpenResty 配置，并核对安装版本。
 
 候选先拉取到主机并验证身份。干净停止 PostgreSQL，确认退出，再保存受限的冷数据副本
 与 Repository/配置引用。按渲染并验证的现有 Compose 拓扑只重建数据库服务，保持原数据
@@ -193,3 +192,144 @@ Recovery Generation 所需镜像。ADR 0032 的 PostgreSQL 清理保护继续生
 设置文件 0640/组 10050、检查原有历史追加与刷新模式、私有 Dry Run 和 Mi Fitness 对账，
 再按授权开启健康同步并定向收敛 content-worker。验收首次导入、重复零新增、后续新增、
 人工备注保留、失败重试与 Owner 页面时间。每次连接与生产配置变更继续事先授权。
+
+
+## 受审计入口与生产授权清单
+
+本节命令中的占位值在指定只读预检和候选发布后填写，并随每次授权请求提供完整展开值。
+生产源站使用 `ddns.tungchiahui.cn` 或已批准 Host Alias。控制路径沿用
+`https://www.tungchiahui.cn/api/ops/*`。
+
+### 入口契约
+
+```sh
+./site postgres-image preflight \
+  --old-digest <approved-old-sha256-digest> \
+  --new-digest <approved-new-sha256-digest> \
+  --candidate-sha <candidate-source-sha> \
+  --backup-id <fresh-verified-full-backup-id> \
+  --reason <approved-preflight-reason> \
+  --idempotency-key <stable-preflight-key>
+
+./site postgres-image execute \
+  --old-digest <same-old-sha256-digest> \
+  --new-digest <same-new-sha256-digest> \
+  --candidate-sha <same-candidate-source-sha> \
+  --backup-id <same-full-backup-id> \
+  --preflight-operation <successful-preflight-uuid> \
+  --restore-evidence-sha256 <approved-isolated-production-restore-report-sha256> \
+  --confirm POSTGRES-IMAGE-UPGRADE-PRODUCTION \
+  --reason <approved-maintenance-reason> \
+  --idempotency-key <stable-execution-key>
+```
+
+CLI 返回可查询的 Operation ID。通过既有
+`GET /api/ops/infrastructure-operations/<id>` 查询 Phase、Target、Result、失败摘要和租约。
+相同 Actor、Target、Reason 与 Idempotency Key 返回同一 Operation。更换目标需使用新 Key。
+执行中断由 Supervisor Fence 后接续同一 Operation；回退失败的 `recovery-required` 保持状态
+等待明确恢复处理。
+
+`restoreEvidenceSha256` 是 Owner/Operator 审阅的独立恢复报告引用。入口验证格式并在 Target
+中持久记录该 SHA。报告需要绑定 Backup ID/Manifest、旧/新镜像、恢复目标、Ledger/业务摘要、
+四语言搜索、权限和耗时；生产报告完成后才能填写真实值。自动预检另外完整读回两端备份对象。
+
+预检会写 SQLite 审计、拉取缺失的精确镜像并运行临时版本检查容器，pgBackRest check
+可能产生 WAL/归档检查活动。Execute 持久化拓扑、配置 Hash、Consumer/Timer 状态和完整
+Active/Previous Web State。执行期间 `.env` 或拓扑变化会拒绝继续并保持受控恢复路径。
+
+### 分步授权表
+
+| 授权步骤 | 精确对象与预期操作 | 验收与停止条件 |
+| --- | --- | --- |
+| 指定只读 SSH | 指定 Host Alias，读取 PostgreSQL Image ID/Digest、数据卷、版本、空间、Ledger、角色、PGroonga/Collation、WAL/备份、Host Executor、Operation、Timer 与健康同步状态 | 实际旧 Digest 必须与保留证据一致，未完成 Operation 或拓扑差异先解释并处理 |
+| main 发布 | 给出待审提交和完整 Diff，由既有 CI 构建/复用不可变组件并完成普通 Blue-Green 发布 | 验证实际 Control API、Recovery Image、Host Coordinator、Supervisor 与维护 Proxy 配置，确认数据库容器身份保持 |
+| 新鲜恢复保护 | 单独授权 Full Backup、双副本读回、Control-state 和加密配置快照 | 两端完整 Hash 验证、WAL 与 Snapshot 均有效，任一失败即停止 |
+| 生产真实备份隔离恢复 | 单独授权准确 Generation、临时目录/容器/网络、资源上限、旧/新目标镜像和本次清理范围 | 使用生产备份恢复合成矩阵对应检查，输出摘要，私有内容保持受限，形成经审阅报告和 SHA-256 |
+| API Preflight | 绑定已发布候选 Source SHA/Digest、新鲜 Full Backup 和稳定 Key | 核对 OCI/二进制/扩展、双副本、空间、挂载、四语言搜索和权限，取得成功 Operation ID |
+| 数据库切换 | 单独授权完整展开的 Execute 请求、恢复报告 SHA、维护时间预期、旧镜像回退与冷副本路径 | 动态入口维护、排空、干净停止、冷副本、候选启动、业务/权限/索引/amcheck/WAL、升级后 Full 双副本、PgBouncer/站点 Ready 均通过 |
+| 失败恢复 | 同目录旧 Digest 回退属于该次切换清单；冷副本或 Backup/PITR 数据恢复再次申请精确恢复点和写入影响授权 | 回退验证失败保持维护态，使用下方显式交接，恢复验收与 Session Verifier 轮换后重新预检 |
+
+每次 SSH、main 推送、Workflow 修改、生产操作均须在执行前得到对应授权。表格本身是审阅
+清单。既有 Workflow 已具备相关组件构建路径，本轮源码变更集中在现有服务、CLI 和测试。
+
+### 状态与现场证据
+
+正常阶段依次为 `prepared`、`quiescing`、`drained`、`stopped`、`cold-copy-verified`、
+`candidate-starting`、`candidate-verified`、`backup-verified`、`resuming` 和 `verified`。
+失败补偿为 `rolling-back`、`rollback-verified` 或 `recovery-required`。
+
+冷副本位于 `<dataRoot>/postgres-maintenance/<operation-id>/`，目录受 Host 管理员权限限制。
+`data/` 保留原所有权/权限，`manifest.json` 记录逐文件 SHA-256；Result 记录 Manifest Hash。
+文件和目录经 fsync，完成标记前的部分副本可按同一 Operation 重建，完成副本重试时完整读回。
+冷副本的保留与退役在后续单独批准的精确清单内处理。
+
+Result 保存原运行意图、配置 Hash、精确 Image ID、Backup Manifest、数据库/角色摘要、
+冷副本 Hash、新 Full Backup 和开始时间。Audit 另存每阶段 Fence、实际运行 Digest、WAL
+Restore Point LSN 与验证结果，停机时间可由阶段时间戳计算。既有 Control-state 指标和
+未完成 Operation 告警可识别长期维护/needs-attention。Public 503 提供 Retry-After/no-store，
+独立基础设施状态查询保留。普通 Owner/业务控制请求在直接访问 Control API 时也返回 503。
+
+完整性检查在事务中临时加载 amcheck，调用支持的 Heap/B-tree 检查后回滚。
+临时写入读回也在事务内回滚，WAL Restore Point 通过后续 pgBackRest/WAL 检查验证归档。
+检查函数及覆盖范围遵循 [PostgreSQL 18 amcheck 文档](https://www.postgresql.org/docs/18/amcheck.html)。
+
+### 修复可恢复故障后的补偿重试
+
+主机可用性、配置或网络故障修复后，可单独授权补偿重试。该入口复用原 Operation，
+保留原 Target/Reason 与全部失败 Audit，追加本次操作者、原因和稳定 Retry Key。
+执行器重新领取后优先验证并恢复旧精确 Digest 和原 Consumer/Timer 状态。
+
+```sh
+./site postgres-image retry \
+  --operation-id <held-maintenance-uuid> \
+  --confirm POSTGRES-MAINTENANCE-RETRY \
+  --reason <approved-compensation-reason> \
+  --idempotency-key <stable-retry-key>
+```
+
+相同 Retry Key/Actor/Reason 返回同一 Operation 当前状态。尚未完成数据库排空的故障，
+补偿会先重新排空并取得摘要，再以旧镜像验证。同一故障再次失败时继续保持维护态。
+涉及冷副本或 Backup/PITR 的数据替换，使用下方独立 Restore 授权。
+
+### 回退失败后的显式 Restore 交接
+
+```sh
+./site restore <approved-backup-id-or-time> \
+  --environment production \
+  --maintenance-operation <held-maintenance-uuid> \
+  --confirm RESTORE-PRODUCTION \
+  --reason <separately-approved-recovery-point-and-write-impact>
+```
+
+该请求要求 Operator 身份和准确的 `needs-attention/recovery-required` Operation。
+同一 SQLite Transaction 保存交接 Audit，将原维护记录保留为 failed 并创建既有 Restore
+Operation。原 Target、Result、阶段证据与失败 Audit 保留，维护标记继续存在。
+Restore 使用同一 Recovery Engine、Replica/PITR 和确认策略。
+
+恢复后保持业务入口关闭，按 `backup-and-recovery.md` 轮换 Owner Session Verifier，核对身体
+测量、旧快照、计划、备注与 JSON 重放幂等，再创建新鲜 Full Backup 和恢复证据。
+新预检/维护继承原 Consumer 与 Timer 的运行意图，并绑定当前实际容器与配置。
+该轮验证成功或验证后的安全回退，才解除原维护保持状态。
+
+正常公网控制路径不可用时，同一 Restore 支持既有显式 Break-glass 模式；调用所需 SSH
+仍须单独授权。其请求同样携带 `--maintenance-operation`，并写入同一 SQLite Audit。
+
+### 本地验收范围
+
+Unit 覆盖闭合契约、CLI、Operator 权限、重复请求、租约排他、过期 Fence、预检漂移、
+各阶段故障/接续、冷副本读回、回退失败保持、HTTP 维护关闭和显式 Restore 交接。
+Foundation 使用一次性本地 Registry 和 S3Mock、真实 PostgreSQL/Compose/OpenResty，
+验证预检身份保持、维护 503/控制状态可读、候选验证失败后的旧 Digest 回退、候选启动后
+崩溃接续、原状态恢复、新 Full Backup 双副本、四语言索引、角色/业务摘要及冷副本。
+隔离测试使用本地 Replica 配置调用同一 Recovery Helper，生产配置继续要求 HTTPS。
+
+本轮运行日志位于开发机 `.local/postgres-maintenance/maintenance-*.log`。
+完整 Gate 的最终状态在 `current-state.md` 顶部交接记录填写。
+
+
+Foundation 支持 `pnpm test:infra --trivy-cache <verified-public-cache-root>`，将已校验官方 OCI
+制品中的 `trivy/db/trivy.db` 与 Metadata 复制到本次隔离目录。Scanner 保留正常新鲜度判断、
+Critical/Secret 失败条件和 SBOM；缓存 Metadata 的 DownloadedAt 记录实际校验下载时间。
+本轮官方 Layer Digest 为 `sha256:fd406c50cad6892a16b258bef67be31ebfd4ddfb00da80ce869b461e73116d4f`，
+DB SHA-256 为 `324ef75b4ba84ec45caf6e427bb3c7f57732beae1933afc6cbafd8fe1a85f441`，
+UpdatedAt 为 `2026-11-13T07:00:07.938173847Z`。该路径用于下载中断后的可复现本地验收。

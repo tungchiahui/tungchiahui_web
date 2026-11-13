@@ -5,6 +5,7 @@ import { createContentSync } from './content/control-client'
 import { createDeployment, createRollback, readDeploymentStatus } from './deployment/control-client'
 import { resetDevelopmentStack, startDevelopmentStack, stopDevelopmentStack } from './dev/runtime'
 import { runRetentionCleanup } from './maintenance/control-client'
+import { createPostgresMaintenance, retryPostgresMaintenance } from './maintenance/postgres-client'
 import { prepareMusic } from './music/prepare'
 import { startMusicStudio } from './music/studio'
 import {
@@ -92,6 +93,13 @@ Recovery:
   restore ... --break-glass --inventory-host <stable-ssh-alias>
 
 Maintenance:
+  postgres-image preflight|execute --old-digest sha256:<digest> --new-digest sha256:<digest>
+    --candidate-sha <40-char-sha> --backup-id <full-backup-id>
+    --reason <text> --idempotency-key <stable-key>
+    Execute additionally requires --preflight-operation <uuid>
+    --restore-evidence-sha256 <sha256> --confirm POSTGRES-IMAGE-UPGRADE-PRODUCTION
+  postgres-image retry --operation-id <held-uuid> --confirm POSTGRES-MAINTENANCE-RETRY
+    --reason <approved-compensation-reason> --idempotency-key <stable-key>
   cleanup retention
             Create and wait for an exact production dry-run plan
   cleanup retention --execute --confirm RETENTION-CLEANUP-PRODUCTION [--reason <text>]
@@ -123,6 +131,12 @@ async function main() {
   const command = parseSiteCommand(process.argv.slice(2))
 
   switch (command.kind) {
+    case 'postgres-image-maintenance-retry':
+      console.log(JSON.stringify(await retryPostgresMaintenance(command), null, 2))
+      return 0
+    case 'postgres-image-maintenance':
+      console.log(JSON.stringify(await createPostgresMaintenance(command), null, 2))
+      return 0
     case 'music-studio':
       await startMusicStudio()
       return 0
@@ -239,6 +253,9 @@ async function main() {
       return 0
     case 'restore': {
       const request = {
+        ...(command.maintenanceOperationId
+          ? { maintenanceOperationId: command.maintenanceOperationId }
+          : {}),
         confirmation: command.confirmation,
         environment: command.environment,
         reason: command.reason,

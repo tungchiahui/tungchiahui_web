@@ -203,3 +203,15 @@ Rollback:   blue  6f82ac1
 ```
 
 Exit Code 必须对自动化可靠。
+
+
+## PostgreSQL 镜像维护
+
+`./site postgres-image preflight|execute` 通过既有基础设施 Operation 调用 Host Adapter。
+请求绑定精确旧/新 Digest、候选源码 SHA、Full Backup、Reason 和稳定 Idempotency Key。
+Execute 另需成功 Preflight ID、独立恢复报告 SHA-256 和
+`POSTGRES-IMAGE-UPGRADE-PRODUCTION` Confirmation。返回 Operation ID 后沿既有状态接口查询。
+
+回退失败后的单独授权恢复沿用 `./site restore`，通过
+`--maintenance-operation <id>` 显式交接保持中的窗口。完整参数、停止条件和逐项生产授权见
+[数据库镜像维护方案](postgres-image-maintenance.md)。

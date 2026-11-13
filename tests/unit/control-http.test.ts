@@ -479,3 +479,36 @@ describe('independent control-api HTTP boundary', () => {
     expect(execute.status).toBe(403)
   })
 })
+
+it('keeps SQLite status and explicit recovery controls available during PostgreSQL maintenance', async () => {
+  const { base, statePath } = await serverFixture()
+  const target = {
+    action: 'postgres-image-upgrade',
+    mode: 'execute',
+    environment: 'production',
+    oldDigest: `sha256:${'a'.repeat(64)}`,
+    newDigest: `sha256:${'b'.repeat(64)}`,
+    candidateSha: 'c'.repeat(40),
+    backupId: '20261113-000000F',
+    preflightOperationId: crypto.randomUUID(),
+    restoreEvidenceSha256: 'd'.repeat(64),
+    confirmation: 'POSTGRES-IMAGE-UPGRADE-PRODUCTION',
+  } as const
+  const operation = createInfrastructureOperation(
+    statePath,
+    { operationType: 'server-migration', reason: 'Test maintenance closure', target },
+    { id: 'operator:test', kind: 'operator', capabilities: ['infrastructure-operation:create'] },
+    'maintenance-http-window',
+  ).operation
+  const privateResponse = await fetch(new URL('/api/ops/health/measurements', base))
+  expect(privateResponse.status).toBe(503)
+  expect(privateResponse.headers.get('retry-after')).toBe('60')
+  expect((await fetch(new URL('/health', base))).status).toBe(200)
+  expect(
+    (
+      await signedFetch(base, `/api/ops/infrastructure-operations/${operation.id}`, {
+        nonce: 'maintenance-state-read-001',
+      })
+    ).status,
+  ).toBe(200)
+})

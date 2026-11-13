@@ -1,10 +1,14 @@
 import { spawnSync } from 'node:child_process'
-
 import { z } from 'zod'
 import {
   type TranslationOperationRequest,
   translationOperationRequestSchema,
 } from '../src/translation/contracts'
+import {
+  type PostgresMaintenanceCommand,
+  type PostgresMaintenanceRetryCommand,
+  parsePostgresMaintenanceCommand,
+} from './maintenance/postgres-command'
 import {
   type LocalTranslationCommand,
   parseLocalTranslationCommand,
@@ -13,6 +17,8 @@ import {
 const defaultProductionEnvFile = '/etc/tungchiahui/.env'
 
 export type SiteCommand =
+  | PostgresMaintenanceCommand
+  | PostgresMaintenanceRetryCommand
   | Readonly<{ kind: 'music-studio' }>
   | Readonly<{ kind: 'music-prepare'; inputDirectory: string; outputDirectory: string }>
   | LocalTranslationCommand
@@ -93,6 +99,7 @@ export type SiteCommand =
   | Readonly<{ kind: 'storage-contract-s3' }>
   | Readonly<{ kind: 'test' }>
   | Readonly<{
+      maintenanceOperationId?: string
       breakGlass: boolean
       confirmation: string
       environment: 'local' | 'production' | 'test'
@@ -120,6 +127,8 @@ export function assertToolchain(nodeVersion: string) {
 }
 
 export function parseSiteCommand(arguments_: readonly string[]): SiteCommand {
+  if (arguments_[0] === 'postgres-image')
+    return parsePostgresMaintenanceCommand(arguments_.slice(1))
   if (arguments_.length === 2 && arguments_[0] === 'music' && arguments_[1] === 'studio')
     return { kind: 'music-studio' }
   if (arguments_[0] === 'music' && arguments_[1] === 'prepare') {
@@ -611,6 +620,7 @@ export function parseSiteCommand(arguments_: readonly string[]): SiteCommand {
     const selector = timestamp.success
       ? Object.freeze({ targetTime: timestamp.data })
       : Object.freeze({ backupId: z.string().min(1).max(200).parse(selectorValue) })
+    let maintenanceOperationId: string | undefined
     let breakGlass = false
     let confirmation: string | undefined
     let environment: 'local' | 'production' | 'test' | undefined
@@ -619,6 +629,11 @@ export function parseSiteCommand(arguments_: readonly string[]): SiteCommand {
     let index = 2
     while (index < arguments_.length) {
       const argument = arguments_[index]
+      if (argument === '--maintenance-operation') {
+        maintenanceOperationId = z.uuid().parse(arguments_[index + 1])
+        index += 2
+        continue
+      }
       if (argument === '--environment') {
         environment = z.enum(['local', 'test', 'production']).parse(arguments_[index + 1])
         index += 2
@@ -671,6 +686,7 @@ export function parseSiteCommand(arguments_: readonly string[]): SiteCommand {
       )
     }
     return Object.freeze({
+      ...(maintenanceOperationId ? { maintenanceOperationId } : {}),
       breakGlass,
       confirmation,
       environment,

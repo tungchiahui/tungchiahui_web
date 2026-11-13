@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { applicationJobRequestSchema, ownerDatasetKeySchema } from '../domain/persistence'
+import { postgresMaintenanceTargetSchema } from '../maintenance/postgres-contracts'
 import { translationOperationRequestSchema } from '../translation/contracts'
 
 export const capabilityValues = [
@@ -127,6 +128,7 @@ const infrastructureTargetSchemas = {
     .object({
       confirmation: z.string().min(1).max(100).optional(),
       environment: environmentSchema,
+      maintenanceOperationId: z.uuid().optional(),
       selector: restoreSelectorSchema.optional(),
       // Backward-compatible with the Phase 4 recovery-state fixture.
       backupId: z.string().min(1).max(200).optional(),
@@ -165,6 +167,7 @@ const infrastructureTargetSchemas = {
     })
     .strict(),
   'server-migration': z.union([
+    postgresMaintenanceTargetSchema,
     z
       .object({
         action: z.enum(['planned-migration', 'provision-only']).default('planned-migration'),

@@ -37,14 +37,23 @@ import {
 export async function executeDatabaseBackup(
   configuration: RecoveryConfiguration,
   backupType: 'diff' | 'full' | 'incr',
-  options: Readonly<{ includeControlState?: boolean; reuseCompletedDate?: string }> = {},
+  options: Readonly<{
+    includeControlState?: boolean
+    reuseCompletedDate?: string
+    reuseCompletedAfter?: string
+  }> = {},
 ) {
   const started = performance.now()
   const pgBackRest = {
     configPath: configuration.pgBackRestConfigPath,
     stanza: configuration.stanza,
   }
-  const backup = runPgBackRestBackup(pgBackRest, backupType, options.reuseCompletedDate)
+  const backup = runPgBackRestBackup(
+    pgBackRest,
+    backupType,
+    options.reuseCompletedDate,
+    options.reuseCompletedAfter,
+  )
   checkPgBackRest(pgBackRest)
   const generation = `${backup.backupId}-${randomUUID()}`
   const manifest = createRepositoryManifest(
@@ -394,4 +403,31 @@ export async function restoreLatestControlStateFromReplica(
   throw new Error('Primary and off-site control-state replicas are both unavailable', {
     cause: restoreFailure,
   })
+}
+
+/** Read back the exact generation from both independent replicas before maintenance. */
+export async function verifyMaintenanceBackup(
+  configuration: RecoveryConfiguration,
+  backupId: string,
+) {
+  const record = getRecoveryBackup(configuration.controlStatePath, backupId)
+  if (
+    !record?.valid ||
+    record.backupType !== 'full' ||
+    record.primaryReplicaStatus !== 'fresh' ||
+    record.offsiteReplicaStatus !== 'fresh'
+  )
+    throw new Error('Maintenance requires a verified full backup on both replicas')
+  checkPgBackRest({ configPath: configuration.pgBackRestConfigPath, stanza: configuration.stanza })
+  for (const replica of [configuration.primary, configuration.offsite]) {
+    const manifest = await readRepositoryManifestFromReplica(record.repositoryGeneration, replica)
+    if (
+      manifest.backupId !== record.backupId ||
+      manifest.generation !== record.repositoryGeneration ||
+      repositoryManifestSha256(manifest) !== record.manifestSha256
+    )
+      throw new Error('Maintenance backup identity differs from the recorded generation')
+    await verifyRepositoryReplica(manifest, replica, configuration.replicationConcurrency)
+  }
+  return record
 }

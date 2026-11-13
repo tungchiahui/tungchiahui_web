@@ -47,7 +47,7 @@ async function main() {
         stop()
       }
       for (const operation of listInfrastructureOperations(path, {
-        operationTypes: ['deploy', 'rollback'],
+        operationTypes: ['deploy', 'rollback', 'server-migration'],
         statuses: ['running'],
       })) {
         if (operation.leaseOwner === owner) {
@@ -72,10 +72,22 @@ async function main() {
   try {
     reconcileInfrastructureOperations(path)
     const interrupted = listInfrastructureOperations(path, {
-      operationTypes: ['deploy', 'rollback'],
+      operationTypes: ['deploy', 'rollback', 'server-migration'],
       statuses: ['needs-attention'],
     })
     for (const operation of interrupted) {
+      if (
+        operation.operationType === 'server-migration' &&
+        (operation.target.action !== 'postgres-image-upgrade' ||
+          operation.result?.phase === 'recovery-required')
+      )
+        continue
+      runHostCommand(
+        'docker',
+        ['rm', '--force', `${settings.projectName}-postgres-maintenance-${operation.id}`],
+        {},
+        true,
+      )
       runHostCommand(
         'docker',
         ['rm', '--force', `${settings.projectName}-release-${operation.id}`],
@@ -109,9 +121,21 @@ async function main() {
         acquireHostExecutor(path, owner)
         reconcileInfrastructureOperations(path)
         for (const operation of listInfrastructureOperations(path, {
-          operationTypes: ['deploy', 'rollback'],
+          operationTypes: ['deploy', 'rollback', 'server-migration'],
           statuses: ['needs-attention'],
         })) {
+          if (
+            operation.operationType === 'server-migration' &&
+            (operation.target.action !== 'postgres-image-upgrade' ||
+              operation.result?.phase === 'recovery-required')
+          )
+            continue
+          runHostCommand(
+            'docker',
+            ['rm', '--force', `${settings.projectName}-postgres-maintenance-${operation.id}`],
+            {},
+            true,
+          )
           runHostCommand(
             'docker',
             ['rm', '--force', `${settings.projectName}-release-${operation.id}`],

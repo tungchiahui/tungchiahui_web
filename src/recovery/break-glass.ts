@@ -19,6 +19,7 @@ export const breakGlassRestorePayloadSchema = z
     request: z
       .object({
         confirmation: z.literal('RESTORE-PRODUCTION'),
+        maintenanceOperationId: z.uuid().optional(),
         environment: z.literal('production'),
         reason: z.string().trim().min(1).max(1_000),
         selector: z.union([
@@ -49,6 +50,9 @@ export function authorizeBreakGlassRestore(
       confirmation: payload.request.confirmation,
       environment: payload.request.environment,
       selector: payload.request.selector,
+      ...(payload.request.maintenanceOperationId
+        ? { maintenanceOperationId: payload.request.maintenanceOperationId }
+        : {}),
     },
   })
   appendControlAuditEvent(statePath, {

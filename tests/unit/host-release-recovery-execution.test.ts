@@ -94,6 +94,7 @@ beforeEach(() => {
   vi.mocked(hostTopologyConfigStale).mockReturnValue({ openresty: false, pgbouncer: false })
   vi.mocked(inspectHostContainer).mockImplementation((name) => ({
     Config: { Image: before.serviceImage, Labels: {} },
+    imageId: `sha256:${'a'.repeat(64)}`,
     Id: name,
     State: { Health: { Status: 'healthy' }, Running: true, StartedAt: '2100-01-01T00:00:00Z' },
     deploymentPollingEnabled: false,

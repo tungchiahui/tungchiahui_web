@@ -323,7 +323,7 @@ export function acquireHostExecutor(path: string, owner: string, now = new Date(
     if (parsed && parsed.owner !== owner) {
       // The prior supervisor is fenced before any interrupted child is stopped/restarted.
       db.prepare(
-        "UPDATE infrastructure_operations SET lease_expires_at=?,fencing_token=fencing_token+1 WHERE operation_type IN ('deploy','rollback') AND status IN ('running','claimed') AND lease_owner=?",
+        "UPDATE infrastructure_operations SET lease_expires_at=?,fencing_token=fencing_token+1 WHERE (operation_type IN ('deploy','rollback') OR json_extract(target_json,'$.action')='postgres-image-upgrade') AND status IN ('running','claimed') AND lease_owner=?",
       ).run(now.toISOString(), parsed.owner)
     }
     db.exec('COMMIT')
@@ -345,7 +345,7 @@ export function releaseHostExecutor(path: string, owner: string) {
       .parse(db.prepare('SELECT owner FROM host_release_executor_lock WHERE singleton_id=1').get())
     if (lock.owner === owner) {
       db.prepare(
-        "UPDATE infrastructure_operations SET lease_expires_at=?,fencing_token=fencing_token+1 WHERE operation_type IN ('deploy','rollback') AND status IN ('running','claimed') AND lease_owner=?",
+        "UPDATE infrastructure_operations SET lease_expires_at=?,fencing_token=fencing_token+1 WHERE (operation_type IN ('deploy','rollback') OR json_extract(target_json,'$.action')='postgres-image-upgrade') AND status IN ('running','claimed') AND lease_owner=?",
       ).run(new Date().toISOString(), owner)
       db.prepare('DELETE FROM host_release_executor_lock WHERE singleton_id=1 AND owner=?').run(
         owner,

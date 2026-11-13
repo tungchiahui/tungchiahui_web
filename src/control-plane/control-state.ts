@@ -10,8 +10,11 @@ import {
 } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-
 import { z } from 'zod'
+import {
+  postgresMaintenanceProgressSchema,
+  postgresMaintenanceRetrySchema,
+} from '../maintenance/postgres-contracts'
 
 import {
   type ActorIdentity,
@@ -699,6 +702,18 @@ export function consumeControlNonce(
   }
 }
 
+const unresolvedPostgresMaintenanceSql = `SELECT held.id FROM infrastructure_operations held
+  WHERE held.operation_type='server-migration'
+    AND json_extract(held.target_json,'$.action')='postgres-image-upgrade'
+    AND held.status='failed' AND held.phase='postgres-image-recovery-required'
+    AND NOT EXISTS(SELECT 1 FROM infrastructure_operations resolved
+      WHERE resolved.operation_type='server-migration'
+        AND json_extract(resolved.target_json,'$.action')='postgres-image-upgrade'
+        AND json_extract(resolved.target_json,'$.mode')='execute'
+        AND resolved.phase IN ('postgres-image-verified','postgres-image-reverted')
+        AND resolved.created_at > held.created_at)
+  ORDER BY held.created_at LIMIT 1`
+
 export function createInfrastructureOperation(
   path: string,
   request: InfrastructureOperationRequest,
@@ -706,6 +721,14 @@ export function createInfrastructureOperation(
   idempotencyKey: string,
   now = new Date(),
 ) {
+  if (
+    request.operationType === 'server-migration' &&
+    request.target.action === 'postgres-image-upgrade' &&
+    actor.kind !== 'operator'
+  )
+    throw new ControlStateConflictError(
+      'PostgreSQL image maintenance requires an operator identity',
+    )
   const database = openControlState(path)
   try {
     return transaction(database, () => {
@@ -726,6 +749,56 @@ export function createInfrastructureOperation(
         }
         return Object.freeze({ created: false, operation: existing })
       }
+
+      // An explicitly approved restore can take over a held maintenance window. Keep its
+      // marker and failure evidence while handing the host capability to the existing engine.
+      if (request.operationType === 'restore' && request.target.maintenanceOperationId) {
+        const held = mapOperation(
+          database
+            .prepare('SELECT * FROM infrastructure_operations WHERE id=?')
+            .get(request.target.maintenanceOperationId),
+        )
+        if (
+          actor.kind !== 'operator' ||
+          request.target.environment !== 'production' ||
+          request.target.confirmation !== 'RESTORE-PRODUCTION' ||
+          held.target.action !== 'postgres-image-upgrade' ||
+          held.status !== 'needs-attention' ||
+          held.result?.phase !== 'recovery-required'
+        )
+          throw new ControlStateConflictError(
+            'Restore handoff requires the exact held PostgreSQL maintenance and operator approval',
+          )
+        database
+          .prepare("UPDATE infrastructure_operations SET status='failed',updated_at=? WHERE id=?")
+          .run(now.toISOString(), held.id)
+        appendAudit(database, {
+          actorId: actor.id,
+          createdAt: now.toISOString(),
+          details: { restoreIdempotencyKey: idempotencyKey },
+          eventType: 'postgres_maintenance_restore_handoff',
+          operationId: held.id,
+          outcome: 'accepted',
+        })
+      }
+      const heldMaintenance = database.prepare(unresolvedPostgresMaintenanceSql).get()
+      if (
+        heldMaintenance &&
+        request.operationType !== 'restore' &&
+        !(
+          request.operationType === 'recovery' &&
+          ['backup', 'offsite-retry', 'control-state-backup'].includes(
+            String('action' in request.target ? request.target.action : ''),
+          )
+        ) &&
+        !(
+          request.operationType === 'server-migration' &&
+          request.target.action === 'postgres-image-upgrade'
+        )
+      )
+        throw new ControlStateConflictError(
+          'PostgreSQL maintenance recovery requires restore, recovery evidence and a new verified maintenance window',
+        )
 
       if (request.operationType === 'deploy' || request.operationType === 'rollback') {
         const competing = database
@@ -896,6 +969,7 @@ export function claimNextInfrastructureOperation(
   leaseSeconds: number,
   now = new Date(),
   allowedOperationTypes?: readonly InfrastructureOperation['operationType'][],
+  targetAction?: string,
 ) {
   const owner = z.string().min(1).max(200).parse(leaseOwner)
   const duration = z.number().int().min(1).max(3_600).parse(leaseSeconds)
@@ -914,7 +988,7 @@ export function claimNextInfrastructureOperation(
       if (
         database
           .prepare(
-            "SELECT id FROM infrastructure_operations WHERE status IN ('claimed', 'running') LIMIT 1",
+            "SELECT id FROM infrastructure_operations WHERE status IN ('claimed', 'running') OR (status = 'needs-attention' AND json_extract(target_json, '$.action') = 'postgres-image-upgrade') LIMIT 1",
           )
           .get()
       )
@@ -934,10 +1008,11 @@ export function claimNextInfrastructureOperation(
                 `SELECT * FROM infrastructure_operations
                  WHERE status = 'queued'
                    AND operation_type IN (${allowed.map(() => '?').join(', ')})
+                   AND (? IS NULL OR json_extract(target_json, '$.action') = ?)
                  ORDER BY created_at, id
                  LIMIT 1`,
               )
-              .get(...allowed)
+              .get(...allowed, targetAction ?? null, targetAction ?? null)
       if (!row) {
         return null
       }
@@ -1163,12 +1238,13 @@ export function updateInfrastructureOperationPhase(
   }
 }
 
-export function checkpointDailyProtectionOperation(
+export function checkpointRecoveryOperation(
   path: string,
   id: string,
   lease: LeaseIdentity,
   phase: string,
   result: Readonly<Record<string, unknown>>,
+  action: 'daily-protection' | 'postgres-image-upgrade',
   now = new Date(),
 ) {
   const validatedPhase = z.string().trim().min(1).max(200).parse(phase)
@@ -1182,10 +1258,8 @@ export function checkpointDailyProtectionOperation(
           .get(z.uuid().parse(id)),
       )
       requireActiveLease(operation, lease, now, ['running'])
-      if (operation.target.action !== 'daily-protection')
-        throw new ControlStateConflictError(
-          'Only daily protection can checkpoint component results',
-        )
+      if (operation.target.action !== action)
+        throw new ControlStateConflictError('Checkpoint action does not match operation')
       const timestamp = now.toISOString()
       database
         .prepare(`UPDATE infrastructure_operations SET phase = ?, result_json = ?, updated_at = ?
@@ -1202,7 +1276,10 @@ export function checkpointDailyProtectionOperation(
         actorId: lease.leaseOwner,
         createdAt: timestamp,
         details: { phase: validatedPhase, fencingToken: lease.fencingToken },
-        eventType: 'daily_protection_component_checkpoint',
+        eventType:
+          action === 'daily-protection'
+            ? 'daily_protection_component_checkpoint'
+            : 'postgres_maintenance_checkpoint',
         operationId: operation.id,
         outcome: 'accepted',
       })
@@ -1213,6 +1290,17 @@ export function checkpointDailyProtectionOperation(
   } finally {
     database.close()
   }
+}
+
+export function checkpointDailyProtectionOperation(
+  path: string,
+  id: string,
+  lease: LeaseIdentity,
+  phase: string,
+  result: Readonly<Record<string, unknown>>,
+  now = new Date(),
+) {
+  return checkpointRecoveryOperation(path, id, lease, phase, result, 'daily-protection', now)
 }
 
 export function requeueDailyProtectionOperation(path: string, id: string, now = new Date()) {
@@ -1268,7 +1356,11 @@ export function requeueDeploymentOperationForReconciliation(
       )
       if (
         operation.status !== 'needs-attention' ||
-        (operation.operationType !== 'deploy' && operation.operationType !== 'rollback')
+        (operation.operationType !== 'deploy' &&
+          operation.operationType !== 'rollback' &&
+          operation.target.action !== 'postgres-image-upgrade') ||
+        (operation.target.action === 'postgres-image-upgrade' &&
+          operation.result?.phase === 'recovery-required')
       ) {
         throw new ControlStateConflictError('Only interrupted deployment operations can reconcile')
       }
@@ -1549,12 +1641,12 @@ export function finishInfrastructureOperation(
     errorSummary?: string | null
     phase: string
     result?: Readonly<Record<string, unknown>> | null
-    status: 'completed' | 'failed'
+    status: 'completed' | 'failed' | 'needs-attention'
   }>,
   now = new Date(),
 ) {
   const phase = z.string().trim().min(1).max(200).parse(result.phase)
-  const status = z.enum(['completed', 'failed']).parse(result.status)
+  const status = z.enum(['completed', 'failed', 'needs-attention']).parse(result.status)
   const errorSummary = z
     .string()
     .trim()
@@ -2027,6 +2119,98 @@ export function assertAuditAppendOnly(path: string) {
   const database = openControlState(path)
   try {
     database.exec('UPDATE control_audit_events SET event_type = event_type')
+  } finally {
+    database.close()
+  }
+}
+
+/** Database-backed control endpoints stay closed while an exclusive image switch is pending. */
+export function isPostgresMaintenanceActive(path: string) {
+  const database = openControlState(path)
+  try {
+    return (
+      Boolean(database.prepare(unresolvedPostgresMaintenanceSql).get()) ||
+      Boolean(
+        database
+          .prepare(`SELECT id FROM infrastructure_operations
+      WHERE operation_type='server-migration' AND json_extract(target_json,'$.action')='postgres-image-upgrade'
+      AND json_extract(target_json,'$.mode')='execute'
+      AND status IN ('queued','claimed','running','needs-attention') LIMIT 1`)
+          .get(),
+      )
+    )
+  } finally {
+    database.close()
+  }
+}
+
+/** Explicit operator retry compensates to the old image while preserving the original request. */
+export function retryPostgresMaintenanceOperation(
+  path: string,
+  id: string,
+  actor: ActorIdentity,
+  input: unknown,
+  retryKey: string,
+  now = new Date(),
+) {
+  const request = postgresMaintenanceRetrySchema.parse(input)
+  if (actor.kind !== 'operator')
+    throw new ControlStateConflictError('PostgreSQL maintenance retry requires an operator')
+  const database = openControlState(path)
+  try {
+    return transaction(database, () => {
+      const operation = mapOperation(
+        database
+          .prepare('SELECT * FROM infrastructure_operations WHERE id=?')
+          .get(z.uuid().parse(id)),
+      )
+      const prior = database
+        .prepare(
+          "SELECT actor_id,details_json FROM control_audit_events WHERE operation_id=? AND event_type='postgres_maintenance_retry_authorized' AND json_extract(details_json,'$.retryKey')=?",
+        )
+        .get(operation.id, retryKey)
+      if (prior) {
+        const receipt = z.object({ actor_id: z.string(), details_json: z.string() }).parse(prior)
+        const details = z
+          .object({ reason: z.string() })
+          .parse(JSON.parse(receipt.details_json) as unknown)
+        if (receipt.actor_id !== actor.id || details.reason !== request.reason)
+          throw new ControlStateConflictError(
+            'Maintenance retry key was reused with a different actor or reason',
+          )
+        return operation
+      }
+      if (
+        operation.target.action !== 'postgres-image-upgrade' ||
+        operation.target.mode !== 'execute' ||
+        operation.status !== 'needs-attention' ||
+        operation.result?.phase !== 'recovery-required'
+      )
+        throw new ControlStateConflictError(
+          'Maintenance retry requires the exact held recovery-required operation',
+        )
+      const progress = postgresMaintenanceProgressSchema.parse(operation.result)
+      database
+        .prepare(
+          "UPDATE infrastructure_operations SET status='queued',phase='rolling-back',result_json=?,error_summary=NULL,finished_at=NULL,updated_at=? WHERE id=?",
+        )
+        .run(
+          JSON.stringify({ ...progress, phase: 'rolling-back' }),
+          now.toISOString(),
+          operation.id,
+        )
+      appendAudit(database, {
+        actorId: actor.id,
+        createdAt: now.toISOString(),
+        details: { reason: request.reason, retryKey },
+        eventType: 'postgres_maintenance_retry_authorized',
+        operationId: operation.id,
+        outcome: 'accepted',
+      })
+      return mapOperation(
+        database.prepare('SELECT * FROM infrastructure_operations WHERE id=?').get(operation.id),
+      )
+    })
   } finally {
     database.close()
   }

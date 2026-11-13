@@ -284,6 +284,7 @@ async function executeClaimedRecovery() {
       const target = z
         .object({
           confirmation: z.literal('RESTORE-PRODUCTION'),
+          maintenanceOperationId: z.uuid().optional(),
           environment: z.literal('production'),
           selector: z.union([
             z.object({ backupId: z.string().min(1).max(200) }).strict(),
@@ -293,7 +294,11 @@ async function executeClaimedRecovery() {
         .strict()
         .parse(claimed.target)
       await changePostgresState('stop')
-      await executeDatabaseRestore(recovery, target)
+      await executeDatabaseRestore(recovery, {
+        confirmation: target.confirmation,
+        environment: target.environment,
+        selector: target.selector,
+      })
       await changePostgresState('start')
     }
     finishInfrastructureOperation(configuration.CONTROL_STATE_PATH, claimed.id, lease, {

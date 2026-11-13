@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process'
-import { chmodSync, mkdtempSync, rmSync } from 'node:fs'
+import { chmodSync, lstatSync, mkdtempSync, rmSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -26,6 +26,19 @@ async function freePort() {
       server.close((error) => (error ? rejectPort(error) : resolvePort(address.port)))
     })
   })
+}
+
+const options = process.argv.slice(2)
+let trivyCacheRoot: string | undefined
+if (options.length > 0) {
+  if (options.length !== 2 || options[0] !== '--trivy-cache' || !options[1])
+    throw new Error('Expected --trivy-cache <verified-public-database-cache>')
+  trivyCacheRoot = resolve(options[1])
+  for (const file of ['trivy.db', 'metadata.json']) {
+    const metadata = lstatSync(join(trivyCacheRoot, 'trivy/db', file))
+    if (!metadata.isFile() || metadata.isSymbolicLink())
+      throw new Error('Trivy cache must contain regular public database files')
+  }
 }
 
 const repositoryRoot = resolve(process.cwd())
@@ -64,6 +77,14 @@ try {
     `type=bind,source=${repositoryRoot},target=/workspace,readonly`,
     '--mount',
     `type=bind,source=${hostRoot},target=${hostRoot}`,
+    ...(trivyCacheRoot
+      ? [
+          '--env',
+          'PHASE12_TRIVY_CACHE_ROOT=/trivy-cache',
+          '--mount',
+          `type=bind,source=${trivyCacheRoot},target=/trivy-cache,readonly`,
+        ]
+      : []),
     '--workdir',
     '/workspace',
     testImage,

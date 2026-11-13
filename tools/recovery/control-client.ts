@@ -20,6 +20,7 @@ const backupRequestSchema = z
   .strip()
 
 type RestoreRequest = Readonly<{
+  maintenanceOperationId?: string
   confirmation: string
   environment: 'local' | 'production' | 'test'
   reason: string

@@ -31,6 +31,7 @@ const containerSchema = z
   .array(
     z.object({
       Id: z.string(),
+      Image: z.string(),
       Config: z.object({
         Image: z.string(),
         Labels: z.record(z.string(), z.string()).nullable(),
@@ -312,6 +313,7 @@ export function inspectHostContainer(name: string) {
   if (!parsed) return undefined
   return {
     Id: parsed.Id,
+    imageId: parsed.Image,
     Config: { Image: parsed.Config.Image, Labels: parsed.Config.Labels },
     State: parsed.State,
     startedAt: parsed.State.StartedAt,

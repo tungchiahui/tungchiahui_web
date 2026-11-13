@@ -20,6 +20,7 @@ COPY src ./src
 COPY tsconfig.json ./
 RUN mkdir -p /workspace/dist \
   && pnpm exec esbuild services/deploy-agent/main.ts --bundle --format=cjs --platform=node --target=node24 --outfile=dist/deploy-agent.cjs \
+  && pnpm exec esbuild services/postgres-maintenance-recovery/main.ts --bundle --format=cjs --platform=node --target=node24 --outfile=dist/postgres-maintenance-recovery.cjs \
   && pnpm exec esbuild services/recovery-drill/main.ts --bundle --format=cjs --platform=node --target=node24 --outfile=dist/recovery-drill.cjs \
   && pnpm exec esbuild services/recovery-break-glass/main.ts --bundle --format=cjs --platform=node --target=node24 --outfile=dist/recovery-break-glass.cjs \
   && pnpm exec esbuild services/recovery-scheduler/main.ts --bundle --format=cjs --platform=node --target=node24 --outfile=dist/recovery-scheduler.cjs \

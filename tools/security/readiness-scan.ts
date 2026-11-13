@@ -24,7 +24,9 @@ const productionSources = [
   'ops/production/openresty.conf',
   ...walkFiles(resolve('ops/production/images')),
   ...walkFiles(resolve('src/host-release')),
+  ...walkFiles(resolve('src/maintenance')),
   ...walkFiles(resolve('services/host-coordinator')),
+  ...walkFiles(resolve('services/postgres-maintenance-recovery')),
   ...walkFiles(resolve('services/release-supervisor')),
 ]
 const forbiddenProductionPatterns = [

@@ -47,10 +47,12 @@ import {
   findCompletedDeployment,
   getInfrastructureOperation,
   getRecoveryBackup,
+  isPostgresMaintenanceActive,
   listRecoveryBackups,
   readControlObservabilitySnapshot,
   readControlState,
   readDeploymentState,
+  retryPostgresMaintenanceOperation,
 } from './control-state'
 import { createOwnerHttpHandler } from './owner-http'
 import { OwnerSessionRepository } from './owner-sessions'
@@ -205,6 +207,13 @@ function routeShape(pathname: string) {
       imageDigest: `sha256:${deploymentReceipt[2]}`,
     })
   }
+  const maintenanceRetry = /^\/api\/ops\/infrastructure-operations\/([^/]+)\/retry$/.exec(pathname)
+  if (maintenanceRetry?.[1])
+    return Object.freeze({
+      allow: 'POST',
+      id: maintenanceRetry[1],
+      kind: 'postgres-maintenance-retry' as const,
+    })
   const infrastructureOperation = /^\/api\/ops\/infrastructure-operations\/([^/]+)$/.exec(pathname)
   if (infrastructureOperation?.[1]) {
     return Object.freeze({
@@ -404,6 +413,20 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
           status: 503,
         })
       }
+      return
+    }
+
+    if (
+      !/^\/api\/ops\/(?:status$|infrastructure-operations(?:\/|$)|backups(?:\/|$)|restores$)/u.test(
+        url.pathname,
+      ) &&
+      isPostgresMaintenanceActive(configuration.statePath)
+    ) {
+      sendJson(response, {
+        body: { error: 'database_maintenance' },
+        headers: { 'retry-after': '60' },
+        status: 503,
+      })
       return
     }
 
@@ -740,6 +763,7 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
               confirmation: z.string().min(1).max(100),
               environment: z.enum(['local', 'test', 'production']),
               reason: z.string().trim().min(1).max(1_000),
+              maintenanceOperationId: z.uuid().optional(),
               selector: z.union([
                 z.object({ backupId: z.string().min(1).max(200) }).strict(),
                 z.object({ targetTime: z.iso.datetime({ offset: true }) }).strict(),
@@ -757,6 +781,9 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
               confirmation: input.confirmation,
               environment: input.environment,
               selector: input.selector,
+              ...(input.maintenanceOperationId
+                ? { maintenanceOperationId: input.maintenanceOperationId }
+                : {}),
             },
           })
           const idempotencyKey = idempotencyKeySchema.parse(headers.get('idempotency-key'))
@@ -866,6 +893,18 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
           )
           const job = await translationJobs.cancel(route.id, actor)
           sendJson(response, { body: { job }, status: 200 })
+          return
+        }
+        case 'postgres-maintenance-retry': {
+          requireCapability(actor, 'infrastructure-operation:create')
+          const operation = retryPostgresMaintenanceOperation(
+            configuration.statePath,
+            route.id,
+            actor,
+            parseJsonBody(body, headers.get('content-type')),
+            idempotencyKeySchema.parse(headers.get('idempotency-key')),
+          )
+          sendJson(response, { body: { operation }, status: 202 })
           return
         }
         case 'infrastructure-operation-create': {
