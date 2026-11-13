@@ -1,5 +1,31 @@
 # Website V2 Current Implementation State
 
+## 2026-11-13 — 发布耗时精简实施
+
+Owner 在接管收尾期间明确授权分级检查、组件复用及对应 Workflow、架构文档和工程约束。
+ADR 0032 记录本次决策，部分替代 ADR 0024/0027，并补齐 ADR 0025 的组件保留保护。
+工作分支为 `codex/release-pipeline-simplification`，延续已验证的回滚修复。
+
+仅文档修改执行文档/源码检查。明确允许清单内公开界面修改保留静态、类型、构建、安全
+边界、Unit 和完整应用 Integration/E2E。数据库、权限、私有界面、部署、恢复、依赖和
+未知路径执行完整 Gate。Git Diff 禁用 rename 折叠，避免后台文件移入 docs 后误分类。
+手动指定 SHA 始终完整验证。每日 UTC 20:00 的隔离 CI 执行完整 Foundation/Recovery。
+开发检查和构建可由新 push 取代，生产部署使用独立不可取消队列。
+
+Web Manifest 增加 Service/Recovery 各自 Source SHA，旧 Manifest 默认同 Web SHA。
+组件计划基于已安装 Executor 的实际执行源码确认兼容能力，状态不可用或版本不兼容时
+保留同 SHA 构建。兼容后比较实际打包依赖、运行资源与构建配置，输入不变时复用已安装
+版本。组件元数据查询集中在一次只读计划内，构建 Job 直接消费验证过的 Digest。
+正常 Host 收敛移除重复控制面迁移，前向完整迁移由共享 Engine 执行一次。
+
+新增真实蓝绿复用测试，验证四个独立服务、PostgreSQL、PgBouncer 的容器 ID，并验证
+复用后的回滚。GHCR 清理先验证保留 Web Manifest 的组件引用，保护旧组件。长期固定的
+PostgreSQL 镜像在独立数据库维护中退役。下载加入有界重试和时限，固定 SHA 校验继续执行。
+本地静态、类型、构建、安全检查和相关 Unit 已通过，完整隔离 CI 待本轮复验并记录结果。
+
+本轮仍未获 main 推送、生产部署或服务器连接授权，生产保持此前验收的版本。S400 输出
+接入与开关启用、实际 PostgreSQL 镜像扫描、双副本备份和 Owner UI 验收待后续逐项授权。
+
 ## 2026-11-13 — 接管验收与本地回滚收尾
 
 接管基线 main 为 `a0ea96b527fb7c51abbfb725f368ac94b762538b`，生产为

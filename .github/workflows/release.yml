@@ -17,10 +17,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: application-production-release
-  cancel-in-progress: false
-
 env:
   CI: true
   NEXT_TELEMETRY_DISABLED: 1
@@ -33,6 +29,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       git_sha: ${{ steps.release.outputs.git_sha }}
+      quality_mode: ${{ steps.impact.outputs.quality_mode }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -58,9 +55,24 @@ jobs:
           git merge-base --is-ancestor "$release_sha" origin/main
           echo "git_sha=$release_sha" >>"$GITHUB_OUTPUT"
 
+      - name: Install Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - name: Classify the approved release diff
+        id: impact
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_SHA: ${{ steps.release.outputs.git_sha }}
+          BASE_SHA: ${{ github.event.before }}
+        run: node tools/ci/release-impact.ts
+
   quality-static:
     name: quality-static
     needs: resolve-release
+    concurrency:
+      group: application-quality-static-${{ github.ref }}-${{ github.event_name }}
+      cancel-in-progress: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -103,11 +115,19 @@ jobs:
         run: pnpm run renovate:validate
 
       - name: Production build
+        if: needs.resolve-release.outputs.quality_mode != 'docs'
         run: pnpm run build
+      - name: Client bundle and secret boundary checks
+        if: needs.resolve-release.outputs.quality_mode != 'docs'
+        run: pnpm run check:security
 
   quality-unit:
     name: quality-unit
     needs: resolve-release
+    if: needs.resolve-release.outputs.quality_mode != 'docs'
+    concurrency:
+      group: application-quality-unit-${{ github.ref }}-${{ github.event_name }}
+      cancel-in-progress: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -133,6 +153,10 @@ jobs:
   quality-infrastructure:
     name: quality-infrastructure
     needs: resolve-release
+    if: needs.resolve-release.outputs.quality_mode == 'full'
+    concurrency:
+      group: application-quality-infrastructure-${{ github.ref }}-${{ github.event_name }}
+      cancel-in-progress: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -158,6 +182,10 @@ jobs:
   quality-integration:
     name: quality-integration
     needs: resolve-release
+    if: needs.resolve-release.outputs.quality_mode != 'docs'
+    concurrency:
+      group: application-quality-integration-${{ github.ref }}-${{ github.event_name }}
+      cancel-in-progress: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -185,6 +213,10 @@ jobs:
   quality-migration:
     name: quality-migration
     needs: resolve-release
+    if: needs.resolve-release.outputs.quality_mode == 'full'
+    concurrency:
+      group: application-quality-migration-${{ github.ref }}-${{ github.event_name }}
+      cancel-in-progress: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -210,6 +242,7 @@ jobs:
   quality-gate:
     name: quality-gate
     needs:
+      - resolve-release
       - quality-static
       - quality-unit
       - quality-infrastructure
@@ -219,25 +252,103 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Check out the reviewed quality gate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+      - name: Install Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
       - name: Require every parallel quality gate
         env:
+          QUALITY_MODE: ${{ needs.resolve-release.outputs.quality_mode }}
           STATIC_RESULT: ${{ needs.quality-static.result }}
           UNIT_RESULT: ${{ needs.quality-unit.result }}
           INFRASTRUCTURE_RESULT: ${{ needs.quality-infrastructure.result }}
           INTEGRATION_RESULT: ${{ needs.quality-integration.result }}
           MIGRATION_RESULT: ${{ needs.quality-migration.result }}
-        shell: bash
+        run: node tools/ci/quality-gate.ts
+
+  plan-components:
+    name: plan-immutable-component-reuse
+    needs: [resolve-release, quality-gate]
+    if: needs.resolve-release.outputs.quality_mode != 'docs'
+    concurrency:
+      group: application-plan-components-${{ github.ref }}-${{ github.event_name }}
+      cancel-in-progress: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+      packages: read
+    outputs:
+      reuse_components: ${{ steps.plan.outputs.reuse_components }}
+      service_source_sha: ${{ steps.plan.outputs.service_source_sha }}
+      service_image_reference: ${{ steps.plan.outputs.service_image_reference }}
+      service_image_digest: ${{ steps.plan.outputs.service_image_digest }}
+      service_exists: ${{ steps.plan.outputs.service_exists }}
+      recovery_source_sha: ${{ steps.plan.outputs.recovery_source_sha }}
+      recovery_image_reference: ${{ steps.plan.outputs.recovery_image_reference }}
+      recovery_image_digest: ${{ steps.plan.outputs.recovery_image_digest }}
+      recovery_exists: ${{ steps.plan.outputs.recovery_exists }}
+      postgres_source_sha: ${{ steps.plan.outputs.postgres_source_sha }}
+      postgres_image_reference: ${{ steps.plan.outputs.postgres_image_reference }}
+      postgres_image_digest: ${{ steps.plan.outputs.postgres_image_digest }}
+      postgres_exists: ${{ steps.plan.outputs.postgres_exists }}
+    env:
+      SITE_CONTROL_API_URL: https://www.tungchiahui.cn
+      RELEASE_SHA: ${{ needs.resolve-release.outputs.git_sha }}
+      DEPLOYMENT_ENABLED: ${{ vars.PRODUCTION_DEPLOYMENT_ENABLED }}
+    steps:
+      - name: Check out approved release
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.resolve-release.outputs.git_sha }}
+          fetch-depth: 0
+      - name: Install pnpm
+        uses: pnpm/action-setup@008330803749db0355799c700092d9a85fd074e9 # v6.0.9
+        with:
+          version: 11.23.0
+          run_install: false
+      - name: Install Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - name: Install locked planning client
+        run: pnpm install --frozen-lockfile
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+      - name: Authenticate for immutable component reads
+        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Read installed executor compatibility
+        id: plan
         run: |
-          set -euo pipefail
-          [[ "$STATIC_RESULT" == "success" ]]
-          [[ "$UNIT_RESULT" == "success" ]]
-          [[ "$INFRASTRUCTURE_RESULT" == "success" ]]
-          [[ "$INTEGRATION_RESULT" == "success" ]]
-          [[ "$MIGRATION_RESULT" == "success" ]]
+          if [ -f tools/ci/plan-components.ts ]; then
+            pnpm exec tsx tools/ci/plan-components.ts
+          else
+            echo 'reuse_components=false' >>"$GITHUB_OUTPUT"
+            for kind in service recovery postgres; do
+              echo "${kind}_source_sha=$RELEASE_SHA" >>"$GITHUB_OUTPUT"
+              echo "${kind}_image_reference=ghcr.io/tungchiahui/tungchiahui_web-$kind:$RELEASE_SHA" >>"$GITHUB_OUTPUT"
+              echo "${kind}_exists=false" >>"$GITHUB_OUTPUT"
+            done
+          fi
 
   build-pgbouncer:
     name: build-pgbouncer
     needs: [resolve-release, quality-gate]
+    if: needs.resolve-release.outputs.quality_mode != 'docs'
+    concurrency:
+      group: application-build-pgbouncer-${{ github.ref }}-${{ github.event_name }}
+      cancel-in-progress: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -282,14 +393,19 @@ jobs:
 
   build-postgres:
     name: build-postgres
-    needs: [resolve-release, quality-gate]
+    needs: [resolve-release, quality-gate, plan-components]
+    if: needs.resolve-release.outputs.quality_mode != 'docs'
+    concurrency:
+      group: application-build-postgres-${{ github.ref }}-${{ github.event_name }}
+      cancel-in-progress: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: read
       packages: write
     outputs:
-      image_digest: ${{ steps.publish.outputs.digest }}
+      image_digest: ${{ steps.publish.outputs.digest || needs.plan-components.outputs.postgres_image_digest }}
+      source_sha: ${{ needs.plan-components.outputs.postgres_source_sha }}
     env:
       POSTGRES_IMAGE_REPOSITORY: ghcr.io/tungchiahui/tungchiahui_web-postgres
     steps:
@@ -297,6 +413,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.resolve-release.outputs.git_sha }}
+          fetch-depth: 0
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
       - name: Authenticate to GitHub Container Registry
@@ -306,27 +423,32 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
       - name: Build and publish PostgreSQL image
+        if: needs.plan-components.outputs.postgres_exists != 'true'
         id: publish
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
         with:
           context: .
           file: ops/production/images/postgres.Dockerfile
           push: true
-          tags: ${{ env.POSTGRES_IMAGE_REPOSITORY }}:${{ needs.resolve-release.outputs.git_sha }}
-          build-args: SITE_DEPLOYMENT_SHA=${{ needs.resolve-release.outputs.git_sha }}
+          tags: ${{ needs.plan-components.outputs.postgres_image_reference }}
+          build-args: SITE_DEPLOYMENT_SHA=${{ needs.plan-components.outputs.postgres_source_sha }}
           cache-from: type=gha,scope=production-postgres
           cache-to: type=gha,mode=max,scope=production-postgres
 
   build-recovery:
     name: build-recovery
-    needs: [resolve-release, quality-gate, build-pgbouncer]
+    needs: [resolve-release, quality-gate, build-pgbouncer, plan-components]
+    concurrency:
+      group: application-build-recovery-${{ github.ref }}-${{ github.event_name }}
+      cancel-in-progress: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: read
       packages: write
     outputs:
-      image_digest: ${{ steps.publish.outputs.digest }}
+      image_digest: ${{ steps.publish.outputs.digest || needs.plan-components.outputs.recovery_image_digest }}
+      source_sha: ${{ needs.plan-components.outputs.recovery_source_sha }}
     env:
       RECOVERY_IMAGE_REPOSITORY: ghcr.io/tungchiahui/tungchiahui_web-recovery
     steps:
@@ -334,6 +456,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.resolve-release.outputs.git_sha }}
+          fetch-depth: 0
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
       - name: Authenticate to GitHub Container Registry
@@ -343,15 +466,16 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
       - name: Build and publish recovery image
+        if: needs.plan-components.outputs.recovery_exists != 'true'
         id: publish
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
         with:
           context: .
           file: ops/production/images/recovery.Dockerfile
           push: true
-          tags: ${{ env.RECOVERY_IMAGE_REPOSITORY }}:${{ needs.resolve-release.outputs.git_sha }}
+          tags: ${{ needs.plan-components.outputs.recovery_image_reference }}
           build-args: |
-            SITE_DEPLOYMENT_SHA=${{ needs.resolve-release.outputs.git_sha }}
+            SITE_DEPLOYMENT_SHA=${{ needs.plan-components.outputs.recovery_source_sha }}
             SITE_PGBOUNCER_IMAGE=ghcr.io/tungchiahui/tungchiahui_web-pgbouncer@${{ needs.build-pgbouncer.outputs.image_digest }}
             SITE_PGBOUNCER_SHA=${{ needs.build-pgbouncer.outputs.source_sha }}
           cache-from: type=gha,scope=production-recovery
@@ -359,14 +483,18 @@ jobs:
 
   build-service:
     name: build-service
-    needs: [resolve-release, quality-gate]
+    needs: [resolve-release, quality-gate, plan-components]
+    concurrency:
+      group: application-build-service-${{ github.ref }}-${{ github.event_name }}
+      cancel-in-progress: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: read
       packages: write
     outputs:
-      image_digest: ${{ steps.publish.outputs.digest }}
+      image_digest: ${{ steps.publish.outputs.digest || needs.plan-components.outputs.service_image_digest }}
+      source_sha: ${{ needs.plan-components.outputs.service_source_sha }}
     env:
       SERVICE_IMAGE_REPOSITORY: ghcr.io/tungchiahui/tungchiahui_web-service
     steps:
@@ -374,6 +502,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.resolve-release.outputs.git_sha }}
+          fetch-depth: 0
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
       - name: Authenticate to GitHub Container Registry
@@ -383,20 +512,24 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
       - name: Build and publish service image
+        if: needs.plan-components.outputs.service_exists != 'true'
         id: publish
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
         with:
           context: .
           file: ops/production/images/services.Dockerfile
           push: true
-          tags: ${{ env.SERVICE_IMAGE_REPOSITORY }}:${{ needs.resolve-release.outputs.git_sha }}
-          build-args: SITE_DEPLOYMENT_SHA=${{ needs.resolve-release.outputs.git_sha }}
+          tags: ${{ needs.plan-components.outputs.service_image_reference }}
+          build-args: SITE_DEPLOYMENT_SHA=${{ needs.plan-components.outputs.service_source_sha }}
           cache-from: type=gha,scope=production-service
           cache-to: type=gha,mode=max,scope=production-service
 
   build-web:
     name: build-web
     needs: [resolve-release, build-service, build-recovery]
+    concurrency:
+      group: application-build-web-${{ github.ref }}-${{ github.event_name }}
+      cancel-in-progress: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -431,6 +564,8 @@ jobs:
             SITE_DEPLOYMENT_SHA=${{ needs.resolve-release.outputs.git_sha }}
             SITE_SERVICE_IMAGE_DIGEST=${{ needs.build-service.outputs.image_digest }}
             SITE_RECOVERY_IMAGE_DIGEST=${{ needs.build-recovery.outputs.image_digest }}
+            SITE_SERVICE_SOURCE_SHA=${{ needs.build-service.outputs.source_sha }}
+            SITE_RECOVERY_SOURCE_SHA=${{ needs.build-recovery.outputs.source_sha }}
           cache-from: type=gha,scope=production-web
           cache-to: type=gha,mode=max,scope=production-web
 
@@ -454,6 +589,8 @@ jobs:
           POSTGRES_DIGEST: ${{ needs.build-postgres.outputs.image_digest }}
           PGBOUNCER_DIGEST: ${{ needs.build-pgbouncer.outputs.image_digest }}
           PGBOUNCER_SOURCE_SHA: ${{ needs.build-pgbouncer.outputs.source_sha }}
+          SERVICE_SOURCE_SHA: ${{ needs.build-service.outputs.source_sha }}
+          RECOVERY_SOURCE_SHA: ${{ needs.build-recovery.outputs.source_sha }}
           RECOVERY_DIGEST: ${{ needs.build-recovery.outputs.image_digest }}
           SERVICE_DIGEST: ${{ needs.build-service.outputs.image_digest }}
         shell: bash
@@ -461,6 +598,8 @@ jobs:
           set -euo pipefail
           [[ "$RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
           [[ "$PGBOUNCER_SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$SERVICE_SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$RECOVERY_SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]
           for digest in "$WEB_DIGEST" "$POSTGRES_DIGEST" "$PGBOUNCER_DIGEST" "$RECOVERY_DIGEST" "$SERVICE_DIGEST"; do
             [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
           done
@@ -470,12 +609,14 @@ jobs:
             jq -n \
               --arg gitSha "$RELEASE_SHA" \
               --arg web "$WEB_DIGEST" \
+              --arg serviceSourceSha "$SERVICE_SOURCE_SHA" \
+              --arg recoverySourceSha "$RECOVERY_SOURCE_SHA" \
               --arg service "$SERVICE_DIGEST" \
               --arg recovery "$RECOVERY_DIGEST" \
               --arg postgres "$POSTGRES_DIGEST" \
               --arg pgbouncer "$PGBOUNCER_DIGEST" \
               --arg pgbouncerSourceSha "$PGBOUNCER_SOURCE_SHA" \
-              '{gitSha: $gitSha, pgbouncerSourceSha: $pgbouncerSourceSha, images: {web: $web, service: $service, recovery: $recovery, postgres: $postgres, pgbouncer: $pgbouncer}}'
+              '{gitSha: $gitSha, serviceSourceSha: $serviceSourceSha, recoverySourceSha: $recoverySourceSha, pgbouncerSourceSha: $pgbouncerSourceSha, images: {web: $web, service: $service, recovery: $recovery, postgres: $postgres, pgbouncer: $pgbouncer}}'
             echo '```'
           } >>"$GITHUB_STEP_SUMMARY"
 
@@ -483,6 +624,9 @@ jobs:
     name: shared-control-plane-blue-green-deployment
     needs: build
     if: vars.PRODUCTION_DEPLOYMENT_ENABLED == 'true'
+    concurrency:
+      group: application-production-release
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: production
@@ -538,19 +682,24 @@ jobs:
 
   release-result:
     name: verify-production-release-completed
-    needs: [build, deploy]
+    needs: [resolve-release, quality-gate, build, deploy]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Check out the reviewed release result policy
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+      - name: Install Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
       - name: Require both image publication and deployment
         env:
+          QUALITY_MODE: ${{ needs.resolve-release.outputs.quality_mode }}
+          QUALITY_RESULT: ${{ needs.quality-gate.result }}
           BUILD_RESULT: ${{ needs.build.result }}
           DEPLOYMENT_ENABLED: ${{ vars.PRODUCTION_DEPLOYMENT_ENABLED }}
           DEPLOY_RESULT: ${{ needs.deploy.result }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          [[ "$BUILD_RESULT" == "success" ]]
-          [[ "$DEPLOYMENT_ENABLED" == "true" ]]
-          [[ "$DEPLOY_RESULT" == "success" ]]
+        run: node tools/ci/release-result.ts

@@ -182,6 +182,9 @@ Production Docker Image 使用 Multi-stage Build、尽量 Minimal 的 Runtime Im
 
 ## 正常生产发布路径
 
+ADR 0032 对文档、公开界面和高风险变更采用分级验证。每日隔离 CI 保留完整恢复演练。
+Web SHA 绑定组件自己的 Source SHA/Digest，未变化组件复用镜像及运行容器。
+
 Web Application Repository 的正常发布路径固定为：
 
 ```text

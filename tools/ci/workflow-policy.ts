@@ -21,6 +21,9 @@ const workflowJobSchema = z
     needs: z.union([z.string(), z.array(z.string())]).optional(),
     outputs: z.record(z.string(), z.string()).optional(),
     permissions: z.record(z.string(), z.string()).optional(),
+    concurrency: z
+      .object({ group: z.string(), 'cancel-in-progress': z.union([z.boolean(), z.string()]) })
+      .optional(),
   })
   .passthrough()
 
@@ -108,7 +111,7 @@ function requireReleaseJobStructure(
   if (
     qualityGate &&
     (JSON.stringify(normalizedNeeds(qualityGate).toSorted()) !==
-      JSON.stringify(qualityJobs.toSorted()) ||
+      JSON.stringify(['resolve-release', ...qualityJobs].toSorted()) ||
       qualityGate.if !== 'always()')
   ) {
     issues.push({
@@ -116,6 +119,29 @@ function requireReleaseJobStructure(
       message: 'Quality gate must fail closed across every parallel quality job',
     })
   }
+  for (const name of ['quality-infrastructure', 'quality-migration']) {
+    if (requireJob(name)?.if !== "needs.resolve-release.outputs.quality_mode == 'full'")
+      issues.push({ file: 'release.yml', message: `${name} must require the full impact gate` })
+  }
+  for (const name of ['quality-unit', 'quality-integration']) {
+    if (requireJob(name)?.if !== "needs.resolve-release.outputs.quality_mode != 'docs'")
+      issues.push({
+        file: 'release.yml',
+        message: `${name} must run for every application release`,
+      })
+  }
+  const plan = requireJob('plan-components')
+  if (
+    plan?.permissions?.['id-token'] !== 'write' ||
+    plan.permissions.packages !== 'read' ||
+    plan.environment !== 'production' ||
+    JSON.stringify(normalizedNeeds(plan).toSorted()) !==
+      JSON.stringify(['resolve-release', 'quality-gate'].toSorted())
+  )
+    issues.push({
+      file: 'release.yml',
+      message: 'Component planning must use the quality-gated production identity',
+    })
 
   const publishJobs = [
     'build-pgbouncer',
@@ -136,7 +162,9 @@ function requireReleaseJobStructure(
   if (
     recoveryBuild &&
     JSON.stringify(normalizedNeeds(recoveryBuild).toSorted()) !==
-      JSON.stringify(['resolve-release', 'quality-gate', 'build-pgbouncer'].toSorted())
+      JSON.stringify(
+        ['resolve-release', 'quality-gate', 'build-pgbouncer', 'plan-components'].toSorted(),
+      )
   )
     issues.push({
       file: 'release.yml',
@@ -190,7 +218,9 @@ function requireReleaseJobStructure(
       JSON.stringify(normalizedNeeds(deploy)) !== JSON.stringify(['build']) ||
       deploy.if !== "vars.PRODUCTION_DEPLOYMENT_ENABLED == 'true'" ||
       environment !== 'production' ||
-      deploy.permissions?.['id-token'] !== 'write'
+      deploy.permissions?.['id-token'] !== 'write' ||
+      deploy.concurrency?.group !== 'application-production-release' ||
+      deploy.concurrency['cancel-in-progress'] !== false
     ) {
       issues.push({
         file: 'release.yml',
@@ -203,7 +233,7 @@ function requireReleaseJobStructure(
   if (
     result &&
     (JSON.stringify(normalizedNeeds(result).toSorted()) !==
-      JSON.stringify(['build', 'deploy'].toSorted()) ||
+      JSON.stringify(['resolve-release', 'quality-gate', 'build', 'deploy'].toSorted()) ||
       result.if !== 'always()')
   ) {
     issues.push({
@@ -219,6 +249,20 @@ export function analyzeWorkflowPolicies(root: string): readonly WorkflowPolicyIs
   const content = workflow(root, 'content-sync.yml')
   const translation = workflow(root, 'translation.yml')
   const maintenance = workflow(root, 'maintenance.yml')
+  const verification = workflow(root, 'host-release-diagnostics-verification.yml')
+  verifyPinnedActions(issues, 'host-release-diagnostics-verification.yml', verification.source)
+  requireFragments(issues, 'host-release-diagnostics-verification.yml', verification.source, [
+    "cron: '0 20 * * *'",
+    'contents: read',
+    'pnpm run test:infra && pnpm run test:recovery',
+    'pnpm run test:migration',
+  ])
+  rejectFragments(issues, 'host-release-diagnostics-verification.yml', verification.source, [
+    'id-token: write',
+    'packages: write',
+    './site deploy',
+    'secrets.',
+  ])
 
   const maintenanceTriggers = Object.keys(maintenance.parsed.on).toSorted()
   if (JSON.stringify(maintenanceTriggers) !== JSON.stringify(['schedule', 'workflow_dispatch'])) {
@@ -283,12 +327,17 @@ export function analyzeWorkflowPolicies(root: string): readonly WorkflowPolicyIs
     'git rev-parse origin/main',
     './site deploy',
     '--wait',
-    '[[ "$DEPLOY_RESULT" == "success" ]]',
+    'run: node tools/ci/quality-gate.ts',
+    'run: node tools/ci/release-result.ts',
+    'run: node tools/ci/release-impact.ts',
+    'SITE_SERVICE_SOURCE_SHA=$' + '{{ needs.build-service.outputs.source_sha }}',
+    'SITE_RECOVERY_SOURCE_SHA=$' + '{{ needs.build-recovery.outputs.source_sha }}',
+    'pnpm exec tsx tools/ci/plan-components.ts',
   ])
-  if (release.source.split(releaseShaBuildArgument).length - 1 !== 4) {
+  if (release.source.split(releaseShaBuildArgument).length - 1 !== 1) {
     issues.push({
       file: 'release.yml',
-      message: 'Every application image must bind the exact release SHA',
+      message: 'The Web manifest must bind the exact release SHA',
     })
   }
   rejectFragments(issues, 'release.yml', release.source, [

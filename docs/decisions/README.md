@@ -53,3 +53,4 @@ ADR 是不可变的历史记录。
 - `0029-multilingual-project-portfolio.md`
 
 - [0031 — Owner-only unified body measurements](0031-private-body-measurements.md)
+- [0032 — 分级发布验证与组件镜像复用](0032-graded-release-validation-and-component-reuse.md)

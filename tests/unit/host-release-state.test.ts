@@ -23,6 +23,7 @@ import {
   initializeHostReleaseState,
   readHostBootstrapBaseline,
   readHostCheckpoint,
+  readHostExecutorStatus,
   readHostGeneration,
   readHostRuntime,
   recordHostBootstrapBaseline,
@@ -86,6 +87,32 @@ function deploy(path: string) {
 }
 
 describe('durable server release component', () => {
+  it('accepts explicit legacy component revisions while rejecting a changed component identity', () => {
+    const { path } = fixture()
+    stageHostGeneration(path, release)
+    expect(() =>
+      stageHostGeneration(path, { ...release, serviceSha: release.sha, recoverySha: release.sha }),
+    ).not.toThrow()
+    expect(() => stageHostGeneration(path, { ...release, serviceSha: 'e'.repeat(40) })).toThrow(
+      'identity changed',
+    )
+    expect(readHostGeneration(path, release.sha)).toEqual(release)
+  })
+
+  it('reports the actual component revisions separately from the Web release generation', () => {
+    const { path } = fixture()
+    stageHostGeneration(path, {
+      ...release,
+      serviceSha: 'b'.repeat(40),
+      recoverySha: 'c'.repeat(40),
+    })
+    commitHostGeneration(path, release.sha)
+    expect(readHostExecutorStatus(path)).toMatchObject({
+      currentSha: release.sha,
+      serviceSha: 'b'.repeat(40),
+      sourceSha: 'c'.repeat(40),
+    })
+  })
   it('retains the audited pre-bootstrap Web identity through backup/restore and rejects baseline replacement', () => {
     const { path, root } = fixture()
     const bootstrap = createInfrastructureOperation(

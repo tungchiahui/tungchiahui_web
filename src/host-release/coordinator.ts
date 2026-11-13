@@ -21,6 +21,7 @@ import {
   type ProvisionRequest,
   releaseDigestSchema,
   releaseShaSchema,
+  sameHostRelease,
   topologyFiles,
 } from './contracts'
 import {
@@ -93,7 +94,6 @@ export function releaseProvisionRequest(
   repository: string,
   release: HostRelease,
   before: ConvergenceSnapshot,
-  operationType: 'deploy' | 'rollback' = 'deploy',
 ): ProvisionRequest {
   return {
     settings,
@@ -105,7 +105,6 @@ export function releaseProvisionRequest(
     recoveryImage: `${repository}-recovery@${release.recoveryDigest}`,
     postgresImage: before.postgresImage,
     mode: 'services',
-    applyMigrations: operationType === 'deploy',
     backupScheduleEnabled: before.backupScheduleEnabled,
     maintenanceScheduleEnabled: before.maintenanceScheduleEnabled,
   }
@@ -327,7 +326,7 @@ export async function coordinateNextHostRelease(input: HostSettings, owner: stri
       bridge?.webDigest ?? target.imageDigest,
       environment,
     )
-    if (checkpoint && JSON.stringify(checkpoint.release) !== JSON.stringify(release))
+    if (checkpoint && !sameHostRelease(checkpoint.release, release))
       throw new Error('Durable release manifest changed during replay')
     const before = checkpoint?.before ?? captureHostConvergence(settings)
     if (!checkpoint) {
@@ -342,13 +341,12 @@ export async function coordinateNextHostRelease(input: HostSettings, owner: stri
       ) !== before.files['pgbackrest.conf']
     )
       throw new Error('PostgreSQL backup configuration requires explicit server maintenance')
-    const request = releaseProvisionRequest(
-      settings,
-      repository,
-      release,
-      before,
-      operation.operationType === 'rollback' ? 'rollback' : 'deploy',
-    )
+    // The shared engine applies and verifies the full journal before Web verification.
+    // Host convergence only updates its fixed resources and services.
+    const request = {
+      ...releaseProvisionRequest(settings, repository, release, before),
+      applyMigrations: false,
+    }
     heartbeatInfrastructureOperation(path, operation.id, lease, 3600)
     if (checkpoint?.phase === 'compensating' || checkpoint?.phase === 'reverted')
       throw new Error('Interrupted failed release requires compensation')
@@ -382,6 +380,8 @@ export async function coordinateNextHostRelease(input: HostSettings, owner: stri
           webDigest: baselineRollback ? target.imageDigest : release.webDigest,
           serviceDigest: release.serviceDigest,
           recoveryDigest: release.recoveryDigest,
+          serviceSha: release.serviceSha ?? release.sha,
+          recoverySha: release.recoverySha ?? release.sha,
           status: baselineRollback ? 'retained-web-restored' : 'converged',
           executorSha: release.sha,
         },

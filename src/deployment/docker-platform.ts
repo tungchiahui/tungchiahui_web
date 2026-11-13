@@ -406,6 +406,7 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
     if (container.State.Running) throw new Error('Migration container is already running')
     const repository = this.configuration.DEPLOYMENT_IMAGE_REPOSITORY
     let serviceDigest: string | undefined
+    let serviceSha = release.sha
     if (repository !== undefined) {
       const webInspection = await requestDockerJson(
         this.socketPath,
@@ -427,6 +428,10 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
         throw new Error('Web image does not declare a valid digest-bound service image')
       }
       serviceDigest = parsedServiceDigest.data
+      serviceSha = z
+        .string()
+        .regex(/^[a-f0-9]{40}$/u)
+        .parse(webImage.Config.Labels?.['cn.tungchiahui.release.service-sha'] ?? release.sha)
     }
     // The Web image is the immutable release manifest: its digest-bound label selects the exact
     // paired migration bundle. Offline fixtures retain their prepared local image identity.
@@ -450,9 +455,9 @@ export class DockerDeploymentPlatform implements DeploymentPlatform {
     }
     const image = dockerImageSchema.parse(inspection.body)
     const revision = image.Config.Labels?.['org.opencontainers.image.revision']
-    if (revision !== release.sha) {
+    if (revision !== serviceSha) {
       throw new Error(
-        `Migration image revision ${revision ?? 'unknown'} does not match target ${release.sha}`,
+        `Migration image revision ${revision ?? 'unknown'} does not match target ${serviceSha}`,
       )
     }
     if (

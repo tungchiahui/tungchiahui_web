@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
-import { type HostRelease, hostReleaseSchema } from './contracts'
+import { type HostRelease, hostReleaseSchema, sameHostRelease } from './contracts'
 
 const phaseSchema = z.enum([
   'prepared',
@@ -159,8 +159,14 @@ export function stageHostGeneration(
       .get(validated.sha)
     if (
       existing &&
-      z.object({ release_json: z.string() }).parse(existing).release_json !==
-        JSON.stringify(validated)
+      !sameHostRelease(
+        hostReleaseSchema.parse(
+          JSON.parse(
+            z.object({ release_json: z.string() }).parse(existing).release_json,
+          ) as unknown,
+        ),
+        validated,
+      )
     )
       throw new Error('Host generation identity changed for an existing SHA')
     db.prepare(
@@ -368,6 +374,8 @@ export function readHostExecutorStatus(path: string, now = new Date()) {
         installed: false,
         healthy: false,
         currentSha: null,
+        sourceSha: null,
+        serviceSha: null,
         previousSha: null,
         pendingSha: null,
       }
@@ -376,10 +384,14 @@ export function readHostExecutorStatus(path: string, now = new Date()) {
       .prepare('SELECT expires_at FROM host_release_executor_lock WHERE singleton_id=1')
       .get()
     const expiresAt = lock ? z.object({ expires_at: z.string() }).parse(lock).expires_at : null
+    const generation =
+      runtime.current_sha === null ? null : readHostGeneration(path, runtime.current_sha)
     return {
       installed: runtime.current_sha !== null,
       healthy: expiresAt !== null && expiresAt > now.toISOString(),
       currentSha: runtime.current_sha,
+      sourceSha: generation?.recoverySha ?? runtime.current_sha,
+      serviceSha: generation?.serviceSha ?? runtime.current_sha,
       previousSha: runtime.previous_sha,
       pendingSha: runtime.pending_sha,
     }

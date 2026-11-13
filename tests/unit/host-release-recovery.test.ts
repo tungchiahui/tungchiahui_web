@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { infrastructureOperationRequestSchema } from '../../src/control-plane/contracts'
-import { hostReleaseSchema, hostSettingsSchema } from '../../src/host-release/contracts'
-import { convergenceDifferences, releaseProvisionRequest } from '../../src/host-release/coordinator'
+import { hostReleaseSchema, sameHostRelease } from '../../src/host-release/contracts'
+import { convergenceDifferences } from '../../src/host-release/coordinator'
 import { containerConfigRebindRequired } from '../../src/host-release/provision'
 import { hostRecoveryRejection } from '../../src/host-release/recovery'
 import { convergenceSnapshotSchema } from '../../src/host-release/state'
@@ -126,16 +126,11 @@ describe('host release recovery candidate', () => {
 })
 
 describe('host convergence verification', () => {
-  it('runs migrations on deploy and skips the retained journal on rollback', () => {
-    const settings = hostSettingsSchema.parse({})
+  it('compares legacy manifests with explicit matching component revisions', () => {
     expect(
-      releaseProvisionRequest(settings, 'ghcr.io/example/site', release, before),
-    ).toMatchObject({
-      applyMigrations: true,
-    })
-    expect(
-      releaseProvisionRequest(settings, 'ghcr.io/example/site', release, before, 'rollback'),
-    ).toMatchObject({ applyMigrations: false })
+      sameHostRelease(release, { ...release, serviceSha: release.sha, recoverySha: release.sha }),
+    ).toBe(true)
+    expect(sameHostRelease(release, { ...release, serviceSha: previousSha })).toBe(false)
   })
 
   it('accepts an identical snapshot and reports every exact difference', () => {

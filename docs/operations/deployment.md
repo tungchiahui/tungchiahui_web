@@ -24,7 +24,7 @@ push to main
  -> POST /api/ops/deployments
 ```
 
-Quality Gates 未全部通过时不得构建/发布 Production Candidate，也不得 Cutover。
+ADR 0032 对应的 Quality Gates 未通过时不得构建/发布 Production Candidate，也不得 Cutover。
 
 首次上线使用 Repository Actions Variable `PRODUCTION_DEPLOYMENT_ENABLED` 作为显式 Activation
 Gate。变量不存在或不等于 `true` 时，`main` Quality/Build 仍可发布完整 Immutable Image Set，
@@ -91,8 +91,9 @@ https://www.tungchiahui.cn/api/ops/deployments
 
 ### Independent service release boundary
 
-完整发布由服务器 Host Adapter 自动更新 Web、固定配置、四个独立服务和 Host Coordinator。
-同一 SHA/Digest 的完整结果才可标记 Operation Completed；详见
+完整发布由服务器 Host Adapter 收敛 Web、固定配置、四个独立服务和 Host Coordinator。
+未变化组件复用其 Source SHA/Digest，Web SHA/Digest 绑定完整 Manifest。全部收敛后才可
+标记 Operation Completed；详见
 [服务器发布与初始化](server-release.md)。初次接入需要一次服务器管理员安装，后续 main
 发布由服务器接续，不依赖开发电脑。
 

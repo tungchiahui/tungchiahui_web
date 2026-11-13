@@ -1,5 +1,7 @@
 # ADR 0027：服务器执行完整发布与初始化，移除 Ansible
 
+> ADR 0032 部分替代全部组件同 SHA 与每次完整检查要求，保留同一 Host Adapter、Engine 和恢复状态。
+
 - Status: Accepted
 - Date: 2026-10-04
 - Authorization: Owner 明确要求取消 Ansible 和个人开发机依赖，并授权实施所讨论方案。

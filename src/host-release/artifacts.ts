@@ -12,7 +12,13 @@ import {
 import { join } from 'node:path'
 import { z } from 'zod'
 import { requestDockerJson } from '../deployment/docker-platform'
-import { type HostRelease, type HostSettings, hostReleaseSchema, topologyFiles } from './contracts'
+import {
+  type HostRelease,
+  type HostSettings,
+  hostReleaseSchema,
+  sameHostRelease,
+  topologyFiles,
+} from './contracts'
 import { runHostCommand, writeHostFile } from './provision'
 
 const imageSchema = z
@@ -105,12 +111,22 @@ export async function resolveHostRelease(
     webDigest,
     serviceDigest: image.Config.Labels?.['cn.tungchiahui.release.service-digest'],
     recoveryDigest: image.Config.Labels?.['cn.tungchiahui.release.recovery-digest'],
+    ...(image.Config.Labels?.['cn.tungchiahui.release.service-sha'] === undefined
+      ? {}
+      : {
+          serviceSha: image.Config.Labels['cn.tungchiahui.release.service-sha'],
+        }),
+    ...(image.Config.Labels?.['cn.tungchiahui.release.recovery-sha'] === undefined
+      ? {}
+      : {
+          recoverySha: image.Config.Labels['cn.tungchiahui.release.recovery-sha'],
+        }),
   })
-  for (const [suffix, digest] of [
-    ['service', release.serviceDigest],
-    ['recovery', release.recoveryDigest],
+  for (const [suffix, digest, componentSha] of [
+    ['service', release.serviceDigest, release.serviceSha ?? release.sha],
+    ['recovery', release.recoveryDigest, release.recoverySha ?? release.sha],
   ] as const) {
-    await ensureHostReleaseImage(`${repository}-${suffix}`, digest, sha, environment)
+    await ensureHostReleaseImage(`${repository}-${suffix}`, digest, componentSha, environment)
   }
   return release
 }
@@ -156,7 +172,7 @@ export function extractHostGeneration(
     try {
       const marker = markerSchema.parse(JSON.parse(readFileSync(markerPath, 'utf8')) as unknown)
       if (
-        JSON.stringify(marker.release) === JSON.stringify(release) &&
+        sameHostRelease(marker.release, release) &&
         hostArtifacts.every(([, destination, executable]) => {
           const path = join(directory, destination)
           if (!existsSync(path)) return false

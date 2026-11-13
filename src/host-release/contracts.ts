@@ -69,6 +69,19 @@ export const hostReleaseSchema = z
     webDigest: releaseDigestSchema,
     serviceDigest: releaseDigestSchema,
     recoveryDigest: releaseDigestSchema,
+    serviceSha: releaseShaSchema.optional(),
+    recoverySha: releaseShaSchema.optional(),
   })
   .strict()
 export type HostRelease = Readonly<z.infer<typeof hostReleaseSchema>>
+
+export function sameHostRelease(left: HostRelease, right: HostRelease) {
+  return (
+    left.sha === right.sha &&
+    left.webDigest === right.webDigest &&
+    left.serviceDigest === right.serviceDigest &&
+    left.recoveryDigest === right.recoveryDigest &&
+    (left.serviceSha ?? left.sha) === (right.serviceSha ?? right.sha) &&
+    (left.recoverySha ?? left.sha) === (right.recoverySha ?? right.sha)
+  )
+}

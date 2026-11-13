@@ -6,7 +6,7 @@ ARG PGBACKREST_VERSION=2.59.1
 RUN apk add --no-cache \
       bzip2-dev curl curl-dev gcc libc-dev libssh2-dev libxml2-dev linux-headers lz4-dev meson \
       openssl-dev postgresql-dev zlib-dev zstd-dev \
-  && curl --fail --location --silent --show-error \
+  && curl --fail --location --silent --show-error --retry 3 --retry-all-errors --connect-timeout 15 --max-time 300 \
       "https://github.com/pgbackrest/pgbackrest/releases/download/release%2F${PGBACKREST_VERSION}/pgbackrest-${PGBACKREST_VERSION}.tar.gz" \
       --output /tmp/pgbackrest.tar.gz \
   && echo "${PGBACKREST_SHA256}  /tmp/pgbackrest.tar.gz" | sha256sum -c \

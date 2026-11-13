@@ -39,7 +39,7 @@ ARG PGBACKREST_VERSION=2.59.1
 RUN apk add --no-cache \
       bzip2-dev curl curl-dev gcc libc-dev libssh2-dev libxml2-dev linux-headers lz4-dev meson \
       openssl-dev postgresql-dev zlib-dev zstd-dev \
-  && curl --fail --location --silent --show-error \
+  && curl --fail --location --silent --show-error --retry 3 --retry-all-errors --connect-timeout 15 --max-time 300 \
       "https://github.com/pgbackrest/pgbackrest/releases/download/release%2F${PGBACKREST_VERSION}/pgbackrest-${PGBACKREST_VERSION}.tar.gz" \
       --output /tmp/pgbackrest.tar.gz \
   && echo "${PGBACKREST_SHA256}  /tmp/pgbackrest.tar.gz" | sha256sum -c \
@@ -56,6 +56,7 @@ RUN CGO_ENABLED=0 GOBIN=/out go install filippo.io/age/cmd/age@v${AGE_VERSION}
 FROM node:24.19.0-alpine3.23@sha256:244cc2b53f46f9e876304391d17682b0ddae9ac33491f4857e25e35a36ba7995 AS runtime
 ARG SITE_DEPLOYMENT_SHA
 LABEL org.opencontainers.image.revision=${SITE_DEPLOYMENT_SHA} \
+  cn.tungchiahui.host-release-manifest-versions="1,2" \
   org.opencontainers.image.source="https://github.com/tungchiahui/tungchiahui_web"
 
 RUN apk add --no-cache ca-certificates libbz2 libcrypto3 libpq libssh2 libxml2 lz4-libs zlib zstd-libs \

@@ -27,12 +27,12 @@ RUN apt-get update \
   && apt-get install --yes --no-install-recommends ca-certificates curl docker.io openssl \
   && rm -rf /var/lib/apt/lists/* \
   && mkdir -p /usr/local/libexec/docker/cli-plugins \
-  && curl --fail --location --silent --show-error \
+  && curl --fail --location --silent --show-error --retry 3 --retry-all-errors --connect-timeout 15 --max-time 300 \
     "https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-linux-x86_64" \
     --output /tmp/docker-compose \
   && echo "${COMPOSE_SHA256}  /tmp/docker-compose" | sha256sum --check --strict \
   && install -m 0755 /tmp/docker-compose /usr/local/libexec/docker/cli-plugins/docker-compose \
-  && curl --fail --location --silent --show-error \
+  && curl --fail --location --silent --show-error --retry 3 --retry-all-errors --connect-timeout 15 --max-time 300 \
     "https://github.com/FiloSottile/age/releases/download/v${AGE_VERSION}/age-v${AGE_VERSION}-linux-amd64.tar.gz" \
     --output /tmp/age.tar.gz \
   && echo "${AGE_SHA256}  /tmp/age.tar.gz" | sha256sum --check --strict \

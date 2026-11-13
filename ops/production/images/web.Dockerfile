@@ -20,9 +20,13 @@ FROM node:24.19.0-alpine3.23@sha256:244cc2b53f46f9e876304391d17682b0ddae9ac33491
 ARG SITE_DEPLOYMENT_SHA
 ARG SITE_SERVICE_IMAGE_DIGEST
 ARG SITE_RECOVERY_IMAGE_DIGEST
+ARG SITE_SERVICE_SOURCE_SHA=${SITE_DEPLOYMENT_SHA}
+ARG SITE_RECOVERY_SOURCE_SHA=${SITE_DEPLOYMENT_SHA}
 LABEL org.opencontainers.image.revision=${SITE_DEPLOYMENT_SHA} \
   cn.tungchiahui.release.service-digest=${SITE_SERVICE_IMAGE_DIGEST} \
   cn.tungchiahui.release.recovery-digest=${SITE_RECOVERY_IMAGE_DIGEST} \
+  cn.tungchiahui.release.service-sha=${SITE_SERVICE_SOURCE_SHA} \
+  cn.tungchiahui.release.recovery-sha=${SITE_RECOVERY_SOURCE_SHA} \
   org.opencontainers.image.source="https://github.com/tungchiahui/tungchiahui_web"
 ENV HOSTNAME=0.0.0.0 \
   NODE_ENV=production \

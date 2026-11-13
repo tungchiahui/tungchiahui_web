@@ -119,6 +119,8 @@ describe('Docker migration image identity', () => {
     { revision: 'a'.repeat(40), registry: true, missingServiceLabel: true },
     { revision: 'a'.repeat(40), registry: true, invalidWebDigest: true },
     { revision: 'a'.repeat(40), registry: true, running: true },
+    { revision: 'b'.repeat(40), registry: true, serviceSha: 'b'.repeat(40) },
+    { revision: 'a'.repeat(40), registry: true, serviceSha: 'b'.repeat(40) },
   ] as const)(
     'validates migration image before replacing the runner: %j',
     async (scenario: {
@@ -131,6 +133,7 @@ describe('Docker migration image identity', () => {
       missingServiceLabel?: boolean
       invalidWebDigest?: boolean
       running?: boolean
+      serviceSha?: string
     }) => {
       const { revision } = scenario
       const directory = mkdtempSync(join(tmpdir(), 'migration-docker-'))
@@ -184,7 +187,12 @@ describe('Docker migration image identity', () => {
               Config: {
                 Labels: scenario.missingServiceLabel
                   ? {}
-                  : { 'cn.tungchiahui.release.service-digest': serviceDigest },
+                  : {
+                      'cn.tungchiahui.release.service-digest': serviceDigest,
+                      ...(scenario.serviceSha === undefined
+                        ? {}
+                        : { 'cn.tungchiahui.release.service-sha': scenario.serviceSha }),
+                    },
               },
               Id: `sha256:${'f'.repeat(64)}`,
               RepoDigests: scenario.invalidWebDigest ? [] : [webReference],
@@ -264,7 +272,7 @@ describe('Docker migration image identity', () => {
             : target,
         })
         if (
-          revision !== targetSha ||
+          revision !== (scenario.serviceSha ?? targetSha) ||
           scenario.pullError ||
           scenario.missingDigest ||
           scenario.missingServiceLabel ||

@@ -221,6 +221,11 @@ build
 E2E tests for affected critical flows
 ```
 
+ADR 0032 定义分级 Gate。仅文档修改运行文档/源码策略检查。明确允许清单内的公开界面
+修改保留静态/类型/构建、安全边界扫描、Unit 与完整应用 Integration/E2E。数据库、权限、
+私有界面、部署、恢复、依赖及未知路径继续完整 Gate。每日只读 CI 运行完整基础设施、
+恢复与迁移测试。分类依赖可靠的 Git Diff，无法确认时使用完整 Gate。
+
 Storage Code 还必须通过：
 
 - Local S3Mock Test
@@ -263,6 +268,10 @@ push to main
 GitHub Actions 与 `./site deploy` 必须调用同一个 Control Plane、Deployment Engine 和 Policy，不得维护两套实现。`./site deploy` 保留用于人工触发、重试和指定版本。Content Repository Push 只执行 Content Sync，不得触发 Next.js Image Build/Blue-Green。
 
 绝不在原地替换 Active Application Container。
+
+ADR 0032 允许复用未改变的独立组件。Web Manifest 绑定各组件自己的 Source SHA 和
+不可变 Digest，逐一校验仓库与 OCI Revision。旧 Manifest 默认组件 SHA 等于 Web SHA。
+首次启用须兼容当前 Host Executor，状态无法确认时使用本次 Web SHA 构建。
 
 一次 Deployment 必须：
 

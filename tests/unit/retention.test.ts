@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import type {
   InfrastructureOperation,
@@ -9,7 +9,12 @@ import {
   planDockerRetention,
   retentionPolicy,
 } from '../../src/maintenance/retention'
-import { type GhcrPackageVersion, planGhcrRetention } from '../../tools/maintenance/ghcr-retention'
+import {
+  type GhcrPackageVersion,
+  manifestComponentReferences,
+  planGhcrRetention,
+  retainedComponentReferences,
+} from '../../tools/maintenance/ghcr-retention'
 
 function backup(
   backupId: string,
@@ -116,5 +121,79 @@ describe('audited retention policy', () => {
     const plan = planGhcrRetention({ tungchiahui_web: old }, new Date('2026-09-23T00:00:00.000Z'))
     expect(plan.protectedReleaseShas).toHaveLength(retentionPolicy.ghcrReleaseCount)
     expect(plan.delete.map((version) => version.versionId)).toEqual([1, 2])
+  })
+
+  it('protects old components referenced by a retained Web manifest', () => {
+    const old = Array.from({ length: 22 }, (_, index) =>
+      ghcrVersion(
+        index + 1,
+        index.toString(16).padStart(40, '0'),
+        new Date(Date.UTC(2026, 0, index + 1)).toISOString(),
+      ),
+    )
+    const reference = `tungchiahui_web-service@sha256:${'a'.repeat(64)}`
+    const plan = planGhcrRetention(
+      {
+        tungchiahui_web: old,
+        'tungchiahui_web-service': [ghcrVersion(99, 'b'.repeat(40), '2025-01-01T00:00:00.000Z')],
+      },
+      new Date('2026-09-23T00:00:00.000Z'),
+      [reference],
+    )
+    expect(plan.delete.some((entry) => entry.packageName === 'tungchiahui_web-service')).toBe(false)
+    expect(
+      manifestComponentReferences({
+        'cn.tungchiahui.release.service-digest': `sha256:${'a'.repeat(64)}`,
+      }),
+    ).toEqual([reference])
+    expect(() =>
+      manifestComponentReferences({ 'cn.tungchiahui.release.service-digest': 'invalid' }),
+    ).toThrow()
+  })
+
+  it('keeps host-pinned PostgreSQL versions outside generic Web image cleanup', () => {
+    const old = Array.from({ length: 25 }, (_, index) =>
+      ghcrVersion(
+        index + 1,
+        index.toString(16).padStart(40, '0'),
+        new Date(Date.UTC(2026, 0, index + 1)).toISOString(),
+      ),
+    )
+    const plan = planGhcrRetention(
+      { 'tungchiahui_web-postgres': old },
+      new Date('2026-11-13T00:00:00.000Z'),
+    )
+    expect(plan.delete).toEqual([])
+    expect(plan.policy.postgresMaintenanceOnly).toBe(true)
+  })
+
+  it('reads retained OCI indexes before allowing component cleanup', async () => {
+    const digest = `sha256:${'b'.repeat(64)}`
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json({ token: 'synthetic-registry-token' }))
+      .mockResolvedValueOnce(
+        Response.json({
+          manifests: [{ digest, platform: { os: 'linux', architecture: 'amd64' } }],
+        }),
+      )
+      .mockResolvedValueOnce(Response.json({ config: { digest } }))
+      .mockResolvedValueOnce(
+        Response.json({ config: { Labels: { 'cn.tungchiahui.release.recovery-digest': digest } } }),
+      )
+    vi.stubGlobal('fetch', fetcher)
+    try {
+      expect(
+        await retainedComponentReferences('synthetic-github-token', 'fixture', [
+          ghcrVersion(1, 'a'.repeat(40), '2026-01-01T00:00:00.000Z'),
+        ]),
+      ).toEqual([`tungchiahui_web-recovery@${digest}`])
+      fetcher.mockResolvedValueOnce(new Response('', { status: 503 }))
+      await expect(
+        retainedComponentReferences('synthetic-github-token', 'fixture', []),
+      ).rejects.toThrow('authenticate')
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 })

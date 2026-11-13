@@ -3,11 +3,12 @@
 ## 日常开发和发布
 
 开发电脑只需 GitHub 权限及本地开发工具。换电脑后可 clone、开发、测试、push。
-提交合并到 main 后，GitHub 执行完整 Quality Gates，构建不可变镜像，并通过 OIDC
+提交合并到 main 后，GitHub 执行 ADR 0032 对应的 Quality Gates，构建或复用不可变镜像，并通过 OIDC
 调用现有 `https://www.tungchiahui.cn/api/ops/*`。服务器接续任务，开发电脑可以关机。
 没有 Ansible、个人 SSH Alias、本地 sudo 或密码窗口参与日常发布。
 
-Web 镜像同时绑定同一 SHA 的 Service 与 Recovery Digest。服务器先用目标 Recovery
+Web 镜像同时绑定 Service 与 Recovery 各自的 Source SHA 和 Digest。旧镜像缺少组件
+Source SHA 时按 Web SHA 解释。服务器先用目标 Recovery
 镜像的一次性 deploy-agent worker 执行现有蓝绿 Engine，再收敛固定配置、独立服务和
 定时器，重跑内部/公网 Smoke，验证候选执行代码能启动，最后提交完整发布结果。
 `./site deploy ... --wait` 和 CI 都要求结果包含该 SHA/Digest 的 `hostRelease.status=converged`。
@@ -81,7 +82,9 @@ root-only 临时目录后调用：
 
 ## 自更新与维护范围
 
-每次发布替换 deploy-agent 容器和执行工作的 Host Coordinator。稳定 Supervisor 是已安装
+内容变化时更新 deploy-agent 容器和 Host Coordinator。未变化组件复用其经过验证的
+Digest，Compose 保持对应容器身份。`hostExecutor.currentSha` 标识发布代际，
+`hostExecutor.sourceSha` 标识实际执行代码。稳定 Supervisor 是已安装
 Bootstrap Protocol 1；它从 SQLite 的当前 Generation 启动工作代码，升级工作代码不会终止
 正在执行的发布。Bootstrap Protocol/systemd 沙箱或操作系统依赖升级属于服务器控制台维护。
 
@@ -96,10 +99,31 @@ Bootstrap Protocol 1；它从 SQLite 的当前 Generation 启动工作代码，�
 仍走原有 Fresh Backup、Blue/Green Compatibility 与 Migration Policy 门禁。
 Secret/数据库身份轮换也应按生产配置维护流程执行，不能当作普通代码更新隐式完成。
 
-正常 Rollback 的 Host 收敛显式设置 `applyMigrations=false`。保留版本可能只有较短的
+正常 Deploy/Rollback 的 Host 收敛显式设置 `applyMigrations=false`。Deploy 的完整迁移
+已由共享 Web Engine 执行并验证一次。保留版本可能只有较短的
 Migration Journal，例如健康数据升级前的 14 项与升级后的 16 项；回滚保留已经执行的
 Expand Schema，并继续执行镜像身份、数据兼容性、服务健康和 Smoke 校验。
-前向 Deploy 与 Bootstrap 继续执行原有 Migration Policy 和账本校验。
+前向 Web Engine 与独立 Bootstrap 继续执行原有 Migration Policy 和账本校验。
+
+## 分级检查和组件复用
+
+仅文档修改通过文档/源码检查后结束。允许清单内的公开界面修改保留静态、类型、构建、
+安全边界扫描、Unit 与完整应用 Integration/E2E。数据库、权限、私有页面、部署、恢复、
+依赖及未知路径执行完整 Gate。手动指定 SHA 始终完整验证。既有只读验证 Workflow 每日
+UTC 20:00 对 main 执行完整 Foundation、Recovery 和 Migration，包含 Critical 漏洞扫描。
+新 push 可取消过时的开发检查与构建，生产部署任务使用单独的不可取消互斥队列。
+
+组件依赖集合来自实际 esbuild 依赖图和显式运行资源，包含锁文件、编译配置、Dockerfile、
+迁移和拓扑。输入与已安装版本相同时继续复用该 Source SHA，输入变化时使用集合最后
+变更提交。定位已有镜像后验证批准仓库、
+精确 Digest 与 OCI Revision。复用后仍执行共享部署引擎的兼容性、备份、健康和 Smoke。
+
+只读组件计划使用现有 production OIDC 身份查询 Executor 状态。首版升级时，旧 Executor
+尚不支持独立组件 SHA，继续以本次 Web SHA 构建全部必要组件。成功切换到新 Executor 后
+自动启用复用。状态读取失败或无法确认能力时采用同 SHA 构建，恢复镜像仍可发布供维护。
+普通备份任务影响部署引擎领取任务的时机，组件复用只检查 Executor 自身的版本和 Pending
+状态。GHCR 清理读取所有保留 Web Manifest 的组件引用后再制定删除计划。
+长期固定的 PostgreSQL 镜像由数据库维护退役，常规 Web 镜像清理保留这些版本。
 
 ## 中断、回退和恢复
 

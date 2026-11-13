@@ -34,6 +34,16 @@ describe('Phase 15 workflow trigger and credential separation', () => {
       target: '  release-result:',
     },
     {
+      expected: 'Deploy job must remain build-gated, production-scoped and OIDC-only',
+      replacement: 'group: unsafe-deployment-queue',
+      target: 'group: application-production-release',
+    },
+    {
+      expected: 'quality-infrastructure must require the full impact gate',
+      replacement: "if: needs.resolve-release.outputs.quality_mode == 'ui'",
+      target: "if: needs.resolve-release.outputs.quality_mode == 'full'",
+    },
+    {
       expected: `Missing policy: ${serviceDigestReference}`,
       replacement: 'SITE_SERVICE_IMAGE_DIGEST=sha256:unbound',
       target: serviceDigestReference,
@@ -45,7 +55,7 @@ describe('Phase 15 workflow trigger and credential separation', () => {
       const releasePath = join(root, '.github', 'workflows', 'release.yml')
       const source = readFileSync(releasePath, 'utf8')
       expect(source).toContain(scenario.target)
-      writeFileSync(releasePath, source.replace(scenario.target, scenario.replacement))
+      writeFileSync(releasePath, source.replaceAll(scenario.target, scenario.replacement))
       expect(analyzeWorkflowPolicies(root)).toContainEqual({
         file: 'release.yml',
         message: scenario.expected,

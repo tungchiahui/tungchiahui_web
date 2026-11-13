@@ -1,5 +1,7 @@
 # ADR 0025: Audited retention cleanup
 
+> ADR 0032 adds retained Web Manifest dependency protection and reserves PostgreSQL image retirement for database maintenance.
+
 - Status: Accepted
 - Date: 2026-09-23
 - Supersedes: ADR 0019 only where it deferred remote-generation deletion

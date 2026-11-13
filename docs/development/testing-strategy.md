@@ -148,9 +148,15 @@ Phase 10 在同一 Disposable Stack 先通过 PostgreSQL Durable Job 重建四 L
 
 ## Deployment Pipeline Test
 
+ADR 0032 对发布范围分级。仅文档修改执行文档/源码检查，允许清单内公开界面修改执行
+静态、类型、构建、安全边界扫描、Unit 和完整应用 Integration/E2E。其余变更与手动发布
+执行完整测试。每日隔离 CI 执行全部 Foundation、Recovery、Migration 和漏洞扫描。
+分类未知或历史不可用时执行完整 Gate。Unit 测试验证分类边界和每项允许跳过条件。
+真实 Foundation 验证独立组件 SHA/Digest，以及复用部署与回滚期间的容器 ID 保持。
+
 验证 Web Application Repository 的 `release.yml` 必须只由 `main` push 或显式 dispatch 触发。
 静态/Build、Unit、Production Infrastructure/Recovery、Integration/E2E 和 Migration 可以并行，但
-稳定的 `quality-gate` 必须 Fail-closed 汇总全部结果；只有汇总成功后才可用缓存并行 Build
+稳定的 `quality-gate` 必须 Fail-closed 汇总本次要求的全部结果；只有汇总成功后才可用缓存并行 Build
 Git-SHA-tagged Immutable Image Set、汇总四个 digest 并调用与 `./site deploy` 相同的 Control
 Plane/Deployment Engine。验证 Content Repository Push 只触发 Content Sync，不触发 Next.js Build
 或 Blue-Green Deployment。

@@ -3,12 +3,14 @@ name: Host Release Diagnostics Verification
 on:
   push:
     branches: [fix/host-release-diagnostics, fix/host-release-recovery]
+  schedule:
+    - cron: '0 20 * * *'
 
 permissions:
   contents: read
 
 concurrency:
-  group: host-release-diagnostics-verification
+  group: host-release-diagnostics-verification-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -62,6 +64,8 @@ jobs:
 
       - name: Production build
         run: pnpm run build
+      - name: Client bundle and secret boundary checks
+        run: pnpm run check:security
 
   quality-unit:
     name: quality-unit
