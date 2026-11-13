@@ -23,7 +23,17 @@ Web Manifest 增加 Service/Recovery 各自 Source SHA，旧 Manifest 默认同 
 新增真实蓝绿复用测试，验证四个独立服务、PostgreSQL、PgBouncer 的容器 ID，并验证
 复用后的回滚。GHCR 清理先验证保留 Web Manifest 的组件引用，保护旧组件。长期固定的
 PostgreSQL 镜像在独立数据库维护中退役。下载加入有界重试和时限，固定 SHA 校验继续执行。
-本地静态、类型、构建、安全检查和相关 Unit 已通过，完整隔离 CI 待本轮复验并记录结果。
+本地静态、类型、构建、安全检查和 454 项 Unit 已通过。代码提交
+`873f3155f241302b49f514de278946419b708f88` 已通过验证分支 Run
+[`43362891489`](https://github.com/tungchiahui/tungchiahui_web/actions/runs/43362891489)
+的全部六项 Quality Gate，包括 54 项应用 E2E、16 项 Migration、完整 Foundation、
+Recovery 与 Blue-Green。复用测试输出 `immutableComponentReuse=pass`，部署和回滚期间
+六个服务容器身份保持一致。该测试复用现有完整发布测试的 Supervisor 生命周期，避免将
+独立执行器的模式切换计入镜像复用断言。早期测试准备顺序问题已在最终回归中修正。
+恢复报告验证 Full/Diff/Incr、WAL/PITR、双副本和 Off-site Fallback、PostgreSQL-down
+Restore、Control-state 加密恢复、迁移与审计连续性。所有资源均为隔离的非生产测试资源。
+分级分类、只读 GitHub 部署基线查询和发布结果由 Unit/原生 CLI 验证。生产 OIDC 组件
+计划、首次兼容升级及实际发布提速仍须在已授权的正式发布中验收。
 
 本轮仍未获 main 推送、生产部署或服务器连接授权，生产保持此前验收的版本。S400 输出
 接入与开关启用、实际 PostgreSQL 镜像扫描、双副本备份和 Owner UI 验收待后续逐项授权。
