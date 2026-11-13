@@ -690,22 +690,6 @@ function runProvision() {
   }
   expect(provisionHost(request).changed > 0, 'Initial host bootstrap did not report changes')
   expect(provisionHost(request).changed === 0, 'Repeated host bootstrap was not idempotent')
-  expect(
-    execute('docker', [
-      'exec',
-      `${projectName}-postgres-1`,
-      'psql',
-      '--username',
-      'tungchiahui',
-      '--dbname',
-      'tungchiahui',
-      '--tuples-only',
-      '--no-align',
-      '--command',
-      'SELECT count(*) FROM drizzle.__drizzle_migrations',
-    ]).stdout.trim() === '14',
-    'Retained release did not start from its fourteen-migration schema',
-  )
   const blueBefore = compose(['ps', '--quiet', 'web-blue']).stdout.trim()
   const greenBefore = compose(['ps', '--quiet', 'web-green']).stdout.trim()
   compose(['stop', 'control-api'])
@@ -1482,6 +1466,47 @@ async function waitForOperation(id: string) {
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 500))
   }
   throw new Error(`Deployment operation ${id} timed out`)
+}
+
+function prepareRetainedReleaseSchema() {
+  const verified = listRecoveryBackups(join(dataRoot, 'control-state/control.db'))[0]
+  expect(
+    verified?.valid === true &&
+      verified.primaryReplicaStatus === 'fresh' &&
+      verified.offsiteReplicaStatus === 'fresh',
+    'Preparing the retained schema requires the verified disposable backup',
+  )
+  // Bootstrap intentionally creates only the nine control-schema migrations. Expand to
+  // the retained release's fourteen-item journal after taking the genuine backup, then
+  // let the shared deployment engine perform the candidate's fourteen-to-sixteen upgrade.
+  compose([
+    '--profile',
+    'deployment',
+    'run',
+    '--rm',
+    '--no-deps',
+    '--env',
+    'DEPLOYMENT_HAS_FRESH_RECOVERABLE_BACKUP=true',
+    '--env',
+    'DEPLOYMENT_TECH_V3_COMPATIBLE_PREVIOUS_RELEASE=true',
+    'database-migrate',
+    'node',
+    'dist/database-migrate.cjs',
+  ])
+  const count = execute('docker', [
+    'exec',
+    `${projectName}-postgres-1`,
+    'psql',
+    '--username',
+    'tungchiahui',
+    '--dbname',
+    'tungchiahui',
+    '--tuples-only',
+    '--no-align',
+    '--command',
+    'SELECT count(*) FROM drizzle.__drizzle_migrations',
+  ]).stdout.trim()
+  expect(count === '14', `Retained release expected fourteen migrations, found ${count}`)
 }
 
 async function verifyCompleteServerReleases() {
@@ -2615,6 +2640,7 @@ async function main() {
     verifyDatabaseRoleBindings(productionEnv.workerPassword)
     await initializeDeploymentFixture(productionEnv.workerPassword)
     await prepareVerifiedMigrationBackup()
+    prepareRetainedReleaseSchema()
     await verifyBlueGreenDeployment()
     await verifyCompleteServerReleases()
     await verifyRoutingAndIpFamilies()
