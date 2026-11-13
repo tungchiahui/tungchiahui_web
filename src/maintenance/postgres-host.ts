@@ -208,6 +208,17 @@ export function copyPostgresColdData(source: string, destination: string) {
   return manifestHash
 }
 
+export function runningPostgresMatchesDigest(
+  current: ReturnType<typeof inspectHostContainer>,
+  expectedImageId: string,
+) {
+  return (
+    current?.State.Running === true &&
+    current.imageId === expectedImageId &&
+    current.State.Health?.Status === 'healthy'
+  )
+}
+
 export class HostPostgresMaintenance implements PostgresMaintenancePlatform {
   private readonly environment: Record<string, string>
   private readonly path: string
@@ -306,12 +317,7 @@ export class HostPostgresMaintenance implements PostgresMaintenancePlatform {
     if (candidate.Config.Labels?.['org.opencontainers.image.revision'] !== target.candidateSha)
       throw new Error('Candidate OCI revision differs from the approved source SHA')
     const current = inspectHostContainer(this.postgresName)
-    if (
-      !current?.State.Running ||
-      current.imageId !== old.Id ||
-      current.State.Health?.Status !== 'healthy' ||
-      current.Config.Image !== this.image(target.oldDigest)
-    )
+    if (!runningPostgresMatchesDigest(current, old.Id))
       throw new Error('Running PostgreSQL differs from the exact healthy old image')
     for (const reference of [this.image(target.oldDigest), this.image(target.newDigest)]) {
       for (const [command, version] of [

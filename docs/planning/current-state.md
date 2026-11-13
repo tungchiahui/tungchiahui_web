@@ -1,6 +1,26 @@
 # Website V2 Current Implementation State
 
 
+## 2026-11-13 — 生产数据库镜像维护端到端执行中
+
+Owner 在本对话要求“直接在这个对话一次性干完，抓紧点”，授权继续完成前述生产维护
+闭环。本次范围包含指定生产只读检查、main 发布维护入口、新鲜恢复保护、生产真实备份
+隔离恢复、精确镜像切换与核验，以及必要同目录旧镜像补偿。后续其他工作继续按当次授权。
+
+只读 SSH 通过既有 `Debian` Alias 完成，Docker 管理与本地 Operator 凭据可用。
+生产仍为 `3272b43da` / Blue，Previous Green 为 `b41320057`，Host Executor healthy，
+无 Pending/未完成基础设施 Operation。数据库 healthy、PostgreSQL 18.4，约 607 MB，
+Drizzle Ledger 16 项，主机根盘约 18 GB 可用。
+
+发现原数据库仍按 `93287c38…` Git SHA Tag 声明启动，实际 Image ID 与已保留的精确
+`a95122c0…` Digest 一致。本轮将预检依据收敛为已核实 RepoDigest 对应的实际 Image ID
+和健康状态，支持此既有不可变 SHA Tag 引用。回退和新镜像启动继续使用精确 Digest。
+新增回归覆盖旧 Tag、错误 Image ID、停止状态和缺失容器，Unit 490 项与类型通过，
+Foundation 夹具改为从 SHA Tag 启动后按精确 Digest 维护。生产流水线将执行完整 Gate。
+
+生产执行结果与隔离恢复报告在完成后补入本记录。
+
+
 ## 2026-11-13 — 受审计数据库镜像定向维护入口本地验收
 
 从 `codex/release-pipeline-simplification` 的验收提交 `d6629b0cf` 接管。

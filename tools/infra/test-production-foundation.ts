@@ -2030,7 +2030,7 @@ async function verifyPostgresImageMaintenance() {
     const oldDigest = publish(oldTag, initialSha),
       newDigest = publish(postgresImage, input.PHASE12_GIT_SHA)
     compose(['up', '--detach', '--no-deps', '--wait', 'postgres'], false, {
-      TUNGCHIAHUI_POSTGRES_IMAGE: `${registryRepository}-postgres@${oldDigest}`,
+      TUNGCHIAHUI_POSTGRES_IMAGE: `${registryRepository}-postgres:${initialSha}`,
     })
     compose(['up', '--detach', '--no-deps', '--wait', 'deploy-agent'], false, {
       TUNGCHIAHUI_DEPLOYMENT_POLLING_ENABLED: 'false',

@@ -29,7 +29,11 @@ import {
   executePostgresMaintenance,
   type PostgresMaintenancePlatform,
 } from '../../src/maintenance/postgres-engine'
-import { copyPostgresColdData, verifyPostgresColdData } from '../../src/maintenance/postgres-host'
+import {
+  copyPostgresColdData,
+  runningPostgresMatchesDigest,
+  verifyPostgresColdData,
+} from '../../src/maintenance/postgres-host'
 import { parseSiteCommand } from '../../tools/site-command'
 
 const directories: string[] = []
@@ -111,6 +115,28 @@ function fixture() {
 }
 
 describe('audited PostgreSQL image maintenance', () => {
+  it('accepts a retained SHA-tagged runtime only when its real image matches the exact approved digest', () => {
+    const current = {
+      Id: 'retained-postgres',
+      imageId: target.oldDigest,
+      Config: {
+        Image: `ghcr.io/tungchiahui/tungchiahui_web-postgres:${'f'.repeat(40)}`,
+        Labels: {},
+      },
+      State: { Running: true, StartedAt: '2026-11-13T00:00:00Z', Health: { Status: 'healthy' } },
+      startedAt: '2026-11-13T00:00:00Z',
+      deploymentPollingEnabled: false,
+    }
+    expect(runningPostgresMatchesDigest(current, target.oldDigest)).toBe(true)
+    expect(runningPostgresMatchesDigest(current, target.newDigest)).toBe(false)
+    expect(runningPostgresMatchesDigest(undefined, target.oldDigest)).toBe(false)
+    expect(
+      runningPostgresMatchesDigest(
+        { ...current, State: { ...current.State, Running: false } },
+        target.oldDigest,
+      ),
+    ).toBe(false)
+  })
   it('validates closed identities, explicit confirmation and the operator boundary', () => {
     const f = fixture()
     expect(
