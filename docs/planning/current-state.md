@@ -18,9 +18,11 @@ Foundation Fixture 的旧 Service Image 现在使用 14 项 Journal，候选使�
 
 已通过本地静态检查、类型检查、生产构建、安全边界扫描、431 项 Unit Test，以及
 16 项 Migration、健康权限、幂等导入和历史字段对账测试。本地 Foundation 在准备工具
-镜像时下载 age 遇到 GitHub TLS 错误，尚未进入运行验证。完整 Foundation/Recovery、
-Integration/E2E 使用既有 `fix/host-release-recovery` 只读权限验证流程复验，完成结果须
-在本条补充后交付。
+镜像时下载 age 遇到 GitHub TLS 错误，尚未进入运行验证。本地 Integration/E2E 的
+54 项浏览器测试和 S3Mock 合约全部通过。`48786ba6c7cadfef60e50f9bf0bd1750cb9c3749`
+通过既有验证分支 Run `43349429804` 的六项 Quality Gate，包含完整 Foundation、
+Recovery、Integration/E2E 和 Migration。首次新夹具断言在九项控制面 Bootstrap 后过早
+检查十四项，现已将十四项准备移至真实备份之后，后续 14→16 升级与完整回滚验证通过。
 
 Owner 本轮要求任何服务器连接与操作均事先逐项授权，向 main 推送、触发发布与修改
 自动部署 Workflow 也需明确授权。本地修改和测试已授权。生产实时备份、Host Executor、
@@ -30,8 +32,9 @@ Owner 本轮要求任何服务器连接与操作均事先逐项授权，向 main
 Critical 镜像漏洞、健康兼容版未先发布导致的预检拒绝，以及 Host 收敛/补偿故障。
 临时禁用部署的 `43266852066` 最终失败符合既有结果策略。ADR 0027 要求同 SHA 的
 组件与 Host Executor 完整收敛，使普通功能发布也重建独立服务，形成较大的影响面。
-后续优先前移兼容性与资源检查、补足跨版本测试。组件独立版本及 Workflow 调整属于
-另行评估和授权的架构/发布流程变更。
+后续优先前移兼容性与资源检查、补足跨版本测试。Owner 随后明确授权分级检查、组件
+复用及对应 Workflow、架构文档和工程约束修改，正在本地实施。main 推送、生产部署
+和服务器操作继续逐项授权。
 
 ## 2026-11-12 — Host Release 故障诊断与受控恢复
 
