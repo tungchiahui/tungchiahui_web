@@ -1,6 +1,6 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { publicTrafficQuerySchema, publicTrafficResponseSchema } from '@/analytics/public-traffic'
 import { publicUmamiConfig } from '@/analytics/umami-config'
@@ -17,6 +17,8 @@ import {
 
 const router = vi.hoisted(() => ({ push: vi.fn() }))
 vi.mock('next/navigation', () => ({ useRouter: () => router }))
+
+afterEach(cleanup)
 
 function fixture(overrides: Partial<PublicDocument>): PublicDocument {
   return {
