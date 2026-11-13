@@ -1,5 +1,26 @@
 # Website V2 Current Implementation State
 
+## 2026-11-13 — 运行中 PostgreSQL 镜像的恢复制品缺口
+
+Owner 另行批准补充只读 SSH 后，确认 SmartScaleConnect 实际进程 UID/GID 为 0/0。
+生产 PostgreSQL 的实际运行镜像 RepoDigest 为
+`ghcr.io/tungchiahui/tungchiahui_web-postgres@sha256:a95122c0c897d7fb1fb19c3708ad7f6681d0cd1b80a87c08ab381ac8c8b9deff`。
+从开发机连续查询该 Digest 和旧 `93287c38f16bcbe70b1291b82b06e82b23e4ae95` Tag
+均返回 not found，同包的新镜像 `96b0d7f7f44e1616b7a88efc791e924efc8eae6b` 可正常解析为
+`sha256:ef1388d9f1ab9af7550d35e383adfe39ac4d0116f8ec62bb7ecb53169d9799df`。
+
+已追溯到 2026-10-11 的
+[`38103751806`](https://github.com/tungchiahui/tungchiahui_web/actions/runs/38103751806)：
+清理日志 `executed=true`，Delete Plan 明确包含该 PostgreSQL Source SHA，Package
+Version ID `1217040688`。问题早于 2026-11-12 的恢复。旧策略按 Web Release SHA 保护
+组件，遗漏独立固定运行的 PostgreSQL。ADR 0032 的新规则已随 `3272b43da` 上线，
+为后续清理保留 PostgreSQL 镜像，已删除制品的恢复仍需处理。
+
+当前容器健康，数据备份记录双副本 fresh。新主机按原引用拉取镜像和针对实际旧镜像的
+漏洞核验受到此缺口影响。下一步应在单独授权后，从运行容器的精确 Image ID 流式导出
+镜像到开发机私有目录，校验并在本地扫描。Registry 再发布、数据库镜像切换及服务器
+配置修改分别审核授权。现有运行环境与备份的维护继续遵守既有恢复规程。
+
 ## 2026-11-13 — 授权只读服务器验收与 Owner 页面核验
 
 Owner 逐项批准一轮指定 SSH 命令，已于 13:16（Asia/Hong_Kong）执行。Host Release
