@@ -189,23 +189,30 @@ test('keeps removed zh-hant routes negative without redirect', async ({ page }) 
   }
 })
 
-test('preserves exact Legacy article, Pinyin and approved alias routes', async ({ page }) => {
-  for (const route of [
-    '/blog/2026-01-06-xin-bo-ke-qi-yong',
-    '/blog/2026-01-14-w311mi-ax300-qu-dong',
-    '/blog/2026-02-09-xin-de-todolist-jie-mian',
-    '/blog/2026-07-21-vscode-ren-wu-lan-qi-dong-codex-cha-jian-da-bu-kai',
-    '/blog/newblogenable!',
-    '/blog/w311mi_ax300',
-    '/blog/newtodolist',
-    '/blog/vscode-taskbar-codex-fix',
-    '/wiki/docker-tutorial',
-    '/zh-cn/wiki/docker-tutorial',
-    '/wiki/2023-10-05-cplusplus-jiao-xue/0200-c-kai-fa-huan-jing-da-jian-yu-ce-shi',
-  ]) {
-    const response = await page.goto(route)
+for (const route of [
+  '/blog/2026-01-06-xin-bo-ke-qi-yong',
+  '/blog/2026-01-14-w311mi-ax300-qu-dong',
+  '/blog/2026-02-09-xin-de-todolist-jie-mian',
+  '/blog/2026-07-21-vscode-ren-wu-lan-qi-dong-codex-cha-jian-da-bu-kai',
+  '/blog/newblogenable!',
+  '/blog/w311mi_ax300',
+  '/blog/newtodolist',
+  '/blog/vscode-taskbar-codex-fix',
+  '/wiki/docker-tutorial',
+  '/zh-cn/wiki/docker-tutorial',
+]) {
+  test(`preserves the exact Legacy article, Pinyin or approved alias route ${route}`, async ({
+    page,
+  }) => {
+    const response = await page.goto(route, { waitUntil: 'domcontentloaded' })
     expect(response?.status(), route).toBe(200)
-  }
+  })
+}
+
+test('preserves the Legacy C++ environment route and heading', async ({ page }) => {
+  const route = '/wiki/2023-10-05-cplusplus-jiao-xue/0200-c-kai-fa-huan-jing-da-jian-yu-ce-shi'
+  const response = await page.goto(route, { waitUntil: 'domcontentloaded' })
+  expect(response?.status(), route).toBe(200)
   await expect(page.getByRole('heading', { name: 'C++ 开发环境搭建与测试' })).toBeVisible()
 })
 
