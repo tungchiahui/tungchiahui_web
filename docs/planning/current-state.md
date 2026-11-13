@@ -1,5 +1,29 @@
 # Website V2 Current Implementation State
 
+## 2026-11-13 — 授权只读服务器验收与 Owner 页面核验
+
+Owner 逐项批准一轮指定 SSH 命令，已于 13:16（Asia/Hong_Kong）执行。Host Release
+systemd 为 active/running。Control-state 显示 Active Blue/current 为 `3272b43da`，
+Previous Green/last 为 `b41320057`，Web Pending 为 none。Host Executor 的 current/previous
+与两版相同，pending 为 NULL。四个独立服务和当前 Blue 均使用本次 Receipt Digest 且 healthy，
+保留的 Green healthy，OpenResty/PgBouncer 本次发布后仍为此前进程。
+生产 Drizzle Migration 数量直接查询为 16。最近一次备份记录完成于
+2026-11-13 03:30:55（Asia/Hong_Kong），Primary 与 Off-site 均为 fresh，valid=1。
+此处核对的是现有备份状态记录，物理制品的独立读回与恢复验证另按授权范围执行。
+
+生产 `.env` 为 root:root/0600，隔离 health-data 目录为 root:10050/2750。
+SmartScaleConnect 当前镜像名为 `alexxit/smartscaleconnect:latest`，挂载仅为
+`/opt/scaleconnect -> /config`（rw），Config.User 为空。进程 UID 检查使用的 Docker top
+列缺少 PID，命令被 Docker 拒绝，因此实际进程 UID 仍待补查。该次 SSH 已结束，
+新连接与配置修改继续按 Owner 要求单独授权。运行中的网站 PostgreSQL 镜像引用为
+`ghcr.io/tungchiahui/tungchiahui_web-postgres:93287c38f16bcbe70b1291b82b06e82b23e4ae95`，
+实际 Image Digest 与漏洞核验仍待后续检查。
+
+Owner 随后明确要求将截图中的历史记录按旧网站手动来源补录。使用 Owner 已登录的
+网站页面，完成既有 JSON 预览、事务导入、刷新后导出回读对账及重复导入预览验证。
+Owner UI 的真实读取与导入路径已验收。个人测量、截图及导出通过 Owner 私有接口与
+本地受限文件处理。后续 SmartScaleConnect 目录隔离、文件权限、预检和同步启用仍待接入。
+
 ## 2026-11-13 — Owner 授权正式发布完成
 
 代码验收后，Owner 明确授权将 `3272b43da91a012fff36a98e2e54d17478dbc805`
