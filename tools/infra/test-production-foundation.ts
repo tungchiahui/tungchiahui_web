@@ -1925,6 +1925,7 @@ async function verifyCompleteServerReleases() {
         readHostRuntime(path).current_sha === candidate.sha,
       'Pre-bootstrap rollback removed the installed execution layer or failed to restore the old Web slot',
     )
+    await verifyComponentImageReuse()
   } finally {
     await stop()
     // The following foundation probes exercise the standalone container executor. Restore
@@ -2641,17 +2642,6 @@ async function verifyComponentImageReuse() {
   const installed = readHostRuntime(path).current_sha
   if (!installed) throw new Error('Component reuse fixture requires the installed host executor')
   const generation = readHostGeneration(path, installed)
-  // Earlier probes restore the standalone polling executor. Establish the host-supervised
-  // configuration before measuring image reuse so that its deliberate mode switch is excluded.
-  provisionHost({
-    ...releaseProvisionRequest(
-      settings,
-      registryRepository,
-      generation,
-      captureHostConvergence(settings),
-    ),
-    applyMigrations: false,
-  })
   const services = [
     'control-api',
     'content-worker',
@@ -2669,7 +2659,6 @@ async function verifyComponentImageReuse() {
         `${projectName}-${name}-1`,
       ]).stdout.trim(),
     )
-  const before = ids()
   const sha = input.PHASE12_GIT_SHA === '9'.repeat(40) ? '8'.repeat(40) : '9'.repeat(40)
   const root = join(workRoot, 'component-reuse')
   mkdirSync(root, { recursive: true })
@@ -2689,86 +2678,61 @@ async function verifyComponentImageReuse() {
         .stdout.trim()
         .split('@')[1],
     )
-  const settingsPath = join(root, 'settings.json')
-  writeFileSync(settingsPath, JSON.stringify(settings), { mode: 0o600 })
-  const directory = hostGenerationDirectory(settings, installed)
-  const supervisor = spawn(
-    join(directory, 'node'),
-    [join(directory, 'release-supervisor.cjs'), settingsPath],
-    { detached: true, stdio: ['ignore', 'pipe', 'pipe'] },
+  // Reuse the running supervisor from the complete-release fixture. Its standalone polling
+  // mode transition is outside this deployment's container identity measurements.
+  const before = ids()
+  const request = operationResponseSchema.parse(
+    await controlRequest('/api/ops/deployments', {
+      body: {
+        gitSha: sha,
+        imageDigest: digest,
+        reason: 'Verify unchanged immutable component reuse',
+      },
+      idempotencyKey: 'component-reuse-deploy',
+      method: 'POST',
+      purpose: 'component-reuse-deploy',
+    }),
   )
-  let events = ''
-  const capture = (chunk: Buffer) => {
-    events = (events + chunk.toString('utf8')).slice(-16_000)
-  }
-  supervisor.stdout?.on('data', capture)
-  supervisor.stderr?.on('data', capture)
-  process.env.SITE_CONTROL_API_URL = `http://127.0.0.1:${String(input.PHASE12_ORIGIN_PORT)}`
-  try {
-    const request = operationResponseSchema.parse(
-      await controlRequest('/api/ops/deployments', {
-        body: {
-          gitSha: sha,
-          imageDigest: digest,
-          reason: 'Verify unchanged immutable component reuse',
-        },
-        idempotencyKey: 'component-reuse-deploy',
-        method: 'POST',
-        purpose: 'component-reuse-deploy',
-      }),
-    )
-    const deployed = await waitForOperation(request.operation.id)
-    expect(
-      deployed.status === 'completed',
-      `Component reuse deployment failed: ${JSON.stringify(deployed)}; ${events}`,
-    )
-    expect(publicVersion().gitSha === sha, 'Component reuse did not activate the new Web identity')
-    const after = ids()
-    expect(
-      after.every((id, index) => id === before[index]),
-      `Unchanged component containers were recreated: ${services.filter((_, index) => after[index] !== before[index]).join(',')}`,
-    )
-    const current = readHostGeneration(path, sha)
-    expect(
-      current.serviceSha === (generation.serviceSha ?? generation.sha) &&
-        current.recoverySha === (generation.recoverySha ?? generation.sha),
-      'Component provenance was lost from the host journal',
-    )
-    const rollback = operationResponseSchema.parse(
-      await controlRequest('/api/ops/rollbacks', {
-        body: { reason: 'Verify rollback after component reuse' },
-        idempotencyKey: 'component-reuse-rollback',
-        method: 'POST',
-        purpose: 'component-reuse-rollback',
-      }),
-    )
-    const restored = await waitForOperation(rollback.operation.id)
-    expect(
-      restored.status === 'completed',
-      `Component reuse rollback failed: ${JSON.stringify(restored)}; ${events}`,
-    )
-    expect(
-      ids().every((id, index) => id === before[index]),
-      'Component reuse rollback recreated unchanged services',
-    )
-    console.log(
-      JSON.stringify({
-        immutableComponentReuse: 'pass',
-        unchangedServiceContainers: services.length,
-      }),
-    )
-  } finally {
-    if (supervisor.pid && supervisor.exitCode === null) {
-      const exited = new Promise<void>((resolveExit) =>
-        supervisor.once('exit', () => resolveExit()),
-      )
-      process.kill(-supervisor.pid, 'SIGTERM')
-      await exited
-    }
-    compose(['up', '--detach', '--no-deps', '--wait', 'deploy-agent'], false, {
-      TUNGCHIAHUI_DEPLOYMENT_POLLING_ENABLED: 'true',
-    })
-  }
+  const deployed = await waitForOperation(request.operation.id)
+  expect(
+    deployed.status === 'completed',
+    `Component reuse deployment failed: ${JSON.stringify(deployed)}`,
+  )
+  expect(publicVersion().gitSha === sha, 'Component reuse did not activate the new Web identity')
+  const after = ids()
+  expect(
+    after.every((id, index) => id === before[index]),
+    `Unchanged component containers were recreated: ${services.filter((_, index) => after[index] !== before[index]).join(',')}`,
+  )
+  const current = readHostGeneration(path, sha)
+  expect(
+    current.serviceSha === (generation.serviceSha ?? generation.sha) &&
+      current.recoverySha === (generation.recoverySha ?? generation.sha),
+    'Component provenance was lost from the host journal',
+  )
+  const rollback = operationResponseSchema.parse(
+    await controlRequest('/api/ops/rollbacks', {
+      body: { reason: 'Verify rollback after component reuse' },
+      idempotencyKey: 'component-reuse-rollback',
+      method: 'POST',
+      purpose: 'component-reuse-rollback',
+    }),
+  )
+  const restored = await waitForOperation(rollback.operation.id)
+  expect(
+    restored.status === 'completed',
+    `Component reuse rollback failed: ${JSON.stringify(restored)}`,
+  )
+  expect(
+    ids().every((id, index) => id === before[index]),
+    'Component reuse rollback recreated unchanged services',
+  )
+  console.log(
+    JSON.stringify({
+      immutableComponentReuse: 'pass',
+      unchangedServiceContainers: services.length,
+    }),
+  )
 }
 
 async function main() {
@@ -2787,7 +2751,6 @@ async function main() {
     await verifyCompleteServerReleases()
     await verifyRoutingAndIpFamilies()
     await verifySecurityAndLoad()
-    await verifyComponentImageReuse()
     const migrationReadiness = await verifyServerMigrationRehearsal()
     verifyNoSecretLeakage(productionEnv.secretSentinels)
     console.log(
