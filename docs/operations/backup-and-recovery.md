@@ -6,6 +6,9 @@
 
 ## PostgreSQL 备份
 
+数据库镜像修补、跨镜像恢复矩阵及分步维护授权见
+[PostgreSQL 镜像安全维护](postgres-image-maintenance.md)。
+
 基线：
 
 - pgBackRest

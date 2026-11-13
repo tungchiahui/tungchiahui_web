@@ -1,9 +1,12 @@
 import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { chmodSync, chownSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { z } from 'zod'
 import { initializeControlState } from '../../src/control-plane/control-state'
+import { runPostgresMigrations } from '../../src/database/migrate'
+import { seedDevelopmentDatabase } from '../../src/database/seed'
 import {
   commitHostGeneration,
   initializeHostReleaseState,
@@ -16,12 +19,21 @@ import { legacyRecordIdMap, migrateLegacyTechPayload } from '../../src/personal/
 import { dailyProtectionProgressSchema } from '../../src/recovery/daily-protection'
 import { parseS3ConnectionConfiguration } from '../../src/storage/contracts'
 import { S3ObjectStorageAdapter } from '../../src/storage/s3-adapter'
+import { verifyUnifiedHealth } from '../health/verify-health'
 
 const input = z
   .object({
     PHASE13_GIT_SHA: z.string().regex(/^[a-f0-9]{40}$/),
     PHASE13_HOST_ROOT: z.string().startsWith('/'),
     PHASE13_REPOSITORY_ROOT: z.string().startsWith('/'),
+    PHASE13_SOURCE_POSTGRES_IMAGE: z
+      .string()
+      .regex(/^ghcr\.io\/tungchiahui\/tungchiahui_web-postgres@sha256:[a-f0-9]{64}$/)
+      .optional(),
+    PHASE13_RECOVERY_IMAGE: z
+      .string()
+      .regex(/^ghcr\.io\/tungchiahui\/tungchiahui_web-recovery@sha256:[a-f0-9]{64}$/)
+      .optional(),
   })
   .parse(process.env)
 
@@ -29,7 +41,8 @@ const suffix = `${process.pid}-${Date.now()}`
 const postgresName = `phase13-postgres-${suffix}`
 const backupName = `phase13-offsite-s3-${suffix}`
 const postgresImage = `tungchiahui-postgres:${input.PHASE13_GIT_SHA}`
-const recoveryImage = `tungchiahui-recovery:${input.PHASE13_GIT_SHA}`
+const recoveryImage =
+  input.PHASE13_RECOVERY_IMAGE ?? `tungchiahui-recovery-test:${input.PHASE13_GIT_SHA}`
 const pgDataRoot = join(input.PHASE13_HOST_ROOT, 'postgres')
 const repositoryPath = join(input.PHASE13_HOST_ROOT, 'repository')
 const socketPath = join(input.PHASE13_HOST_ROOT, 'socket')
@@ -77,6 +90,23 @@ function docker(arguments_: readonly string[], allowFailure = false) {
 
 function expect(condition: boolean, message: string): asserts condition {
   if (!condition) throw new Error(message)
+}
+
+function ensureImmutableImage(reference: string) {
+  let inspection = docker(['image', 'inspect', reference], true)
+  if (inspection.status !== 0) {
+    expect(inspection.stderr.includes('No such image'), 'Cannot inspect the local pinned image')
+    docker(['pull', reference])
+    inspection = docker(['image', 'inspect', reference])
+  }
+  const images = z
+    .array(z.object({ RepoDigests: z.array(z.string()).nullable() }))
+    .length(1)
+    .parse(JSON.parse(inspection.stdout) as unknown)
+  expect(
+    images[0]?.RepoDigests?.includes(reference) === true,
+    'Local image does not retain the requested registry digest',
+  )
 }
 
 function startS3(name: string, bucket: string) {
@@ -141,6 +171,8 @@ function psql(sql: string) {
     'exec',
     postgresName,
     'psql',
+    '--set',
+    'ON_ERROR_STOP=1',
     '--username',
     'tungchiahui',
     '--dbname',
@@ -150,6 +182,107 @@ function psql(sql: string) {
     '--command',
     sql,
   ]).stdout.trim()
+}
+
+function applicationFingerprint() {
+  const tables = z.array(z.object({ schema: z.string(), name: z.string() })).parse(
+    JSON.parse(
+      psql(`SELECT json_agg(json_build_object('schema', schemaname, 'name', tablename)
+      ORDER BY schemaname, tablename) FROM pg_tables
+      WHERE schemaname IN ('app', 'health', 'account_auth', 'drizzle')
+        AND tablename NOT IN ('recovery_fixture', 'schema_marker')`),
+    ) as unknown,
+  )
+  const hash = createHash('sha256')
+  for (const table of tables) {
+    const relation = [table.schema, table.name]
+      .map((part) => `"${part.replaceAll('"', '""')}"`)
+      .join('.')
+    hash.update(relation)
+    hash.update(
+      psql(`SELECT md5(COALESCE(jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text)::text,
+      '[]')) FROM ${relation} r`),
+    )
+  }
+  return hash.digest('hex')
+}
+
+function verifySearchAndPrivacy() {
+  const settings = 'SET search_path TO app, public; SET enable_seqscan=off;'
+  for (const locale of ['zh-cn', 'zh-hk', 'zh-tw', 'en-us']) {
+    const query = `SELECT count(*) FROM app.search_documents
+      WHERE locale = '${locale}' AND ARRAY[title, headings, body, metadata] &@
+      ('Seed', ARRAY[16, 8, 2, 4], 'search_documents_full_text_idx')::pgroonga_full_text_search_condition`
+    expect(
+      Number(psql(`${settings} ${query}`).split('\n').at(-1)) > 0,
+      `Restored ${locale} PGroonga search returned no seeded document`,
+    )
+    expect(
+      psql(`${settings} EXPLAIN ${query}`).includes('search_documents_full_text_idx'),
+      `${locale} search did not use the PGroonga index`,
+    )
+  }
+  expect(
+    psql("SELECT has_table_privilege('site_app', 'app.body_measurements', 'SELECT')") === 'f',
+    'Public role gained access to private body measurements',
+  )
+  expect(
+    psql(
+      "SET ROLE site_app; SELECT count(*) FROM app.owner_managed_datasets WHERE dataset_key='weight_loss'",
+    )
+      .split('\n')
+      .at(-1) === '0',
+    'Public role can read the frozen legacy weight dataset',
+  )
+}
+
+function startPostgres(image: string) {
+  docker([
+    'run',
+    '--detach',
+    '--name',
+    postgresName,
+    '--publish',
+    '127.0.0.1::5432',
+    '--read-only',
+    '--cap-drop',
+    'ALL',
+    '--security-opt',
+    'no-new-privileges:true',
+    '--tmpfs',
+    '/tmp:size=32m,mode=1777,noexec,nosuid,nodev',
+    '--env',
+    'POSTGRES_DB=tungchiahui',
+    '--env',
+    'POSTGRES_USER=tungchiahui',
+    '--env',
+    'POSTGRES_PASSWORD=phase13-disposable-password',
+    '--env',
+    `PGBACKREST_REPO1_CIPHER_PASS=${cipher}`,
+    '--mount',
+    `type=bind,source=${pgDataRoot},target=/var/lib/postgresql`,
+    '--mount',
+    `type=bind,source=${repositoryPath},target=/var/lib/pgbackrest`,
+    '--mount',
+    `type=bind,source=${socketPath},target=/run/postgresql`,
+    '--mount',
+    `type=bind,source=${pgBackRestConfig},target=/etc/pgbackrest/pgbackrest.conf,readonly`,
+    image,
+    'postgres',
+    '-c',
+    'archive_mode=on',
+    '-c',
+    'archive_command=pgbackrest --config=/etc/pgbackrest/pgbackrest.conf --stanza=tungchiahui archive-push %p',
+    '-c',
+    'archive_timeout=1',
+  ])
+  waitForPostgres()
+}
+
+function switchPostgres(image: string) {
+  docker(['stop', '--time', '30', postgresName])
+  docker(['rm', postgresName])
+  startPostgres(image)
 }
 
 function recoveryEnvironment(backupPort: number) {
@@ -323,59 +456,50 @@ async function main() {
     'build',
     '--file',
     'ops/production/images/postgres.Dockerfile',
+    '--build-arg',
+    `SITE_DEPLOYMENT_SHA=${input.PHASE13_GIT_SHA}`,
     '--tag',
     postgresImage,
     '.',
   ])
-  docker([
-    'build',
-    '--file',
-    'ops/production/images/recovery.Dockerfile',
-    '--build-arg',
-    `SITE_DEPLOYMENT_SHA=${input.PHASE13_GIT_SHA}`,
-    '--build-arg',
-    `SITE_PGBOUNCER_IMAGE=tungchiahui-pgbouncer:${input.PHASE13_GIT_SHA}`,
-    '--build-arg',
-    `SITE_PGBOUNCER_SHA=${input.PHASE13_GIT_SHA}`,
-    '--tag',
-    recoveryImage,
-    '.',
-  ])
+  if (input.PHASE13_RECOVERY_IMAGE) {
+    ensureImmutableImage(recoveryImage)
+  } else {
+    docker([
+      'build',
+      '--file',
+      'ops/production/images/recovery.Dockerfile',
+      '--build-arg',
+      `SITE_DEPLOYMENT_SHA=${input.PHASE13_GIT_SHA}`,
+      '--build-arg',
+      `SITE_PGBOUNCER_IMAGE=tungchiahui-pgbouncer:${input.PHASE13_GIT_SHA}`,
+      '--build-arg',
+      `SITE_PGBOUNCER_SHA=${input.PHASE13_GIT_SHA}`,
+      '--tag',
+      recoveryImage,
+      '.',
+    ])
+  }
 
   let backupPort = 0
   try {
     backupPort = startS3(backupName, 'phase13-primary,phase13-offsite')
-    docker([
-      'run',
-      '--detach',
-      '--name',
-      postgresName,
-      '--env',
-      'POSTGRES_DB=tungchiahui',
-      '--env',
-      'POSTGRES_USER=tungchiahui',
-      '--env',
-      'POSTGRES_PASSWORD=phase13-disposable-password',
-      '--env',
-      `PGBACKREST_REPO1_CIPHER_PASS=${cipher}`,
-      '--mount',
-      `type=bind,source=${pgDataRoot},target=/var/lib/postgresql`,
-      '--mount',
-      `type=bind,source=${repositoryPath},target=/var/lib/pgbackrest`,
-      '--mount',
-      `type=bind,source=${socketPath},target=/run/postgresql`,
-      '--mount',
-      `type=bind,source=${pgBackRestConfig},target=/etc/pgbackrest/pgbackrest.conf,readonly`,
-      postgresImage,
-      'postgres',
-      '-c',
-      'archive_mode=on',
-      '-c',
-      'archive_command=pgbackrest --config=/etc/pgbackrest/pgbackrest.conf --stanza=tungchiahui archive-push %p',
-      '-c',
-      'archive_timeout=1',
-    ])
-    waitForPostgres()
+    const sourceImage = input.PHASE13_SOURCE_POSTGRES_IMAGE ?? postgresImage
+    if (input.PHASE13_SOURCE_POSTGRES_IMAGE) ensureImmutableImage(sourceImage)
+    startPostgres(sourceImage)
+    const sourceVersion = psql('SHOW server_version')
+    const databaseUrl = `postgresql://tungchiahui:phase13-disposable-password@127.0.0.1:${publishedPort(postgresName, 5432)}/tungchiahui`
+    const migrations = await runPostgresMigrations(databaseUrl, {
+      repositoryRoot: process.cwd(),
+      hasFreshRecoverableBackup: true,
+      hasTechV3CompatiblePreviousRelease: true,
+      hasHealthCompatiblePreviousRelease: true,
+    })
+    await seedDevelopmentDatabase(databaseUrl, { includeProjects: false })
+    await verifyUnifiedHealth(databaseUrl)
+    const extensionVersion = psql("SELECT extversion FROM pg_extension WHERE extname='pgroonga'")
+    const backupVersion = docker(['exec', postgresName, 'pgbackrest', 'version']).stdout.trim()
+    verifySearchAndPrivacy()
     docker([
       'exec',
       postgresName,
@@ -393,7 +517,7 @@ async function main() {
       'check',
     ])
     psql(
-      "CREATE SCHEMA app; CREATE TABLE app.schema_marker(version integer PRIMARY KEY); INSERT INTO app.schema_marker VALUES (6); CREATE TABLE app.recovery_fixture(value text PRIMARY KEY); INSERT INTO app.recovery_fixture VALUES ('base');",
+      `CREATE TABLE app.schema_marker(version integer PRIMARY KEY); INSERT INTO app.schema_marker VALUES (${migrations.migrationCount}); CREATE TABLE app.recovery_fixture(value text PRIMARY KEY); INSERT INTO app.recovery_fixture VALUES ('base');`,
     )
     const migratedTech = migrateLegacyTechPayload({
       version: 2,
@@ -423,9 +547,34 @@ async function main() {
       },
     })
     const techJson = JSON.stringify(techFixture).replaceAll("'", "''")
-    psql(`CREATE TABLE app.owner_managed_datasets (dataset_key text PRIMARY KEY, payload jsonb NOT NULL, revision integer NOT NULL);
-      INSERT INTO app.owner_managed_datasets VALUES ('tech_footprint', '${techJson}'::jsonb, 7);`)
+    psql(`UPDATE app.owner_managed_datasets SET payload = '${techJson}'::jsonb, revision = 7
+      WHERE dataset_key = 'tech_footprint';`)
+    const baseline = applicationFingerprint()
     const full = backupResultSchema.parse(runRecovery(backupPort, 'backup', 'full'))
+    if (input.PHASE13_SOURCE_POSTGRES_IMAGE) {
+      switchPostgres(postgresImage)
+      expect(
+        psql('SHOW server_version') === sourceVersion,
+        'Library-only maintenance changed PostgreSQL version',
+      )
+      expect(
+        psql("SELECT extversion FROM pg_extension WHERE extname='pgroonga'") === extensionVersion &&
+          docker(['exec', postgresName, 'pgbackrest', 'version']).stdout.trim() === backupVersion,
+        'Library-only maintenance changed the extension or backup version',
+      )
+      expect(applicationFingerprint() === baseline, 'Forward image switch changed application data')
+      verifySearchAndPrivacy()
+      psql("INSERT INTO app.recovery_fixture VALUES ('candidate-write')")
+      switchPostgres(sourceImage)
+      expect(
+        psql("SELECT count(*) FROM app.recovery_fixture WHERE value='candidate-write'") === '1',
+        'Old image rollback lost a candidate write',
+      )
+      expect(applicationFingerprint() === baseline, 'Old image rollback changed application data')
+      verifySearchAndPrivacy()
+      switchPostgres(postgresImage)
+    }
+
     await removeOffsiteBackupGeneration(backupPort, full.backup.repositoryGeneration)
     const offsiteRetry = z
       .object({
@@ -479,8 +628,29 @@ async function main() {
     psql("INSERT INTO app.recovery_fixture VALUES ('incremental-later'); SELECT pg_switch_wal();")
     const incremental = backupResultSchema.parse(runRecovery(backupPort, 'backup', 'incr'))
     docker(['stop', '--time', '30', postgresName])
-    await removePrimaryReplica(backupPort)
     const targetDataPath = join(pgDataRoot, '18', 'docker')
+    if (input.PHASE13_SOURCE_POSTGRES_IMAGE) {
+      writeFileSync(join(targetDataPath, '.tungchiahui-disposable-recovery-target'), 'test')
+      runRecovery(
+        backupPort,
+        'restore',
+        JSON.stringify({
+          confirmation: 'RESTORE-TEST',
+          environment: 'test',
+          selector: { backupId: full.backup.backupId },
+        }),
+      )
+      docker(['start', postgresName])
+      waitForPostgres()
+      expect(applicationFingerprint() === baseline, 'Old full backup changed application data')
+      expect(
+        psql("SELECT count(*) FROM app.recovery_fixture WHERE value='before-target'") === '0',
+        'Old full backup restore included later writes',
+      )
+      verifySearchAndPrivacy()
+      docker(['stop', '--time', '30', postgresName])
+    }
+    await removePrimaryReplica(backupPort)
     writeFileSync(join(targetDataPath, '.tungchiahui-disposable-recovery-target'), 'test')
     const rejectedPartialRestore = z
       .object({ status: z.number().int().positive() })
@@ -521,7 +691,7 @@ async function main() {
       'Restored PostgreSQL major version is not 18',
     )
     expect(
-      psql('SELECT version FROM app.schema_marker') === '6',
+      psql('SELECT version FROM app.schema_marker') === String(migrations.migrationCount),
       'Migration/version marker was not restored',
     )
     const values = psql('SELECT value FROM app.recovery_fixture ORDER BY value').split('\n')
@@ -529,6 +699,30 @@ async function main() {
     expect(values.includes('before-target'), 'Pre-target row is missing after PITR')
     expect(!values.includes('after-target'), 'Post-target row survived PITR')
     expect(!values.includes('incremental-later'), 'Later incremental row survived PITR')
+    expect(
+      applicationFingerprint() === baseline,
+      'PITR changed application data or migration ledger',
+    )
+    verifySearchAndPrivacy()
+    if (input.PHASE13_SOURCE_POSTGRES_IMAGE) {
+      switchPostgres(sourceImage)
+      expect(applicationFingerprint() === baseline, 'Candidate backup cannot run on the old image')
+      expect(
+        psql("SELECT count(*) FROM app.recovery_fixture WHERE value='before-target'") === '1',
+        'Old image lost pre-target data after candidate backup restore',
+      )
+      verifySearchAndPrivacy()
+      switchPostgres(postgresImage)
+    }
+    docker([
+      'exec',
+      postgresName,
+      'pg_amcheck',
+      '--all',
+      '--install-missing',
+      '--username',
+      'tungchiahui',
+    ])
     const restoredTech = techFootprintPayloadSchema.parse(
       JSON.parse(
         psql(
@@ -594,6 +788,24 @@ async function main() {
 
     console.log(
       JSON.stringify({
+        sourceImage,
+        recoveryImage,
+        candidateImageId: docker([
+          'image',
+          'inspect',
+          '--format',
+          '{{.Id}}',
+          postgresImage,
+        ]).stdout.trim(),
+        sourceVersion,
+        extensionVersion,
+        backupVersion,
+        migrationCount: migrations.migrationCount,
+        applicationFingerprint: baseline,
+        searchAndPrivacy: 'four-locales-index-backed-and-private-roles-preserved',
+        imageCompatibility: input.PHASE13_SOURCE_POSTGRES_IMAGE
+          ? 'forward-rollback-old-full-to-candidate-candidate-pitr-to-old-pass'
+          : 'same-image',
         backupPolicy: ['full', 'diff', 'incr'],
         backupMeasurements: [full.backup, differential.backup, incremental.backup],
         controlState: 'encrypted-snapshot-restored',

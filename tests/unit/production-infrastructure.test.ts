@@ -9,6 +9,7 @@ import { parseControlApiConfiguration } from '../../src/control-plane/configurat
 import { provisionRequestSchema } from '../../src/host-release/contracts'
 import { schedulerTimer, schedulerUnit } from '../../src/host-release/provision'
 import { browserSecurityHeaders } from '../../src/observability/security'
+import { selectImageRegistryReference } from '../../tools/infra/image-reference'
 
 const composeSource = readFileSync(resolve('ops/production/compose.yaml'), 'utf8')
 const openRestySource = readFileSync(resolve('ops/production/openresty.conf'), 'utf8')
@@ -44,6 +45,20 @@ const composeSchema = z.object({
 const compose = composeSchema.parse(parse(composeSource, { merge: true }) as unknown)
 
 describe('Phase 12 production foundation policy', () => {
+  it('selects the current registry when a repeated drill image has several repository digests', () => {
+    const digest = `sha256:${'a'.repeat(64)}`
+    const repository = '127.0.0.1:5002/tungchiahui-web-pgbouncer'
+    const oldReference = `127.0.0.1:5001/tungchiahui-web-pgbouncer@${digest}`
+    const currentReference = `${repository}@${digest}`
+    expect(selectImageRegistryReference([oldReference, currentReference], repository)).toBe(
+      currentReference,
+    )
+    expect(() => selectImageRegistryReference([oldReference], repository)).toThrow()
+    expect(() =>
+      selectImageRegistryReference([`${repository}@sha256:invalid`], repository),
+    ).toThrow()
+  })
+
   it('uses immutable images and multi-stage non-root application images', () => {
     expect(composeSource).not.toMatch(/image:\s+\S+:latest(?:\s|$)/)
     expect(compose.services.postgres?.image).toContain('TUNGCHIAHUI_POSTGRES_IMAGE')

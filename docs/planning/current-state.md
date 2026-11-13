@@ -1,5 +1,62 @@
 # Website V2 Current Implementation State
 
+## 2026-11-13 — 数据库镜像系统库修补与本地跨镜像恢复
+
+本轮按 Owner 授权推进本地分析、实现和测试。工作分支继续为
+`codex/release-pipeline-simplification`，接管文档提交为 `844e638a3`，main/生产验收基线为
+`3272b43da`。每次 SSH、main 推送、Workflow 修改与生产操作继续事前逐项授权。
+本轮工作范围为本地候选、隔离演练和维护方案。
+
+`postgres.Dockerfile` 固定受影响 Alpine 运行库修复版本。PostgreSQL/Recovery 的 pgBackRest
+构建依赖收窄为官方要求的 `libpq-dev`。Web/Service/Recovery 安装前复制与既有测试镜像相同的
+`tsconfig.json`，复用相同锁文件和供应链策略的依赖安装层。
+实际保持 PostgreSQL 18.4、PGroonga 4.0.8、pgBackRest 2.59.1。
+本地候选 Image ID 为 `sha256:d947e9ad43cf34ef77944682d4e0a6021f838fdce1a04aa7011981a9921bd299`，
+配方 SHA-256 为 `070e392967a9521e5de4b0d01fcf2d0cc2faa243d023df46b99303fafc11d8be`。
+该 ID 代表当前工作树的本地测试制品，正式发布须按已提交配方绑定 Source SHA 与 Registry Digest。
+
+使用固定 Trivy 与 2026-11-13T00:58Z 漏洞库，最终候选扫描为 0 Critical、0 High、
+4 Medium、0 Secret，SBOM 为 156 Component。余下四条为 Groonga 静态管理资源的
+`jquery-ui 1.12.1` 漏洞，准确 CVE 与后续维护见
+`docs/operations/postgres-image-maintenance.md`。
+
+既有 Recovery Gate 现支持项目仓库精确 Digest 的 `--source-postgres-image` 与
+`--recovery-image`。以已恢复 GHCR 的实际旧 PostgreSQL Digest `a95122c0…`、当前生产
+Recovery Digest `ff0e5dc4…` 和修补候选运行完整跨镜像演练，15:06（Asia/Hong_Kong）通过。
+覆盖 16 项真实 Migration Ledger、全业务表摘要、统一测量权限/幂等导入、候选写入后
+同目录回退、旧 Full→候选、候选备份/PITR→旧镜像、四语言 PGroonga 索引查询、
+`pg_amcheck` 支持关系、Full/Diff/Incr、WAL、双副本与 Off-site Fallback、无效 PITR 重试、
+每日 Protection 重放及 Control-state/Host Generation 审计恢复。PITR 本地小型合成夹具
+约 11.0 秒。测试容器与临时数据已按该次 Gate 清理。
+
+当前源码 Recovery 也已构建完成，15:51 以实际旧数据库 Digest 重跑完整跨镜像矩阵通过。
+该 Recovery Image ID 为 `sha256:4f946f4c15bf7e0dce700d93cc4da4fe361bc0e75357f82423f94bdeb1e65b82`。
+其本地测试 Tag 与 Foundation 分开，已缓存的精确 Registry Digest 经匹配校验后直接复用。
+
+本地静态/类型/构建/安全、455 项 Unit、16 项 Migration、应用 Integration/S3Mock 与
+54 项 E2E 已通过。Recovery/完整 Foundation 的源码镜像构建先后遇到 pnpm 依赖下载超时。
+本机主机网络构建重试后，继续通过对齐依赖层准备解决重复下载，完整
+供应链/锁文件/扫描/运行检查保留，最终源码镜像构建和完整 Foundation 均通过。
+完整 Foundation 曾在重启发布用例拒绝一个此前临时 Registry 的 PgBouncer 引用。审计诊断
+定位为本机重复演练时 `.RepoDigests[0]` 取到旧仓库；夹具现按本轮精确仓库与 SHA-256
+选择引用，新增回归覆盖多仓库、缺失引用和非法 Digest，完整重跑通过。
+最终报告覆盖整机发布/回滚、执行器重启与启动失败恢复、受控 Host Recovery、六个服务
+容器身份不变的组件复用、数据库故障隔离、IPv4/IPv6、物理流复制/迁机/提升、控制态
+转移、权限/安全/负载及 SBOM/Critical 扫描，`status=pass`、`productionTraffic=false`。
+默认 `test:recovery` 也在最终工具上通过，恢复时间约 10.9 秒。各 Gate 已清理其隔离资源。
+
+详细维护方案已写入 `docs/operations/postgres-image-maintenance.md`，包含分步授权、
+新鲜备份与真实代际隔离恢复、维护态/排空、冷副本、数据库定向替换、验收、回退、
+引擎补丁与旧镜像退役。现有闭合 API 契约尚无数据库镜像升级 Action，生产执行前须
+验收同一 Host 执行边界的定向维护入口，再审核精确的执行与授权清单。
+S400 在数据库维护验收后接续，生产者 UID/GID 0/0 与隔离目录 root:10050/2750 已沿用
+既有证据，挂载、文件权限、私有 Dry Run、首次/增量/重复导入及启用仍待逐项授权。
+本轮证据集中保存在开发机 `.local/postgres-maintenance/`，跨镜像成功日志为
+`recovery-compatible.log`，最终扫描和 SBOM 为 `candidate-final-scan.json`、
+`candidate-final-sbom.json`。
+最终完整 Gate 日志为 `foundation-verified.log`、`recovery-current-final.log` 和
+`recovery-default-verified.log`。本阶段上下文已沉淀，可以授权/开启下一阶段。
+
 ## 2026-11-13 — 精确数据库镜像保全与本地漏洞核验
 
 Owner 单独授权一轮只读 SSH 流式镜像导出与本地扫描。导出对象通过运行容器的 Image ID

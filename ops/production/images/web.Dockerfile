@@ -5,6 +5,7 @@ RUN npm install --global pnpm@11.23.0 \
 
 WORKDIR /workspace
 COPY .npmrc package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY tsconfig.json ./tsconfig.json
 RUN pnpm install --frozen-lockfile
 
 FROM dependencies AS build

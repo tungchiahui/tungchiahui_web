@@ -8,6 +8,7 @@ COPY .npmrc package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY tsconfig.json ./tsconfig.json
 RUN pnpm install --frozen-lockfile
 COPY tools/infra ./tools/infra
+COPY tools/health ./tools/health
 COPY tools/production ./tools/production
 COPY tools/control ./tools/control
 COPY tools/dev/control-auth-fixture.ts ./tools/dev/control-auth-fixture.ts

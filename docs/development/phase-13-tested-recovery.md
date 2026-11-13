@@ -1,5 +1,9 @@
 # Phase 13 Tested Recovery
 
+本文保留 Phase 13 基线及当时的后续事项。当前实施与生产状态见
+`../planning/current-state.md`，数据库镜像增量验收见
+`../operations/postgres-image-maintenance.md`。
+
 ## Scope and safety boundary
 
 Phase 13 implements PostgreSQL backup, WAL/PITR, remote replicas, control-state recovery and a PostgreSQL-independent restore control path. ADR 0018 establishes the final Production topology: provider-neutral `BACKUP_S3_*` AList Primary and `BACKUP_OFFSITE_S3_*` R2 Off-site replicas. It does not deploy to Production, run a destructive Production restore, contact the real AList/R2 targets, modify the legacy Nuxt repository, or implement Phase 14 blue-green deployment.
@@ -40,7 +44,13 @@ The snapshot is encrypted with age and replicated to both Backup S3 targets. Eac
 
 ## Disposable drill
 
-`pnpm test:recovery` builds the pinned PostgreSQL/PGroonga + pgBackRest image and the non-root recovery image, then creates one PostgreSQL instance and two separate S3Mock instances/identities. It performs:
+2026-11-13 增补完整 Migration/开发合成数据、统一身体测量契约、业务表摘要、四 Locale
+PGroonga 索引搜索、私有角色边界与 `pg_amcheck`。可通过 `--source-postgres-image`
+传入本项目 PostgreSQL 的精确 Registry Digest，执行旧镜像到候选及双向恢复/回退矩阵。
+`--recovery-image` 可指定本项目已安装恢复工具的精确 Digest，省略时构建当前源码。
+命令、验收证据和维护顺序见 [数据库镜像安全维护](../operations/postgres-image-maintenance.md)。
+
+`pnpm test:recovery` builds the pinned PostgreSQL/PGroonga + pgBackRest image and the non-root recovery image, then creates one PostgreSQL instance and one S3Mock instance with separate Primary/Off-site buckets and identities. It performs:
 
 1. full backup and dual-replica verification;
 2. pre-target application write and WAL switch;

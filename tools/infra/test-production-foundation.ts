@@ -53,6 +53,7 @@ import {
   type ServerMigrationPlatform,
 } from '../../src/server-migration/engine'
 import { controlRequest, isTransientControlRequestFailure } from '../control/client'
+import { selectImageRegistryReference } from './image-reference'
 
 const input = z
   .object({
@@ -444,13 +445,18 @@ function buildImages() {
   const pgbouncerRegistryTag = `${registryRepository}-pgbouncer:${input.PHASE12_GIT_SHA}`
   execute('docker', ['tag', pgbouncerImage, pgbouncerRegistryTag])
   execute('docker', ['push', pgbouncerRegistryTag])
-  pgbouncerRegistryReference = execute('docker', [
-    'image',
-    'inspect',
-    '--format',
-    '{{(index .RepoDigests 0)}}',
-    pgbouncerRegistryTag,
-  ]).stdout.trim()
+  pgbouncerRegistryReference = selectImageRegistryReference(
+    JSON.parse(
+      execute('docker', [
+        'image',
+        'inspect',
+        '--format',
+        '{{json .RepoDigests}}',
+        pgbouncerRegistryTag,
+      ]).stdout,
+    ) as unknown,
+    `${registryRepository}-pgbouncer`,
+  )
   execute('docker', [
     'build',
     '--build-arg',
@@ -465,6 +471,8 @@ function buildImages() {
     'build',
     '--file',
     'ops/production/images/postgres.Dockerfile',
+    '--build-arg',
+    `SITE_DEPLOYMENT_SHA=${input.PHASE12_GIT_SHA}`,
     '--tag',
     postgresImage,
     '.',
@@ -1607,7 +1615,7 @@ async function verifyCompleteServerReleases() {
     const deployed = await waitForOperation(created.id)
     expect(
       deployed.status === 'completed',
-      `Server restart did not complete the release: ${JSON.stringify(deployed)}`,
+      `Server restart did not complete the release: ${JSON.stringify(deployed)}; ${supervisorEvents}; ${JSON.stringify(listControlAuditEvents(path, created.id))}`,
     )
     expect(
       serviceShas().every((sha) => sha === candidate.sha),

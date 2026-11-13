@@ -2,6 +2,22 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { chmodSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { parseArgs } from 'node:util'
+import { z } from 'zod'
+
+const { values } = parseArgs({
+  options: { 'source-postgres-image': { type: 'string' }, 'recovery-image': { type: 'string' } },
+})
+const sourceImage = z
+  .string()
+  .regex(/^ghcr\.io\/tungchiahui\/tungchiahui_web-postgres@sha256:[a-f0-9]{64}$/)
+  .optional()
+  .parse(values['source-postgres-image'])
+const recoveryImage = z
+  .string()
+  .regex(/^ghcr\.io\/tungchiahui\/tungchiahui_web-recovery@sha256:[a-f0-9]{64}$/)
+  .optional()
+  .parse(values['recovery-image'])
 
 function run(executable: string, arguments_: readonly string[]) {
   const result = spawnSync(executable, arguments_, { encoding: 'utf8', stdio: 'inherit' })
@@ -32,6 +48,8 @@ try {
     `PHASE13_HOST_ROOT=${hostRoot}`,
     '--env',
     `PHASE13_REPOSITORY_ROOT=${repositoryRoot}`,
+    ...(sourceImage ? ['--env', `PHASE13_SOURCE_POSTGRES_IMAGE=${sourceImage}`] : []),
+    ...(recoveryImage ? ['--env', `PHASE13_RECOVERY_IMAGE=${recoveryImage}`] : []),
     '--mount',
     'type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock',
     '--mount',
