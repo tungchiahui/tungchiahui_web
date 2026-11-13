@@ -9,7 +9,9 @@
 ## Decision
 
 保留一个 Main Release、一个 Control Plane 和一个 Deployment Engine。根据实际 Git Diff
-进行保守分类。仅文档修改执行文档/源码策略检查。明确列入允许清单的公开界面修改执行
+进行保守分类。基线通过只读 GitHub Actions 记录确认，使用最近一次成功部署的版本，
+避免新 push 取消旧检查后只比较相邻提交而漏验累计变更。查询失败、基线超出最近 20 次
+成功 Run、基线不是目标祖先时执行完整 Gate。仅文档修改执行文档/源码策略检查。明确列入允许清单的公开界面修改执行
 静态/类型/构建、Unit 和完整应用 Integration/E2E。数据库、权限、私有界面、部署、恢复、
 依赖及其他路径执行完整 Gate。未知分类、无可靠 Diff 和手动指定版本均执行完整 Gate。
 现有只读权限验证 Workflow 每日对 main 执行完整 Foundation、Recovery 和 Migration。

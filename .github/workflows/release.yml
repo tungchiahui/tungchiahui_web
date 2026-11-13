@@ -25,6 +25,9 @@ env:
 jobs:
   resolve-release:
     name: resolve-main-release
+    permissions:
+      contents: read
+      actions: read
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -64,7 +67,7 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           RELEASE_SHA: ${{ steps.release.outputs.git_sha }}
-          BASE_SHA: ${{ github.event.before }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: node tools/ci/release-impact.ts
 
   quality-static:

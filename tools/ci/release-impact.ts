@@ -39,30 +39,69 @@ export function classifyReleaseImpact(paths: readonly string[]): QualityMode {
   return paths.every(isPublicInterface) ? 'ui' : 'full'
 }
 
-function main() {
+export async function deployedReleaseBase(
+  repository: string,
+  token: string,
+  request: typeof fetch = fetch,
+): Promise<string | undefined> {
+  if (!/^[\w.-]+\/[\w.-]+$/u.test(repository) || !token) return undefined
+  const read = async (path: string): Promise<unknown> => {
+    const response = await request(`https://api.github.com/repos/${repository}/${path}`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' },
+      signal: AbortSignal.timeout(10_000),
+    })
+    if (!response.ok) throw new Error('Release baseline lookup failed')
+    return response.json()
+  }
+  const result = await read(
+    'actions/workflows/release.yml/runs?branch=main&status=success&per_page=20',
+  )
+  if (!result || typeof result !== 'object' || !('workflow_runs' in result)) return undefined
+  if (!Array.isArray(result.workflow_runs)) return undefined
+  for (const run of result.workflow_runs as unknown[]) {
+    if (!run || typeof run !== 'object' || !('id' in run) || !('head_sha' in run)) continue
+    if (typeof run.id !== 'number' || !Number.isSafeInteger(run.id)) continue
+    if (typeof run.head_sha !== 'string' || !/^[a-f0-9]{40}$/u.test(run.head_sha)) continue
+    const jobs = await read(`actions/runs/${run.id}/jobs?per_page=100`)
+    if (!jobs || typeof jobs !== 'object' || !('jobs' in jobs) || !Array.isArray(jobs.jobs))
+      return undefined
+    const deployed = (jobs.jobs as unknown[]).some(
+      (job) =>
+        job !== null &&
+        typeof job === 'object' &&
+        'name' in job &&
+        job.name === 'shared-control-plane-blue-green-deployment' &&
+        'conclusion' in job &&
+        job.conclusion === 'success',
+    )
+    if (deployed) return run.head_sha
+  }
+  return undefined
+}
+
+export function classifyReleaseDiff(root: string, base: string, target: string): QualityMode {
+  execFileSync('git', ['merge-base', '--is-ancestor', base, target], { cwd: root, stdio: 'ignore' })
+  const paths = execFileSync('git', ['diff', '--no-renames', '--name-only', '-z', base, target], {
+    cwd: root,
+    encoding: 'utf8',
+  })
+    .split('\0')
+    .filter(Boolean)
+  return classifyReleaseImpact(paths)
+}
+
+async function main() {
   const target = process.env.RELEASE_SHA ?? ''
-  const base = process.env.BASE_SHA ?? ''
   let mode: QualityMode = 'full'
-  if (
-    process.env.EVENT_NAME === 'push' &&
-    /^[a-f0-9]{40}$/u.test(target) &&
-    /^[a-f0-9]{40}$/u.test(base) &&
-    base !== '0'.repeat(40)
-  ) {
+  if (process.env.EVENT_NAME === 'push' && /^[a-f0-9]{40}$/u.test(target)) {
     try {
-      execFileSync('git', ['merge-base', '--is-ancestor', base, target], { stdio: 'ignore' })
-      const paths = execFileSync(
-        'git',
-        ['diff', '--no-renames', '--name-only', '-z', base, target],
-        {
-          encoding: 'utf8',
-        },
+      const base = await deployedReleaseBase(
+        process.env.GITHUB_REPOSITORY ?? '',
+        process.env.GITHUB_TOKEN ?? '',
       )
-        .split('\0')
-        .filter(Boolean)
-      mode = classifyReleaseImpact(paths)
+      if (base) mode = classifyReleaseDiff(process.cwd(), base, target)
     } catch {
-      // Missing history or an unrecognized transition always takes the complete gate.
+      // An unverified baseline, missing history or API failure takes the complete gate.
     }
   }
   const output = process.env.GITHUB_OUTPUT
@@ -71,4 +110,4 @@ function main() {
   console.log(JSON.stringify({ event: 'release_quality_plan', mode }))
 }
 
-if (process.argv[1]?.endsWith('/release-impact.ts')) main()
+if (process.argv[1]?.endsWith('/release-impact.ts')) await main()

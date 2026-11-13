@@ -4,15 +4,19 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { componentRevision, componentSourcePaths } from '../../tools/ci/component-images'
 import { supportsComponentReuse } from '../../tools/ci/plan-components'
 import { qualityGatePassed } from '../../tools/ci/quality-gate'
-import { classifyReleaseImpact } from '../../tools/ci/release-impact'
+import {
+  classifyReleaseDiff,
+  classifyReleaseImpact,
+  deployedReleaseBase,
+} from '../../tools/ci/release-impact'
 import { releaseResultPassed } from '../../tools/ci/release-result'
 
 describe('graded release checks', () => {
-  it('classifies a backend-to-document rename as a full change through the native CLI', () => {
+  it('keeps unshipped backend changes in the diff across later interface and documentation commits', () => {
     const root = mkdtempSync(join(tmpdir(), 'release-diff-'))
     const git = (...args: string[]) =>
       execFileSync(
@@ -30,14 +34,22 @@ describe('graded release checks', () => {
       git('mv', 'backend.ts', 'docs/route.md')
       git('commit', '-qm', 'Rename fixture')
       const target = git('rev-parse', 'HEAD')
+      expect(classifyReleaseDiff(root, base, target)).toBe('full')
+      writeFileSync(join(root, 'README.md'), 'Documentation follow-up\n')
+      git('add', '.')
+      git('commit', '-qm', 'Documentation follow-up')
+      const followup = git('rev-parse', 'HEAD')
+      expect(classifyReleaseDiff(root, target, followup)).toBe('docs')
+      expect(classifyReleaseDiff(root, base, followup)).toBe('full')
       const output = join(root, 'outputs')
       execFileSync(process.execPath, [resolve('tools/ci/release-impact.ts')], {
         cwd: root,
         env: {
           ...process.env,
           EVENT_NAME: 'push',
-          RELEASE_SHA: target,
-          BASE_SHA: base,
+          RELEASE_SHA: followup,
+          BASE_SHA: target,
+          GITHUB_TOKEN: '',
           GITHUB_OUTPUT: output,
         },
         stdio: 'ignore',
@@ -46,6 +58,46 @@ describe('graded release checks', () => {
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
+  })
+  it('uses a successful deployed version and skips documentation-only successes', async () => {
+    const request = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        Response.json({
+          workflow_runs: [
+            { id: 2, head_sha: 'b'.repeat(40) },
+            { id: 1, head_sha: 'a'.repeat(40) },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          jobs: [{ name: 'shared-control-plane-blue-green-deployment', conclusion: 'skipped' }],
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          jobs: [{ name: 'shared-control-plane-blue-green-deployment', conclusion: 'success' }],
+        }),
+      )
+    expect(await deployedReleaseBase('owner/site', 'fixture', request)).toBe('a'.repeat(40))
+    expect(request.mock.calls[0]?.[0]).toContain('status=success')
+    expect(request.mock.calls[2]?.[0]).toContain('/actions/runs/1/jobs')
+  })
+
+  it('requires a confirmed deployment baseline and handles invalid or unavailable history conservatively', async () => {
+    const request = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ workflow_runs: [] }))
+    expect(await deployedReleaseBase('owner/site', '', request)).toBeUndefined()
+    expect(request).not.toHaveBeenCalled()
+    expect(await deployedReleaseBase('owner/site', 'fixture', request)).toBeUndefined()
+    request.mockResolvedValueOnce(
+      Response.json({ workflow_runs: [{ id: 1, head_sha: 'invalid' }] }),
+    )
+    expect(await deployedReleaseBase('owner/site', 'fixture', request)).toBeUndefined()
+    request.mockResolvedValueOnce(new Response('', { status: 403 }))
+    await expect(deployedReleaseBase('owner/site', 'fixture', request)).rejects.toThrow(
+      'baseline lookup failed',
+    )
   })
   it('only takes the short paths for an explicit public-interface or documentation diff', () => {
     expect(classifyReleaseImpact(['docs/operations/server-release.md', 'README.md'])).toBe('docs')

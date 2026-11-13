@@ -2641,6 +2641,17 @@ async function verifyComponentImageReuse() {
   const installed = readHostRuntime(path).current_sha
   if (!installed) throw new Error('Component reuse fixture requires the installed host executor')
   const generation = readHostGeneration(path, installed)
+  // Earlier probes restore the standalone polling executor. Establish the host-supervised
+  // configuration before measuring image reuse so that its deliberate mode switch is excluded.
+  provisionHost({
+    ...releaseProvisionRequest(
+      settings,
+      registryRepository,
+      generation,
+      captureHostConvergence(settings),
+    ),
+    applyMigrations: false,
+  })
   const services = [
     'control-api',
     'content-worker',
@@ -2712,9 +2723,10 @@ async function verifyComponentImageReuse() {
       `Component reuse deployment failed: ${JSON.stringify(deployed)}; ${events}`,
     )
     expect(publicVersion().gitSha === sha, 'Component reuse did not activate the new Web identity')
+    const after = ids()
     expect(
-      ids().every((id, index) => id === before[index]),
-      'Unchanged component containers were recreated',
+      after.every((id, index) => id === before[index]),
+      `Unchanged component containers were recreated: ${services.filter((_, index) => after[index] !== before[index]).join(',')}`,
     )
     const current = readHostGeneration(path, sha)
     expect(
@@ -2753,6 +2765,9 @@ async function verifyComponentImageReuse() {
       process.kill(-supervisor.pid, 'SIGTERM')
       await exited
     }
+    compose(['up', '--detach', '--no-deps', '--wait', 'deploy-agent'], false, {
+      TUNGCHIAHUI_DEPLOYMENT_POLLING_ENABLED: 'true',
+    })
   }
 }
 
