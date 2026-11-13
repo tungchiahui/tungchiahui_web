@@ -552,9 +552,34 @@ function buildImages() {
     const root = join(workRoot, `initial-${suffix}`)
     mkdirSync(root, { recursive: true })
     const file = join(root, 'Dockerfile')
+    let previousMigrations = ''
+    if (suffix === 'service') {
+      // Represent the retained pre-health release with its actual shorter journal.
+      // Both image generations used to carry the current journal, masking rollback failures.
+      const journal = z
+        .object({ entries: z.array(z.unknown()) })
+        .passthrough()
+        .parse(JSON.parse(readFileSync('/workspace/drizzle/meta/_journal.json', 'utf8')) as unknown)
+      const policy = z
+        .object({ migrations: z.array(z.unknown()) })
+        .passthrough()
+        .parse(
+          JSON.parse(readFileSync('/workspace/drizzle/migration-policy.json', 'utf8')) as unknown,
+        )
+      writeFileSync(
+        join(root, '_journal.json'),
+        JSON.stringify({ ...journal, entries: journal.entries.slice(0, 14) }),
+      )
+      writeFileSync(
+        join(root, 'migration-policy.json'),
+        JSON.stringify({ ...policy, migrations: policy.migrations.slice(0, 14) }),
+      )
+      previousMigrations =
+        'COPY --chown=10001:10050 _journal.json /app/deployment/drizzle/meta/_journal.json\nCOPY --chown=10001:10050 migration-policy.json /app/deployment/drizzle/migration-policy.json\n'
+    }
     writeFileSync(
       file,
-      `FROM ${source}\nLABEL org.opencontainers.image.revision=${initialSha}\n${suffix === 'web' ? `LABEL cn.tungchiahui.release.service-digest=${initialServiceRegistryDigest} cn.tungchiahui.release.recovery-digest=${initialRecoveryRegistryDigest}\n` : ''}`,
+      `FROM ${source}\n${previousMigrations}LABEL org.opencontainers.image.revision=${initialSha}\n${suffix === 'web' ? `LABEL cn.tungchiahui.release.service-digest=${initialServiceRegistryDigest} cn.tungchiahui.release.recovery-digest=${initialRecoveryRegistryDigest}\n` : ''}`,
     )
     execute('docker', ['build', '--file', file, '--tag', target, root])
     const registry = `${registryRepository}${suffix === 'web' ? '' : `-${suffix}`}:${initialSha}`
@@ -665,6 +690,22 @@ function runProvision() {
   }
   expect(provisionHost(request).changed > 0, 'Initial host bootstrap did not report changes')
   expect(provisionHost(request).changed === 0, 'Repeated host bootstrap was not idempotent')
+  expect(
+    execute('docker', [
+      'exec',
+      `${projectName}-postgres-1`,
+      'psql',
+      '--username',
+      'tungchiahui',
+      '--dbname',
+      'tungchiahui',
+      '--tuples-only',
+      '--no-align',
+      '--command',
+      'SELECT count(*) FROM drizzle.__drizzle_migrations',
+    ]).stdout.trim() === '14',
+    'Retained release did not start from its fourteen-migration schema',
+  )
   const blueBefore = compose(['ps', '--quiet', 'web-blue']).stdout.trim()
   const greenBefore = compose(['ps', '--quiet', 'web-green']).stdout.trim()
   compose(['stop', 'control-api'])
@@ -1555,6 +1596,31 @@ async function verifyCompleteServerReleases() {
       compose(['ps', '--quiet', 'postgres']).stdout.trim() === postgresBefore,
       'Ordinary release replaced PostgreSQL',
     )
+    const migrationRunnerBeforeRollback = compose([
+      'ps',
+      '--all',
+      '--quiet',
+      'database-migrate',
+    ]).stdout.trim()
+    const migrationLedger = () =>
+      execute('docker', [
+        'exec',
+        `${projectName}-postgres-1`,
+        'psql',
+        '--username',
+        'tungchiahui',
+        '--dbname',
+        'tungchiahui',
+        '--tuples-only',
+        '--no-align',
+        '--command',
+        'SELECT hash,created_at FROM drizzle.__drizzle_migrations ORDER BY created_at',
+      ]).stdout.trim()
+    const expandedLedger = migrationLedger()
+    expect(
+      expandedLedger.split('\n').length === 16,
+      'Candidate did not expand the schema to sixteen migrations',
+    )
     const rollback = operationResponseSchema.parse(
       await controlRequest('/api/ops/rollbacks', {
         body: { reason: 'Whole server rollback verification' },
@@ -1572,6 +1638,12 @@ async function verifyCompleteServerReleases() {
       serviceShas().every((sha) => sha === initial.sha) &&
         readHostRuntime(path).current_sha === initial.sha,
       'Whole rollback did not restore independent services and executor',
+    )
+    expect(migrationLedger() === expandedLedger, 'Rollback changed the expanded migration ledger')
+    expect(
+      compose(['ps', '--all', '--quiet', 'database-migrate']).stdout.trim() ===
+        migrationRunnerBeforeRollback,
+      'Normal rollback recreated or replayed the retained release migration runner',
     )
     await stop()
 

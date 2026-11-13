@@ -93,6 +93,7 @@ export function releaseProvisionRequest(
   repository: string,
   release: HostRelease,
   before: ConvergenceSnapshot,
+  operationType: 'deploy' | 'rollback' = 'deploy',
 ): ProvisionRequest {
   return {
     settings,
@@ -104,6 +105,7 @@ export function releaseProvisionRequest(
     recoveryImage: `${repository}-recovery@${release.recoveryDigest}`,
     postgresImage: before.postgresImage,
     mode: 'services',
+    applyMigrations: operationType === 'deploy',
     backupScheduleEnabled: before.backupScheduleEnabled,
     maintenanceScheduleEnabled: before.maintenanceScheduleEnabled,
   }
@@ -340,7 +342,13 @@ export async function coordinateNextHostRelease(input: HostSettings, owner: stri
       ) !== before.files['pgbackrest.conf']
     )
       throw new Error('PostgreSQL backup configuration requires explicit server maintenance')
-    const request = releaseProvisionRequest(settings, repository, release, before)
+    const request = releaseProvisionRequest(
+      settings,
+      repository,
+      release,
+      before,
+      operation.operationType === 'rollback' ? 'rollback' : 'deploy',
+    )
     heartbeatInfrastructureOperation(path, operation.id, lease, 3600)
     if (checkpoint?.phase === 'compensating' || checkpoint?.phase === 'reverted')
       throw new Error('Interrupted failed release requires compensation')

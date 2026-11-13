@@ -96,6 +96,11 @@ Bootstrap Protocol 1；它从 SQLite 的当前 Generation 启动工作代码，�
 仍走原有 Fresh Backup、Blue/Green Compatibility 与 Migration Policy 门禁。
 Secret/数据库身份轮换也应按生产配置维护流程执行，不能当作普通代码更新隐式完成。
 
+正常 Rollback 的 Host 收敛显式设置 `applyMigrations=false`。保留版本可能只有较短的
+Migration Journal，例如健康数据升级前的 14 项与升级后的 16 项；回滚保留已经执行的
+Expand Schema，并继续执行镜像身份、数据兼容性、服务健康和 Smoke 校验。
+前向 Deploy 与 Bootstrap 继续执行原有 Migration Policy 和账本校验。
+
 ## 中断、回退和恢复
 
 Core SQLite Schema 8 保持兼容；同一 Control-state DB 的 Host Component Journal 1 记录
@@ -115,14 +120,15 @@ Expand Migration、不覆盖 `.env`、不删除数据库或备份。
 
 当原 Operation 为 `failed` / `host-release-recovery-required` 且持久 Checkpoint 为
 `compensating` 或 `reverted` 时，使用仓库内的服务器控制台入口
-`host-recovery.cjs`。它不修改原 Operation、原 Checkpoint phase、数据库 Migration 或
-Blue/Green Slot，而是创建一个新的、排他的 `server-migration` Operation
+`host-recovery.cjs`。该入口要求 Web 已恢复到 Checkpoint 的基线版本，Host Runtime 的
+Current/Previous/Pending 也必须匹配。它创建一个新的、排他的 `server-migration` Operation
 （`action=host-release-recovery`）记录受控恢复：
 
 1. 校验原 Operation 的失败状态、Checkpoint 阶段、Active Web SHA/Digest、Host
    Runtime Current/Previous/Pending 与 Checkpoint 完全一致；任一漂移即拒绝。
-2. 如 Web 仍在失败目标上，调用同一个 Deployment Engine 的合成 Rollback 回到
-   Checkpoint 的 Active Slot；不手工切换 Blue/Green。
+2. 取得排他 Operation Lease 后再次校验基线，拒绝校验与领取之间已完成其他发布的现场。
+   Web 仍在失败目标、切流 Pending 或 Host Generation 漂移时，入口拒绝执行，保留证据
+   供服务器控制台按既有 Deployment/Recovery Engine 单独处理。
 3. 用 Checkpoint 的固定文件与镜像重新收敛 Host，但显式关闭 Migration：
    `applyMigrations=false`。目标 Release 的 Expand Migration 已记录在
    PostgreSQL，恢复旧镜像时不得重放其较短的 Journal。
@@ -132,6 +138,11 @@ Blue/Green Slot，而是创建一个新的、排他的 `server-migration` Operat
    Release Job 的 `verify` Smoke。
 6. 追加 `host_release_recovery_verified` 审计事件到原 Operation，并以
    `host-release-recovered` 完成恢复 Operation；原失败记录与 Checkpoint 保留为审计证据。
+
+首轮恢复失败后，可在重新核对现场后重试。成功重试的 Operation 同样作为完成凭据，重复
+执行会校验固定收敛基线并复用该凭据。过期任务经 Reconcile 进入 `needs-attention` 后，
+管理员必须先确认原恢复进程已退出及无残留执行，再允许入口重新排队并领取新的 Fence。
+恢复结果中的 `webRestoredByEngine=false` 表示该入口只完成基线上的 Host 收敛。
 
 恢复使用当前已审核的 Provision 代码，因此会在缺失时创建受管的
 `${TUNGCHIAHUI_DATA_ROOT}/health-data` 目录（空目录，root:runtime-group，2750）。
@@ -282,3 +293,25 @@ sudo sqlite3 -readonly /var/lib/tungchiahui/control-state/control.db \
   新 SHA，web-blue 保留 `3fedee1b`；PostgreSQL 镜像未变；`hostRelease.status=converged`。
 - 数据库仍为 16 条 Migration；匿名 Health API 返回 401/403；content-worker 只读挂载
   `health-data` 且 `HEALTH_SYNC_ENABLED=false`；备份双副本 fresh，Timer 正常。
+
+### 2026-11-13 增量发布失败评估
+
+Main Release 的红色结果同时包含上线前拒绝、实际部署失败及故意关闭部署后的结果检查。
+判断影响时先看具体失败 Job、Operation 和完成 Receipt。
+
+- `43187645721` 在 TypeScript 检查失败，`43171944587` 在格式检查失败。此类问题应由
+  本地 Gate 或发布前的验证分支捕获。main 作为开发中间检查点会反复启动整套发布流水线。
+- `40189143024` 的扫描报告 Next.js Critical 漏洞，`43168632965` 报告 OpenResty 基础
+  镜像中的 Brotli Critical 漏洞。此类失败包含与新功能无关的依赖维护工作，应提前扫描和
+  修补固定镜像。任何漏洞例外都需要明确的适用性依据与审核。
+- `43197875132` 在健康数据兼容预检拒绝，保护尚未升级的旧版隐私与回滚能力。
+  兼容性和目标 Host 资源需求应尽早检查，并在首次状态修改前复核。
+- `43214600338` 对应实际 Host 收敛与补偿失败。新目录必须兼容当前已安装的
+  Coordinator，回归测试须覆盖相邻版本不同 Journal 的升级和完整回退。
+- ADR 0027 的同 SHA 完整收敛会使普通功能发布同时更新独立服务与执行器。
+  组件独立版本、保持已验证组件 Digest 的方案值得评估，需要新的明确架构决策，
+  并继续使用同一 Deployment Engine、不可变 Manifest 和完整验收。
+
+保留 Owner 权限、Secret 边界、Migration 兼容性、新鲜可恢复备份、镜像身份及
+Health/Smoke 门禁。改进重点是提前发现问题、减少每次发布触及的组件、验证失败恢复。
+Workflow 与生产配置调整须按 Owner 的逐项授权执行。

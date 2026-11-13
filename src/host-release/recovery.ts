@@ -24,7 +24,6 @@ import {
 } from './contracts'
 import {
   captureHostConvergence,
-  compensateStaleWebRelease,
   convergenceDifferences,
   describeHostReleaseFailure,
   executeWebJob,
@@ -245,6 +244,20 @@ export async function recoverHostRelease(
     throw new Error(
       'Another infrastructure operation is active; recovery requires an exclusive window',
     )
+  // A successful retry has a different key from the first failed attempt. Reuse its receipt
+  // so repeating the console command cannot create another recovery after that retry succeeds.
+  const completed = listInfrastructureOperations(path, {
+    operationTypes: ['server-migration'],
+    statuses: ['completed'],
+  }).findLast(matchesRecovery)
+  if (completed && !existing) {
+    const differences = convergenceDifferences(before, captureHostConvergence(settings))
+    if (differences.length > 0)
+      throw new Error(
+        `Completed recovery no longer matches its baseline: ${differences.join(', ')}`,
+      )
+    return completed
+  }
   let created: InfrastructureOperation
   if (existing) {
     if (existing.status === 'needs-attention') requeueHostRecovery(path, existing.id)
@@ -283,14 +296,16 @@ export async function recoverHostRelease(
   const topologyBefore = topologyContainerIds(settings)
   let finished = false
   try {
-    const webRestoredByEngine = compensateStaleWebRelease({
-      settings,
-      repository,
-      release: checkpoint.release,
-      before,
-      operation,
-      owner,
+    // Admission happened before the exclusive operation was created. Refuse a release that
+    // completed in that window instead of applying a stale host snapshot over its services.
+    const lockedRejection = hostRecoveryRejection({
+      operation: getInfrastructureOperation(path, originalOperationId) ?? original,
+      checkpoint,
+      deployment: readDeploymentState(path),
+      hostRuntime: readHostRuntime(path),
     })
+    if (lockedRejection !== null)
+      throw new Error(`Host release recovery refused after claim: ${lockedRejection}`)
     restoreHostConvergence(settings, before, operation.id)
     const after = captureHostConvergence(settings)
     const differences = convergenceDifferences(before, after)
@@ -326,7 +341,7 @@ export async function recoverHostRelease(
           openresty: topologyBefore.openresty !== topologyAfter.openresty,
           pgbouncer: topologyBefore.pgbouncer !== topologyAfter.pgbouncer,
         },
-        webRestoredByEngine,
+        webRestoredByEngine: false,
       },
     }
     appendControlAuditEvent(path, {

@@ -1,5 +1,38 @@
 # Website V2 Current Implementation State
 
+## 2026-11-13 — 接管验收与本地回滚收尾
+
+接管基线 main 为 `a0ea96b527fb7c51abbfb725f368ac94b762538b`，生产为
+`b4132005798f66e5464f3c8adb4d5bbc52f7ccc4`。两次后续提交仅修改文档。
+本轮通过 GitHub 重新核实 Main Release `43271881580` 的 15 个 Job 全部成功，部署
+Receipt 为 `deployment-verified` / `hostRelease.status=converged`。公网 Version 为该
+Green SHA，Health 为 ok，Ready 报告 PostgreSQL ready。历史失败 Operation 和
+`compensating` Checkpoint 作为审计证据保留。
+
+本地 `codex/host-release-rollback-followup` 修复普通 Rollback 仍运行旧 Migration Journal
+的既有缺陷。Host 收敛根据 Deploy/Rollback 显式选择是否执行 Migration，保持前向迁移门禁。
+Foundation Fixture 的旧 Service Image 现在使用 14 项 Journal，候选使用 16 项，检查
+回滚后完整账本保持一致且 Migration Runner 没有重建。恢复入口复用成功重试的 Receipt，
+修复首轮失败后重复恢复产生新任务的问题，并在取得排他 Claim 后再次验证基线。
+恢复入口要求 Web 与 Host Runtime 已匹配基线，其支持范围已在运维文档说明。
+
+已通过本地静态检查、类型检查、生产构建、安全边界扫描、431 项 Unit Test，以及
+16 项 Migration、健康权限、幂等导入和历史字段对账测试。本地 Foundation 在准备工具
+镜像时下载 age 遇到 GitHub TLS 错误，尚未进入运行验证。完整 Foundation/Recovery、
+Integration/E2E 使用既有 `fix/host-release-recovery` 只读权限验证流程复验，完成结果须
+在本条补充后交付。
+
+Owner 本轮要求任何服务器连接与操作均事先逐项授权，向 main 推送、触发发布与修改
+自动部署 Workflow 也需明确授权。本地修改和测试已授权。生产实时备份、Host Executor、
+双槽身份与 Owner UI 仍待后续授权验收，S400 生产者接入与启用也待单独安排。
+
+近期 Main Release 失败需要按阶段解释。已核实的样本包括上线前格式/类型错误、
+Critical 镜像漏洞、健康兼容版未先发布导致的预检拒绝，以及 Host 收敛/补偿故障。
+临时禁用部署的 `43266852066` 最终失败符合既有结果策略。ADR 0027 要求同 SHA 的
+组件与 Host Executor 完整收敛，使普通功能发布也重建独立服务，形成较大的影响面。
+后续优先前移兼容性与资源检查、补足跨版本测试。组件独立版本及 Workflow 调整属于
+另行评估和授权的架构/发布流程变更。
+
 ## 2026-11-12 — Host Release 故障诊断与受控恢复
 
 生产 Operation `c6dee55b-ee63-4e7a-a14f-bc92ac7278c9`（目标
