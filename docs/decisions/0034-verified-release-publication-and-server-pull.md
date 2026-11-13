@@ -30,7 +30,9 @@ Main Release 已 completed/success 的制品。若 main 已前进，只允许精
 自动拉取默认为关闭。Operator 通过签名的 configure-release-pull Operation 显式启停，固定
 Confirmation 为 RELEASE-PULL-PRODUCTION。启停与最近检查阶段通过签名 Status 可查询，持久化在 host-local SQLite 附加表，并留下
 原 Operation/Audit。中断的配置任务由同一 Supervisor Fence 后接续。首次安装通过已授权
-./site deploy 完成，再启用自动拉取。禁用后已存在的 Operation 继续按自身生命周期处理。
+./site deploy 完成，再启用自动拉取。引入新 Target 时还须检查 systemd 中实际常驻 Supervisor
+的 Source SHA，确认续租、Host Takeover Fence 与接续包含新 Target。监督器协议通过原管理员
+Bootstrap 安装已验收版本，普通 Deploy 更新代际工作代码。禁用后已存在的 Operation 继续按自身生命周期处理。
 
 服务器以 github-publication:<id> 创建幂等的普通 Deploy Operation，使用 SQLite 全局排他、
 Lease/Fence、原 Host Adapter、Digest/OCI Revision 验证、Migration、Blue-Green、Smoke 和回退。

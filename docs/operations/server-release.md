@@ -47,7 +47,8 @@ Control API 自升级会暂时断开状态查询。每个 GET 仍执行原三次
 这是一次服务器管理员动作。Docker/Compose、systemd 和现有生产拓扑必须可用；
 安装入口验证它们，不替换当前 Docker 软件源或升级 PostgreSQL。
 先在 main 发布新镜像，暂时关闭 `PRODUCTION_DEPLOYMENT_ENABLED` 以阻止旧部署服务领取任务。
-完整 Quality 与镜像必须成功；停用部署期间最终发布结果应为失败/未完成。
+完整 Quality 与镜像必须成功。ADR 0034 的 Main Release 标识检查与发布结果，自动执行关闭时
+Payload automatic=false，生产部署状态独立回报。
 
 记录并审核该 SHA 的 Web/Service/Recovery Digest。确认没有正在执行的 Infrastructure
 Operation、生产备份可恢复、两 Web Slot 和 PostgreSQL 的原始身份已保存。
@@ -70,14 +71,19 @@ root-only 临时目录后调用：
 <server-temp>/node <server-temp>/host-bootstrap.cjs <SHA> <WebDigest>
 ```
 
-提取只创建停止的镜像容器并复制固定文件，不运行特权容器或挂载宿主根目录。
+提取可创建停止的镜像容器并复制固定文件。管理员执行环境需要提供宿主 systemd 上下文。
+使用既有 Docker 管理员入口时，须取得 Owner 对具体操作的授权，再用精确 Recovery Digest、
+固定 Bootstrap 参数和短生命周期管理员容器执行同一引擎。本轮使用 user 0、Host PID/Network、
+宿主根目录挂载，以及 CHOWN/DAC_OVERRIDE/FOWNER/SYS_CHROOT 四项 Capability，执行后清理
+临时 Bundle。现场保留镜像 Digest、固定命令、Mount/Capability 和退出结果。
 首次读取私有镜像所需的 Registry Read 身份必须在服务器配置，不进入开发电脑或 Actions。
-初始化保持现有 Web Slot、PostgreSQL Image、`.env` 和数据；安装固定 systemd Unit，
+初始化记录并核对 Web Slot、PostgreSQL Image、`.env` 和数据；安装固定 systemd Unit，
 保留现有两个 Timer 的启用状态，并切换独立服务到审核的镜像。
 完成后检查 `./site status` 中 hostExecutor.installed/healthy，以及四个独立服务的健康与 SHA。
 连续运行两次应无配置/服务变更。
 
-恢复 `PRODUCTION_DEPLOYMENT_ENABLED=true`，重新执行新版本 Deploy Job。首次完整自动发布
+恢复 `PRODUCTION_DEPLOYMENT_ENABLED=true`，通过审计配置启用服务器拉取，核对 GitHub
+生产回执。首次完整发布
 必须验证 Web 和四个独立服务、原 PostgreSQL 容器、定时器与 `hostRelease` 结果。
 之后正常发布不需要重复安装或服务器密码。
 
@@ -88,6 +94,10 @@ Digest，Compose 保持对应容器身份。`hostExecutor.currentSha` 标识发�
 `hostExecutor.sourceSha` 标识实际执行代码。稳定 Supervisor 是已安装
 Bootstrap Protocol 1；它从 SQLite 的当前 Generation 启动工作代码，升级工作代码不会终止
 正在执行的发布。Bootstrap Protocol/systemd 沙箱或操作系统依赖升级属于服务器控制台维护。
+新增维护 Operation 的续租/接续类型时，需核对正在运行的 systemd ExecStart 对应 Supervisor
+Source SHA。普通 Deploy 只更新代际工作代码。使用已经验收的当前版本，通过原 Bootstrap
+在无 active Operation 时完成监督器协议升级，核对 systemd Source 与持续刷新租约，再继续维护。
+不得将 `hostExecutor.sourceSha` 当作常驻 Supervisor 的 Source SHA。
 
 镜像仓库认证与 Manifest 获取可能暂时没有进度数据。Host Artifact Pull 使用独立的
 120 秒静默等待窗口，并以 10 分钟总时限终止持续无结果的拉取；普通 Docker 操作仍使用

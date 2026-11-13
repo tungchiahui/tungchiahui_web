@@ -1,29 +1,100 @@
 # Website V2 Current Implementation State
 
 
-## 2026-11-13 — Actions 主动拉取改造验收中
+## 2026-11-14 — Actions 发布改造与数据库镜像维护生产验收
 
-Owner 审阅参考 SDUTVINCI/sdutvinci_web 的简化方案后明确授权“执行”。本轮正在完成
-验证后发布、服务器主动拉取与独立生产回执，架构见 ADR 0034。开关默认关闭，首次安装
-后通过原 Operator 签名的配置 Operation 启用。实际生产结果在 GitHub Deployment 独立回报。
-复用原 Host Adapter、SQLite 全局排他/Lease/Fence/Audit 和 Blue-Green Engine。
+Owner 在审阅方案后授权“执行”，并另行批准常驻监督器更新及必要 SSH 执行、核验。
+本阶段已完成数据库维护和发布入口验收。后续 S400 自动同步接入等待下一阶段单独授权。
+当前授权限定本轮已执行的具体操作，未来 SSH、main Push、Workflow 修改和生产操作继续
+逐次说明并取得授权。
 
-改造前 main/生产为 `c79a6f65e68aee3f2b2490fd0593b55cf282d01f`，Current Blue，Previous Green
-`44066d339`。该版本完整质量 Gate 已通过，生产 Operation `688d2a18-c229-43fd-ba22-631f7ca54e27`
-已于 13:23:55 UTC 完成 `deployment-verified`。Main Workflow 因 OIDC 等待查询 401 标红。
-数据库保持旧 `a95122c0…`，实际切换尚未执行。
+### 当前实际运行身份
 
-真实 Full `20261113-112533F` 对应的 3,244 个对象已逐项对照 R2 代际 Manifest 校验，本地
-Repository 经相同 Recovery Engine 完成旧镜像/新镜像/同目录旧镜像回退，23 表、16 项迁移、
-四语言索引与 amcheck 一致。有效报告 `.local/postgres-maintenance/production-real-restore-report.json`
-SHA-256 为 `f8e6a30c92c7a5e19895407832a241e848768b56c29534dd2f12a76a8c617ba7`。
-此前缺少容器边界的报告已作废。直接远端 R2 Fallback 的额外隔离恢复因读取缓慢主动停止，
-此项未宣告通过。临时资源限定于 `backup-work/postgres-image-drill-20261113`。
+| 对象 | 验收结果 |
+| --- | --- |
+| Web / Active Blue | `fb285d78563206898853912c87f04d7116f2aefc` |
+| Web Digest | `sha256:77750869c62c4880f147fadd76123fc893a95dabfe651b907f5be2cc877fa9cb` |
+| Service / Recovery Source SHA | `d2fc6849ea25de389518debff1be15dfdc9335bb` |
+| Service Digest | `sha256:a472ef9efe2122758ff78b2505774447980df1676c55d2ee50ff9e3c40fb8f92` |
+| Recovery Digest | `sha256:c9a8e8d9d833ede931343dac4ca03c4b0f76cbea7f344a6dee57be7ba7a77ec8` |
+| Previous Green | `ccf4a0a3c911209d5eff47d4ac8dba61e63361d5` |
+| PostgreSQL Digest | `sha256:6ce616e9a4ae1efe73827051a517b2b7f59ad58affd59897f3e897f663e176ed` |
+| PostgreSQL Source SHA | `d6629b0cf4a3d791ee307bb363c4931de97e8b75` |
+| 数据库容器 | `ad3e213db2f269ca7073856575f7dda75bff87863294159feb9e574a4cde61c8` |
+| Host Executor | healthy，Current fb，工作代码与组件 Source 为 d2，无 Pending |
+| SQLite / 拉取状态 | Core Schema 8，无未完成 Operation，enabled=true，deployed 指向实际 fb |
 
-正式候选 Digest `6ce616e9…`、Source SHA `d6629b0cf…`，在 2026-11-13 07:00 UTC Trivy DB
-下为 0 Critical/0 High/4 Medium。同库旧镜像为 1 Critical/72 High。此前 1/34 为旧漏洞库扫描。
-真实切换仍需使用新入口重做成功 Preflight，再绑定上述有效真实报告和新鲜 Backup 进行 Execute。
-改造的完整本地 Gate、正式发布、自动拉取启用与数据库维护结果将继续补入本节。
+本次交接提交为文档变更，实际运行版本按上表核验。公网 Version/Health/Ready 与精简发布
+回执通过，四语言 Docker 关键词搜索各返回 20 条公开结果。普通发布和最后的 Bootstrap
+执行后，数据库容器身份、Image ID、精确 Digest 与运行状态逐项一致。
+
+### Gate 与发布结果
+
+完整本地和 main CI Gate 通过，包含格式/策略/类型/Build/安全扫描、515 Unit、16 Migration、
+Integration/S3Mock、64 E2E、完整 Foundation 和 Recovery。Foundation 验证自动拉取进入同一
+Engine、真实 Registry Digest 蓝绿切换/回执/回滚、六个未变组件容器复用，以及数据库维护
+失败回退、崩溃接续、冷副本、四语言索引和双副本。Recovery 验证 Full/Diff/Incr、WAL/PITR、
+隔离 Off-site Fallback、加密 Control-state 和 Host Generation 恢复，本地 PITR 约 14.9 秒。
+证据位于 `.local/postgres-maintenance/` 的 `pull-*`、`final-pull-*`、`route-case-*` 日志。
+
+最终 main CI [43466864087](https://github.com/tungchiahui/tungchiahui_web/actions/runs/43466864087)
+全部成功。Production Publication 为 `7771755568`。服务器自动创建
+`40e5f37b-0142-4c16-8262-e787ebce3b2a`，Actor `service:release-pull`，在获取 Recovery Image
+阶段终止为 host-release-rejected。补齐同一精确镜像后，经原 Operator 入口重试
+`8d5224fa-e9c6-462e-9416-6fad6e7d9ac9`，17:46:56 UTC 完成 deployment-verified，完整
+hostRelease.status=converged。原自动任务失败记录保留。此轮生产成功包含一次显式重试。
+
+独立状态回报 [43477272852](https://github.com/tungchiahui/tungchiahui_web/actions/runs/43477272852)
+成功，GitHub Deployment 于 17:54:14 UTC 根据真实当前回执记录 success。Main Release 的
+成功表示不可变制品发布完成，Production Deployment 表示真实服务器收敛结果。
+运行入口、启停与失败重试见 ADR 0034 和 server-release.md。服务器复用已有只读 Registry
+Credential 读取固定仓库，GitHub 回报使用独立 Workflow 的 deployments:write。
+
+### 数据库维护与恢复证据
+
+Preflight `1dd2e4df-54ff-468c-9738-92545d66a6b0` 于 15:55:54 UTC 完成真实双副本完整读回。
+Execute `bf533618-c014-451a-99f4-34315ae47efa` 从 16:27:04 至 17:11:15 UTC 完成
+completed/postgres-image-verified，包含新镜像业务/权限/索引/amcheck/WAL 核验和新 Full 双副本。
+排空时表 SHA-256 为 `b09584c51fb147d2779a201d93e485ea37b9d101192db3d0e3d69e7c63abe43a`，
+目录/角色 MD5 为 `5e33c2e1cc2823d7e76b07be54b2d7dc`，新镜像核对一致。
+
+冷副本位于 `/var/lib/tungchiahui/postgres-maintenance/bf533618-c014-451a-99f4-34315ae47efa/`，
+Manifest SHA-256 为 `e9afdfa157b1c3903107dedd11c1735f901e822ff565c88f97307556a5b5f1e0`。
+新 Full `20261113-162904F` 的 Generation 为
+`20261113-162904F-76ddc3bc-5648-45b8-8a83-96eba290f107`，Manifest SHA-256 为
+`79edfefa5a5ff342714deaf188c8269f157feffa537586fa825219d1b6d87c4c`，两端 fresh/valid。
+真实备份数据为 198,399,840 bytes，约 41.6 分钟完成，随后恢复原消费者/Timer 和站点服务。
+
+正式候选在 2026-11-13 07:00 UTC Trivy DB 下为 0 Critical/0 High/4 Medium/0 Secret。
+精确扫描报告 Hash 为 `f57175008b0f1d22de1039526c0719b1b6db2f0c6b5e4c87d1b16cd76b700418`。
+同库旧镜像为 1 Critical/72 High，历史 1/34 属于早期漏洞库。PG 18.4、PGroonga 4.0.8、
+pgBackRest 2.59.1 的实际固定版本通过核验。
+
+真实 Full `20261113-112533F` 的 3,244 项对象逐项对照 R2 代际 Manifest 核验后，经同一
+Recovery Engine 在隔离目录完成旧/新镜像恢复及同目录旧镜像回退，23 表、16 迁移、四语言
+索引和 amcheck 通过。有效报告 `production-real-restore-report.json` SHA-256 为
+`f8e6a30c92c7a5e19895407832a241e848768b56c29534dd2f12a76a8c617ba7`。缺少容器边界的
+早期报告已作废。额外的直接远端 R2 Fallback 恢复因读取缓慢主动停止，此项未宣告通过。
+
+### 本轮纠正与清理
+
+常驻 systemd Supervisor 原为 2026-10-06 的 `14b7249b3…`，普通发布更新代际工作代码。
+它缺少维护续租/接续支持，已在 Owner 单独授权下通过原 Bootstrap 完成两次监督器收敛。
+ccf 激活 `73f251e1-6a0d-4b4b-a9ff-ae83c4c83026`，最终 fb 激活
+`982c5b1c-3782-4ff8-b5be-1d1c14780c0e` 均为 completed/host-bootstrap-verified。
+最终 systemd ExecStart 指向 fb 代际，实际监督器 Bundle 来自 d2 Recovery，启动时间为
+2026-11-14 01:48:12 CST。新配置写入在同一 SQLite Transaction 验证 Operation 与 Host Fence，
+Host 接管立即 Fence 并接续配置任务。生产操作由同一引擎执行。
+
+旧 Legacy 路由用例将 11 次导航合并在 30 秒上限内，CI 三次重试在不同地址耗尽时间。
+已拆为逐地址用例，完整 64 E2E 在本地与 CI 通过。初次本地重试期间的 Alpine 下载/TLS/I/O
+错误和并行负载下的一次数据库连接超时均记录在日志中，最终完整 Gate 通过。
+
+`backup-work/postgres-image-drill-20261113`、两个已停止演练容器、临时候选镜像传输文件、
+扫描目录和 Bootstrap 副本已清理。数据库维护冷副本、旧镜像离线归档、加密配置和已审计的
+备份代际按后续明确授权管理。具体身份、证据和授权清单见 PostgreSQL 镜像维护方案。
+
+本阶段上下文已沉淀，可以授权/开启下一阶段。S400 自动同步接入等待下一阶段授权。
 
 
 ## 2026-11-13 — 生产数据库镜像维护端到端执行中

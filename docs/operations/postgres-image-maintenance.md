@@ -259,6 +259,14 @@ Active/Previous Web State。执行期间 `.env` 或拓扑变化会拒绝继续�
 每次 SSH、main 推送、Workflow 修改、生产操作均须在执行前得到对应授权。表格本身是审阅
 清单。既有 Workflow 已具备相关组件构建路径，本轮源码变更集中在现有服务、CLI 和测试。
 
+### 常驻监督器安装前置检查
+
+通过只读 systemd ExecStart 核对正在运行的 Supervisor Source。普通完整发布会更新当前代际
+Host Coordinator，常驻 Bootstrap Supervisor 的协议更新需要原管理员 Bootstrap 入口。
+维护运行时应观察 Operation 的 leaseExpiresAt 持续推进，并核对接续包含 server-migration。
+若 Supervisor 仍为旧协议，先完成当前只读预检，在全局无 active Operation 时通过已验收
+版本执行原 Bootstrap，核对业务/拓扑/原消费者基线一致后，再执行维护。
+
 ### 状态与现场证据
 
 正常阶段依次为 `prepared`、`quiescing`、`drained`、`stopped`、`cold-copy-verified`、
@@ -365,3 +373,36 @@ Engine 完成旧镜像恢复、新镜像恢复与同目录旧镜像回退，23 �
 Preflight `353efc72-22ca-4c89-9e87-5e3ceb596649` 触及旧 20 分钟子命令限制，已审计为失败。
 `c79a6f65e` 使用维护恢复专用 90 分钟上限和并行双副本复验。正式 Execute 等待新的成功
 Preflight ID，绑定上述有效恢复报告、仍在时效内的 Full 和精确旧/新 Digest。
+
+## 2026-11-14 生产数据库维护验收
+
+以下执行时间使用 UTC。Owner 在本对话授权继续完成维护，并单独批准监督器更新及必要
+SSH 执行、核验。预检 `1dd2e4df-54ff-468c-9738-92545d66a6b0` 于 15:55:54 完成。
+常驻监督器原为 2026-10-06 安装的 `14b7249b3…`，普通发布更新的是代际工作代码。
+通过原受审计 Bootstrap 安装 ccf 监督器后，实际维护的租约持续刷新。
+
+Execute `bf533618-c014-451a-99f4-34315ae47efa` 从 16:27:04 至 17:11:15 完成
+`completed/postgres-image-verified`，总执行约 44 分钟。旧镜像为 `a95122c0…`，新镜像为
+`sha256:6ce616e9a4ae1efe73827051a517b2b7f59ad58affd59897f3e897f663e176ed`，候选 Source SHA
+`d6629b0cf4a3d791ee307bb363c4931de97e8b75`。实际 PostgreSQL Container ID 为
+`ad3e213db2f269ca7073856575f7dda75bff87863294159feb9e574a4cde61c8`，运行状态和精确引用已核对。
+
+排空时取得的业务表 SHA-256 为 `b09584c51fb147d2779a201d93e485ea37b9d101192db3d0e3d69e7c63abe43a`，
+角色/目录 MD5 为 `5e33c2e1cc2823d7e76b07be54b2d7dc`。新镜像启动后核对相同摘要，四语言
+索引、amcheck、事务内写入读回及 WAL 检查均通过。真实隔离恢复报告对应较早的 Full
+快照，其表摘要独立保存。实际切换以排空时的当前数据摘要核对。
+
+冷副本保存在 `/var/lib/tungchiahui/postgres-maintenance/bf533618-c014-451a-99f4-34315ae47efa/`，
+Manifest SHA-256 为 `e9afdfa157b1c3903107dedd11c1735f901e822ff565c88f97307556a5b5f1e0`。
+该副本与旧镜像离线归档按后续明确的回退保留/清理授权管理。
+
+新 Full 为 `20261113-162904F`，Generation 为
+`20261113-162904F-76ddc3bc-5648-45b8-8a83-96eba290f107`，Manifest SHA-256 为
+`79edfefa5a5ff342714deaf188c8269f157feffa537586fa825219d1b6d87c4c`。
+17:10:42 完成双副本完整读回，两端均 fresh/valid，制品 198,399,840 bytes，耗时约 41.6 分钟，
+WAL Archive Max 为 `0000000100000005000000EE`。随后恢复原消费者与定时器意图，公网
+Health/Ready 和 SQLite 状态核对通过，未完成 Operation 数为 0。
+
+本轮已清理 `backup-work/postgres-image-drill-20261113`、两个已停止的演练容器、临时
+候选镜像传输文件和扫描目录，以及临时 Bootstrap 副本。有效恢复报告、精确扫描、边界
+记录和运行日志保存在开发机 `.local/postgres-maintenance/`。
