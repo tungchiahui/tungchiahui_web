@@ -126,6 +126,7 @@ describe('audited server publication pull', () => {
       actor,
       'enable-pull',
     )
+    acquireHostExecutor(path, 'host:test')
     expect(await configureReleasePull(settings, 'host:test')).toBe(true)
     expect(readReleasePull(path).enabled).toBe(true)
     expect(listInfrastructureOperations(path)[0]).toMatchObject({
@@ -229,8 +230,9 @@ describe('audited server publication pull', () => {
       actor,
       'durable-enable',
     )
-    const before = new Date(Date.now() - 10000)
-    const claimed = claimNextInfrastructureOperation(path, 'old-host', 1, before)
+    const before = new Date(Date.now() - 60000)
+    acquireHostExecutor(path, 'old-host', before)
+    const claimed = claimNextInfrastructureOperation(path, 'old-host', 3600, before)
     if (!claimed) throw new Error('Missing configuration')
     startInfrastructureOperation(
       path,
@@ -239,14 +241,23 @@ describe('audited server publication pull', () => {
       before,
     )
     setReleasePullEnabled(path, true)
+    expect(acquireHostExecutor(path, 'new-host')).toBe(true)
     reconcileInfrastructureOperations(path)
     requeueDeploymentOperationForReconciliation(path, operation.operation.id)
     expect(await configureReleasePull(settings, 'new-host')).toBe(true)
     expect(listInfrastructureOperations(path)).toHaveLength(1)
     expect(listInfrastructureOperations(path)[0]).toMatchObject({
       status: 'completed',
-      fencingToken: 2,
+      fencingToken: 3,
     })
+    expect(readReleasePull(path).enabled).toBe(true)
+    expect(() =>
+      setReleasePullEnabled(path, false, new Date(), {
+        operationId: claimed.id,
+        leaseOwner: 'old-host',
+        fencingToken: claimed.fencingToken,
+      }),
+    ).toThrow(/stale/)
     expect(readReleasePull(path).enabled).toBe(true)
   })
   it('keeps an interrupted deployment pending while the supervisor reconciles its lease', () => {
@@ -304,8 +315,8 @@ describe('audited server publication pull', () => {
     ).toBe(true)
     expect(() => parseReleasePullCommand(['enable', '--reason', 'Missing confirmation'])).toThrow()
   })
-  it('projects a converged healthy exact release without exposing operation or host details', () => {
-    const { path } = fixture()
+  it('projects a converged healthy exact release without exposing operation or host details', async () => {
+    const { path, settings } = fixture()
     initializeDeploymentRuntime(path, {
       sha: publication.gitSha,
       digest: publication.imageDigest,
@@ -356,6 +367,13 @@ describe('audited server publication pull', () => {
       },
     })
     expect(JSON.stringify(publicReleaseStatus(path))).not.toContain('private')
+    setReleasePullEnabled(path, true)
+    await pollPublishedRelease(settings, github({ head: 'e'.repeat(40) }))
+    expect(readReleasePull(path).status).toMatchObject({
+      phase: 'deployed',
+      gitSha: publication.gitSha,
+    })
+    expect(listInfrastructureOperations(path)).toHaveLength(1)
   })
 })
 

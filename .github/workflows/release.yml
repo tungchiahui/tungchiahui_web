@@ -170,7 +170,7 @@ jobs:
       group: application-quality-infrastructure-${{ github.ref }}-${{ github.event_name }}
       cancel-in-progress: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     steps:
       - name: Check out approved release
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

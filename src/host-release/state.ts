@@ -104,12 +104,15 @@ export function readHostGeneration(path: string, sha: string): HostRelease {
   }
 }
 
-type HostOperationLease = Readonly<{
+export type HostOperationLease = Readonly<{
   operationId: string
   leaseOwner: string
   fencingToken: number
 }>
-function requireHostOperationLease(db: DatabaseSync, identity: HostOperationLease | undefined) {
+export function requireHostOperationLease(
+  db: DatabaseSync,
+  identity: HostOperationLease | undefined,
+) {
   if (!identity) return // Server-console bootstrap is explicitly administrator-only.
   const operation = z
     .object({
@@ -323,7 +326,7 @@ export function acquireHostExecutor(path: string, owner: string, now = new Date(
     if (parsed && parsed.owner !== owner) {
       // The prior supervisor is fenced before any interrupted child is stopped/restarted.
       db.prepare(
-        "UPDATE infrastructure_operations SET lease_expires_at=?,fencing_token=fencing_token+1 WHERE (operation_type IN ('deploy','rollback') OR json_extract(target_json,'$.action')='postgres-image-upgrade') AND status IN ('running','claimed') AND lease_owner=?",
+        "UPDATE infrastructure_operations SET lease_expires_at=?,fencing_token=fencing_token+1 WHERE (operation_type IN ('deploy','rollback') OR json_extract(target_json,'$.action') IN ('postgres-image-upgrade','configure-release-pull')) AND status IN ('running','claimed') AND lease_owner=?",
       ).run(now.toISOString(), parsed.owner)
     }
     db.exec('COMMIT')
@@ -345,7 +348,7 @@ export function releaseHostExecutor(path: string, owner: string) {
       .parse(db.prepare('SELECT owner FROM host_release_executor_lock WHERE singleton_id=1').get())
     if (lock.owner === owner) {
       db.prepare(
-        "UPDATE infrastructure_operations SET lease_expires_at=?,fencing_token=fencing_token+1 WHERE (operation_type IN ('deploy','rollback') OR json_extract(target_json,'$.action')='postgres-image-upgrade') AND status IN ('running','claimed') AND lease_owner=?",
+        "UPDATE infrastructure_operations SET lease_expires_at=?,fencing_token=fencing_token+1 WHERE (operation_type IN ('deploy','rollback') OR json_extract(target_json,'$.action') IN ('postgres-image-upgrade','configure-release-pull')) AND status IN ('running','claimed') AND lease_owner=?",
       ).run(new Date().toISOString(), owner)
       db.prepare('DELETE FROM host_release_executor_lock WHERE singleton_id=1 AND owner=?').run(
         owner,

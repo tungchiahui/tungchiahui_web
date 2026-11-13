@@ -37,7 +37,7 @@ export async function configureReleasePull(settings: HostSettings, owner: string
   const lease = { leaseOwner: owner, fencingToken: operation.fencingToken }
   startInfrastructureOperation(path, operation.id, lease)
   const target = configureReleasePullTargetSchema.parse(operation.target)
-  setReleasePullEnabled(path, target.enabled)
+  setReleasePullEnabled(path, target.enabled, new Date(), { operationId: operation.id, ...lease })
   finishInfrastructureOperation(path, operation.id, lease, {
     status: 'completed',
     phase: 'release-pull-configured',
@@ -134,7 +134,7 @@ export async function pollPublishedRelease(
       return
     }
     if (publicReleaseStatus(path, target, publication.payload.imageDigest).state === 'completed') {
-      writeReleasePull(path, { phase: 'deployed', gitSha: head }, now)
+      writeReleasePull(path, { phase: 'deployed', gitSha: target }, now)
       return
     }
     const created = createInfrastructureOperation(

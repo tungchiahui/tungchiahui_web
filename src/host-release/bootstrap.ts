@@ -39,8 +39,8 @@ import {
   stageHostGeneration,
 } from './state'
 
-// This minimal supervisor is the server's installed bootstrap protocol. All deployment work
-// runs from the SHA-bound generation selected in recovery state; it is replaced on each release.
+// The installed bootstrap protocol selects SHA-bound work code for each release.
+// Supervisor protocol changes require explicit server-console activation.
 export function hostExecutorUnit(settings: HostSettings, installedDirectory: string) {
   return `[Unit]\nDescription=Tungchiahui server release supervisor\nRequires=docker.service\nAfter=docker.service\n\n[Service]\nType=simple\nUser=root\nGroup=root\nUMask=0077\nExecStart=${installedDirectory}/node ${installedDirectory}/release-supervisor.cjs ${settings.configRoot}/host-runtime/settings.json\nRestart=on-failure\nRestartSec=5\nTimeoutStopSec=45\nKillMode=control-group\nNoNewPrivileges=true\nPrivateTmp=true\nProtectHome=true\nProtectSystem=full\nReadWritePaths=${settings.configRoot} ${settings.dataRoot} /etc/systemd/system\nRestrictAddressFamilies=AF_UNIX AF_INET AF_INET6\n\n[Install]\nWantedBy=multi-user.target\n`
 }

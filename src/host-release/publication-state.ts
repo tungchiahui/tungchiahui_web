@@ -6,7 +6,13 @@ import {
 } from '../control-plane/control-state'
 import { hostReleaseSchema } from './contracts'
 import { publicReleaseReceiptSchema } from './publication-contracts'
-import { openHostReleaseDatabase, readHostExecutorStatus, readHostRuntime } from './state'
+import {
+  type HostOperationLease,
+  openHostReleaseDatabase,
+  readHostExecutorStatus,
+  readHostRuntime,
+  requireHostOperationLease,
+} from './state'
 
 const pullStateSchema = z.object({
   enabled: z.union([z.literal(0), z.literal(1)]),
@@ -56,17 +62,29 @@ export function writeReleasePull(
     db.close()
   }
 }
-export function setReleasePullEnabled(path: string, enabled: boolean, now = new Date()) {
+export function setReleasePullEnabled(
+  path: string,
+  enabled: boolean,
+  now = new Date(),
+  identity?: HostOperationLease,
+) {
   initializeReleasePull(path)
   const db = openHostReleaseDatabase(path)
   try {
+    db.exec('BEGIN IMMEDIATE')
+    requireHostOperationLease(db, identity)
     db.prepare(
       'UPDATE host_release_pull_state SET enabled=?,next_check_at=? WHERE singleton_id=1',
     ).run(enabled ? 1 : 0, now.toISOString())
+    db.exec('COMMIT')
+  } catch (error) {
+    db.exec('ROLLBACK')
+    throw error
   } finally {
     db.close()
   }
 }
+
 export function publicReleaseStatus(path: string, sha?: string, digest?: string) {
   const deployment = readDeploymentState(path)
   const db = openHostReleaseDatabase(path)
