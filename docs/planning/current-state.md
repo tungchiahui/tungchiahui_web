@@ -1,5 +1,33 @@
 # Website V2 Current Implementation State
 
+## 2026-11-13 — Owner 授权正式发布完成
+
+代码验收后，Owner 明确授权将 `3272b43da91a012fff36a98e2e54d17478dbc805`
+快进推送 main，并由现有 Main Release 自动发布。main 已完成该次快进。
+[`43367330273`](https://github.com/tungchiahui/tungchiahui_web/actions/runs/43367330273)
+全部 16 个 Job 成功，包含完整 Quality Gate、组件计划、镜像构建/扫描和正式蓝绿发布。
+发布时间为 2026-11-13 12:43:16–13:08:04（Asia/Hong_Kong），总计 24 分 48 秒。
+服务器 Operation `ce680baf-9f5f-4b89-a0e5-6804a945c4ca` 在
+13:06:14–13:07:45 完成，状态为 `completed/deployment-verified`，
+`hostRelease.status=converged`，`executorSha=3272b43da91a012fff36a98e2e54d17478dbc805`。
+
+本次 Web Digest 为 `sha256:5d2a00a7b38bf1fee1b9d89b625f21b89b702190573edac6a7629452366639f5`，
+Service Digest 为 `sha256:39d93e8a638a9633958b87354659dd02e210d82e36c5586937aeac28185a1079`，
+Recovery Digest 为 `sha256:ff0e5dc4998ec3b3cbbeaed9d0f26580a544a22ea7096096efa606d17a73ac88`。
+首次计划确认旧执行器尚不支持组件 Source SHA，按兼容路径输出 `reuse=false`，
+完成同 SHA 的首次升级。后续正常界面发布的实际提速仍待运行记录验收。
+
+发布后独立 HTTPS 复查确认 Version 为该 SHA/Blue，Health 为 ok，Ready 的 PostgreSQL
+为 ready。匿名 `/api/ops/health/snapshot` 返回 401，旧公开
+`/api/personal-data/weight_loss` 返回 403，两者均带 `private, no-store`。
+本轮自动发布与公网检查均已完成。服务器 SSH/1Panel 接入仍需逐项授权，实时双副本备份、
+实际 PostgreSQL 镜像安全核验和双槽直接检查留待服务器验收。Owner UI 与 SmartScaleConnect
+输出目录、UID、权限、首次预检及同步启用仍待一次性接入。
+
+Owner 在构建等待期间已收到与现有实现一致的接入说明，默认主机隔离目录为
+`/var/lib/tungchiahui/health-data`，仅 content-worker 只读挂载，网站导入周期为五分钟。
+本段发布后验收记录在交付工作分支沉淀，main 发布目标为已授权的 `3272b43da`。
+
 ## 2026-11-13 — 发布耗时精简实施
 
 Owner 在接管收尾期间明确授权分级检查、组件复用及对应 Workflow、架构文档和工程约束。
