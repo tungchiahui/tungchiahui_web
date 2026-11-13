@@ -1,9 +1,9 @@
 import { readFile } from 'node:fs/promises'
-import { expect, test } from '@playwright/test'
 import { z } from 'zod'
 import { healthSnapshotSchema } from '../../src/health/contracts'
 import { datasetResponseSchema, techFootprintPayloadSchema } from '../../src/personal/contracts'
 import { roadmapExchangeSchema } from '../../src/personal/exchange'
+import { expect, test } from './fixtures'
 
 test('owner login directly enables both trackers; saves survive reload and health stays private', async ({
   page,

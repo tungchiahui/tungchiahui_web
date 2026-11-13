@@ -239,3 +239,11 @@ Phase 13 已收集一次 Disposable 小数据集 Measurement，用于证明可�
 ## Owner browser sessions after restore
 
 ADR 0021 personal-tracker data and `owner_auth.sessions` are included in PostgreSQL recovery. A PITR/restore may resurrect a session revoked after the chosen recovery point. Keep `OWNER_PASSWORD_HASH` absent during restore activation and rotate to a new verifier through `/etc/tungchiahui/.env` before enabling owner login. This invalidates restored sessions without resetting tracker data. Owner login is never a prerequisite for Operator/OIDC/SQLite recovery. Validate tracker row counts and representative progress/weight values, then verify old session rejection and new login/save/logout on an isolated restore target. Do not run this drill destructively against production.
+
+## 2026-11-13 真实备份隔离恢复记录
+
+数据库镜像维护使用 Full `20261113-112533F` 的真实不可变 Generation，3,244 项对象与
+R2 代际 Manifest 逐项校验后，经同一 Recovery Engine 在隔离数据目录恢复。旧镜像、新
+镜像和同目录旧镜像回退的 23 表、迁移、角色与四语言索引核对通过，包含 amcheck。
+有效报告与 Hash、镜像身份和执行前清单见 PostgreSQL 镜像维护方案。直接远端 R2 Fallback
+的额外恢复尚未形成通过证据。真实文件与私有内容始终保持在授权的受限主机目录。

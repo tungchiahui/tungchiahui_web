@@ -21,5 +21,7 @@ services:
     ports:
       - "127.0.0.1::8082"
   web:
+    environment:
+      NODE_OPTIONS: "--import=/workspace/tools/dev/external-fixtures.ts"
     ports:
       - "127.0.0.1::3000"

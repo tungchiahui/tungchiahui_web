@@ -24,9 +24,9 @@ describe('Phase 15 workflow trigger and credential separation', () => {
       target: pgbouncerImageReference,
     },
     {
-      expected: 'Deploy job must remain build-gated, production-scoped and OIDC-only',
-      replacement: 'environment: staging',
-      target: 'environment: production',
+      expected: 'Publication must be build-gated with deployment-metadata permission',
+      replacement: 'deployments: read',
+      target: 'deployments: write',
     },
     {
       expected: 'Missing or invalid release job: release-result',
@@ -34,9 +34,9 @@ describe('Phase 15 workflow trigger and credential separation', () => {
       target: '  release-result:',
     },
     {
-      expected: 'Deploy job must remain build-gated, production-scoped and OIDC-only',
-      replacement: 'group: unsafe-deployment-queue',
-      target: 'group: application-production-release',
+      expected: 'Missing or invalid release job: publish',
+      replacement: '  disabled-publish:',
+      target: '  publish:',
     },
     {
       expected: 'quality-infrastructure must require the full impact gate',

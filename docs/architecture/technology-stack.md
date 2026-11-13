@@ -109,3 +109,8 @@ Control-state Schema 8 允许基础设施 Operation 保存经过 Validation 的�
 - 第二个 Production Search Engine
 
 新工具必须解决已经证明存在的缺口；如果它与现有职责重叠，则必须获得 Architecture Decision。
+
+
+ADR 0034 的发布元数据使用 GitHub Deployments API。服务器复用已有只读 Registry Credential
+读取固定仓库的发布与 Run，主机 SQLite 保存拉取开关和检查状态。独立 GitHub Workflow
+使用最小 deployments:write 回报公开的生产版本回执。CI 与服务器各自使用有界重试。

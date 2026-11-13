@@ -4,6 +4,7 @@ import {
   type TranslationOperationRequest,
   translationOperationRequestSchema,
 } from '../src/translation/contracts'
+import { parseReleasePullCommand } from './ci/release-pull-command'
 import {
   type PostgresMaintenanceCommand,
   type PostgresMaintenanceRetryCommand,
@@ -17,6 +18,7 @@ import {
 const defaultProductionEnvFile = '/etc/tungchiahui/.env'
 
 export type SiteCommand =
+  | ReturnType<typeof parseReleasePullCommand>
   | PostgresMaintenanceCommand
   | PostgresMaintenanceRetryCommand
   | Readonly<{ kind: 'music-studio' }>
@@ -127,6 +129,7 @@ export function assertToolchain(nodeVersion: string) {
 }
 
 export function parseSiteCommand(arguments_: readonly string[]): SiteCommand {
+  if (arguments_[0] === 'release-pull') return parseReleasePullCommand(arguments_.slice(1))
   if (arguments_[0] === 'postgres-image')
     return parsePostgresMaintenanceCommand(arguments_.slice(1))
   if (arguments_.length === 2 && arguments_[0] === 'music' && arguments_[1] === 'studio')

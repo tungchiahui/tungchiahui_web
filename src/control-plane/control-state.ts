@@ -723,12 +723,10 @@ export function createInfrastructureOperation(
 ) {
   if (
     request.operationType === 'server-migration' &&
-    request.target.action === 'postgres-image-upgrade' &&
+    ['postgres-image-upgrade', 'configure-release-pull'].includes(request.target.action) &&
     actor.kind !== 'operator'
   )
-    throw new ControlStateConflictError(
-      'PostgreSQL image maintenance requires an operator identity',
-    )
+    throw new ControlStateConflictError('Host maintenance requires an operator identity')
   const database = openControlState(path)
   try {
     return transaction(database, () => {
@@ -893,7 +891,12 @@ export function getInfrastructureOperation(path: string, id: string) {
   }
 }
 
-export function findCompletedDeployment(path: string, gitSha: string, imageDigest: string) {
+export function findDeploymentOperation(
+  path: string,
+  gitSha: string,
+  imageDigest: string,
+  completedOnly = true,
+) {
   const request = infrastructureOperationRequestSchema.parse({
     operationType: 'deploy',
     reason: 'Read completed deployment receipt',
@@ -904,15 +907,19 @@ export function findCompletedDeployment(path: string, gitSha: string, imageDiges
   try {
     const row = database
       .prepare(`SELECT * FROM infrastructure_operations
-      WHERE operation_type = 'deploy' AND status = 'completed'
+      WHERE operation_type = 'deploy' ${completedOnly ? "AND status = 'completed'" : ''}
         AND json_extract(target_json, '$.gitSha') = ?
         AND json_extract(target_json, '$.imageDigest') = ?
-      ORDER BY finished_at DESC, id DESC LIMIT 1`)
+      ORDER BY ${completedOnly ? 'finished_at' : 'created_at'} DESC, id DESC LIMIT 1`)
       .get(request.target.gitSha, request.target.imageDigest)
     return row ? mapOperation(row) : null
   } finally {
     database.close()
   }
+}
+
+export function findCompletedDeployment(path: string, gitSha: string, imageDigest: string) {
+  return findDeploymentOperation(path, gitSha, imageDigest, true)
 }
 
 export function listInfrastructureOperations(
@@ -1358,7 +1365,9 @@ export function requeueDeploymentOperationForReconciliation(
         operation.status !== 'needs-attention' ||
         (operation.operationType !== 'deploy' &&
           operation.operationType !== 'rollback' &&
-          operation.target.action !== 'postgres-image-upgrade') ||
+          !['postgres-image-upgrade', 'configure-release-pull'].some(
+            (action) => action === operation.target.action,
+          )) ||
         (operation.target.action === 'postgres-image-upgrade' &&
           operation.result?.phase === 'recovery-required')
       ) {

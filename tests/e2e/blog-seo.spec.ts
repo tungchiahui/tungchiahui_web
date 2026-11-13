@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures'
 
 test('blog journal stays readable on desktop and mobile with usable search', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })

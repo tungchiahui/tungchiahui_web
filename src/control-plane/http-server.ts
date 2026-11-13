@@ -1,9 +1,9 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-
 import { z } from 'zod'
 import { createHealthHttpHandler } from '../health/http'
 import { LegacyHealthRepository } from '../health/legacy'
 import { HealthRepository } from '../health/repository'
+import { publicReleaseStatus, readReleasePull } from '../host-release/publication-state'
 import { readHostExecutorStatus } from '../host-release/state'
 import { createMusicHttpHandler } from '../music/http'
 import { MusicLibraryRepository } from '../music/library-repository'
@@ -198,6 +198,8 @@ function routeShape(pathname: string) {
   if (pathname === '/api/ops/infrastructure-operations') {
     return Object.freeze({ allow: 'POST', kind: 'infrastructure-operation-create' as const })
   }
+  if (pathname === '/api/ops/releases/status')
+    return { allow: 'GET', kind: 'public-release-status' as const }
   const deploymentReceipt = /^\/api\/ops\/deployment-receipts\/([^/]+)\/([^/]+)$/.exec(pathname)
   if (deploymentReceipt?.[1] && deploymentReceipt[2]) {
     return Object.freeze({
@@ -528,6 +530,31 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
       return
     }
 
+    if (route.kind === 'public-release-status') {
+      try {
+        const query = z
+          .object({
+            sha: z
+              .string()
+              .regex(/^[a-f0-9]{40}$/)
+              .optional(),
+            digest: z
+              .string()
+              .regex(/^sha256:[a-f0-9]{64}$/)
+              .optional(),
+          })
+          .strict()
+          .refine((q) => Boolean(q.sha) === Boolean(q.digest))
+          .parse(Object.fromEntries(url.searchParams))
+        sendJson(response, {
+          body: publicReleaseStatus(configuration.statePath, query.sha, query.digest),
+          status: 200,
+        })
+      } catch (error: unknown) {
+        sendJson(response, errorResponse(error))
+      }
+      return
+    }
     const headers = requestHeaders(request)
     let actorId = 'anonymous'
     try {
@@ -561,6 +588,7 @@ export function createControlApiServer(configuration: ControlApiConfiguration) {
               deployment: readDeploymentState(configuration.statePath),
               deployAgent: configuration.mode === 'production' ? 'server-release' : 'fake',
               hostExecutor: readHostExecutorStatus(configuration.statePath),
+              releasePull: readReleasePull(configuration.statePath),
               identityContracts: serviceIdentityContracts,
               mode: configuration.mode,
               productionOperations: configuration.mode === 'production',

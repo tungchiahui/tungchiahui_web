@@ -42,62 +42,61 @@ describe('graded release checks', () => {
       expect(classifyReleaseDiff(root, target, followup)).toBe('docs')
       expect(classifyReleaseDiff(root, base, followup)).toBe('full')
       const output = join(root, 'outputs')
-      execFileSync(process.execPath, [resolve('tools/ci/release-impact.ts')], {
-        cwd: root,
-        env: {
-          ...process.env,
-          EVENT_NAME: 'push',
-          RELEASE_SHA: followup,
-          BASE_SHA: target,
-          GITHUB_TOKEN: '',
-          GITHUB_OUTPUT: output,
+      execFileSync(
+        process.execPath,
+        [resolve('node_modules/tsx/dist/cli.mjs'), resolve('tools/ci/release-impact.ts')],
+        {
+          cwd: root,
+          env: {
+            ...process.env,
+            EVENT_NAME: 'push',
+            RELEASE_SHA: followup,
+            BASE_SHA: target,
+            GITHUB_TOKEN: '',
+            GITHUB_OUTPUT: output,
+          },
+          stdio: 'ignore',
         },
-        stdio: 'ignore',
-      })
+      )
       expect(readFileSync(output, 'utf8')).toBe('quality_mode=full\n')
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
   })
-  it('uses a successful deployed version and skips documentation-only successes', async () => {
+  it('uses confirmed production metadata even when the publication workflow did not report deployment', async () => {
+    const payload = {
+      version: 1,
+      gitSha: 'a'.repeat(40),
+      imageDigest: `sha256:${'b'.repeat(64)}`,
+      serviceSha: 'c'.repeat(40),
+      recoverySha: 'd'.repeat(40),
+      runId: 123,
+      automatic: true,
+    }
     const request = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(
-        Response.json({
-          workflow_runs: [
-            { id: 2, head_sha: 'b'.repeat(40) },
-            { id: 1, head_sha: 'a'.repeat(40) },
-          ],
-        }),
+        Response.json([
+          {
+            id: 1,
+            sha: payload.gitSha,
+            environment: 'production',
+            creator: { login: 'github-actions[bot]' },
+            payload,
+          },
+        ]),
       )
-      .mockResolvedValueOnce(
-        Response.json({
-          jobs: [{ name: 'shared-control-plane-blue-green-deployment', conclusion: 'skipped' }],
-        }),
-      )
-      .mockResolvedValueOnce(
-        Response.json({
-          jobs: [{ name: 'shared-control-plane-blue-green-deployment', conclusion: 'success' }],
-        }),
-      )
-    expect(await deployedReleaseBase('owner/site', 'fixture', request)).toBe('a'.repeat(40))
-    expect(request.mock.calls[0]?.[0]).toContain('status=success')
-    expect(request.mock.calls[2]?.[0]).toContain('/actions/runs/1/jobs')
+      .mockResolvedValueOnce(Response.json([{ state: 'success' }]))
+    expect(await deployedReleaseBase('owner/site', 'fixture', request)).toBe(payload.gitSha)
+    expect(request.mock.calls[0]?.[0]).toContain('/deployments?environment=production')
   })
-
-  it('requires a confirmed deployment baseline and handles invalid or unavailable history conservatively', async () => {
-    const request = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ workflow_runs: [] }))
+  it('takes the full gate when no confirmed deployment exists', async () => {
+    const request = vi.fn<typeof fetch>().mockResolvedValue(Response.json([]))
     expect(await deployedReleaseBase('owner/site', '', request)).toBeUndefined()
     expect(request).not.toHaveBeenCalled()
     expect(await deployedReleaseBase('owner/site', 'fixture', request)).toBeUndefined()
-    request.mockResolvedValueOnce(
-      Response.json({ workflow_runs: [{ id: 1, head_sha: 'invalid' }] }),
-    )
-    expect(await deployedReleaseBase('owner/site', 'fixture', request)).toBeUndefined()
     request.mockResolvedValueOnce(new Response('', { status: 403 }))
-    await expect(deployedReleaseBase('owner/site', 'fixture', request)).rejects.toThrow(
-      'baseline lookup failed',
-    )
+    await expect(deployedReleaseBase('owner/site', 'fixture', request)).rejects.toThrow('HTTP 403')
   })
   it('only takes the short paths for an explicit public-interface or documentation diff', () => {
     expect(classifyReleaseImpact(['docs/operations/server-release.md', 'README.md'])).toBe('docs')
@@ -152,7 +151,7 @@ describe('graded release checks', () => {
     expect(qualityGatePassed('unexpected', all)).toBe(false)
   })
 
-  it('distinguishes a verified documentation update from a completed application deployment', () => {
+  it('distinguishes a verified documentation update from a completed immutable publication', () => {
     const result = {
       mode: 'full',
       quality: 'success',

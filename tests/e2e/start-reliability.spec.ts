@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
-import { expect, test } from '@playwright/test'
 import { z } from 'zod'
 import { type StartPayload, startPayloadSchema } from '../../src/start/contracts'
+import { expect, test } from './fixtures'
 
 const enUs = JSON.parse(
   readFileSync(resolve(import.meta.dirname, '../../messages/en-us.json'), 'utf8'),

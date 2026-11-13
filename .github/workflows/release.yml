@@ -6,11 +6,11 @@ on:
   workflow_dispatch:
     inputs:
       git_sha:
-        description: Full main-branch Git SHA to quality-check, build and deploy
+        description: Full main-branch Git SHA to quality-check, build and publish
         required: true
         type: string
       reason:
-        description: Audited retry or specified-SHA deployment reason
+        description: Audited reason for preparing a specified-SHA publication
         required: true
         type: string
 
@@ -28,6 +28,7 @@ jobs:
     permissions:
       contents: read
       actions: read
+      deployments: read
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -58,17 +59,25 @@ jobs:
           git merge-base --is-ancestor "$release_sha" origin/main
           echo "git_sha=$release_sha" >>"$GITHUB_OUTPUT"
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@008330803749db0355799c700092d9a85fd074e9
+        with:
+          version: 11.23.0
+          run_install: false
       - name: Install Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
+          cache: pnpm
+      - name: Install locked planning dependencies
+        run: pnpm install --frozen-lockfile
       - name: Classify the approved release diff
         id: impact
         env:
           EVENT_NAME: ${{ github.event_name }}
           RELEASE_SHA: ${{ steps.release.outputs.git_sha }}
           GITHUB_TOKEN: ${{ github.token }}
-        run: node tools/ci/release-impact.ts
+        run: pnpm exec tsx tools/ci/release-impact.ts
 
   quality-static:
     name: quality-static
@@ -282,10 +291,9 @@ jobs:
       cancel-in-progress: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    environment: production
     permissions:
       contents: read
-      id-token: write
+      deployments: read
       packages: read
     outputs:
       reuse_components: ${{ steps.plan.outputs.reuse_components }}
@@ -302,7 +310,7 @@ jobs:
       postgres_image_digest: ${{ steps.plan.outputs.postgres_image_digest }}
       postgres_exists: ${{ steps.plan.outputs.postgres_exists }}
     env:
-      SITE_CONTROL_API_URL: https://www.tungchiahui.cn
+      GITHUB_TOKEN: ${{ github.token }}
       RELEASE_SHA: ${{ needs.resolve-release.outputs.git_sha }}
       DEPLOYMENT_ENABLED: ${{ vars.PRODUCTION_DEPLOYMENT_ENABLED }}
     steps:
@@ -331,7 +339,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
-      - name: Read installed executor compatibility
+      - name: Resolve components from confirmed publication history
         id: plan
         run: |
           if [ -f tools/ci/plan-components.ts ]; then
@@ -580,6 +588,8 @@ jobs:
     outputs:
       git_sha: ${{ needs.resolve-release.outputs.git_sha }}
       image_digest: ${{ needs.build-web.outputs.image_digest }}
+      service_source_sha: ${{ needs.build-service.outputs.source_sha }}
+      recovery_source_sha: ${{ needs.build-recovery.outputs.source_sha }}
       postgres_image_digest: ${{ needs.build-postgres.outputs.image_digest }}
       pgbouncer_image_digest: ${{ needs.build-pgbouncer.outputs.image_digest }}
       recovery_image_digest: ${{ needs.build-recovery.outputs.image_digest }}
@@ -623,86 +633,61 @@ jobs:
             echo '```'
           } >>"$GITHUB_STEP_SUMMARY"
 
-  deploy:
-    name: shared-control-plane-blue-green-deployment
+  publish:
+    name: publish-verified-release
     needs: build
-    if: vars.PRODUCTION_DEPLOYMENT_ENABLED == 'true'
-    concurrency:
-      group: application-production-release
-      cancel-in-progress: false
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    environment: production
+    timeout-minutes: 5
     permissions:
       contents: read
-      id-token: write
+      deployments: write
     env:
-      RELEASE_DIGEST: ${{ needs.build.outputs.image_digest }}
-      RELEASE_REASON: ${{ github.event_name == 'workflow_dispatch' && inputs.reason || format('main release workflow {0}', github.run_id) }}
+      GITHUB_TOKEN: ${{ github.token }}
       RELEASE_SHA: ${{ needs.build.outputs.git_sha }}
-      SITE_CONTROL_API_URL: https://www.tungchiahui.cn
+      RELEASE_DIGEST: ${{ needs.build.outputs.image_digest }}
+      SERVICE_SOURCE_SHA: ${{ needs.build.outputs.service_source_sha }}
+      RECOVERY_SOURCE_SHA: ${{ needs.build.outputs.recovery_source_sha }}
+      DEPLOYMENT_ENABLED: ${{ vars.PRODUCTION_DEPLOYMENT_ENABLED }}
     steps:
-      - name: Check out the reviewed workflow control client
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check out publication client
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.workflow_sha }}
-          fetch-depth: 0
-
-      - name: Refuse a stale automatic release
-        if: github.event_name == 'push'
-        env:
-          RELEASE_SHA: ${{ needs.build.outputs.git_sha }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          git fetch --no-tags --prune origin main
-          [[ "$RELEASE_SHA" == "$(git rev-parse origin/main)" ]]
-
       - name: Install pnpm
-        uses: pnpm/action-setup@008330803749db0355799c700092d9a85fd074e9 # v6.0.9
+        uses: pnpm/action-setup@008330803749db0355799c700092d9a85fd074e9
         with:
           version: 11.23.0
           run_install: false
-
       - name: Install Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version-file: .node-version
           cache: pnpm
-
-      - name: Install locked deployment client
+      - name: Install locked publication client
         run: pnpm install --frozen-lockfile
-
-      - name: Validate rollout compatibility before contacting the deployment engine
-        env:
-          RELEASE_SHA: ${{ needs.build.outputs.git_sha }}
-        run: pnpm exec tsx tools/deployment/release-preflight.ts
-
-      - name: Trigger and wait for the shared deployment engine
-        run: >-
-          ./site deploy "$RELEASE_SHA" --image-digest "$RELEASE_DIGEST"
-          --reason "$RELEASE_REASON" --wait
+      - name: Publish verified immutable release
+        run: pnpm exec tsx tools/ci/publish-release.ts
 
   release-result:
-    name: verify-production-release-completed
-    needs: [resolve-release, quality-gate, build, deploy]
+    name: verify-release-publication-completed
+    needs: [resolve-release, quality-gate, build, publish]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Check out the reviewed release result policy
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check out publication policy
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.workflow_sha }}
       - name: Install Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version-file: .node-version
-      - name: Require both image publication and deployment
+      - name: Require quality and immutable publication
         env:
           QUALITY_MODE: ${{ needs.resolve-release.outputs.quality_mode }}
           QUALITY_RESULT: ${{ needs.quality-gate.result }}
           BUILD_RESULT: ${{ needs.build.result }}
           DEPLOYMENT_ENABLED: ${{ vars.PRODUCTION_DEPLOYMENT_ENABLED }}
-          DEPLOY_RESULT: ${{ needs.deploy.result }}
+          DEPLOY_RESULT: ${{ needs.publish.result }}
         run: node tools/ci/release-result.ts

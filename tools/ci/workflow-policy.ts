@@ -132,15 +132,15 @@ function requireReleaseJobStructure(
   }
   const plan = requireJob('plan-components')
   if (
-    plan?.permissions?.['id-token'] !== 'write' ||
+    plan?.permissions?.deployments !== 'read' ||
     plan.permissions.packages !== 'read' ||
-    plan.environment !== 'production' ||
+    plan.permissions?.['id-token'] !== undefined ||
     JSON.stringify(normalizedNeeds(plan).toSorted()) !==
       JSON.stringify(['resolve-release', 'quality-gate'].toSorted())
   )
     issues.push({
       file: 'release.yml',
-      message: 'Component planning must use the quality-gated production identity',
+      message: 'Component planning must use read-only publication history',
     })
 
   const publishJobs = [
@@ -189,6 +189,8 @@ function requireReleaseJobStructure(
       'pgbouncer_image_digest',
       'recovery_image_digest',
       'service_image_digest',
+      'service_source_sha',
+      'recovery_source_sha',
     ]
     if (
       JSON.stringify(Object.keys(build.outputs ?? {}).toSorted()) !==
@@ -210,35 +212,30 @@ function requireReleaseJobStructure(
     }
   }
 
-  const deploy = requireJob('deploy')
-  if (deploy) {
-    const environment =
-      typeof deploy.environment === 'string' ? deploy.environment : deploy.environment?.name
-    if (
-      JSON.stringify(normalizedNeeds(deploy)) !== JSON.stringify(['build']) ||
-      deploy.if !== "vars.PRODUCTION_DEPLOYMENT_ENABLED == 'true'" ||
-      environment !== 'production' ||
-      deploy.permissions?.['id-token'] !== 'write' ||
-      deploy.concurrency?.group !== 'application-production-release' ||
-      deploy.concurrency['cancel-in-progress'] !== false
-    ) {
-      issues.push({
-        file: 'release.yml',
-        message: 'Deploy job must remain build-gated, production-scoped and OIDC-only',
-      })
-    }
+  const publish = requireJob('publish')
+  if (
+    publish &&
+    (JSON.stringify(normalizedNeeds(publish)) !== JSON.stringify(['build']) ||
+      publish.permissions?.deployments !== 'write' ||
+      publish.permissions?.['id-token'] !== undefined ||
+      publish.environment !== undefined)
+  ) {
+    issues.push({
+      file: 'release.yml',
+      message: 'Publication must be build-gated with deployment-metadata permission',
+    })
   }
 
   const result = requireJob('release-result')
   if (
     result &&
     (JSON.stringify(normalizedNeeds(result).toSorted()) !==
-      JSON.stringify(['resolve-release', 'quality-gate', 'build', 'deploy'].toSorted()) ||
+      JSON.stringify(['resolve-release', 'quality-gate', 'build', 'publish'].toSorted()) ||
       result.if !== 'always()')
   ) {
     issues.push({
       file: 'release.yml',
-      message: 'Release result job must fail closed across build and deployment outcomes',
+      message: 'Release result job must fail closed across quality and publication outcomes',
     })
   }
 }
@@ -292,8 +289,6 @@ export function analyzeWorkflowPolicies(root: string): readonly WorkflowPolicyIs
   requireReleaseJobStructure(issues, release.parsed.jobs)
   requireFragments(issues, 'release.yml', release.source, [
     'branches: [main]',
-    'group: application-production-release',
-    'cancel-in-progress: false',
     'git merge-base --is-ancestor "$release_sha" origin/main',
     'pnpm run check:biome',
     'pnpm run check:source',
@@ -307,16 +302,12 @@ export function analyzeWorkflowPolicies(root: string): readonly WorkflowPolicyIs
     'pnpm run renovate:validate',
     'pnpm run build',
     'packages: write',
-    'id-token: write',
-    'environment: production',
-    "if: vars.PRODUCTION_DEPLOYMENT_ENABLED == 'true'",
     'ghcr.io/tungchiahui/tungchiahui_web',
     'docker/setup-buildx-action@',
     'docker/build-push-action@',
     'cache-from: type=gha,scope=production-web',
     'cache-to: type=gha,mode=max,scope=production-web',
     workflowShaReference,
-    'SITE_CONTROL_API_URL: https://www.tungchiahui.cn',
     serviceDigestReference,
     recoveryDigestReference,
     pgbouncerImageReference,
@@ -324,12 +315,11 @@ export function analyzeWorkflowPolicies(root: string): readonly WorkflowPolicyIs
     'build-args: SITE_DEPLOYMENT_SHA=$' + '{{ steps.resolve.outputs.source_sha }}',
     'SITE_PGBOUNCER_SHA=$' + '{{ needs.build-pgbouncer.outputs.source_sha }}',
     '### Immutable release manifest',
-    'git rev-parse origin/main',
-    './site deploy',
-    '--wait',
     'run: node tools/ci/quality-gate.ts',
     'run: node tools/ci/release-result.ts',
-    'run: node tools/ci/release-impact.ts',
+    'run: pnpm exec tsx tools/ci/release-impact.ts',
+    'pnpm exec tsx tools/ci/publish-release.ts',
+    'deployments: write',
     'SITE_SERVICE_SOURCE_SHA=$' + '{{ needs.build-service.outputs.source_sha }}',
     'SITE_RECOVERY_SOURCE_SHA=$' + '{{ needs.build-recovery.outputs.source_sha }}',
     'pnpm exec tsx tools/ci/plan-components.ts',
@@ -349,6 +339,27 @@ export function analyzeWorkflowPolicies(root: string): readonly WorkflowPolicyIs
     'SITE_OPERATOR_PRIVATE_KEY',
     '/var/run/docker.sock',
     'secrets.',
+    'id-token: write',
+    'SITE_CONTROL_API_URL',
+    './site deploy',
+    '--wait',
+  ])
+  const status = workflow(root, 'production-status.yml')
+  verifyPinnedActions(issues, 'production-status.yml', status.source)
+  requireFragments(issues, 'production-status.yml', status.source, [
+    "cron: '*/15 * * * *'",
+    'deployments: write',
+    'workflows: [Main Release]',
+    'branches: [main]',
+    workflowShaReference,
+    'tools/ci/observe-production.ts',
+  ])
+  rejectFragments(issues, 'production-status.yml', status.source, [
+    'id-token: write',
+    'packages: write',
+    'secrets.',
+    './site deploy',
+    'DATABASE_URL',
   ])
 
   if (JSON.stringify(Object.keys(content.parsed.on)) !== JSON.stringify(['workflow_call'])) {

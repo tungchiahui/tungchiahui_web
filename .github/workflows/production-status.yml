@@ -1,0 +1,41 @@
+name: Production Deployment Status
+on:
+  workflow_run:
+    workflows: [Main Release]
+    types: [completed]
+    branches: [main]
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+  deployments: write
+concurrency:
+  group: production-deployment-status
+  cancel-in-progress: false
+jobs:
+  receipt:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out trusted receipt client
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.workflow_sha }}
+      - name: Install pnpm
+        uses: pnpm/action-setup@008330803749db0355799c700092d9a85fd074e9
+        with:
+          version: 11.23.0
+          run_install: false
+      - name: Install Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - name: Install locked receipt client
+        run: pnpm install --frozen-lockfile
+      - name: Reconcile actual production receipts
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: pnpm exec tsx tools/ci/observe-production.ts

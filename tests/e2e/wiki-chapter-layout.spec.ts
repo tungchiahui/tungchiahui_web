@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures'
 
 test('long chapter numbers keep their own width and a visible title gap on narrow screens', async ({
   page,

@@ -21,16 +21,16 @@ Web Application Repository 的正常 Production Trigger：
 push to main
  -> CI Quality Gates
  -> build Git-SHA-tagged immutable image set
- -> POST /api/ops/deployments
+ -> publish verified GitHub Deployment metadata
+ -> server pull / existing SQLite deployment operation
 ```
 
 ADR 0032 对应的 Quality Gates 未通过时不得构建/发布 Production Candidate，也不得 Cutover。
 
-首次上线使用 Repository Actions Variable `PRODUCTION_DEPLOYMENT_ENABLED` 作为显式 Activation
-Gate。变量不存在或不等于 `true` 时，`main` Quality/Build 仍可发布完整 Immutable Image Set，
-但 Deploy Job 保持 Skipped，最终 Release Result 会 Fail-closed，避免把“只构建未部署”误报为完整
-发布成功。只有 Production Environment Protection、Origin Provision、Control API 与 Pre-cutover
-Gate 均通过后才设置为 `true`；该变量不能绕过 Quality Gate。
+首次安装以 Repository Actions Variable `PRODUCTION_DEPLOYMENT_ENABLED=true` 标记自动执行意图，
+并由 Operator 通过受审计配置 Operation 启用服务器拉取。变量关闭时仍可发布不可变制品，
+Payload 的 automatic 为 false。Main Release 结果表示检查/发布结果，生产结果由独立
+Production Deployment Status 与 GitHub Deployment 状态表示。激活步骤见 ADR 0034 与服务器发布手册。
 
 Human-triggered/Retry/指定版本：
 
@@ -44,29 +44,22 @@ Human-triggered/Retry/指定版本：
 `ghcr.io/tungchiahui/tungchiahui_web` 解析 `<sha>` 对应的 Registry Manifest Digest。解析失败时，
 Operator 必须手工传入 digest。
 
-Deployment request idempotency includes the GitHub run ID and run attempt in addition to the
-release SHA/digest. Repeated requests within an attempt return the same operation; **Re-run failed
-jobs** creates a new attempt, preserving the original failed operation and audit history. Manual
-CLI invocations receive a fresh attempt UUID. The server still rejects concurrent deployments.
-Clients from before this fix reuse a release-only key: rerunning those historical workflow commits
-returns the original failure without executing Docker again. Use the corrected client for an
-explicit retry; do not delete or rewrite failed operations to make a historical run green.
+自动拉取的幂等键为 `github-publication:<id>`，同一发布的重复检查和进程重启复用同一
+Operation。确定失败后保留原记录，Operator 通过原 `./site deploy` 明确重试。人工 CLI 的
+每次明确调用使用独立 Attempt UUID，并继续受全局排他与 Audit 约束。
 
-GitHub Actions 和 `./site deploy` 向同一个独立 `control-api` 完成认证，执行相同 Policy，并调用同一个底层 Deployment Engine；不得维护 CI/Manual 两套实现。
+服务器拉取与 `./site deploy` 使用同一个 SQLite Operation、Policy 和 Deployment Engine。
 控制客户端只会对 GET 或具有 Idempotency Key 的请求重试瞬时网络错误以及
 `408`/`425`/`429`/`5xx` 响应，最多三次并为每次尝试重新绑定认证 Nonce。认证拒绝、
 Policy Denial 和没有 Idempotency Key 的 POST 不得重试，避免把网络恢复机制变成重复副作用。
 
-`release.yml` 只接受 `main` push 或显式 `workflow_dispatch`。完整 Quality Gate 按静态/Build、Unit、
-Production Infrastructure/Recovery、Integration/E2E、Migration 并行执行，再由稳定的
-`quality-gate` Fail-closed 汇总。Gate 全部成功后，PostgreSQL、Recovery、Service 镜像并行使用
-Buildx/GitHub Cache 构建，Web 镜像在精确 Service/Recovery Digest 可用后构建；四个 Digest 汇总成
-Immutable Release Manifest 后才能部署。Web Manifest Digest 仍是 Blue/Green Deployment Identity，
-Web Image Label 同时绑定精确 Service/Recovery Image Digest。自动 Push 在部署前必须确认目标 SHA 仍是
-`origin/main`，落后的并发 Release 不得切流；最终 Result Job 要求 Build 和 Deploy 都成功。Deploy
-Job 只持有 Repository Read 与 OIDC，进入受保护的 `production` Environment，并由单一
-non-cancelling Concurrency Group 序列化。Workflow 不持有 Production DB、AI Provider、Host
-Login、Origin Pull Credential、生产 `.env` 或 Docker Socket。
+`release.yml` 只接受 main Push 或显式 workflow_dispatch。静态/Build、Unit、完整基础设施/
+Recovery、Integration/E2E、Migration 按 ADR 0032 分级并行检查，quality-gate 汇总后构建或
+复用独立组件，Web Manifest 绑定精确 Digest 与各组件 Source SHA。发布器以 deployments:write
+创建版本化元数据，服务器核对 main、成功 Run、固定 Workflow 与 Digest 后创建普通部署
+Operation。中间仅文档变更可由完整 Compare 明确证明。现有不可取消的 SQLite Lease/Fence
+串行执行切换，独立 Workflow 读取精简版本回执并写入生产状态。服务器认证继续支持原签名
+Operator 与内容自动化 OIDC。发布流程和独立回报权限见 ADR 0034。
 
 Production 主机上的手工 Secret/Policy Source 只有部署根目录 `/etc/tungchiahui/.env`。服务器
 TypeScript Host Adapter 只提供主机事实和本次不可变 Release Identity，不得覆盖其中的 Polling、Probe、Rate
@@ -173,6 +166,8 @@ Git commit
 CI Quality Gates
    |
 build immutable Git-SHA image set
+   |
+publish verified metadata / server pull
    |
 deployment operation
    |

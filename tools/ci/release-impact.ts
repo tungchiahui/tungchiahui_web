@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { appendFileSync } from 'node:fs'
+import { confirmedPublication } from './github-publications'
 
 export type QualityMode = 'docs' | 'ui' | 'full'
 
@@ -32,6 +33,11 @@ export function classifyReleaseImpact(paths: readonly string[]): QualityMode {
   const isPublicInterface = (path: string) =>
     isDocumentation(path) ||
     path === 'src/app/globals.css' ||
+    [
+      'tests/unit/blog-wiki-compatibility.test.tsx',
+      'tests/unit/reader-navigation-lifecycle.test.tsx',
+      'tests/unit/reader-scroll.test.ts',
+    ].includes(path) ||
     /^messages\/(?:zh-CN|zh-HK|zh-TW|en-US)\.json$/u.test(path) ||
     /^src\/components\/ui\/[a-z0-9-]+\.tsx$/u.test(path) ||
     (path.startsWith('src/components/') &&
@@ -45,38 +51,7 @@ export async function deployedReleaseBase(
   request: typeof fetch = fetch,
 ): Promise<string | undefined> {
   if (!/^[\w.-]+\/[\w.-]+$/u.test(repository) || !token) return undefined
-  const read = async (path: string): Promise<unknown> => {
-    const response = await request(`https://api.github.com/repos/${repository}/${path}`, {
-      headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' },
-      signal: AbortSignal.timeout(10_000),
-    })
-    if (!response.ok) throw new Error('Release baseline lookup failed')
-    return response.json()
-  }
-  const result = await read(
-    'actions/workflows/release.yml/runs?branch=main&status=success&per_page=20',
-  )
-  if (!result || typeof result !== 'object' || !('workflow_runs' in result)) return undefined
-  if (!Array.isArray(result.workflow_runs)) return undefined
-  for (const run of result.workflow_runs as unknown[]) {
-    if (!run || typeof run !== 'object' || !('id' in run) || !('head_sha' in run)) continue
-    if (typeof run.id !== 'number' || !Number.isSafeInteger(run.id)) continue
-    if (typeof run.head_sha !== 'string' || !/^[a-f0-9]{40}$/u.test(run.head_sha)) continue
-    const jobs = await read(`actions/runs/${run.id}/jobs?per_page=100`)
-    if (!jobs || typeof jobs !== 'object' || !('jobs' in jobs) || !Array.isArray(jobs.jobs))
-      return undefined
-    const deployed = (jobs.jobs as unknown[]).some(
-      (job) =>
-        job !== null &&
-        typeof job === 'object' &&
-        'name' in job &&
-        job.name === 'shared-control-plane-blue-green-deployment' &&
-        'conclusion' in job &&
-        job.conclusion === 'success',
-    )
-    if (deployed) return run.head_sha
-  }
-  return undefined
+  return (await confirmedPublication(token, request, repository))?.gitSha
 }
 
 export function classifyReleaseDiff(root: string, base: string, target: string): QualityMode {

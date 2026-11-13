@@ -1,6 +1,31 @@
 # Website V2 Current Implementation State
 
 
+## 2026-11-13 — Actions 主动拉取改造验收中
+
+Owner 审阅参考 SDUTVINCI/sdutvinci_web 的简化方案后明确授权“执行”。本轮正在完成
+验证后发布、服务器主动拉取与独立生产回执，架构见 ADR 0034。开关默认关闭，首次安装
+后通过原 Operator 签名的配置 Operation 启用。实际生产结果在 GitHub Deployment 独立回报。
+复用原 Host Adapter、SQLite 全局排他/Lease/Fence/Audit 和 Blue-Green Engine。
+
+改造前 main/生产为 `c79a6f65e68aee3f2b2490fd0593b55cf282d01f`，Current Blue，Previous Green
+`44066d339`。该版本完整质量 Gate 已通过，生产 Operation `688d2a18-c229-43fd-ba22-631f7ca54e27`
+已于 13:23:55 UTC 完成 `deployment-verified`。Main Workflow 因 OIDC 等待查询 401 标红。
+数据库保持旧 `a95122c0…`，实际切换尚未执行。
+
+真实 Full `20261113-112533F` 对应的 3,244 个对象已逐项对照 R2 代际 Manifest 校验，本地
+Repository 经相同 Recovery Engine 完成旧镜像/新镜像/同目录旧镜像回退，23 表、16 项迁移、
+四语言索引与 amcheck 一致。有效报告 `.local/postgres-maintenance/production-real-restore-report.json`
+SHA-256 为 `f8e6a30c92c7a5e19895407832a241e848768b56c29534dd2f12a76a8c617ba7`。
+此前缺少容器边界的报告已作废。直接远端 R2 Fallback 的额外隔离恢复因读取缓慢主动停止，
+此项未宣告通过。临时资源限定于 `backup-work/postgres-image-drill-20261113`。
+
+正式候选 Digest `6ce616e9…`、Source SHA `d6629b0cf…`，在 2026-11-13 07:00 UTC Trivy DB
+下为 0 Critical/0 High/4 Medium。同库旧镜像为 1 Critical/72 High。此前 1/34 为旧漏洞库扫描。
+真实切换仍需使用新入口重做成功 Preflight，再绑定上述有效真实报告和新鲜 Backup 进行 Execute。
+改造的完整本地 Gate、正式发布、自动拉取启用与数据库维护结果将继续补入本节。
+
+
 ## 2026-11-13 — 生产数据库镜像维护端到端执行中
 
 Owner 在本对话要求“直接在这个对话一次性干完，抓紧点”，授权继续完成前述生产维护

@@ -41,7 +41,9 @@ import {
   releaseProvisionRequest,
 } from '../../src/host-release/coordinator'
 import { provisionHost } from '../../src/host-release/provision'
+import { readReleasePull, setReleasePullEnabled } from '../../src/host-release/publication-state'
 import { recoverHostRelease } from '../../src/host-release/recovery'
+import { pollPublishedRelease } from '../../src/host-release/release-pull'
 import {
   acquireHostExecutor,
   checkpointHostRelease,
@@ -3073,24 +3075,67 @@ async function verifyComponentImageReuse() {
   // Reuse the running supervisor from the complete-release fixture. Its standalone polling
   // mode transition is outside this deployment's container identity measurements.
   const before = ids()
-  const request = operationResponseSchema.parse(
-    await controlRequest('/api/ops/deployments', {
-      body: {
-        gitSha: sha,
-        imageDigest: digest,
-        reason: 'Verify unchanged immutable component reuse',
+  const future = new Date(Date.now() + 3600000)
+  setReleasePullEnabled(path, true, future)
+  try {
+    await pollPublishedRelease(
+      settings,
+      async (url) => {
+        const endpoint = String(url)
+        if (endpoint.includes('git/ref/heads/main'))
+          return Response.json({ object: { type: 'commit', sha } })
+        if (endpoint.includes('deployments?'))
+          return Response.json([
+            {
+              id: 900,
+              sha,
+              environment: 'production',
+              creator: { login: 'github-actions[bot]' },
+              payload: {
+                version: 1,
+                gitSha: sha,
+                imageDigest: digest,
+                serviceSha: generation.serviceSha ?? generation.sha,
+                recoverySha: generation.recoverySha ?? generation.sha,
+                runId: 900,
+                automatic: true,
+              },
+            },
+          ])
+        if (endpoint.endsWith('actions/runs/900'))
+          return Response.json({
+            head_sha: sha,
+            head_branch: 'main',
+            event: 'push',
+            path: '.github/workflows/release.yml',
+            status: 'completed',
+            conclusion: 'success',
+          })
+        throw new Error('Unexpected publication fixture request')
       },
-      idempotencyKey: 'component-reuse-deploy',
-      method: 'POST',
-      purpose: 'component-reuse-deploy',
-    }),
-  )
-  const deployed = await waitForOperation(request.operation.id)
+      future,
+    )
+  } finally {
+    setReleasePullEnabled(path, false)
+  }
+  const pulled = readReleasePull(path)
+  const operationId = z.uuid().parse(pulled.status.operationId)
+  const deployed = await waitForOperation(operationId)
   expect(
     deployed.status === 'completed',
     `Component reuse deployment failed: ${JSON.stringify(deployed)}`,
   )
   expect(publicVersion().gitSha === sha, 'Component reuse did not activate the new Web identity')
+  const receiptResponse = await fetch(
+    `http://127.0.0.1:${input.PHASE12_ORIGIN_PORT}/api/ops/releases/status?sha=${sha}&digest=${digest}`,
+  )
+  const receipt = z
+    .object({ state: z.literal('completed'), current: z.object({ gitSha: z.literal(sha) }) })
+    .parse(await receiptResponse.json())
+  expect(
+    receiptResponse.ok && receipt.state === 'completed',
+    'Anonymous receipt did not confirm server pull deployment',
+  )
   const after = ids()
   expect(
     after.every((id, index) => id === before[index]),
@@ -3122,6 +3167,7 @@ async function verifyComponentImageReuse() {
   console.log(
     JSON.stringify({
       immutableComponentReuse: 'pass',
+      publishedReleasePull: 'pass',
       unchangedServiceContainers: services.length,
     }),
   )

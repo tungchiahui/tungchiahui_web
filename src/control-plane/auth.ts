@@ -310,13 +310,24 @@ function authenticateOperator(
   })
 }
 
-export async function validateGitHubOidcToken(
+const remoteGitHubKeys = new Map<string, ReturnType<typeof createRemoteJWKSet>>()
+
+function githubKey(url: string) {
+  let key = remoteGitHubKeys.get(url)
+  if (!key) {
+    key = createRemoteJWKSet(new URL(url))
+    remoteGitHubKeys.set(url, key)
+  }
+  return key
+}
+
+async function verifiedGitHubClaims(
   token: string,
   policyInput: unknown,
   verificationKey?: JWTVerifyGetKey | KeyInput,
 ) {
   const policy = githubOidcPolicySchema.parse(policyInput)
-  const key = verificationKey ?? createRemoteJWKSet(new URL(policy.jwksUrl))
+  const key = verificationKey ?? githubKey(policy.jwksUrl)
   let payload: JWTPayload
   try {
     const verified = await jwtVerify(token, key, {
@@ -339,6 +350,11 @@ export async function validateGitHubOidcToken(
     throw new AuthenticationError('invalid_github_oidc_claims', 'GitHub OIDC claims are invalid')
   }
 
+  return claims.data
+}
+
+function authorizeGitHubClaims(data: z.infer<typeof githubClaimsSchema>, policy: GitHubOidcPolicy) {
+  const claims = { data }
   const mismatchedClaims = [
     claims.data.iss !== policy.issuer ? 'iss' : null,
     claims.data.repository !== policy.repository ? 'repository' : null,
@@ -378,6 +394,15 @@ export async function validateGitHubOidcToken(
   })
 }
 
+export async function validateGitHubOidcToken(
+  token: string,
+  policyInput: unknown,
+  verificationKey?: JWTVerifyGetKey | KeyInput,
+) {
+  const policy = githubOidcPolicySchema.parse(policyInput)
+  return authorizeGitHubClaims(await verifiedGitHubClaims(token, policy, verificationKey), policy)
+}
+
 async function authenticateGitHub(
   bound: ReturnType<typeof parseBoundHeaders>,
   configuration: AuthenticationConfiguration,
@@ -391,9 +416,16 @@ async function authenticateGitHub(
   let actor: ActorIdentity | undefined
   let closestPolicyMismatch: AuthenticationAuditDetails | undefined
   let verificationFailure: AuthenticationError | undefined
+  const proofs = new Map<string, Promise<z.infer<typeof githubClaimsSchema>>>()
   for (const policy of configuration.githubPolicies) {
     try {
-      actor = await validateGitHubOidcToken(token, policy, configuration.githubVerificationKey)
+      const identity = JSON.stringify([policy.issuer, policy.audience, policy.jwksUrl])
+      let proof = proofs.get(identity)
+      if (!proof) {
+        proof = verifiedGitHubClaims(token, policy, configuration.githubVerificationKey)
+        proofs.set(identity, proof)
+      }
+      actor = authorizeGitHubClaims(await proof, policy)
       break
     } catch (error: unknown) {
       if (!(error instanceof AuthenticationError)) throw error
@@ -411,7 +443,10 @@ async function authenticateGitHub(
     }
   }
   if (!actor) {
-    if (closestPolicyMismatch === undefined && verificationFailure !== undefined) {
+    if (
+      verificationFailure?.code === 'github_oidc_verification_unavailable' ||
+      (closestPolicyMismatch === undefined && verificationFailure !== undefined)
+    ) {
       throw verificationFailure
     }
     throw new AuthenticationError(

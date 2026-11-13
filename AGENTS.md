@@ -260,13 +260,15 @@ Web Application Repository 的正常生产发布路径必须是：
 push to main
 -> CI Quality Gates
 -> Build Git-SHA-tagged Immutable Image
+-> Publish Verified Release Metadata
+-> Server Pull into Existing SQLite Operation
 -> Production Blue-Green Deployment
 -> Pre-cutover Health/Readiness/Smoke
 -> OpenResty Cutover
 -> Post-cutover Public Smoke
 ```
 
-GitHub Actions 与 `./site deploy` 必须调用同一个 Control Plane、Deployment Engine 和 Policy，不得维护两套实现。`./site deploy` 保留用于人工触发、重试和指定版本。Content Repository Push 只执行 Content Sync，不得触发 Next.js Image Build/Blue-Green。
+ADR 0034 定义验证后发布、服务器主动拉取与独立生产回执。GitHub Actions 发布的元数据、服务器拉取与 `./site deploy` 必须使用同一个 Control Plane、Deployment Engine 和 Policy，不得维护两套实现。`./site deploy` 保留用于人工触发、重试和指定版本。Content Repository Push 只执行 Content Sync，不得触发 Next.js Image Build/Blue-Green。
 
 绝不在原地替换 Active Application Container。
 

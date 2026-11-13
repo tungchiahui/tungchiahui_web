@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { expect, test } from '@playwright/test'
 import type { AppLocale } from '../../src/i18n/locales'
+import { expect, test } from './fixtures'
 
 const messagesForLocale = (locale: AppLocale) =>
   JSON.parse(

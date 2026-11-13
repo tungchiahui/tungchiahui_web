@@ -1,5 +1,7 @@
 # ADR 0027：服务器执行完整发布与初始化，移除 Ansible
 
+> ADR 0034 部分替代 CI OIDC 投递/等待和成功 Run 基线，采用验证后发布、服务器主动拉取及实际部署回执。
+
 > ADR 0032 部分替代全部组件同 SHA 与每次完整检查要求，保留同一 Host Adapter、Engine 和恢复状态。
 
 - Status: Accepted

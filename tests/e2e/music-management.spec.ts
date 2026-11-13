@@ -1,9 +1,8 @@
 import { readFileSync } from 'node:fs'
-import { expect, test } from '@playwright/test'
 import { z } from 'zod'
 import { type MusicCheck, musicLibrarySchema } from '../../src/music/library-contracts'
-
 import { playbackEvidenceSchema, playbackVerdict } from '../../src/music/playback-check'
+import { expect, test } from './fixtures'
 
 test('music management requires an owner and publishes matched MP3 files without editing code', async ({
   page,

@@ -294,3 +294,12 @@ OpenResty/Control API 维护态、Consumer 排空、干净停止、受限冷副�
 回退失败时显式授权交接既有 Restore Engine，并保持业务关闭直至重新验收。
 生产真实备份隔离恢复与数据库切换分别授权，完整契约见
 [ADR 0033](../decisions/0033-audited-postgres-image-maintenance.md)。
+
+
+## 验证后发布与服务器拉取
+
+ADR 0034 规定 CI 完成分级 Gate 后发布绑定精确 Digest 的 GitHub Deployment 元数据。
+现有 Host Coordinator 校验 main 与成功 Run，创建幂等 SQLite Deploy Operation，调用同一
+Host Adapter 和 Blue-Green Engine。Operator 通过审计操作启停默认关闭的自动拉取。
+独立 Workflow 读取仅公开版本元数据的 `/api/ops/releases/status` 回执并回报生产状态。
+业务数据库不可用时仍可查询该回执和原基础设施状态。

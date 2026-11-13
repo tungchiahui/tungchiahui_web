@@ -1,19 +1,20 @@
-# 服务器执行完整发布（ADR 0027）
+# 服务器执行完整发布（ADR 0027、0034）
 
 ## 日常开发和发布
 
 开发电脑只需 GitHub 权限及本地开发工具。换电脑后可 clone、开发、测试、push。
-提交合并到 main 后，GitHub 执行 ADR 0032 对应的 Quality Gates，构建或复用不可变镜像，并通过 OIDC
-调用现有 `https://www.tungchiahui.cn/api/ops/*`。服务器接续任务，开发电脑可以关机。
+提交合并到 main 后，GitHub 执行 ADR 0032 对应的 Quality Gates，构建或复用不可变镜像，发布 GitHub Deployment 元数据。既有 Host Coordinator 校验
+成功的 main Push Run 后主动创建幂等 SQLite Deploy Operation。服务器接续任务，开发电脑可以关机。
 没有 Ansible、个人 SSH Alias、本地 sudo 或密码窗口参与日常发布。
 
 Web 镜像同时绑定 Service 与 Recovery 各自的 Source SHA 和 Digest。旧镜像缺少组件
 Source SHA 时按 Web SHA 解释。服务器先用目标 Recovery
 镜像的一次性 deploy-agent worker 执行现有蓝绿 Engine，再收敛固定配置、独立服务和
 定时器，重跑内部/公网 Smoke，验证候选执行代码能启动，最后提交完整发布结果。
-`./site deploy ... --wait` 和 CI 都要求结果包含该 SHA/Digest 的 `hostRelease.status=converged`。
+`./site deploy ... --wait` 要求该 SHA/Digest 的 `hostRelease.status=converged`。
+独立 Production Deployment Status Workflow 通过公开精简回执核对相同收敛结果，写入 GitHub Deployment 状态。
 
-CI 等待响应失败后，服务器 Operation 可能已经完成。再次运行同一版本时，客户端先读取
+人工客户端等待响应失败后，服务器 Operation 可能已经完成。再次运行同一版本时，客户端先读取
 Status；只有 Current SHA/Digest、有效 Previous Slot/SHA/Digest、健康的已安装 Executor、无 Pending/未完成 Operation
 全部一致，才通过 `GET /api/ops/deployment-receipts/<SHA>/<Digest hex>` 取回 SQLite 中的
 真实已完成 Deploy Record。该路由要求原 `infrastructure-operation:read` Capability、绑定
@@ -346,3 +347,23 @@ Workflow 与生产配置调整须按 Owner 的逐项授权执行。
 本地测试准备阶段曾下载 age 遇到一次 TLS 中断，复测同一 19.4 MB 文件在 Host/Bridge
 网络均成功，耗时约 19/15 秒。下载步骤可采用有界重试与连接/总时限，并继续验证固定
 SHA-256，降低瞬时网络错误导致的整轮失败。
+
+
+## 自动拉取首次安装与暂停
+
+首次使用已发布精确版本执行原 `./site deploy <sha> --image-digest <digest> --wait`，核对完整
+Host 收敛结果，再通过相同 Operator 凭据启用拉取。
+
+```sh
+./site release-pull enable --confirm RELEASE-PULL-PRODUCTION --reason 'Enable verified server release pull'
+./site release-pull disable --confirm RELEASE-PULL-PRODUCTION --reason 'Pause automatic release intake'
+```
+
+返回的是受审计配置 Operation。通过原 Operation 状态确认 `completed/release-pull-configured`。
+默认关闭，SQLite 持久化开关。签名 `./site status` 的 `releasePull` 返回开关、下次检查时间和最近阶段。Supervisor 中断后接续配置操作。暂停后已领取任务继续自身
+生命周期。生产维护、恢复和 needs-attention 状态会阻止创建新的自动部署。
+
+Main Release 绿色代表质量与制品发布成功。部署结果在 GitHub Production Deployment 中显示，
+独立状态 Workflow 每十五分钟和发布后复核，暂时无法联网时保持 pending，实际失败标 failure。
+可手动运行该 Workflow 重新核对，或用原签名入口查询详细状态。公开回执仅含版本身份。
+服务器对固定 main Run、精确 Digest/Revision 与幂等 Operation 的校验见 ADR 0034。

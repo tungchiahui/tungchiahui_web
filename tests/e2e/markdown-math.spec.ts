@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures'
 
 test('Blog/Wiki math is server-rendered with local fonts, themes and mobile scrolling across locales', async ({
   browser,

@@ -340,3 +340,28 @@ Critical/Secret 失败条件和 SBOM；缓存 Metadata 的 DownloadedAt 记录�
 本轮官方 Layer Digest 为 `sha256:fd406c50cad6892a16b258bef67be31ebfd4ddfb00da80ce869b461e73116d4f`，
 DB SHA-256 为 `324ef75b4ba84ec45caf6e427bb3c7f57732beae1933afc6cbafd8fe1a85f441`，
 UpdatedAt 为 `2026-11-13T07:00:07.938173847Z`。该路径用于下载中断后的可复现本地验收。
+
+## 2026-11-13 生产执行前证据
+
+Owner 已在本对话授权完成指定生产维护闭环，并随后授权 ADR 0034 发布流程改造。
+改造完成后继续同一维护任务，S400 接入等待本阶段交接后的下一次授权。
+
+正式候选为 `sha256:6ce616e9a4ae1efe73827051a517b2b7f59ad58affd59897f3e897f663e176ed`，
+Source SHA `d6629b0cf4a3d791ee307bb363c4931de97e8b75`。使用上文官方 Trivy DB 的精确
+制品扫描为 0 Critical、0 High、4 Medium、0 Secret，SBOM 156 个组件。相同漏洞库下旧
+`a95122c0…` 为 1 Critical、72 High。此前 1/34 属于早期漏洞库。精确扫描报告位于受限
+`.local/postgres-maintenance/production-candidate-exact-scan.json`，SHA-256 为
+`f57175008b0f1d22de1039526c0719b1b6db2f0c6b5e4c87d1b16cd76b700418`。
+
+真实 Full `20261113-112533F` 的 Generation 为
+`20261113-112533F-4b959844-6901-4917-b023-5721e58300ab`，Manifest SHA-256 为
+`cb7732667f5f90a7c63913c2950f8f120b4f632941730c952f40e86195769b42`。
+本地 Repository 的 3,244 项对象逐项与真实 R2 代际 Manifest 校验。通过同一 Recovery
+Engine 完成旧镜像恢复、新镜像恢复与同目录旧镜像回退，23 表和 16 项迁移一致，四语言
+索引 52 个匹配与 amcheck 通过。有效报告 `production-real-restore-report.json` SHA-256 为
+`f8e6a30c92c7a5e19895407832a241e848768b56c29534dd2f12a76a8c617ba7`，容器边界已核对。
+缺少边界的早期报告已作废。额外的直接远端 R2 Fallback 恢复因读取缓慢主动停止。
+
+Preflight `353efc72-22ca-4c89-9e87-5e3ceb596649` 触及旧 20 分钟子命令限制，已审计为失败。
+`c79a6f65e` 使用维护恢复专用 90 分钟上限和并行双副本复验。正式 Execute 等待新的成功
+Preflight ID，绑定上述有效恢复报告、仍在时效内的 Full 和精确旧/新 Digest。

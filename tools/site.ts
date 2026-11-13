@@ -1,6 +1,7 @@
 import { activateHostExecutor } from '../src/host-release/bootstrap'
 import { hostSettingsSchema } from '../src/host-release/contracts'
 import { createAccount } from './account/create'
+import { configurePublishedReleases } from './ci/release-pull-command'
 import { createContentSync } from './content/control-client'
 import { createDeployment, createRollback, readDeploymentStatus } from './deployment/control-client'
 import { resetDevelopmentStack, startDevelopmentStack, stopDevelopmentStack } from './dev/runtime'
@@ -93,6 +94,7 @@ Recovery:
   restore ... --break-glass --inventory-host <stable-ssh-alias>
 
 Maintenance:
+  release-pull enable|disable --confirm RELEASE-PULL-PRODUCTION --reason <reason>
   postgres-image preflight|execute --old-digest sha256:<digest> --new-digest sha256:<digest>
     --candidate-sha <40-char-sha> --backup-id <full-backup-id>
     --reason <text> --idempotency-key <stable-key>
@@ -131,6 +133,9 @@ async function main() {
   const command = parseSiteCommand(process.argv.slice(2))
 
   switch (command.kind) {
+    case 'release-pull-configure':
+      console.log(JSON.stringify(await configurePublishedReleases(command), null, 2))
+      return 0
     case 'postgres-image-maintenance-retry':
       console.log(JSON.stringify(await retryPostgresMaintenance(command), null, 2))
       return 0

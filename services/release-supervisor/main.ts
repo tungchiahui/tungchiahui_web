@@ -78,7 +78,9 @@ async function main() {
     for (const operation of interrupted) {
       if (
         operation.operationType === 'server-migration' &&
-        (operation.target.action !== 'postgres-image-upgrade' ||
+        (!['postgres-image-upgrade', 'configure-release-pull'].some(
+          (action) => action === operation.target.action,
+        ) ||
           operation.result?.phase === 'recovery-required')
       )
         continue
@@ -126,7 +128,9 @@ async function main() {
         })) {
           if (
             operation.operationType === 'server-migration' &&
-            (operation.target.action !== 'postgres-image-upgrade' ||
+            (!['postgres-image-upgrade', 'configure-release-pull'].some(
+              (action) => action === operation.target.action,
+            ) ||
               operation.result?.phase === 'recovery-required')
           )
             continue

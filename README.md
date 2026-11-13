@@ -191,7 +191,8 @@ Web Application Repository 的正常发布路径固定为：
 push to main
  -> CI Quality Gates
  -> build Git-SHA-tagged immutable image set
- -> control-api / shared Deployment Engine
+ -> publish verified GitHub Deployment metadata
+ -> server pull / existing SQLite Operation / shared Deployment Engine
  -> inactive Blue/Green slot
  -> pre-cutover health/ready/smoke
  -> OpenResty cutover
@@ -312,3 +313,9 @@ Operator 不需要记忆底层 Docker、PostgreSQL、OpenResty、Backup 或 Work
 ### S400 与健康数据
 
 Owner 私有身体测量、历史迁移、JSON 导入导出和自动同步配置见 [身体测量运维说明](docs/operations/body-measurements.md)。
+
+
+ADR 0034 定义 main 验证后发布与服务器主动拉取。Main Release 成功表示不可变制品发布完成，
+Production Deployment Status 依据服务器完整回执记录生产结果。首次安装后通过受审计的
+`./site release-pull enable --confirm RELEASE-PULL-PRODUCTION --reason <reason>` 启用。
+细节见 [服务器发布](docs/operations/server-release.md)。

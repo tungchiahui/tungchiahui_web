@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
-import { expect, test } from '@playwright/test'
 import { healthExchangeSchema, healthSnapshotSchema } from '../../src/health/contracts'
 import { normalizeSmartscaleRow } from '../../src/health/smartscale'
+import { expect, test } from './fixtures'
 
 test('Owner manages partial measurements and versioned JSON with private anonymous rendering', async ({
   page,

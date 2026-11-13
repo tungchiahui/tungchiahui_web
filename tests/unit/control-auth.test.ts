@@ -1,7 +1,7 @@
 import { generateKeyPairSync, sign } from 'node:crypto'
 
 import { generateKeyPair, SignJWT } from 'jose'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   AuthenticationError,
@@ -345,4 +345,78 @@ describe('control-plane authentication and authorization', () => {
       ),
     ).rejects.toBeInstanceOf(AuthenticationError)
   })
+})
+
+it('verifies a shared OIDC trust authority once before matching the allowed workflow', async () => {
+  const policy = parseGitHubOidcPolicy({
+    audience: 'control-api',
+    capabilities: ['status:read'],
+    environment: 'production',
+    issuer: 'https://token.actions.githubusercontent.com',
+    jwksUrl: 'https://token.actions.githubusercontent.com/.well-known/jwks',
+    ref: 'refs/heads/main',
+    repository: 'owner/repository',
+    workflowRef: 'owner/repository/.github/workflows/other.yml@refs/heads/main',
+  })
+  const allowed = parseGitHubOidcPolicy({
+    ...policy,
+    workflowRef: 'owner/repository/.github/workflows/content-sync.yml@refs/heads/main',
+  })
+  const { privateKey, publicKey } = await generateKeyPair('RS256')
+  const token = await new SignJWT({
+    environment: 'production',
+    repository: policy.repository,
+    ref: policy.ref,
+    sub: 'repo:owner/repository:environment:production',
+    workflow_ref: allowed.workflowRef,
+  })
+    .setProtectedHeader({ alg: 'RS256' })
+    .setIssuer(policy.issuer)
+    .setAudience(policy.audience)
+    .setIssuedAt()
+    .setExpirationTime('5m')
+    .sign(privateKey)
+  const body = Buffer.from('')
+  const input = {
+    body,
+    method: 'GET',
+    path: '/api/ops/status',
+    now: new Date(),
+    headers: new Headers({
+      authorization: `Bearer ${token}`,
+      'x-ops-body-sha256': sha256(body),
+      'x-ops-nonce': 'shared-oidc-proof-0001',
+      'x-ops-timestamp': String(Math.floor(Date.now() / 1000)),
+    }),
+  }
+  const key = vi.fn(async () => publicKey)
+  await expect(
+    authenticateControlRequest(
+      input,
+      {
+        githubPolicies: [policy, allowed],
+        githubVerificationKey: key,
+        operatorKeys: [],
+        replayWindowSeconds: 300,
+      },
+      { consumeNonce: () => true },
+    ),
+  ).resolves.toMatchObject({
+    id: `github:owner/repository:${allowed.workflowRef}`,
+    capabilities: ['status:read'],
+  })
+  expect(key).toHaveBeenCalledTimes(1)
+  key.mockRejectedValue(new TypeError('JWKS temporarily unavailable'))
+  await expect(
+    authenticateControlRequest(
+      input,
+      {
+        githubPolicies: [policy, allowed],
+        githubVerificationKey: key,
+        operatorKeys: [],
+        replayWindowSeconds: 300,
+      },
+      { consumeNonce: () => true },
+    ),
+  ).rejects.toMatchObject({ code: 'github_oidc_verification_unavailable' })
 })

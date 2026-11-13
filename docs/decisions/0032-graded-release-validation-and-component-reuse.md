@@ -1,5 +1,7 @@
 # ADR 0032 — 分级发布验证与组件镜像复用
 
+> ADR 0034 部分替代 CI OIDC 投递/等待和成功 Run 基线，采用验证后发布、服务器主动拉取及实际部署回执。
+
 - Status: Accepted
 - Date: 2026-11-13
 - Authorization: Owner 明确授权分级检查、组件复用及相关 Workflow、架构文档和工程约束修改。

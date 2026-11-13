@@ -512,3 +512,19 @@ it('keeps SQLite status and explicit recovery controls available during PostgreS
     ).status,
   ).toBe(200)
 })
+
+it('limits anonymous production receipts to safe metadata and validated GET requests', async () => {
+  const { base } = await serverFixture()
+  const response = await fetch(new URL('/api/ops/releases/status', base))
+  expect(response.status).toBe(200)
+  expect(await response.json()).toEqual({ current: null, state: 'pending' })
+  expect((await fetch(new URL('/api/ops/releases/status?sha=invalid', base))).status).toBe(400)
+  expect((await fetch(new URL('/api/ops/releases/status?unknown=value', base))).status).toBe(400)
+  expect((await fetch(new URL('/api/ops/releases/status', base), { method: 'POST' })).status).toBe(
+    405,
+  )
+  expect((await fetch(new URL('/api/ops/status', base))).status).toBe(401)
+  expect(
+    (await fetch(new URL('/api/ops/infrastructure-operations', base), { method: 'POST' })).status,
+  ).toBe(401)
+})

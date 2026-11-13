@@ -1,4 +1,4 @@
-import { expect, type Locator, type Page, test } from '@playwright/test'
+import { expect, type Locator, type Page, test } from './fixtures'
 
 const readers = [
   { name: 'Blog', path: '/blog/2026-07-21-vscode-ren-wu-lan-qi-dong-codex-cha-jian-da-bu-kai' },

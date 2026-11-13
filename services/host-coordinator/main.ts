@@ -1,6 +1,7 @@
 import { hostSettingsSchema } from '../../src/host-release/contracts'
 import { coordinateNextHostRelease, hostControlPath } from '../../src/host-release/coordinator'
 import { readHostEnvironment } from '../../src/host-release/provision'
+import { configureReleasePull, pollPublishedRelease } from '../../src/host-release/release-pull'
 import { initializeHostReleaseState, readHostRuntime } from '../../src/host-release/state'
 import { coordinateNextPostgresMaintenance } from '../../src/maintenance/postgres-host'
 
@@ -20,6 +21,8 @@ async function main() {
   }
   const owner = process.env.HOST_RELEASE_OWNER
   if (!owner?.startsWith('deploy-agent:host:')) throw new Error('Supervisor identity missing')
+  if (await configureReleasePull(settings, owner)) return
+  await pollPublishedRelease(settings)
   if (!(await coordinateNextPostgresMaintenance(settings, owner)))
     await coordinateNextHostRelease(settings, owner)
 }

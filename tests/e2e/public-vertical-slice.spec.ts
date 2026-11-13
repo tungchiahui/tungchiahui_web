@@ -1,7 +1,7 @@
 import { readdirSync } from 'node:fs'
 import { join, relative, resolve, sep } from 'node:path'
 
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures'
 
 const repositoryRoot = resolve(import.meta.dirname, '../..')
 

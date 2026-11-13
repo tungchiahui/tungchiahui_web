@@ -14,8 +14,7 @@ export function releaseResultPassed(
   return (
     (input.mode === 'ui' || input.mode === 'full') &&
     input.build === 'success' &&
-    input.deploy === 'success' &&
-    input.deploymentEnabled === 'true'
+    input.deploy === 'success'
   )
 }
 
@@ -34,6 +33,6 @@ if (process.argv[1]?.endsWith('/release-result.ts')) {
       summary,
       process.env.QUALITY_MODE === 'docs'
         ? '### Documentation validation completed\n'
-        : '### Production release verified\n',
+        : '### Immutable release publication verified\n',
     )
 }

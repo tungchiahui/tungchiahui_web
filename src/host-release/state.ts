@@ -557,3 +557,5 @@ export function readHostBootstrapBaseline(path: string) {
     db.close()
   }
 }
+
+export { database as openHostReleaseDatabase }

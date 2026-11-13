@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { applicationJobRequestSchema, ownerDatasetKeySchema } from '../domain/persistence'
+import { configureReleasePullTargetSchema } from '../host-release/publication-contracts'
 import { postgresMaintenanceTargetSchema } from '../maintenance/postgres-contracts'
 import { translationOperationRequestSchema } from '../translation/contracts'
 
@@ -168,6 +169,7 @@ const infrastructureTargetSchemas = {
     .strict(),
   'server-migration': z.union([
     postgresMaintenanceTargetSchema,
+    configureReleasePullTargetSchema,
     z
       .object({
         action: z.enum(['planned-migration', 'provision-only']).default('planned-migration'),
