@@ -41,6 +41,7 @@ export async function componentSourcePaths(root: string, kind: ComponentKind) {
   return [
     ...new Set([
       ...inputs,
+      '.dockerignore',
       '.npmrc',
       'package.json',
       'pnpm-lock.yaml',
@@ -51,7 +52,12 @@ export async function componentSourcePaths(root: string, kind: ComponentKind) {
       'tools/ci/component-images.ts',
       ...(kind === 'service'
         ? ['drizzle', 'ops/database']
-        : ['drizzle/migration-policy.json', 'drizzle/meta/_journal.json', 'ops/production']),
+        : [
+            'drizzle/migration-policy.json',
+            'drizzle/meta/_journal.json',
+            'ops/production',
+            'tools/ci/resolve-pgbouncer-image.ts',
+          ]),
     ]),
   ].sort()
 }

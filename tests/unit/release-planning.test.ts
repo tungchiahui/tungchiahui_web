@@ -248,6 +248,7 @@ describe('immutable component reuse', () => {
         'src/health/repository.ts',
         'src/control-plane/http-server.ts',
         'pnpm-lock.yaml',
+        '.dockerignore',
         'drizzle',
         'ops/database',
       ]),
@@ -258,6 +259,7 @@ describe('immutable component reuse', () => {
         'src/host-release/coordinator.ts',
         'src/deployment/docker-platform.ts',
         'ops/production',
+        'tools/ci/resolve-pgbouncer-image.ts',
       ]),
     )
     expect(await componentSourcePaths(resolve('.'), 'postgres')).toEqual([
