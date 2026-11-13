@@ -1,5 +1,29 @@
 # Website V2 Current Implementation State
 
+## 2026-11-13 — 精确数据库镜像保全与本地漏洞核验
+
+Owner 单独授权一轮只读 SSH 流式镜像导出与本地扫描。导出对象通过运行容器的 Image ID
+选择，归档 183,502,848 bytes，校验 Source SHA 为 `93287c38f16bcbe70b1291b82b06e82b23e4ae95`，
+Image ID 为 `sha256:b881eaeef51d0f43fdb052b8d90dc8ad84c53edcd13c4af7f2db5215b7e3a186`。
+本机持久化私有目录为
+`/home/tungchiahui/.local/share/tungchiahui-recovery/postgres-93287c38/`，归档 SHA-256 为
+`3cc24f34eed97da8602d3d6c6301531d195981055f38e9f4667e54807a90f82e`。
+原始 Registry Manifest 与 Config/13 Layers 的全部 14 个 Blob 均核对大小及 SHA-256。
+
+使用仓库相同 Digest 固定的 Trivy，在本地以该归档为输入扫描，结果命中 1 条 Critical、
+34 条 High，涉及 33 个不同 CVE。Critical 为 `brotli-libs 1.2.0-r1` 的
+`CVE-2026-111497`，修复版本 `1.2.1-r0`。上游
+[v1.2.1](https://github.com/google/brotli/releases/tag/v1.2.1) 确认该漏洞修复。
+当前源码候选镜像已固定修复包，实际数据库镜像更新继续按独立维护和恢复验证授权。
+
+本地隔离 Registry 完成 `docker load -> tag -> push -> inspect` 回环，推送出的 Manifest
+Digest 与原始 `sha256:a95122c0c897d7fb1fb19c3708ad7f6681d0cd1b80a87c08ab381ac8c8b9deff`
+完全相同。临时 Registry 已清理。可通过恢复同一个原始制品补齐 GHCR 拉取缺口，
+该 Registry 上传仍需 Owner 单独授权。
+
+本地核对传输进度时曾过宽枚举 SSH 进程参数，包含无关终端会话元数据，后续已收窄为
+本次导出文件的大小、摘要和制品校验。私有会话信息保持在受限诊断上下文内。
+
 ## 2026-11-13 — 运行中 PostgreSQL 镜像的恢复制品缺口
 
 Owner 另行批准补充只读 SSH 后，确认 SmartScaleConnect 实际进程 UID/GID 为 0/0。
