@@ -156,7 +156,9 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
   page,
 }) => {
   test.setTimeout(120000)
-  const { emptyMetrics, measurementSchema } = await import('../../src/health/contracts')
+  const { emptyMetrics, measurementDay, measurementSchema } = await import(
+    '../../src/health/contracts'
+  )
   const messagesForLocale = (locale: string) =>
     JSON.parse(
       readFileSync(resolve(import.meta.dirname, `../../messages/${locale}.json`), 'utf8'),
@@ -181,6 +183,9 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
       bodyFat: index % 3 === 0 ? null : 28 - index * 0.06,
       muscleMass: 55 + Math.sin(index) * 0.2,
       waist: index % 5 === 0 ? 98 - index * 0.12 : null,
+      proteinMass: index === 41 ? null : 12 + index * 0.02,
+      bodyScore: index === 41 ? null : 80 + Math.floor(index / 10),
+      metabolicAge: index >= 40 ? null : 45 - Math.floor(index / 4),
       bmi: 30 - index * 0.05,
       bodyWater: index % 3 === 0 ? null : 52 + index * 0.08,
       visceralFat: 12 - Math.floor(index / 10),
@@ -189,11 +194,31 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
       updatedAt: measuredAt,
     })
   }).toReversed()
+  measurements.unshift(
+    measurementSchema.parse({
+      ...measurements[0],
+      id: randomUUID(),
+      measuredAt: new Date().toISOString(),
+      excluded: true,
+      proteinMass: 199,
+      bodyScore: 99,
+      metabolicAge: 149,
+    }),
+  )
+  let emptySupplementaryMetrics = false
   await page.route('**/api/ops/health/snapshot?*', async (route) => {
     const response = await route.fetch()
     const { ownerHealthSnapshotSchema } = await import('../../src/health/contracts')
     const complete = ownerHealthSnapshotSchema.parse(await response.json())
-    await route.fulfill({ response, json: { ...complete, measurements } })
+    await route.fulfill({
+      response,
+      json: {
+        ...complete,
+        measurements: emptySupplementaryMetrics
+          ? measurements.map((row) => ({ ...row, bodyScore: null, metabolicAge: null }))
+          : measurements,
+      },
+    })
   })
   await page.goto('/weight-loss')
   await page.getByRole('button', { name: '登录', exact: true }).click()
@@ -262,12 +287,15 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
     await page.goto(locale === 'zh-cn' ? '/weight-loss' : `/${locale}/weight-loss`)
     const copy = messagesForLocale(locale).Health
     const overview = page.getByRole('region', { name: copy.overview, exact: true })
-    await expect(overview.getByRole('article')).toHaveCount(8)
+    await expect(overview.getByRole('article')).toHaveCount(10)
+    await expect(
+      overview.getByRole('heading', { name: copy.metrics.waist, exact: true }),
+    ).toHaveCount(0)
     for (const metric of [
       'weight',
       'bodyFat',
       'muscleMass',
-      'waist',
+      'proteinMass',
       'bmi',
       'bodyWater',
       'visceralFat',
@@ -282,6 +310,23 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
         /NaN|Infinity/,
       )
     }
+    for (const metric of ['proteinMass', 'bodyScore', 'metabolicAge'] as const) {
+      const card = overview.getByRole('article').filter({
+        has: page.getByRole('heading', { name: copy.metrics[metric], exact: true }),
+      })
+      const latest = measurements.find((row) => !row.excluded && row[metric] !== null)
+      expect(latest).toBeDefined()
+      await expect(card).toContainText(
+        new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(latest?.[metric] ?? 0),
+      )
+      await expect(card).toContainText(measurementDay(latest?.measuredAt ?? ''))
+    }
+    const score = overview.getByRole('article').filter({ hasText: copy.metrics.bodyScore })
+    const age = overview.getByRole('article').filter({ hasText: copy.metrics.metabolicAge })
+    await expect(score).toContainText(copy.units.points)
+    await expect(age).toContainText(copy.units.years)
+    await expect(score.locator('svg')).toHaveCount(0)
+    await expect(age.locator('svg')).toHaveCount(0)
     await expect(page.getByRole('heading', { name: copy.stagePlan, exact: true })).toBeVisible()
     await expect(page.getByRole('heading', { name: copy.calendar, exact: true })).toBeVisible()
     await expect(page.locator('#health-trend')).not.toContainText('MISSING_MESSAGE')
@@ -327,5 +372,14 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
     fullPage: true,
   })
   expect(await chart.locator('svg').innerHTML()).not.toMatch(/NaN|Infinity/)
+  emptySupplementaryMetrics = true
+  await page.reload()
+  for (const name of ['身体评分', '代谢年龄']) {
+    const card = overview.getByRole('article').filter({
+      has: page.getByRole('heading', { name, exact: true }),
+    })
+    await expect(card).toContainText('暂无数据')
+    await expect(card).toContainText('—')
+  }
   expect(failures).toEqual([])
 })

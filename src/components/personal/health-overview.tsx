@@ -42,7 +42,7 @@ export function HealthOverview({ snapshot }: { snapshot: OwnerHealthSnapshot }) 
             'weight',
             'bodyFat',
             'muscleMass',
-            'waist',
+            'proteinMass',
             'bmi',
             'bodyWater',
             'visceralFat',
@@ -112,6 +112,29 @@ export function HealthOverview({ snapshot }: { snapshot: OwnerHealthSnapshot }) 
                   {format(change)}
                 </span>
                 <span className="text-muted-foreground">{t('recentChange')}</span>
+              </p>
+            </article>
+          )
+        })}
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        {(['bodyScore', 'metabolicAge'] as const).map((metric) => {
+          const latest = snapshot.measurements.find((row) => !row.excluded && row[metric] !== null)
+          const unit =
+            metricDefinitions.find((definition) => definition.key === metric)?.unit ?? 'points'
+          return (
+            <article key={metric} className="min-w-0 rounded-2xl border bg-card p-4 sm:p-5">
+              <h2 className="font-medium text-muted-foreground text-sm">
+                {t(`metrics.${metric}`)}
+              </h2>
+              <p className="mt-2 break-words font-semibold text-2xl tabular-nums tracking-tight">
+                {format(latest?.[metric])}{' '}
+                <span className="font-normal text-muted-foreground text-xs">
+                  {t(`units.${unit}`)}
+                </span>
+              </p>
+              <p className="mt-1 text-muted-foreground text-xs">
+                {latest ? measurementDay(latest.measuredAt) : t('noData')}
               </p>
             </article>
           )
