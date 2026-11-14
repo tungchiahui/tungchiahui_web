@@ -7,7 +7,7 @@
 
 ## Decision
 
-Keep locale-aware `/weight-loss` and its static plan public. Actual measurements are owner-only,
+Keep locale-aware `/weight-loss` public as an entry page. Personal plans and actual measurements are owner-only,
 including historical JSONB. Private reads and writes use independent control-api and the current
 `site_session` account authentication with strict owner role checks. Anonymous SSR receives no
 measurements. Public dataset reads deny `weight_loss`; technical-roadmap behavior stays compatible.
@@ -41,3 +41,28 @@ The compatibility release SHA is explicitly recognized by deployment compatibili
 images advertise health-data-versions=1. Migration and rollback fail closed when the retained release
 cannot serve owner-only unified data. Backup/PITR and restore drills cover all added PostgreSQL data.
 Operational details and recovery validation are in ../operations/body-measurements.md.
+
+## 2026-11-14 — Owner-authorized private plan and dashboard revision
+
+The Owner approved hiding personal plans from anonymous and non-owner visitors, replacing the
+fixed fortnightly target table with stage plans and measurement-based period reviews, and using
+January 10, 2027 at 80 kg as the next checkpoint. August 14 through October 25, 2026 is a 90 kg
+maintenance interval. Weight loss resumes from 90 kg on October 26. The 75 kg long-term target has
+no scheduled end date. This revision replaces the earlier public-static-plan presentation decision.
+
+The authenticated snapshot response adds a validated plan and localized `HealthPlan` messages.
+The public next-intl payload excludes this namespace. Existing snapshot fields, database schema,
+version-1 JSON exchange, source protection and account boundaries remain compatible. Original plan
+overrides remain stored and exported. The revised schedule takes precedence from August 14 onwards,
+while earlier explicit custom targets remain effective. Legacy default plan generation is retained
+for historical data migration and offline compatibility.
+
+Charts default to 14-calendar-day local weighted regression over daily means, with optional
+7/30-day windows and observed daily points. Bounded cubic segments join missing intervals with
+explicitly labelled dashed estimates. Daily and seven-calendar-day means remain available.
+Estimated values are display-only and never contribute to persistence, exchange or statistics.
+Weekly/monthly statistics give each valid daily mean equal weight. The private dashboard includes
+metric sparklines, weekly change bars, a measurement calendar and accessible record dialogs.
+Verification covers authorization, anonymous HTML/RSC, four locales, time boundaries, missing values,
+excluded records, smooth-path bounds, responsive layout and the retained JSON/annotation workflows.
+Operational behavior and rollback implications are documented in body-measurements.md.

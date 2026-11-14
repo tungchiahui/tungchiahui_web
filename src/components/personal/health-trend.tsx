@@ -2,61 +2,111 @@
 import { useTranslations } from 'next-intl'
 import { useState } from 'react'
 import {
+  type HealthPlan,
   type Measurement,
   type MetricKey,
   measurementDay,
   metricDefinitions,
 } from '@/health/contracts'
-import { trendPoints } from '@/health/trends'
-import { getTargetRange, weightMilestones } from '@/personal/weight-plan'
+import { targetAt } from '@/health/plan'
+import {
+  metricSeries,
+  type SmoothingWindow,
+  smoothingWindows,
+  type TrendMode,
+  type TrendPoint,
+} from '@/health/trends'
+import { MeasurementChart } from './measurement-chart'
 import { fieldClass, panelClass } from './tracker-toolbar'
 
 export function HealthTrend({
   records,
-  plans,
+  plan,
+  initialWindow,
 }: {
   records: Measurement[]
-  plans: { date: string; targetMin: number; targetMax: number }[]
+  plan: HealthPlan
+  initialWindow: { from: string; to: string } | null
 }) {
   const t = useTranslations('Health')
   const [metric, setMetric] = useState<MetricKey>('weight')
-  const [range, setRange] = useState('90')
-  const [daily, setDaily] = useState(false)
-  const [customFrom, setFrom] = useState('')
-  const [customTo, setTo] = useState('')
+  const [range, setRange] = useState(initialWindow ? 'custom' : '90')
+  const [mode, setMode] = useState<TrendMode>('smooth')
+  const [customFrom, setFrom] = useState(initialWindow?.from ?? '')
+  const [customTo, setTo] = useState(initialWindow?.to ?? '')
+  const [fullPlan, setFullPlan] = useState(false)
+  const [smoothing, setSmoothing] = useState<SmoothingWindow>(14)
+  const [showObserved, setShowObserved] = useState(true)
   const from =
     range === 'custom'
       ? customFrom
       : range === 'all'
         ? ''
         : measurementDay(new Date(Date.now() - (Number(range) - 1) * 86400000).toISOString())
-  const to = range === 'custom' ? customTo : ''
-  const points = trendPoints(records, metric, daily, from, to)
-  const targets =
+  const to = range === 'custom' ? customTo : measurementDay(new Date().toISOString())
+  const points = metricSeries(records, metric, mode, from, to, smoothing)
+  const actualFrom = from || measurementDay(points[0]?.time ?? new Date().toISOString())
+  const actualTo =
+    range === 'custom' && customTo
+      ? customTo
+      : measurementDay(points.at(-1)?.time ?? new Date().toISOString())
+  const domain =
+    fullPlan && metric === 'weight'
+      ? {
+          from: actualFrom < plan.startDate ? actualFrom : plan.startDate,
+          to: actualTo > plan.endDate ? actualTo : plan.endDate,
+        }
+      : { from: actualFrom, to: actualTo < actualFrom ? actualFrom : actualTo }
+  const dates = [
+    ...new Set([domain.from, domain.to, ...plan.targets.map((point) => point.date)]),
+  ].sort()
+  const targets: TrendPoint[] =
     metric === 'weight'
-      ? weightMilestones
-          .filter((row) => (!from || row.date >= from) && (!to || row.date <= to))
-          .map((row) => ({ time: `${row.date}T00:00:00+08:00`, value: (row.min + row.max) / 2 }))
+      ? dates.flatMap((day) => {
+          const target = targetAt(plan, day)
+          return target && day >= domain.from && day <= domain.to
+            ? [
+                {
+                  id: day,
+                  time: `${day}T00:00:00+08:00`,
+                  value: (target.min + target.max) / 2,
+                  count: 0,
+                },
+              ]
+            : []
+        })
       : []
-  const timestamps = [...points, ...targets].map((point) => Date.parse(point.time))
-  const first = Math.min(...timestamps),
-    last = Math.max(...timestamps)
-  const values = [...points, ...targets].map((point) => point.value)
-  const min = values.length ? Math.floor(Math.min(...values) - 1) : 0,
-    max = values.length ? Math.ceil(Math.max(...values) + 1) : 1
-  const x = (time: string) => 60 + ((Date.parse(time) - first) / Math.max(last - first, 1)) * 780
-  const y = (value: number) => 235 - ((value - min) / Math.max(max - min, 1)) * 205
-  const targetFor = (time: string) => {
-    const date = measurementDay(time)
-    const custom = plans.find((row) => row.date === date)
-    const target = custom ? { min: custom.targetMin, max: custom.targetMax } : getTargetRange(date)
-    return (target.min + target.max) / 2
-  }
   return (
-    <section className={`${panelClass} space-y-5`}>
-      <h2 className="font-bold text-2xl">{t('trend')}</h2>
-      <div className="grid gap-4 sm:grid-cols-3">
-        <label>
+    <section id="health-trend" className={`${panelClass} min-w-0 space-y-5 scroll-mt-28`}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="font-bold text-xl">{t('trend')}</h2>
+        <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-muted-foreground">
+          <span className="flex items-center gap-2">
+            <span className="h-0.5 w-5 bg-blue-600 dark:bg-blue-400" />
+            {t(mode === 'smooth' ? 'smooth' : 'actualCurve')}
+          </span>
+          {mode !== 'raw' && (
+            <span className="flex items-center gap-2">
+              <span className="w-5 border-t-2 border-blue-500 border-dashed" />
+              {t('gapEstimate')}
+            </span>
+          )}
+          {mode === 'smooth' && showObserved && (
+            <span className="flex items-center gap-2">
+              <span className="size-1.5 rounded-full bg-blue-500/30" />
+              {t('observedMean')}
+            </span>
+          )}
+          {metric === 'weight' && (
+            <span className="flex items-center gap-2">
+              <span className="w-5 border-t-2 border-emerald-600 border-dashed dark:border-emerald-400" />
+              {t('targetLabel')}
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <label className="space-y-1 text-sm">
           {t('metric')}
           <select
             className={fieldClass}
@@ -73,7 +123,7 @@ export function HealthTrend({
             ))}
           </select>
         </label>
-        <label>
+        <label className="space-y-1 text-sm">
           {t('range')}
           <select
             className={fieldClass}
@@ -87,109 +137,110 @@ export function HealthTrend({
             ))}
           </select>
         </label>
-        <label>
+        <label className="space-y-1 text-sm">
           {t('aggregation')}
           <select
             className={fieldClass}
-            value={daily ? 'daily' : 'raw'}
-            onChange={(event) => setDaily(event.target.value === 'daily')}
+            value={mode}
+            onChange={(event) => {
+              const value = event.target.value
+              if (value === 'raw' || value === 'daily' || value === 'rolling' || value === 'smooth')
+                setMode(value)
+            }}
           >
-            <option value="raw">{t('raw')}</option>
-            <option value="daily">{t('daily')}</option>
+            {(['smooth', 'raw', 'daily', 'rolling'] as const).map((value) => (
+              <option key={value} value={value}>
+                {t(value)}
+              </option>
+            ))}
           </select>
         </label>
+        {mode === 'smooth' && (
+          <label className="space-y-1 text-sm">
+            {t('smoothingWindow')}
+            <select
+              className={fieldClass}
+              value={smoothing}
+              onChange={(event) => {
+                const selected = smoothingWindows.find(
+                  (window) => window === Number(event.target.value),
+                )
+                if (selected) setSmoothing(selected)
+              }}
+            >
+              {smoothingWindows.map((days) => (
+                <option key={days} value={days}>
+                  {t('smoothingDays', { count: days })}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         {range === 'custom' && (
           <>
-            <label>
+            <label className="space-y-1 text-sm">
               {t('from')}
               <input
                 className={fieldClass}
                 type="date"
                 value={customFrom}
                 max={customTo || undefined}
-                onChange={(e) => setFrom(e.target.value)}
+                onChange={(event) => setFrom(event.target.value)}
               />
             </label>
-            <label>
+            <label className="space-y-1 text-sm">
               {t('to')}
               <input
                 className={fieldClass}
                 type="date"
                 value={customTo}
                 min={customFrom || undefined}
-                onChange={(e) => setTo(e.target.value)}
+                onChange={(event) => setTo(event.target.value)}
               />
             </label>
           </>
         )}
       </div>
-      <p className="text-muted-foreground text-sm">{t(daily ? 'dailyHelp' : 'rawHelp')}</p>
-      {points.length ? (
-        <div className="overflow-x-auto">
-          <svg
-            viewBox="0 0 900 280"
-            className="w-full min-w-[500px]"
-            role="img"
-            aria-label={t('trend')}
-          >
-            <title>{t('trend')}</title>
-            {[0, 1, 2, 3, 4].map((tick) => {
-              const value = min + ((max - min) * tick) / 4
-              return (
-                <g key={tick}>
-                  <line
-                    x1="60"
-                    x2="840"
-                    y1={y(value)}
-                    y2={y(value)}
-                    stroke="currentColor"
-                    opacity="0.12"
-                  />
-                  <text x="50" y={y(value) + 4} textAnchor="end" fill="currentColor" fontSize="12">
-                    {value.toFixed(1)}
-                  </text>
-                </g>
-              )
-            })}
-            {metric === 'weight' && (
-              <polyline
-                fill="none"
-                stroke="#059669"
-                strokeDasharray="5 4"
-                points={[
-                  ...targets,
-                  ...points.map((row) => ({ time: row.time, value: targetFor(row.time) })),
-                ]
-                  .sort((a, b) => Date.parse(a.time) - Date.parse(b.time))
-                  .map((row) => `${x(row.time)},${y(row.value)}`)
-                  .join(' ')}
-              />
-            )}
-            <polyline
-              fill="none"
-              stroke="#3b82f6"
-              strokeWidth="2"
-              points={points.map((point) => `${x(point.time)},${y(point.value)}`).join(' ')}
+      <div className="flex flex-wrap gap-x-5 gap-y-3">
+        {mode === 'smooth' && (
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={showObserved}
+              onChange={(event) => setShowObserved(event.target.checked)}
             />
-            {points.map((point) => (
-              <circle key={point.id} cx={x(point.time)} cy={y(point.value)} r="4" fill="#3b82f6">
-                <title>{`${measurementDay(point.time)} ${point.value.toFixed(2)} · ${t('samples', { count: point.count })}`}</title>
-              </circle>
-            ))}
-            <text x="60" y="265" fill="currentColor" fontSize="12">
-              {measurementDay(new Date(first).toISOString())}
-            </text>
-            <text x="840" y="265" textAnchor="end" fill="currentColor" fontSize="12">
-              {measurementDay(new Date(last).toISOString())}
-            </text>
-          </svg>
-        </div>
-      ) : (
-        <p>{t('noData')}</p>
-      )}
-      {metric === 'weight' && (
-        <p className="text-sm text-emerald-600 dark:text-emerald-400">{t('targetCurve')}</p>
-      )}
+            {t('showObserved')}
+          </label>
+        )}
+        {metric === 'weight' && (
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={fullPlan}
+              onChange={(event) => setFullPlan(event.target.checked)}
+            />
+            {t('fullPlan')}
+          </label>
+        )}
+      </div>
+      <MeasurementChart
+        key={`${metric}:${mode}:${from}:${to}:${fullPlan}:${smoothing}`}
+        points={points}
+        targets={targets}
+        metric={metric}
+        raw={mode === 'raw'}
+        rolling={mode === 'rolling'}
+        smoothed={mode === 'smooth'}
+        showObserved={showObserved}
+        domain={domain}
+        hold={{ from: plan.holdStart, to: plan.holdEnd }}
+      />
+      <p className="text-muted-foreground text-xs leading-5">
+        {mode === 'smooth'
+          ? t('smoothHelp', { days: smoothing })
+          : t(mode === 'raw' ? 'rawHelp' : mode === 'daily' ? 'dailyHelp' : 'rollingHelp')}{' '}
+        {t('curveHelp')}
+      </p>
     </section>
   )
 }

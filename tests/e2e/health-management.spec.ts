@@ -1,7 +1,11 @@
 import { randomUUID } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { healthExchangeSchema, healthSnapshotSchema } from '../../src/health/contracts'
 import { normalizeSmartscaleRow } from '../../src/health/smartscale'
 import { expect, test } from './fixtures'
+
+test.use({ hasTouch: true })
 
 test('Owner manages partial measurements and versioned JSON with private anonymous rendering', async ({
   page,
@@ -12,13 +16,14 @@ test('Owner manages partial measurements and versioned JSON with private anonymo
   if (!baseURL) throw new Error('Missing test base URL')
   await page.goto('/weight-loss')
   await expect(
-    page.getByText('登录 Owner 账号后可查看身体指标、历史记录和手动管理功能。'),
+    page.getByText('登录 Owner 账号后可查看个人计划、身体指标和历史记录。'),
   ).toBeVisible()
   await page.getByRole('button', { name: '登录', exact: true }).click()
   const dialog = page.getByRole('dialog')
   await dialog.getByLabel('用户名').fill('owner')
   await dialog.getByLabel('密码').fill('local-only-owner-password')
   await dialog.getByRole('button', { name: '登录', exact: true }).click()
+  await page.getByRole('button', { name: '新增手动记录', exact: true }).click()
   const note = `synthetic-private-${Date.now()}`
   const form = page
     .locator('form')
@@ -47,11 +52,12 @@ test('Owner manages partial measurements and versioned JSON with private anonymo
   await expect(form.getByLabel('腰围 (cm)', { exact: true })).toHaveValue('90.5')
   await form.getByLabel('腰围 (cm)', { exact: true }).fill('91.5')
   await form.getByRole('button', { name: '保存记录', exact: true }).click()
-  await expect(form.getByLabel('腰围 (cm)', { exact: true })).toHaveValue('')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
   const edited = healthSnapshotSchema
     .parse(await (await page.request.get('/api/ops/health/snapshot')).json())
     .measurements.find((item) => item.id === record.id)
   expect(edited?.waist).toBe(91.5)
+  await page.getByRole('button', { name: '数据管理', exact: true }).click()
   const download = page.waitForEvent('download')
   await page.getByRole('button', { name: '导出 JSON', exact: true }).click()
   const downloaded = await download
@@ -103,6 +109,7 @@ test('Owner manages partial measurements and versioned JSON with private anonymo
   await autoRow.getByRole('button').click()
   await expect(form.getByLabel('体重 (kg)', { exact: true })).toBeDisabled()
   await expect(form.getByRole('button', { name: '删除记录', exact: true })).toHaveCount(0)
+  await page.getByRole('button', { name: '关闭', exact: true }).click()
   await page.screenshot({ path: test.info().outputPath('health-desktop.png'), fullPage: true })
   await page.setViewportSize({ width: 390, height: 844 })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
@@ -110,6 +117,7 @@ test('Owner manages partial measurements and versioned JSON with private anonymo
   )
   await page.screenshot({ path: test.info().outputPath('health-mobile.png'), fullPage: true })
   await page.setViewportSize({ width: 1280, height: 900 })
+  await autoRow.getByRole('button').click()
   await form.getByLabel('备注', { exact: true }).fill('synthetic automatic annotation')
   await form.getByLabel('排除统计', { exact: true }).check()
   await form.getByRole('button', { name: '保存记录', exact: true }).click()
@@ -124,7 +132,11 @@ test('Owner manages partial measurements and versioned JSON with private anonymo
     const anonymous = await context.newPage()
     await anonymous.goto('/weight-loss')
     expect(await anonymous.content()).not.toContain(note)
-    expect(await (await anonymous.request.get('/weight-loss')).text()).not.toContain(note)
+    const html = await (await anonymous.request.get('/weight-loss')).text()
+    expect(html).not.toContain(note)
+    expect(html).not.toContain('1300-1400 kcal')
+    expect(html).not.toContain('2027-01-10')
+    await expect(anonymous.getByRole('heading', { name: '阶段计划' })).toHaveCount(0)
     expect((await anonymous.request.get('/api/ops/health/snapshot')).status()).toBe(401)
     expect((await anonymous.request.get('/api/personal-data/weight_loss')).status()).toBe(403)
   } finally {
@@ -136,6 +148,154 @@ test('Owner manages partial measurements and versioned JSON with private anonymo
   await expect(page.getByRole('cell', { name: note, exact: true })).toHaveCount(0)
   await page.getByRole('button', { name: 'owner', exact: true }).click()
   await expect(
-    page.getByText('登录 Owner 账号后可查看身体指标、历史记录和手动管理功能。'),
+    page.getByText('登录 Owner 账号后可查看个人计划、身体指标和历史记录。'),
   ).toBeVisible()
+})
+
+test('Owner dashboard charts support four locales, keyboard, mobile touch and dark mode', async ({
+  page,
+}) => {
+  test.setTimeout(120000)
+  const { emptyMetrics, measurementSchema } = await import('../../src/health/contracts')
+  const messagesForLocale = (locale: string) =>
+    JSON.parse(
+      readFileSync(resolve(import.meta.dirname, `../../messages/${locale}.json`), 'utf8'),
+    ) as typeof import('../../messages/zh-cn.json')
+  const failures: string[] = []
+  page.on('pageerror', (error) => failures.push(error.message))
+  const measurements = Array.from({ length: 42 }, (_, index) => {
+    const daysAgo = index < 20 ? 86 - index : 43 - index
+    const measuredAt = new Date(Date.now() - daysAgo * 86400000).toISOString()
+    return measurementSchema.parse({
+      ...emptyMetrics,
+      id: randomUUID(),
+      measuredAt,
+      timePrecision: 'datetime',
+      source: 'manual',
+      sourceRecordKey: null,
+      rawPayload: null,
+      revision: 0,
+      excluded: index === 10,
+      note: `synthetic-chart-${index}`,
+      weight: 96 - index * 0.16 + Math.sin(index) * 0.25,
+      bodyFat: index % 3 === 0 ? null : 28 - index * 0.06,
+      muscleMass: 55 + Math.sin(index) * 0.2,
+      waist: index % 5 === 0 ? 98 - index * 0.12 : null,
+      createdAt: measuredAt,
+      updatedAt: measuredAt,
+    })
+  }).toReversed()
+  await page.route('**/api/ops/health/snapshot?*', async (route) => {
+    const response = await route.fetch()
+    const { ownerHealthSnapshotSchema } = await import('../../src/health/contracts')
+    const complete = ownerHealthSnapshotSchema.parse(await response.json())
+    await route.fulfill({ response, json: { ...complete, measurements } })
+  })
+  await page.goto('/weight-loss')
+  await page.getByRole('button', { name: '登录', exact: true }).click()
+  const login = page.getByRole('dialog')
+  await login.getByLabel('用户名').fill('owner')
+  await login.getByLabel('密码').fill('local-only-owner-password')
+  await login.getByRole('button', { name: '登录', exact: true }).click()
+  const chart = page.locator('#health-trend')
+  const captureChart = async (name: string) => {
+    const viewport = page.viewportSize()
+    const bounds = await chart.boundingBox()
+    if (viewport && bounds)
+      await page.setViewportSize({
+        width: viewport.width,
+        height: Math.max(viewport.height, Math.ceil(bounds.height) + 160),
+      })
+    await chart.evaluate((element) =>
+      element.scrollIntoView({ behavior: 'instant', block: 'start' }),
+    )
+    await chart.screenshot({ path: test.info().outputPath(name) })
+    if (viewport) await page.setViewportSize(viewport)
+  }
+
+  await expect(chart.getByRole('img')).toBeVisible()
+  await expect(chart.locator('path[data-estimated="true"]')).toHaveCount(2)
+  await expect(chart.locator('path[data-estimated="false"]')).toHaveCount(3)
+  await expect(chart.getByLabel('聚合方式')).toHaveValue('smooth')
+  await expect(chart.getByLabel('平滑范围')).toHaveValue('14')
+  await chart.getByLabel('平滑范围').selectOption('30')
+  await chart.getByLabel('平滑范围').selectOption('7')
+  await chart.getByLabel('平滑范围').selectOption('14')
+  await chart.getByLabel('显示实测日均点').uncheck()
+  await expect(chart.locator('circle[data-observed]')).toHaveCount(0)
+  await chart.getByLabel('显示实测日均点').check()
+  await expect(chart.locator('circle[data-observed]')).toHaveCount(41)
+  const slider = chart.getByRole('slider')
+  const last = await slider.inputValue()
+  await slider.focus()
+  await page.keyboard.press('ArrowLeft')
+  await expect(slider).not.toHaveValue(last)
+  await captureChart('health-chart-default.png')
+  await slider.press('Home')
+  for (let day = 0; day < 35; day++) await slider.press('ArrowRight')
+  await expect(chart.getByTestId('chart-reading')).toContainText('缺测估算')
+  await expect(slider).toHaveAttribute('aria-valuetext', /缺测估算/)
+  await captureChart('health-chart-gap-estimate.png')
+  await slider.press('End')
+  await chart.getByLabel('显示完整计划').check()
+  await expect(chart.locator('polyline')).toHaveCount(1)
+  await chart.getByLabel('聚合方式').selectOption('rolling')
+  await expect(chart.locator('path[data-estimated="true"]')).toHaveCount(2)
+  await expect(chart.locator('path[data-estimated="false"]')).toHaveCount(3)
+  await chart.getByLabel('聚合方式').selectOption('raw')
+  await expect(chart.locator('circle[data-observed]')).toHaveCount(41)
+  await chart.getByLabel('聚合方式').selectOption('smooth')
+  await page.getByRole('button', { name: '按月', exact: true }).click()
+  await expect(page.getByRole('button', { name: '按月', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await page.screenshot({
+    path: test.info().outputPath('health-dashboard-desktop.png'),
+    fullPage: true,
+  })
+  for (const locale of ['zh-cn', 'zh-hk', 'zh-tw', 'en-us'] as const) {
+    await page.goto(locale === 'zh-cn' ? '/weight-loss' : `/${locale}/weight-loss`)
+    const copy = messagesForLocale(locale).Health
+    await expect(page.getByRole('heading', { name: copy.stagePlan, exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: copy.calendar, exact: true })).toBeVisible()
+    await expect(page.locator('#health-trend')).not.toContainText('MISSING_MESSAGE')
+    await expect(page.locator('.music-floating, .music-mini')).toHaveCount(0)
+    expect(await (await page.request.get(`/${locale}/weight-loss`)).text()).not.toContain(
+      '1300-1400 kcal',
+    )
+    await page.setViewportSize({ width: 390, height: 844 })
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true)
+    await page.locator('#health-trend svg').tap({ position: { x: 180, y: 100 } })
+    await expect(chart.getByTestId('chart-reading')).toContainText(copy.gapEstimate)
+    await page.getByRole('button', { name: copy.addRecord, exact: true }).click()
+    await expect(page.getByRole('dialog')).toBeVisible()
+    expect(
+      await page
+        .getByRole('dialog')
+        .evaluate((element) => element.scrollWidth <= element.clientWidth),
+    ).toBe(true)
+    await page.keyboard.press('Escape')
+  }
+  await page.goto('/weight-loss')
+  await expect(page.locator('#health-trend svg')).toBeVisible()
+  await captureChart('health-chart-mobile.png')
+  await page.screenshot({
+    path: test.info().outputPath('health-dashboard-mobile.png'),
+    fullPage: true,
+  })
+  await page.evaluate(() => document.documentElement.classList.add('dark'))
+  await page.screenshot({
+    path: test.info().outputPath('health-dashboard-mobile-dark.png'),
+    fullPage: true,
+  })
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.screenshot({
+    path: test.info().outputPath('health-dashboard-desktop-dark.png'),
+    fullPage: true,
+  })
+  expect(await chart.locator('svg').innerHTML()).not.toMatch(/NaN|Infinity/)
+  expect(failures).toEqual([])
 })

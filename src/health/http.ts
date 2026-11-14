@@ -3,7 +3,9 @@ import { z } from 'zod'
 import type { ControlApiConfiguration } from '../control-plane/configuration'
 import { ownerRequestOriginAllowed } from '../control-plane/owner-http'
 import { FixedWindowRateLimiter } from '../control-plane/rate-limit'
+import { localeSchema } from '../domain/persistence'
 import { healthExchangeSchema, measurementInputSchema } from './contracts'
+import { ownerHealthPlan } from './owner-plan'
 import { HealthConflict, type HealthRepository, HealthSourceProtected } from './repository'
 
 async function readBody(request: IncomingMessage) {
@@ -46,9 +48,13 @@ export function createHealthHttpHandler(
       if (!limiter.consume(account.id).allowed)
         return respond(429, { error: 'rate_limit_exceeded' })
       if (!repository) return respond(503, { error: 'health_store_unavailable' })
-      const path = new URL(request.url ?? '/', 'http://control-api').pathname
-      if (path === '/api/ops/health/snapshot' && request.method === 'GET')
-        return respond(200, await repository.snapshot())
+      const url = new URL(request.url ?? '/', 'http://control-api')
+      const path = url.pathname
+      if (path === '/api/ops/health/snapshot' && request.method === 'GET') {
+        const locale = localeSchema.parse(url.searchParams.get('locale') ?? 'zh-cn')
+        const snapshot = await repository.snapshot()
+        return respond(200, { ...snapshot, ...ownerHealthPlan(locale, snapshot.planOverrides) })
+      }
       if (!['POST', 'PUT', 'DELETE', 'PATCH'].includes(request.method ?? ''))
         return respond(405, { error: 'method_not_allowed' })
       if (!/^application\/json(?:\s*;.*)?$/i.test(headers.get('content-type') ?? ''))

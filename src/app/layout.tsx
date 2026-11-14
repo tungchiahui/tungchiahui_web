@@ -27,6 +27,9 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   const locale = await getLocale()
   const messages = await getMessages()
+  const publicMessages = Object.fromEntries(
+    Object.entries(messages).filter(([namespace]) => namespace !== 'HealthPlan'),
+  )
   const t = await getTranslations('Web')
 
   return (
@@ -47,7 +50,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           }}
         />
         <CdnFontAwesome />
-        <NextIntlClientProvider messages={messages}>
+        <NextIntlClientProvider messages={publicMessages}>
           <MusicPlayerProvider>
             {children}
             <GlobalMusicPlayer />

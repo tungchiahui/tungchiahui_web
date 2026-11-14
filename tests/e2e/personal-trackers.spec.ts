@@ -95,6 +95,7 @@ test('owner login directly enables both trackers; saves survive reload and healt
 
   await page.goto('/weight-loss')
   await expect(page.getByRole('heading', { name: '减脂计划与进度记录' })).toBeVisible()
+  await page.getByRole('button', { name: '新增手动记录', exact: true }).click()
   const weight = page.getByRole('spinbutton', { name: '体重 (kg)', exact: true })
   await expect(weight).toBeEnabled()
   await weight.fill('96.5')
@@ -160,6 +161,9 @@ test('owner login directly enables both trackers; saves survive reload and healt
   const logoutButton = page.getByRole('button', { name: 'owner', exact: true })
   await expect(logoutButton).toBeVisible()
   await logoutButton.click()
+  await expect(
+    page.getByText('登录 Owner 账号后可查看个人计划、身体指标和历史记录。'),
+  ).toBeVisible()
   await expect(weight).toHaveCount(0)
   expect(
     z

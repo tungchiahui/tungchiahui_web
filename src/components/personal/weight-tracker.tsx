@@ -1,92 +1,57 @@
 'use client'
-import { useLocale, useTranslations } from 'next-intl'
+
+import { Dialog } from '@base-ui/react/dialog'
+import { LockKeyhole, Plus, Settings2, X } from 'lucide-react'
+import { NextIntlClientProvider, useLocale, useMessages, useTranslations } from 'next-intl'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
-  type HealthExchange,
-  type HealthSnapshot,
-  healthExchangeSchema,
-  healthImportPreviewSchema,
   healthTimeZone,
   type Measurement,
   measurementDay,
   metricDefinitions,
+  type OwnerHealthSnapshot,
 } from '@/health/contracts'
-import { GOAL_WEIGHT, getTargetRange, START_WEIGHT, weightMilestones } from '@/personal/weight-plan'
+import { HealthExchangePanel } from './health-exchange'
+import { HealthOverview } from './health-overview'
+import { HealthLifestylePlan, HealthStagePlan } from './health-plan'
 import { HealthRecordForm } from './health-record-form'
+import { HealthReview } from './health-review'
 import { HealthTrend } from './health-trend'
-import { downloadFile, fieldClass, panelClass } from './tracker-toolbar'
-import { healthRequest, useHealthData } from './use-health-data'
+import { fieldClass, panelClass } from './tracker-toolbar'
+import { useHealthData } from './use-health-data'
 
 export function WeightTracker() {
   const t = useTranslations('Weight')
   const h = useTranslations('Health')
+  const locale = useLocale()
+  const messages = useMessages()
   const store = useHealthData()
   return (
-    <div className="space-y-6">
-      <header className={`${panelClass} bg-gradient-to-br from-blue-500/10 to-card`}>
-        <p className="text-primary text-sm">{t('eyebrow')}</p>
-        <h1 className="mt-3 font-bold text-3xl sm:text-4xl">{t('title')}</h1>
-        <p className="mt-4 text-muted-foreground leading-7">{t('intro')}</p>
+    <div className="min-w-0 space-y-6">
+      <header className="py-3 sm:py-5">
+        <h1 className="font-bold text-3xl tracking-tight sm:text-4xl">{t('title')}</h1>
+        <p className="mt-3 text-muted-foreground text-sm leading-6">{t('intro')}</p>
       </header>
       {store.snapshot ? (
-        <HealthDashboard snapshot={store.snapshot} reload={() => store.reload()} />
-      ) : (
-        <section className={panelClass}>
-          <p role="status">
-            {h(store.checking ? 'checking' : store.error ? 'loadFailed' : 'ownerOnly')}
-          </p>
-          {store.error && <Button onClick={() => void store.reload()}>{h('retry')}</Button>}
-        </section>
-      )}
-      <aside className={`${panelClass} mb-6 border-amber-500/40`}>
-        <h2 className="font-semibold">{t('healthTitle')}</h2>
-        <p className="mt-2 text-muted-foreground text-sm leading-6">{t('healthBody')}</p>
-        <a
-          className="mt-3 inline-block text-primary text-sm underline"
-          href="https://www.cdc.gov/healthy-weight-growth/losing-weight/index.html"
-          target="_blank"
-          rel="noreferrer"
+        <NextIntlClientProvider
+          locale={locale}
+          messages={{ ...messages, HealthPlan: store.snapshot.planMessages }}
         >
-          {t('healthSource')}
-        </a>
-      </aside>
-      <section className="mb-6">
-        <h2 className="mb-4 font-bold text-2xl">{t('planTitle')}</h2>
-        <div className="grid gap-4 md:grid-cols-3">
-          {(['summer', 'school', 'rest'] as const).map((kind) => (
-            <article key={kind} className={panelClass}>
-              <h3 className="font-semibold text-lg">{t(`${kind}Plan`)}</h3>
-              <dl className="mt-4 space-y-4">
-                {(['Calories', 'Activity', 'Meals'] as const).map((item) => (
-                  <div key={item}>
-                    <dt className="text-muted-foreground text-xs">
-                      {t(
-                        item === 'Calories'
-                          ? 'calories'
-                          : item === 'Activity'
-                            ? 'activity'
-                            : 'meals',
-                      )}
-                    </dt>
-                    <dd className="mt-1 text-sm leading-6">{t(`${kind}${item}`)}</dd>
-                  </div>
-                ))}
-              </dl>
-            </article>
-          ))}
-        </div>
-      </section>
-      {!store.snapshot && (
-        <section className={panelClass}>
-          <h2 className="font-bold text-2xl">{t('milestoneTitle')}</h2>
-          <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {weightMilestones.map((row) => (
-              <li key={row.date} className="text-sm">
-                {row.date} · {row.min}–{row.max} kg
-              </li>
-            ))}
-          </ul>
+          <HealthDashboard snapshot={store.snapshot} reload={() => store.reload()} />
+        </NextIntlClientProvider>
+      ) : (
+        <section className={`${panelClass} flex items-start gap-4`}>
+          <LockKeyhole
+            className="mt-0.5 size-5 shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <div className="space-y-3">
+            <p role="status" className="text-sm leading-6">
+              {h(store.checking ? 'checking' : store.error ? 'loadFailed' : 'ownerOnly')}
+            </p>
+            {store.error && <Button onClick={() => void store.reload()}>{h('retry')}</Button>}
+          </div>
         </section>
       )}
     </div>
@@ -97,135 +62,102 @@ function HealthDashboard({
   snapshot,
   reload,
 }: {
-  snapshot: HealthSnapshot
+  snapshot: OwnerHealthSnapshot
   reload: () => Promise<void>
 }) {
   const t = useTranslations('Health')
-  const w = useTranslations('Weight')
   const locale = useLocale()
   const [selected, setSelected] = useState<Measurement | undefined>()
   const [formGeneration, setFormGeneration] = useState(0)
+  const [editing, setEditing] = useState(false)
+  const [managementOpen, setManagementOpen] = useState(false)
   const [source, setSource] = useState('all')
-  const [from, setFrom] = useState(''),
-    [to, setTo] = useState('')
-  const [visible, setVisible] = useState(30)
-  const [pending, setPending] = useState<{
-    file: HealthExchange
-    preview: ReturnType<typeof healthImportPreviewSchema.parse>
-  } | null>(null)
-  const [exchangeError, setExchangeError] = useState('')
-  const [importing, setImporting] = useState(false)
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
+  const [visible, setVisible] = useState(10)
+  const [inspection, setInspection] = useState<{ from: string; to: string } | null>(null)
   const records = snapshot.measurements
   const latest = records.find((row) => !row.excluded)
-  const latestWeight = records.find((row) => !row.excluded && row.weight !== null)
+  const format = (value: number | null | undefined) =>
+    value === null || value === undefined
+      ? '—'
+      : new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(value)
   const dateTime = (row: Measurement) =>
     row.timePrecision === 'date'
       ? `${measurementDay(row.measuredAt)} · ${t('precision.date')}`
       : new Date(row.measuredAt).toLocaleString(locale, { timeZone: healthTimeZone, hour12: false })
-  const syncTime = (value: string | null) =>
-    value ? new Date(value).toLocaleString(locale, { timeZone: healthTimeZone }) : t('noData')
-  const value = (number: number | null | undefined) =>
-    number === null || number === undefined
-      ? '—'
-      : new Intl.NumberFormat(locale, { maximumFractionDigits: 3 }).format(number)
   const filtered = records.filter(
     (row) =>
       (source === 'all' || row.source === source) &&
       (!from || measurementDay(row.measuredAt) >= from) &&
       (!to || measurementDay(row.measuredAt) <= to),
   )
+  const edit = (row?: Measurement) => {
+    setSelected(row)
+    setFormGeneration((old) => old + 1)
+    setEditing(true)
+  }
   const saved = async () => {
     await reload()
+    setEditing(false)
     setSelected(undefined)
-    setFormGeneration((old) => old + 1)
+  }
+  const inspect = (start: string, end: string) => {
+    setSource('all')
+    setFrom(start)
+    setTo(end)
+    setVisible(10)
+    setInspection({ from: start, to: end })
+    document.getElementById('health-trend')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
   return (
     <>
-      <section className={`${panelClass} space-y-5`}>
-        <h2 className="font-bold text-2xl">{t('overview')}</h2>
-        <dl className="grid grid-cols-2 gap-5 lg:grid-cols-4">
-          {(['weight', 'bodyFat', 'bmi', 'muscleMass'] as const).map((key) => (
-            <div key={key}>
-              <dt className="text-muted-foreground text-sm">{t(`metrics.${key}`)}</dt>
-              <dd className="mt-2 font-bold text-2xl tabular-nums">{value(latest?.[key])}</dd>
-            </div>
-          ))}
-          <div>
-            <dt>{t('startWeight')}</dt>
-            <dd>{START_WEIGHT} kg</dd>
-          </div>
-          <div>
-            <dt>{t('goalGap')}</dt>
-            <dd>
-              {value(
-                latestWeight?.weight === null || latestWeight?.weight === undefined
-                  ? null
-                  : latestWeight.weight - GOAL_WEIGHT,
-              )}{' '}
-              kg
-            </dd>
-          </div>
-          <div>
-            <dt>{t('change')}</dt>
-            <dd>
-              {value(
-                latestWeight?.weight === null || latestWeight?.weight === undefined
-                  ? null
-                  : latestWeight.weight - START_WEIGHT,
-              )}{' '}
-              kg
-            </dd>
-          </div>
-          <div>
-            <dt>{t('goal')}</dt>
-            <dd>{GOAL_WEIGHT} kg</dd>
-          </div>
-        </dl>
-        <p className="text-sm text-muted-foreground">
-          {t('measuredAt')} · {latest ? dateTime(latest) : t('noData')}
-        </p>
-        {latestWeight && latestWeight.id !== latest?.id && (
-          <p className="text-sm">
-            {t('lastWeight')} · {value(latestWeight.weight)} kg · {dateTime(latestWeight)}
-          </p>
-        )}
-        <p className="text-sm text-muted-foreground">
-          {t('lastSync')} · {syncTime(snapshot.sync.lastSuccessAt)}
-          <br />
-          {t('sourceUpdated')} · {syncTime(snapshot.sync.sourceUpdatedAt)}
-        </p>
-        {snapshot.sync.lastError && (
-          <p role="status" className="text-amber-600 dark:text-amber-400">
-            {t('syncFailed')}
-          </p>
-        )}
-      </section>
-      <HealthTrend records={records} plans={snapshot.planOverrides} />
-      <section className={`${panelClass} space-y-4`}>
-        <h2 className="font-bold text-2xl">{t('composition')}</h2>
-        <p className="text-muted-foreground text-sm">{latest ? dateTime(latest) : t('noData')}</p>
-        <dl className="grid grid-cols-2 gap-5 lg:grid-cols-4">
-          {metricDefinitions.map(({ key, unit }) => (
-            <div key={key}>
-              <dt className="text-muted-foreground text-sm">{t(`metrics.${key}`)}</dt>
-              <dd className="mt-1 font-semibold tabular-nums">
-                {value(latest?.[key])} {t(`units.${unit}`)}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      </section>
-      <section className={`${panelClass} space-y-5`}>
-        <h2 className="font-bold text-2xl">{t('history')}</h2>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <label>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="font-semibold text-lg">{t('overview')}</h2>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => edit()}>
+            <Plus className="mr-1.5 size-4" aria-hidden="true" />
+            {t('addRecord')}
+          </Button>
+          <Button
+            className="border bg-card text-foreground hover:bg-muted"
+            onClick={() => {
+              setManagementOpen(true)
+              document
+                .getElementById('health-management')
+                ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            }}
+          >
+            <Settings2 className="mr-1.5 size-4" aria-hidden="true" />
+            {t('manage')}
+          </Button>
+        </div>
+      </div>
+      <HealthOverview snapshot={snapshot} />
+      <HealthTrend
+        key={inspection ? `${inspection.from}:${inspection.to}` : 'default'}
+        records={records}
+        plan={snapshot.plan}
+        initialWindow={inspection}
+      />
+      <HealthReview records={records} inspect={inspect} />
+      <HealthStagePlan plan={snapshot.plan} records={records} />
+      <section id="health-history" className={`${panelClass} min-w-0 space-y-4`}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="font-bold text-xl">{t('history')}</h2>
+          <span className="text-muted-foreground text-xs">
+            {t('recordsCount', { count: filtered.length })}
+          </span>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <label className="space-y-1 text-sm">
             {t('source')}
             <select
               className={fieldClass}
               value={source}
-              onChange={(e) => {
-                setSource(e.target.value)
-                setVisible(30)
+              onChange={(event) => {
+                setSource(event.target.value)
+                setVisible(10)
               }}
             >
               {(['all', 'manual_legacy', 'manual', 'smartscale'] as const).map((item) => (
@@ -235,25 +167,46 @@ function HealthDashboard({
               ))}
             </select>
           </label>
-          <label>
+          <label className="space-y-1 text-sm">
             {t('from')}
             <input
               className={fieldClass}
               type="date"
               value={from}
-              onChange={(e) => setFrom(e.target.value)}
+              max={to || undefined}
+              onChange={(event) => {
+                setFrom(event.target.value)
+                setVisible(10)
+              }}
             />
           </label>
-          <label>
+          <label className="space-y-1 text-sm">
             {t('to')}
             <input
               className={fieldClass}
               type="date"
               value={to}
-              onChange={(e) => setTo(e.target.value)}
+              min={from || undefined}
+              onChange={(event) => {
+                setTo(event.target.value)
+                setVisible(10)
+              }}
             />
           </label>
         </div>
+        {(from || to) && (
+          <Button
+            className="border bg-card text-foreground hover:bg-muted"
+            onClick={() => {
+              setFrom('')
+              setTo('')
+              setVisible(10)
+              setInspection(null)
+            }}
+          >
+            {t('clearRange')}
+          </Button>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead>
@@ -261,211 +214,110 @@ function HealthDashboard({
                 {(
                   ['measuredAt', 'source', 'metrics.weight', 'metrics.bodyFat', 'note'] as const
                 ).map((label) => (
-                  <th key={label} className="border-b p-3">
+                  <th
+                    key={label}
+                    className="whitespace-nowrap border-b px-3 py-3 font-medium text-muted-foreground"
+                  >
                     {t(label)}
+                    {label === 'metrics.weight'
+                      ? ` (${t('units.kg')})`
+                      : label === 'metrics.bodyFat'
+                        ? ` (${t('units.percent')})`
+                        : ''}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filtered.slice(0, visible).map((row) => (
-                <tr key={row.id} className={row.excluded ? 'opacity-60' : ''}>
-                  <td className="border-b p-3">
+                <tr
+                  key={row.id}
+                  className={`${row.excluded ? 'opacity-60' : ''} hover:bg-muted/40`}
+                >
+                  <td className="border-b px-3 py-3">
                     <button
                       type="button"
-                      className="text-primary underline text-left"
-                      onClick={() => {
-                        setSelected(row)
-                        setFormGeneration((old) => old + 1)
-                      }}
+                      className="whitespace-nowrap text-left text-primary underline-offset-4 hover:underline"
+                      onClick={() => edit(row)}
                     >
                       {dateTime(row)}
                     </button>
-                    {row.excluded && <span className="block">{t('excluded')}</span>}
+                    {row.excluded && <span className="mt-1 block text-xs">{t('excluded')}</span>}
                   </td>
-                  <td className="border-b p-3">{t(`sources.${row.source}`)}</td>
-                  <td className="border-b p-3 tabular-nums">{value(row.weight)}</td>
-                  <td className="border-b p-3 tabular-nums">{value(row.bodyFat)}</td>
-                  <td className="max-w-48 break-words border-b p-3">{row.note}</td>
+                  <td className="whitespace-nowrap border-b px-3 py-3 text-xs">
+                    {t(`sources.${row.source}`)}
+                  </td>
+                  <td className="border-b px-3 py-3 tabular-nums">{format(row.weight)}</td>
+                  <td className="border-b px-3 py-3 tabular-nums">{format(row.bodyFat)}</td>
+                  <td className="min-w-32 max-w-64 break-words border-b px-3 py-3">{row.note}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        {!filtered.length && <p>{t('noData')}</p>}
+        {!filtered.length && <p className="text-muted-foreground text-sm">{t('noData')}</p>}
         {filtered.length > visible && (
-          <Button onClick={() => setVisible((old) => old + 30)}>{t('more')}</Button>
+          <Button onClick={() => setVisible((old) => old + 10)}>{t('more')}</Button>
         )}
-        <Button
-          onClick={() => {
-            setSelected(undefined)
-            setFormGeneration((old) => old + 1)
-          }}
-        >
-          {t('addRecord')}
-        </Button>
       </section>
-      {selected && (
-        <section className={`${panelClass} space-y-4`}>
-          <h2 className="font-bold text-2xl">{t('details')}</h2>
-          <p>
-            {dateTime(selected)} · {t(`sources.${selected.source}`)} ·{' '}
-            {t(`precision.${selected.timePrecision}`)}
-          </p>
-          <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            {metricDefinitions.map(({ key, unit }) => (
-              <div key={key}>
-                <dt className="text-muted-foreground text-sm">{t(`metrics.${key}`)}</dt>
-                <dd>
-                  {value(selected[key])} {t(`units.${unit}`)}
-                </dd>
-              </div>
-            ))}
-          </dl>
-          <p className="whitespace-pre-wrap break-words">{selected.note}</p>
-        </section>
-      )}
-      <HealthRecordForm
-        key={`${selected?.id ?? 'new'}:${formGeneration}`}
-        record={selected}
-        saved={saved}
-      />
-      <section className={`${panelClass} space-y-4`}>
-        <h2 className="font-bold text-2xl">{w('milestoneTitle')}</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr>
-                {(['date', 'targetRange', 'actual', 'focus'] as const).map((key) => (
-                  <th key={key} className="border-b p-3">
-                    {w(key)}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {weightMilestones.map((row) => {
-                const override = snapshot.planOverrides.find((plan) => plan.date === row.date)
-                const target = override
-                  ? { min: override.targetMin, max: override.targetMax }
-                  : getTargetRange(row.date)
-                const weights = records.filter(
-                  (record) =>
-                    !record.excluded &&
-                    measurementDay(record.measuredAt) === row.date &&
-                    record.weight !== null,
-                )
-                const average = weights.length
-                  ? weights.reduce((sum, record) => sum + Number(record.weight), 0) / weights.length
-                  : null
-                return (
-                  <tr key={row.date}>
-                    <td className="border-b p-3">{row.date}</td>
-                    <td className="border-b p-3">
-                      {target.min}–{target.max} kg
-                    </td>
-                    <td className="border-b p-3">{value(average)}</td>
-                    <td className="border-b p-3">{w(`milestoneFocus.${row.stage}`)}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-        <p className="text-muted-foreground text-sm">{t('dailyHelp')}</p>
-      </section>
-      <section className={`${panelClass} space-y-4`}>
-        <h2 className="font-bold text-2xl">{t('exchange')}</h2>
-        <p className="text-muted-foreground text-sm">{t('exchangeHelp')}</p>
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            onClick={() =>
-              downloadFile(
-                JSON.stringify(
-                  healthExchangeSchema.parse({
-                    format: 'tungchiahui-health',
-                    schemaVersion: 1,
-                    exportedAt: new Date().toISOString(),
-                    timeZone: healthTimeZone,
-                    measurements: records,
-                    planOverrides: snapshot.planOverrides,
-                  }),
-                  null,
-                  2,
-                ),
-                'body-measurements.json',
-                'application/json',
-              )
-            }
-          >
-            {t('export')}
-          </Button>
-          <label>
-            {t('import')}
-            <input
-              className={fieldClass}
-              type="file"
-              accept=".json,application/json"
-              disabled={importing}
-              onChange={async (event) => {
-                setPending(null)
-                setExchangeError('')
-                try {
-                  const file = event.target.files?.[0]
-                  if (!file) return
-                  if (file.size > 32 * 1024 * 1024) throw new Error('too_large')
-                  const parsed = healthExchangeSchema.parse(
-                    JSON.parse(await file.text()) as unknown,
-                  )
-                  const preview = healthImportPreviewSchema.parse(
-                    await healthRequest('import', 'POST', { file: parsed }),
-                  )
-                  setPending({ file: parsed, preview })
-                } catch {
-                  setExchangeError(t('invalid'))
-                } finally {
-                  event.target.value = ''
-                }
-              }}
-            />
-          </label>
-        </div>
-        {pending && (
-          <div role="status" className="space-y-3">
-            <p>{t('importPreview', pending.preview)}</p>
-            <div className="flex gap-3">
-              <Button
-                disabled={importing || pending.preview.conflicts > 0}
-                onClick={async () => {
-                  setImporting(true)
-                  try {
-                    await healthRequest('import', 'POST', {
-                      file: pending.file,
-                      expectedRevision: pending.preview.revision,
-                    })
-                    setPending(null)
-                    await saved()
-                  } catch {
-                    setExchangeError(t('conflict'))
-                  } finally {
-                    setImporting(false)
-                  }
-                }}
-              >
-                {t('confirmImport')}
-              </Button>
-              <Button disabled={importing} onClick={() => setPending(null)}>
-                {t('cancel')}
-              </Button>
+      <details className={panelClass}>
+        <summary className="cursor-pointer font-semibold text-lg">{t('allMetrics')}</summary>
+        <p className="mt-4 text-muted-foreground text-xs">
+          {latest ? dateTime(latest) : t('noData')} · {t('compositionHelp')}
+        </p>
+        <dl className="mt-5 grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4">
+          {metricDefinitions.map(({ key, unit }) => (
+            <div key={key}>
+              <dt className="text-muted-foreground text-xs">{t(`metrics.${key}`)}</dt>
+              <dd className="mt-1 font-medium tabular-nums">
+                {format(latest?.[key])}{' '}
+                <span className="text-muted-foreground text-xs">{t(`units.${unit}`)}</span>
+              </dd>
             </div>
-          </div>
-        )}
-        {exchangeError && (
-          <p role="alert" className="text-destructive">
-            {exchangeError}
-          </p>
-        )}
-      </section>
+          ))}
+        </dl>
+      </details>
+      <HealthLifestylePlan />
+      <HealthExchangePanel
+        snapshot={snapshot}
+        saved={saved}
+        open={managementOpen}
+        setOpen={setManagementOpen}
+      />
+      <Dialog.Root open={editing} onOpenChange={setEditing}>
+        <Dialog.Portal>
+          <Dialog.Backdrop className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm" />
+          <Dialog.Popup className="fixed top-1/2 left-1/2 z-50 max-h-[90dvh] w-[calc(100%_-_2rem)] max-w-4xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border bg-background p-5 shadow-xl sm:p-7">
+            <div className="mb-5 flex items-start justify-between gap-3">
+              <div>
+                <Dialog.Title className="font-semibold text-xl">
+                  {t(selected ? 'editRecord' : 'addRecord')}
+                </Dialog.Title>
+                <Dialog.Description className="mt-2 text-muted-foreground text-xs">
+                  {selected
+                    ? `${dateTime(selected)} · ${t(`sources.${selected.source}`)}`
+                    : t('rawHelp')}
+                </Dialog.Description>
+              </div>
+              <Dialog.Close
+                render={
+                  <Button
+                    className="shrink-0 border bg-card text-foreground hover:bg-muted"
+                    aria-label={t('close')}
+                  />
+                }
+              >
+                <X className="size-4" aria-hidden="true" />
+              </Dialog.Close>
+            </div>
+            <HealthRecordForm
+              key={`${selected?.id ?? 'new'}:${formGeneration}`}
+              record={selected}
+              saved={saved}
+            />
+          </Dialog.Popup>
+        </Dialog.Portal>
+      </Dialog.Root>
     </>
   )
 }

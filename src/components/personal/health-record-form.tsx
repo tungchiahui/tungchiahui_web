@@ -5,11 +5,10 @@ import { Button } from '@/components/ui/button'
 import {
   emptyMetrics,
   type Measurement,
-  measurementDay,
   measurementInputSchema,
   metricDefinitions,
 } from '@/health/contracts'
-import { fieldClass, panelClass } from './tracker-toolbar'
+import { fieldClass } from './tracker-toolbar'
 import { healthRequest } from './use-health-data'
 
 export function HealthRecordForm({
@@ -81,14 +80,7 @@ export function HealthRecordForm({
     }
   }
   return (
-    <section className={`${panelClass} space-y-5`}>
-      <h2 className="font-bold text-2xl">{t(record ? 'editRecord' : 'addRecord')}</h2>
-      {record && (
-        <p className="text-muted-foreground text-sm">
-          {t(`sources.${record.source}`)} · {t(`precision.${record.timePrecision}`)} ·{' '}
-          {measurementDay(record.measuredAt)}
-        </p>
-      )}
+    <div className="space-y-5">
       {automatic && <p className="text-muted-foreground text-sm">{t('sourceHelp')}</p>}
       <form
         onSubmit={(event) => {
@@ -185,6 +177,6 @@ export function HealthRecordForm({
           )}
         </div>
       </form>
-    </section>
+    </div>
   )
 }

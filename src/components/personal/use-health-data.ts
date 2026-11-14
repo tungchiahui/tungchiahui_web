@@ -1,7 +1,8 @@
 'use client'
+import { useLocale } from 'next-intl'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { accountSessionResponseSchema } from '@/control-plane/account-contracts'
-import { type HealthSnapshot, healthSnapshotSchema } from '@/health/contracts'
+import { type OwnerHealthSnapshot, ownerHealthSnapshotSchema } from '@/health/contracts'
 
 export async function healthRequest(path: string, method = 'GET', body?: unknown) {
   const response = await fetch(`/api/ops/health/${path}`, {
@@ -16,39 +17,49 @@ export async function healthRequest(path: string, method = 'GET', body?: unknown
   return response.json() as Promise<unknown>
 }
 export function useHealthData() {
-  const [snapshot, setSnapshot] = useState<HealthSnapshot | null>(null)
+  const locale = useLocale()
+  const [snapshot, setSnapshot] = useState<OwnerHealthSnapshot | null>(null)
   const [checking, setChecking] = useState(true)
   const [error, setError] = useState(false)
   const generation = useRef(0)
-  const reload = useCallback(async (clear = false) => {
-    const current = ++generation.current
-    if (clear) setSnapshot(null)
-    try {
-      const response = await fetch('/api/ops/auth/session', {
-        cache: 'no-store',
-        signal: AbortSignal.timeout(15000),
-      })
-      if (!response.ok) throw new Error('failed')
-      const session = accountSessionResponseSchema.parse(await response.json())
-      if (current !== generation.current) return
-      if (!session.authenticated || session.account.role !== 'owner') {
+  const reload = useCallback(
+    async (clear = false) => {
+      const current = ++generation.current
+      if (clear) {
         setSnapshot(null)
-        return
+        setChecking(true)
       }
-      const data = healthSnapshotSchema.parse(await healthRequest('snapshot'))
-      if (current === generation.current) {
-        setSnapshot(data)
-        setError(false)
+      try {
+        const response = await fetch('/api/ops/auth/session', {
+          cache: 'no-store',
+          signal: AbortSignal.timeout(15000),
+        })
+        if (!response.ok) throw new Error('failed')
+        const session = accountSessionResponseSchema.parse(await response.json())
+        if (current !== generation.current) return
+        if (!session.authenticated || session.account.role !== 'owner') {
+          setSnapshot(null)
+          setError(false)
+          return
+        }
+        const data = ownerHealthSnapshotSchema.parse(
+          await healthRequest(`snapshot?locale=${encodeURIComponent(locale)}`),
+        )
+        if (current === generation.current) {
+          setSnapshot(data)
+          setError(false)
+        }
+      } catch {
+        if (current === generation.current) {
+          setSnapshot(null)
+          setError(true)
+        }
+      } finally {
+        if (current === generation.current) setChecking(false)
       }
-    } catch {
-      if (current === generation.current) {
-        setSnapshot(null)
-        setError(true)
-      }
-    } finally {
-      if (current === generation.current) setChecking(false)
-    }
-  }, [])
+    },
+    [locale],
+  )
   useEffect(() => {
     // Retire the old browser draft containing private measurements.
     try {

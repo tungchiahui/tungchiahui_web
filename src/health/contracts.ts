@@ -123,6 +123,38 @@ export type Measurement = z.infer<typeof measurementSchema>
 export type MeasurementInput = z.infer<typeof measurementInputSchema>
 export type HealthSnapshot = z.infer<typeof healthSnapshotSchema>
 export type HealthExchange = z.infer<typeof healthExchangeSchema>
+export const healthPlanSchema = z
+  .object({
+    startWeight: z.number().positive(),
+    goalWeight: z.number().positive(),
+    longTermWeight: z.number().positive(),
+    startDate: z.iso.date(),
+    endDate: z.iso.date(),
+    holdStart: z.iso.date(),
+    holdEnd: z.iso.date(),
+    targets: z.array(planOverrideSchema).min(2),
+  })
+  .superRefine((plan, context) => {
+    if (
+      !(
+        plan.startDate < plan.holdStart &&
+        plan.holdStart <= plan.holdEnd &&
+        plan.holdEnd < plan.endDate
+      ) ||
+      plan.targets[0]?.date !== plan.startDate ||
+      plan.targets.at(-1)?.date !== plan.endDate ||
+      plan.targets.some(
+        (point, index) => index > 0 && point.date <= (plan.targets[index - 1]?.date ?? ''),
+      )
+    )
+      context.addIssue({ code: 'custom', message: 'invalid plan chronology' })
+  })
+export type HealthPlan = z.infer<typeof healthPlanSchema>
+export const ownerHealthSnapshotSchema = healthSnapshotSchema.extend({
+  plan: healthPlanSchema,
+  planMessages: z.record(z.string(), z.string()),
+})
+export type OwnerHealthSnapshot = z.infer<typeof ownerHealthSnapshotSchema>
 export const healthImportPreviewSchema = z.object({
   revision: z.number().int().nonnegative(),
   added: z.number().int(),
@@ -131,11 +163,12 @@ export const healthImportPreviewSchema = z.object({
   conflicts: z.number().int(),
   planChanges: z.number().int(),
 })
+const measurementDayFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: healthTimeZone,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+})
 export function measurementDay(timestamp: string) {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: healthTimeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date(timestamp))
+  return measurementDayFormatter.format(new Date(timestamp))
 }
