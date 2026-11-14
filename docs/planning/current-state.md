@@ -1,17 +1,45 @@
 # Website V2 Current Implementation State
 
-## 2026-11-14 — 蛋白质量与评分/代谢年龄总览调整（本地实施）
+## 2026-11-14 — 蛋白质量与评分/代谢年龄总览生产验收
 
-Owner 确认将总览中的腰围替换为蛋白质量，保留 8 项趋势卡，并在趋势卡与 7 日均值/阶段
-目标之间增加独立一行两张紧凑卡片，展示身体评分与代谢年龄。最新有效值、单位与日期
-按指标独立读取，跳过空值和排除记录。蛋白质量为 kg，评分为分，代谢年龄为岁。
-复用四语言现有指标和单位文案，手机两列、大屏主卡四列，补充卡始终两列。
-本轮按已确认方案实施，沿用现有上线授权测试及发布。无需数据库迁移、接口或同步器改动。
+Owner 确认方案并授权执行。总览第四项由腰围替换为蛋白质量（kg），8 张趋势卡下方、
+7 日均值与计划摘要上方，增加身体评分（分）及代谢年龄（岁）两张紧凑卡片。
+补充卡分别展示最新有效值与测量日期，各指标独立跳过空值和排除记录，缺失时显示
+“暂无数据”。复用四语言现有指标及单位，主卡手机两列、大屏四列，补充卡始终两列。
+本次沿用同一快照、同步器、权限、数据库与 JSON 交换契约，无迁移或新增依赖。
 
-525 项 Unit、类型、构建、安全扫描及四语言/手机/触控/深色专项通过。专项覆盖
-蛋白质量与补充卡独立寻找最新有效值、排除最新记录、按各自日期回退，以及补充指标
-全部为空时的展示。完整应用验证与 main CI 发布继续执行，生产验收结果完成后补入。
-此前已有的 S400 文档改动继续保留为未提交内容。
+### 当前生产身份
+
+- Web / Active Green 为 `17fea458a47d627d552055c344472e8e8bee6afc`，
+  Digest 为 `sha256:cdc74be857e6759ce66188622bfd246ca3ac9840c09638a14b90209353f2cf3e`。
+- Previous Blue 为 `6e6d7b3fd7ec6fa487ccc7dc3e060ec3ed4f28b8`，保留即时回滚。
+  Service 复用 `1478712ce9d797292b7c4b476957229765f12777` 的
+  `sha256:670ace55809e1e7dac1635606b547cc1958143abd0e07522d3e94e38ef31465d`。
+- Recovery 复用 `d2fc6849ea25de389518debff1be15dfdc9335bb` 的
+  `sha256:c9a8e8d9d833ede931343dac4ca03c4b0f76cbea7f344a6dee57be7ba7a77ec8`。
+- Main Release [43562239618](https://github.com/tungchiahui/tungchiahui_web/actions/runs/43562239618)
+  完整 Gate、构建及发布成功。GitHub Deployment `7783511213` 和 Production Status
+  `43564556490` 成功。服务器自动创建 Operation `7a719bef-4b96-4d28-8586-4c94194738f5`，
+  completed/deployment-verified，Host Release converged，Executor 健康，无 Pending 或未完成操作。
+
+### 验收与交接
+
+本地 525 Unit、65 E2E、完整应用 Integration/S3Mock、类型、构建、安全扫描、源码策略与
+格式检查通过。main CI 额外完成完整 Foundation、Recovery 和迁移 Gate。专项验证四语言、
+手机触控、键盘、深色、主卡蛋白质量与两张补充卡；合成样本覆盖最新记录被排除、各指标
+分别按日期回退，以及补充指标全部为空时的展示。各指标单位使用共享定义和现有翻译。
+
+公网 Version/Health/Ready、签名完整回执及四语言匿名隐私边界通过。已发布页面的浏览器
+响应注入合成数据后，四语言均显示 8 张趋势卡与 2 张补充卡，390px 无横向溢出。
+生产手机与桌面截图已检查，运行时错误为零。合成数据仅用于浏览器渲染检查，未写入
+生产实际测量。证据位于 `.local/health-protein-release-verification.json`、
+`.local/health-protein-production-preview.json`、`health-protein-production-mobile.png` 和
+`health-protein-production-desktop.png`。本地完整应用日志为 `.local/health-protein-integration.log`。
+
+本次交接提交仅更新文档，实际运行版本为上述 Web SHA。接管前已有的 S400 文档改动
+继续保留为未提交内容。后续身体测量同步观察按运维清单执行。
+
+本阶段上下文已沉淀，可以授权/开启下一阶段。
 
 ## 2026-11-14 — 减重总览 8 项指标生产验收
 
