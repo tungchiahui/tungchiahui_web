@@ -1,13 +1,43 @@
 # Website V2 Current Implementation State
 
-## 2026-11-14 — 减重总览指标扩展（本地实施）
+## 2026-11-14 — 减重总览 8 项指标生产验收
 
-Owner 已查看生产手机页面，并要求从“全部指标”增加总览指标。本轮在原有体重、体脂率、
-肌肉量和腰围之外，增加 BMI、体水分率、内脏脂肪等级及基础代谢，共 8 张指标卡。
+Owner 查看生产手机页面后要求从“全部指标”增加总览指标，并授权执行。本轮在原有体重、
+体脂率、肌肉量和腰围之外，增加 BMI、体水分率、内脏脂肪等级及基础代谢，共 8 张指标卡。
 手机保持两列，大屏四列；各项复用独立最新有效值、测量日期、30 天变化和平滑迷你曲线。
 空值与排除统计沿用现有逻辑，文案和单位复用四语言指标定义。无需数据库或接口变更。
-525 项 Unit、类型、构建、安全边界扫描及四语言/手机/触控/深色专项通过。
-本轮按已有上线授权继续完整应用验证及 main CI 发布，生产验收结果完成后补入。
+
+### 当前生产身份
+
+- Web / Active Blue 为 `6e6d7b3fd7ec6fa487ccc7dc3e060ec3ed4f28b8`，
+  Digest 为 `sha256:adc96ba846fa34a00c604c127ced051038071187447ff6e6a71d268d7a4f650f`。
+- Previous Green 为 `1478712ce9d797292b7c4b476957229765f12777`，保留即时回滚。
+  Service 复用该 SHA 的 `sha256:670ace55809e1e7dac1635606b547cc1958143abd0e07522d3e94e38ef31465d`。
+- Recovery 继续复用 `d2fc6849ea25de389518debff1be15dfdc9335bb` 的
+  `sha256:c9a8e8d9d833ede931343dac4ca03c4b0f76cbea7f344a6dee57be7ba7a77ec8`。
+- Main Release [43557343125](https://github.com/tungchiahui/tungchiahui_web/actions/runs/43557343125)
+  完整 Gate、构建与发布成功。GitHub Deployment `7782897255` 和 Production Status
+  `43559536097` 成功，服务器自动创建 Operation `979510ac-616b-4893-80c2-ed028215f0b8`，
+  状态 completed/deployment-verified，Host Release 已收敛，无 Pending 或未完成操作。
+
+### 验收与交接
+
+本地 525 项 Unit、65 项 E2E、完整应用 Integration/S3Mock、类型、构建、源码策略、
+格式及安全边界扫描通过。main CI 额外完成完整 Foundation、Recovery 与迁移 Gate。
+四语言、手机触控、键盘、深色和桌面专项通过，新增卡片的标签与有效迷你趋势均有断言。
+公网 Version/Health/Ready、签名完整回执、四语言匿名隐私边界及真实 Chromium 检查通过。
+另在已发布页面拦截浏览器响应注入合成样本，验证四语言均显示 8 卡、390px 无横向溢出，
+检查手机两列和桌面四列截图，运行时错误为零。该渲染检查的数据仅存在于浏览器响应，
+生产实际测量未通过测试写入或修改。
+
+只读线上证据为 `.local/health-release-verification.json` 与
+`.local/health-eight-cards-production-preview.json`，截图为
+`.local/health-eight-cards-production-mobile.png` 和 `health-eight-cards-production-desktop.png`。
+本地完整应用日志为 `.local/health-eight-cards-integration-final.log`。
+本次交接提交仅更新文档，实际运行版本为上述 Web SHA。接管前已有的 S400 文档改动
+继续保留为未提交内容。后续身体测量同步观察按运维清单执行。
+
+本阶段上下文已沉淀，可以授权/开启下一阶段。
 
 ## 2026-11-14 — 体重看板生产发布验收
 
@@ -74,7 +104,7 @@ Biome 保留仓库既有 1 条 warning 与 21 条 info，退出码为零。
 `.local/health-smooth-integration-complete.log`。Foundation/Recovery/Migration 日志使用
 `.local/health-dashboard-foundation.log`、`health-dashboard-recovery.log`、`health-dashboard-migrations.log`。
 
-本轮只在本地实施。生产发布、main Push、Workflow 修改和服务器操作继续按单独授权执行。
+本节记录发布前的本地验收。生产发布已另获 Owner 授权，当前生产身份与验收见顶部交接。
 旧版本回滚可能恢复原公开静态计划展示，发布与回滚需确认本轮私有计划要求。实际测量的
 Owner 隐私边界及版本 1 JSON/数据库结构保持兼容。Owner 的生产页面验收及后续新测量观察
 继续按身体测量运维清单记录。
