@@ -37,7 +37,18 @@ export function HealthOverview({ snapshot }: { snapshot: OwnerHealthSnapshot }) 
   return (
     <section className="space-y-4" aria-label={t('overview')}>
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        {(['weight', 'bodyFat', 'muscleMass', 'waist'] as const).map((metric) => {
+        {(
+          [
+            'weight',
+            'bodyFat',
+            'muscleMass',
+            'waist',
+            'bmi',
+            'bodyWater',
+            'visceralFat',
+            'basalMetabolism',
+          ] as const
+        ).map((metric) => {
           const latest: Measurement | undefined = snapshot.measurements.find(
             (row) => !row.excluded && row[metric] !== null,
           )

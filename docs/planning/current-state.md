@@ -1,16 +1,35 @@
 # Website V2 Current Implementation State
 
-## 2026-11-14 — 体重看板生产发布（执行中）
+## 2026-11-14 — 减重总览指标扩展（本地实施）
 
-Owner 在本地验收完成后明确授权“授权了，上线”，授权本轮提交、main 推送与正式发布。
-使用 ADR 0034 的 Main Release、验证后元数据、服务器主动拉取、同一蓝绿 Engine 与独立生产
-回执完成上线，持续跟踪 CI、服务器收敛及公网验证。接管时已有的 S400 接入/迁移文档改动
-继续保留在原工作区，本次提交仅包含看板实现及对应文档。
+Owner 已查看生产手机页面，并要求从“全部指标”增加总览指标。本轮在原有体重、体脂率、
+肌肉量和腰围之外，增加 BMI、体水分率、内脏脂肪等级及基础代谢，共 8 张指标卡。
+手机保持两列，大屏四列；各项复用独立最新有效值、测量日期、30 天变化和平滑迷你曲线。
+空值与排除统计沿用现有逻辑，文案和单位复用四语言指标定义。无需数据库或接口变更。
+525 项 Unit、类型、构建、安全边界扫描及四语言/手机/触控/深色专项通过。
+本轮按已有上线授权继续完整应用验证及 main CI 发布，生产验收结果完成后补入。
 
-发布前只读公网核验 Current 为 `fb285d78563206898853912c87f04d7116f2aefc` / Blue，
-Health/Ready 均为 200，公开发布回执为 completed。远端 main 与本地起点均为 `de915ee523`。
-本地 525 项 Unit、65 项 E2E、完整 Integration、16 项迁移、Foundation、Recovery、类型、
-构建及安全边界检查已通过。最终发布身份和线上结果将在完成后补入本记录。
+## 2026-11-14 — 体重看板生产发布验收
+
+Owner 明确授权“授权了，上线”，本轮通过 ADR 0034 的 Main Release、验证后元数据、
+服务器主动拉取、同一蓝绿 Engine 与独立生产回执完成上线。接管时已有的 S400 接入/迁移
+文档改动继续保留在原工作区，本次提交仅包含看板实现及对应文档。
+
+正式运行 Web/Service Source 为 `1478712ce9d797292b7c4b476957229765f12777`，
+Active Green，Previous Blue 为 `fb285d78563206898853912c87f04d7116f2aefc`。
+Web Digest 为 `sha256:fd2d5eefc5b9c15b4be967b55a862c7211901209bc851eef384af5f0f5924ea4`，
+Service Digest 为 `sha256:670ace55809e1e7dac1635606b547cc1958143abd0e07522d3e94e38ef31465d`。
+Recovery 复用 `d2fc6849ea25de389518debff1be15dfdc9335bb` 的
+`sha256:c9a8e8d9d833ede931343dac4ca03c4b0f76cbea7f344a6dee57be7ba7a77ec8`。
+
+Main Release [43553447851](https://github.com/tungchiahui/tungchiahui_web/actions/runs/43553447851)
+完整 Gate 与发布成功，GitHub Deployment `7782468582` 和 Production Status
+`43556038032` 成功。Operation `d6577d3a-2478-4136-90a0-e748eee9d56d`
+为 completed/deployment-verified，Host Release 已收敛，Executor 健康，无 Pending 或未完成操作。
+公网 Version/Health/Ready、签名完整回执及四语言真实浏览器匿名访问验证通过。
+个人计划未出现在匿名 HTML/RSC，快照匿名 401、旧接口 403，均为 private/no-store，
+浏览器运行时错误为零。只读证据为 `.local/health-release-verification.json`。
+Owner 随后提供生产手机截图，确认页面已可见，并提出增加总览指标的后续改动。
 
 ## 2026-11-14 — 体重与身体测量私有看板改造（本地验收完成）
 

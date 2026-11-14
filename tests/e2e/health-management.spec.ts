@@ -181,6 +181,10 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
       bodyFat: index % 3 === 0 ? null : 28 - index * 0.06,
       muscleMass: 55 + Math.sin(index) * 0.2,
       waist: index % 5 === 0 ? 98 - index * 0.12 : null,
+      bmi: 30 - index * 0.05,
+      bodyWater: index % 3 === 0 ? null : 52 + index * 0.08,
+      visceralFat: 12 - Math.floor(index / 10),
+      basalMetabolism: 1800 - index * 2,
       createdAt: measuredAt,
       updatedAt: measuredAt,
     })
@@ -257,6 +261,27 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
   for (const locale of ['zh-cn', 'zh-hk', 'zh-tw', 'en-us'] as const) {
     await page.goto(locale === 'zh-cn' ? '/weight-loss' : `/${locale}/weight-loss`)
     const copy = messagesForLocale(locale).Health
+    const overview = page.getByRole('region', { name: copy.overview, exact: true })
+    await expect(overview.getByRole('article')).toHaveCount(8)
+    for (const metric of [
+      'weight',
+      'bodyFat',
+      'muscleMass',
+      'waist',
+      'bmi',
+      'bodyWater',
+      'visceralFat',
+      'basalMetabolism',
+    ] as const) {
+      const card = overview.getByRole('article').filter({
+        has: page.getByRole('heading', { name: copy.metrics[metric], exact: true }),
+      })
+      await expect(card).toBeVisible()
+      await expect(card).not.toContainText(copy.noData)
+      expect(await card.locator('svg[viewBox="0 0 160 36"]').innerHTML()).not.toMatch(
+        /NaN|Infinity/,
+      )
+    }
     await expect(page.getByRole('heading', { name: copy.stagePlan, exact: true })).toBeVisible()
     await expect(page.getByRole('heading', { name: copy.calendar, exact: true })).toBeVisible()
     await expect(page.locator('#health-trend')).not.toContainText('MISSING_MESSAGE')
@@ -281,6 +306,11 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
   }
   await page.goto('/weight-loss')
   await expect(page.locator('#health-trend svg')).toBeVisible()
+  await page.setViewportSize({ width: 390, height: 2000 })
+  const overview = page.getByRole('region', { name: '减重总览', exact: true })
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }))
+  await overview.screenshot({ path: test.info().outputPath('health-overview-mobile.png') })
+  await page.setViewportSize({ width: 390, height: 844 })
   await captureChart('health-chart-mobile.png')
   await page.screenshot({
     path: test.info().outputPath('health-dashboard-mobile.png'),
