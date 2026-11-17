@@ -1,5 +1,70 @@
 # Website V2 Current Implementation State
 
+## 2026-11-17 — 比例展示、交互趋势与阶段首次测量生产验收
+
+Owner 已授权的本轮功能完成上线，当前 Web 为 `16bcf172d6b8ef77e0045995f48d06dd2ee1d418`，Active
+blue，Previous green 为
+`1e226b55d5466fd8a4af59922d85d9f2b9343731`。Web Digest 为
+`sha256:c3bcbd20478c0b8e9864bfe322acdfcf7f9482be68a11b42425272832e2ee23a`。Service Source SHA 为
+`16bcf172d6b8ef77e0045995f48d06dd2ee1d418`，Recovery Source SHA 为
+`c8c65639632997399992110eac44ebb1756df217`。
+
+Main Release [44073664724](https://github.com/tungchiahui/tungchiahui_web/actions/runs/44073664724)
+全部 Gate 与不可变制品发布成功。服务器通过既有拉取机制和同一引擎完成蓝绿切换，
+Operation `e3050ad3-536c-484d-9a87-51bdfa1ca888` 已通过签名完整回执、公网版本及 Health/Ready
+核验。此前 c8c656396 发布已由最新 main 累计变更替代。
+首轮 Operation `8190d090-bd52-4c71-a348-4db90d2d8975` 在 resolve-artifacts 阶段
+发生 Docker request timed out，经现有 Operator 路由使用原 SHA/Digest 重试后完成。
+Production Deployment Status [44078360256](https://github.com/tungchiahui/tungchiahui_web/actions/runs/44078360256)
+首次观察到原失败回执，重试第 2 次已核验最新完整回执并成功。
+
+### 功能与测试
+
+- 主卡显示肌肉率与蛋白质率，详情同时展示百分比及 kg，并支持参考色条与 30 日趋势
+  单位切换。先对同条有效记录计算比例，再聚合，变化使用百分点。
+- 个人报告参考按测量日期年龄、有效身高和性别匹配，肌肉量使用报告质量锚点，蛋白质量
+  从报告比例和体重换算锚点，百分比边界随记录体重变化，两种单位共用评级。此锚点策略
+  是产品选择，小米完整算法尚未公开，源报告舍入可能影响末位。参数不匹配时回退既有
+  基线/公式。内脏脂肪与基础代谢显示个人报告区间，基础代谢另保留预测公式参考。
+- 主趋势图桌面 520px、窄屏 420px，增加动态纵轴刻度，鼠标、触控和键盘可查看日期、
+  实际/平滑或缺测估算值、计划值与差值。浮动提示、双游标及曲线高亮已覆盖测试。
+  平滑提示另外显示实测日均值，未来计划日期显示实际暂无数据。
+- Owner 确认阶段起点使用阶段内首次有效测量。当前阶段首次有效日期为 2026-10-29。
+  同日取日均值，跳过空值、排除、未来及阶段外记录，卡片显示真实日期。整阶段缺测时
+  留空。70 kg 挑战与长期维持安排继续生效。
+- 精确提交 CI 完成 589 Unit、65 E2E、16 Migration、完整 Integration/S3Mock、
+  Foundation/Recovery/PITR、格式/类型/构建及安全边界检查。第一次本地完整 E2E 出现
+  图表坐标被固定导航遮挡和选择器歧义，修正后独立 Owner 图表全流程通过，其余 64 项
+  亦通过。最终精确 CI 为 64 项首轮通过，另 1 项音乐页本地化测试因标题等待超时后
+  重试通过，标记 flaky，本轮身体测量用例首轮通过。本地 Foundation 已输出全部成功诊断，外层
+  命令退出为 143，完整 Gate 以精确 CI 成功为准。本地隔离测试容器已完成清理。
+- 线上四语言匿名 HTML/RSC 与 Owner 访问边界通过，档案与计划保持私有。已发布页面
+  使用合成浏览器响应核对双单位、个人报告来源、阶段基线、加高图表及未来计划悬停，
+  四语言、手机、桌面、深色、Escape/焦点均通过，运行时错误为零。生产测量只做只读
+  日期存在性核验。最终截图已人工查看。
+
+### 私有参考配置与回滚
+
+扩展报告数据保持在 Git 外，canonical 配置继续 root:root/0600，只注入 control-api。
+使用精确 Recovery 镜像内的现有 Bootstrap 加载，审计 Operation
+`944a7f6e-b395-4c54-a8e6-d288f5676355` 为 completed/host-bootstrap-verified，运行参数匹配。
+配置核验通过。传输临时目录已删除，SSH 已退出。
+直接 SFTP 传输在 522240 字节处停滞，已终止并清理该临时目录，改用压缩后的 SSH
+标准输入传输完成加载。个人档案与截图同值的本地计算验证显示肌肉量及肌肉率均为标准。
+运行时九个服务健康，私有键仅存在 control-api，配置前后运行服务中只有 control-api
+容器身份变化，另有 database-migrate 占位容器保持 Created。
+保留版本的旧 Schema 可接受并剥离新增嵌套字段，已通过兼容测试。原始测量、数据库
+Schema 和版本 1 JSON 保持现有契约。回滚使用既有 Previous Slot 与 Host Engine。
+
+证据保存在 `.local/health-release-verification.json`、
+`.local/health-assessment-production-preview.json`、
+`.local/health-composition-profile-operation.json`、
+`.local/health-composition-ci-status.json` 及前后生产 Inventory。
+接管前四份 S400/迁移文档的原始未提交内容按保存副本复核保留，本地和 origin 仅有 main。
+本次交接为文档提交，实际 Web 运行身份为上面的 SHA。
+
+本阶段上下文已沉淀，可以授权/开启下一阶段。
+
 ## 2026-11-17 — 阶段首次有效测量规则确认
 
 生产只读核验发现 2026-10-26 当天无有效体重。Owner 明确选择“采用阶段内首次有效

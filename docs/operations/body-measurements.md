@@ -129,6 +129,11 @@ Host Generation 的 Node 调用既有 Bootstrap。canonical 文件经共享 Sche
 当前阶段尚无有效测量时显示阶段开始日期及暂无数据。日期判定采用北京时间。
 这是 Owner 在确认 10 月 26 日无有效记录后明确选择的规则，替代精确起点日基线。
 
+本轮比例展示与交互趋势已在 `16bcf172d6b8ef77e0045995f48d06dd2ee1d418` 上线。个人报告配置
+通过既有受审计 Bootstrap 加载，Operation 为 `944a7f6e-b395-4c54-a8e6-d288f5676355`，
+completed/host-bootstrap-verified，canonical root:root/0600，运行参数匹配。
+完整 CI、生产访问边界及已发布页面合成验证均通过，实际生产身份见最新交接。
+
 ## 比例展示、个人报告参考与交互趋势（2026-11-17）
 
 Owner 已授权实施肌肉率/蛋白质率主卡、双单位详情和更高的交互趋势图。
