@@ -1,4 +1,5 @@
-import { type Measurement, type MetricKey, measurementDay, metricDefinitions } from './contracts'
+import { type Measurement, measurementDay, metricDefinitions } from './contracts'
+import { type DisplayMetricKey, displayMetricValue } from './display-metrics'
 
 export type TrendPoint = {
   id: string
@@ -10,7 +11,7 @@ export type TrendPoint = {
 }
 export function trendPoints(
   records: readonly Measurement[],
-  metric: MetricKey,
+  metric: DisplayMetricKey,
   daily: boolean,
   from: string,
   to: string,
@@ -19,7 +20,7 @@ export function trendPoints(
     .filter(
       (row) =>
         !row.excluded &&
-        row[metric] !== null &&
+        displayMetricValue(row, metric) !== null &&
         (!from || measurementDay(row.measuredAt) >= from) &&
         (!to || measurementDay(row.measuredAt) <= to),
     )
@@ -28,7 +29,7 @@ export function trendPoints(
     return values.map((row) => ({
       id: row.id,
       time: row.measuredAt,
-      value: Number(row[metric]),
+      value: Number(displayMetricValue(row, metric)),
       count: 1,
       timePrecision: row.timePrecision,
     }))
@@ -36,7 +37,10 @@ export function trendPoints(
   for (const row of values) {
     const day = measurementDay(row.measuredAt)
     const old = groups.get(day) ?? { total: 0, count: 0 }
-    groups.set(day, { total: old.total + Number(row[metric]), count: old.count + 1 })
+    groups.set(day, {
+      total: old.total + Number(displayMetricValue(row, metric)),
+      count: old.count + 1,
+    })
   }
   return [...groups].map(([day, row]) => ({
     id: day,
@@ -53,7 +57,7 @@ const dayMilliseconds = 86400000
 
 export function metricSeries(
   records: readonly Measurement[],
-  metric: MetricKey,
+  metric: DisplayMetricKey,
   mode: TrendMode,
   from = '',
   to = '',

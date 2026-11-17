@@ -103,3 +103,26 @@ export function inspectCurve(
     to: '',
   }
 }
+
+export function chartYAxis(values: readonly number[], targetTicks = 5) {
+  const finite = values.filter(Number.isFinite)
+  const low = finite.reduce((minimum, value) => Math.min(minimum, value), Number.POSITIVE_INFINITY)
+  const high = finite.reduce((maximum, value) => Math.max(maximum, value), Number.NEGATIVE_INFINITY)
+  if (!finite.length) return { min: 0, max: 1, ticks: [0, 0.25, 0.5, 0.75, 1] }
+  const padding = Math.max((high - low) * 0.15, 0.5)
+  const lower = Math.max(0, low - padding)
+  const upper = high + padding
+  const rawStep = (upper - lower) / Math.max(2, targetTicks - 1)
+  const magnitude = 10 ** Math.floor(Math.log10(rawStep))
+  const factor =
+    [1, 2, 2.5, 5, 10].toSorted(
+      (left, right) => Math.abs(left * magnitude - rawStep) - Math.abs(right * magnitude - rawStep),
+    )[0] ?? 1
+  const step = factor * magnitude
+  const min = Math.floor(lower / step) * step
+  const max = Math.ceil(upper / step) * step
+  const ticks = Array.from({ length: Math.round((max - min) / step) + 1 }, (_, index) =>
+    Number((min + index * step).toPrecision(12)),
+  )
+  return { min, max, ticks }
+}

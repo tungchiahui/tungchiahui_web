@@ -1,7 +1,13 @@
 import { IncomingMessage } from 'node:http'
 import { Socket } from 'node:net'
 import { describe, expect, it, vi } from 'vitest'
-import { curveSegments, curveValue, inspectCurve, timeSeriesCurve } from '../../src/health/chart'
+import {
+  chartYAxis,
+  curveSegments,
+  curveValue,
+  inspectCurve,
+  timeSeriesCurve,
+} from '../../src/health/chart'
 import {
   emptyMetrics,
   healthPlanSchema,
@@ -10,7 +16,7 @@ import {
 } from '../../src/health/contracts'
 import { createHealthHttpHandler } from '../../src/health/http'
 import { ownerHealthPlan } from '../../src/health/owner-plan'
-import { nextPlanTarget, targetAt } from '../../src/health/plan'
+import { healthPlanPhases, nextPlanTarget, targetAt } from '../../src/health/plan'
 import { HealthRepository } from '../../src/health/repository'
 import {
   measurementCalendar,
@@ -56,6 +62,21 @@ describe('private health dashboard plan', () => {
     expect(nextPlanTarget(plan, '2027-01-10')).toEqual({ date: '2027-01-10', weight: 80 })
     expect(nextPlanTarget(plan, '2027-01-11')).toEqual({ date: '2027-03-20', weight: 70 })
     expect(nextPlanTarget(plan, '2028-01-01')).toEqual({ date: '2027-03-20', weight: 70 })
+  })
+  it.each([
+    ['2026-08-14', '2026-08-14'],
+    ['2026-10-25', '2026-08-14'],
+    ['2026-10-26', '2026-10-26'],
+    ['2027-01-10', '2026-10-26'],
+    ['2027-01-11', '2027-01-11'],
+    ['2027-03-20', '2027-01-11'],
+    ['2027-03-21', '2027-03-21'],
+  ])('resolves the current phase start on %s to %s', (day, start) => {
+    const { plan } = ownerHealthPlan('zh-cn', [])
+    const phase = healthPlanPhases(plan).find(
+      (item) => item.from <= day && (!item.to || day <= item.to),
+    )
+    expect(phase?.from).toBe(start)
   })
   it('preserves earlier custom targets and supersedes old goals in the revised interval', () => {
     const overrides = [
@@ -175,6 +196,22 @@ describe('health chart statistics', () => {
     expect(calendar.find((day) => day.day === '2026-11-01')?.count).toBe(1)
     expect(calendar.find((day) => day.day === '2026-11-15')?.future).toBe(true)
     expect(periodSummaries([], 'week')).toEqual([])
+  })
+  it.each([[70, 87, 98], [87], [0], [0.01, 0.02], [1300, 1774, 2100]])(
+    'builds an expanded readable axis for %j',
+    (...values) => {
+      const axis = chartYAxis(values, 11)
+      expect(axis.ticks.length).toBeGreaterThanOrEqual(8)
+      expect(axis.ticks.length).toBeLessThanOrEqual(18)
+      expect(axis.min).toBeLessThanOrEqual(Math.min(...values))
+      expect(axis.max).toBeGreaterThanOrEqual(Math.max(...values))
+      expect(axis.max).toBeGreaterThan(axis.min)
+      expect(axis.ticks.every(Number.isFinite)).toBe(true)
+      expect(new Set(axis.ticks).size).toBe(axis.ticks.length)
+    },
+  )
+  it('keeps an empty chart axis finite', () => {
+    expect(chartYAxis([])).toEqual({ min: 0, max: 1, ticks: [0, 0.25, 0.5, 0.75, 1] })
   })
   it('generates finite shape-preserving curves', () => {
     const points = [

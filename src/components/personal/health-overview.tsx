@@ -3,13 +3,9 @@
 import { Activity, ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react'
 import { useLocale, useTranslations } from 'next-intl'
 import { timeSeriesCurve } from '@/health/chart'
-import {
-  type Measurement,
-  measurementDay,
-  metricDefinitions,
-  type OwnerHealthSnapshot,
-} from '@/health/contracts'
-import { nextPlanTarget } from '@/health/plan'
+import { type Measurement, measurementDay, type OwnerHealthSnapshot } from '@/health/contracts'
+import { displayMetricDefinitions, displayMetricValue } from '@/health/display-metrics'
+import { healthPlanPhases, nextPlanTarget } from '@/health/plan'
 import { metricSeries } from '@/health/trends'
 import { HealthMetricAssessment } from './health-assessment'
 import { panelClass } from './tracker-toolbar'
@@ -19,6 +15,12 @@ export function HealthOverview({ snapshot }: { snapshot: OwnerHealthSnapshot }) 
   const locale = useLocale()
   const today = measurementDay(new Date().toISOString())
   const checkpoint = nextPlanTarget(snapshot.plan, today)
+  const phase = healthPlanPhases(snapshot.plan).find(
+    (item) => item.from <= today && (!item.to || today <= item.to),
+  )
+  const phaseStart = phase
+    ? metricSeries(snapshot.measurements, 'weight', 'daily', phase.from, phase.from)[0]
+    : undefined
   const from = measurementDay(new Date(Date.now() - 29 * 86400000).toISOString())
   const format = (value: number | null | undefined) =>
     value === null || value === undefined
@@ -44,8 +46,8 @@ export function HealthOverview({ snapshot }: { snapshot: OwnerHealthSnapshot }) 
           [
             'weight',
             'bodyFat',
-            'muscleMass',
-            'proteinMass',
+            'musclePercentage',
+            'proteinPercentage',
             'bmi',
             'bodyWater',
             'visceralFat',
@@ -53,7 +55,7 @@ export function HealthOverview({ snapshot }: { snapshot: OwnerHealthSnapshot }) 
           ] as const
         ).map((metric) => {
           const latest: Measurement | undefined = snapshot.measurements.find(
-            (row) => !row.excluded && row[metric] !== null,
+            (row) => displayMetricValue(row, metric) !== null,
           )
           const points = metricSeries(snapshot.measurements, metric, 'smooth', from, today)
           const first = points[0],
@@ -67,7 +69,7 @@ export function HealthOverview({ snapshot }: { snapshot: OwnerHealthSnapshot }) 
           const start = Date.parse(first?.time ?? today)
           const duration = Math.max(Date.parse(last?.time ?? today) - start, 86400000)
           const unit =
-            metricDefinitions.find((definition) => definition.key === metric)?.unit ?? 'kg'
+            displayMetricDefinitions.find((definition) => definition.key === metric)?.unit ?? 'kg'
           const Icon =
             change === null || change === 0 ? Minus : change < 0 ? ArrowDownRight : ArrowUpRight
           return (
@@ -76,7 +78,11 @@ export function HealthOverview({ snapshot }: { snapshot: OwnerHealthSnapshot }) 
                 {t(`metrics.${metric}`)}
               </h2>
               <p className="mt-3 break-words font-semibold text-3xl tabular-nums tracking-tight">
-                {format(latest?.[metric])}{' '}
+                {latest && (metric === 'musclePercentage' || metric === 'proteinPercentage')
+                  ? new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(
+                      displayMetricValue(latest, metric) ?? 0,
+                    )
+                  : format(displayMetricValue(latest, metric))}{' '}
                 <span className="font-normal text-muted-foreground text-xs">
                   {t(`units.${unit}`)}
                 </span>
@@ -115,7 +121,13 @@ export function HealthOverview({ snapshot }: { snapshot: OwnerHealthSnapshot }) 
                   {change !== null && change > 0 ? '+' : ''}
                   {format(change)}
                 </span>
-                <span className="text-muted-foreground">{t('recentChange')}</span>
+                <span className="text-muted-foreground">
+                  {t(
+                    metric === 'musclePercentage' || metric === 'proteinPercentage'
+                      ? 'recentChangePercentage'
+                      : 'recentChange',
+                  )}
+                </span>
               </p>
             </article>
           )
@@ -125,7 +137,8 @@ export function HealthOverview({ snapshot }: { snapshot: OwnerHealthSnapshot }) 
         {(['bodyScore', 'metabolicAge'] as const).map((metric) => {
           const latest = snapshot.measurements.find((row) => !row.excluded && row[metric] !== null)
           const unit =
-            metricDefinitions.find((definition) => definition.key === metric)?.unit ?? 'points'
+            displayMetricDefinitions.find((definition) => definition.key === metric)?.unit ??
+            'points'
           return (
             <article key={metric} className="min-w-0 rounded-2xl border bg-card p-4 sm:p-5">
               <h2 className="font-medium text-muted-foreground text-sm">
@@ -181,14 +194,15 @@ export function HealthOverview({ snapshot }: { snapshot: OwnerHealthSnapshot }) 
           <p className="text-muted-foreground text-xs">{t('relativeStart')}</p>
           <p className="mt-1 font-semibold text-xl tabular-nums">
             {format(
-              latestWeight === null || latestWeight === undefined
+              latestWeight === null || latestWeight === undefined || !phaseStart
                 ? null
-                : latestWeight - snapshot.plan.startWeight,
+                : latestWeight - phaseStart.value,
             )}{' '}
             <span className="text-sm">{t('units.kg')}</span>
           </p>
           <p className="mt-1 text-muted-foreground text-xs">
-            {snapshot.plan.startDate} · {snapshot.plan.startWeight} {t('units.kg')}
+            {phase?.from ?? t('noData')} ·{' '}
+            {phaseStart ? `${format(phaseStart.value)} ${t('units.kg')}` : t('noData')}
           </p>
         </div>
       </div>

@@ -1,5 +1,43 @@
 import type { HealthPlan } from './contracts'
 
+export function healthPlanPhases(plan: HealthPlan) {
+  const dayBefore = (day: string) => new Date(Date.parse(day) - 86400000).toISOString().slice(0, 10)
+  const dayAfter = (day: string) => new Date(Date.parse(day) + 86400000).toISOString().slice(0, 10)
+  const holdWeight =
+    plan.targets.find((point) => point.date === plan.holdStart)?.targetMin ?? plan.startWeight
+  return [
+    {
+      key: 'phaseInitial',
+      from: plan.startDate,
+      to: dayBefore(plan.holdStart),
+      target: holdWeight,
+    },
+    { key: 'phaseHold', from: plan.holdStart, to: plan.holdEnd, target: holdWeight },
+    {
+      key: 'phaseLoss',
+      from: dayAfter(plan.holdEnd),
+      to: plan.checkpoint?.date ?? plan.endDate,
+      target: plan.checkpoint?.weight ?? plan.goalWeight,
+    },
+    ...(plan.checkpoint
+      ? [
+          {
+            key: 'phaseChallenge' as const,
+            from: dayAfter(plan.checkpoint.date),
+            to: plan.endDate,
+            target: plan.goalWeight,
+          },
+        ]
+      : []),
+    {
+      key: plan.maintainAfterGoal ? 'phaseMaintenance' : 'phaseLongTerm',
+      from: dayAfter(plan.endDate),
+      to: '',
+      target: plan.longTermWeight,
+    },
+  ] as const
+}
+
 export function nextPlanTarget(plan: HealthPlan, day: string) {
   if (plan.checkpoint && day <= plan.checkpoint.date) return plan.checkpoint
   return { date: plan.endDate, weight: plan.goalWeight }

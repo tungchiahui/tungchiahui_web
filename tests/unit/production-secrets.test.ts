@@ -1,7 +1,6 @@
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-
 import { describe, expect, it } from 'vitest'
 import {
   createPostgresScramVerifier,
@@ -18,6 +17,7 @@ import {
   createProductionEnvironmentContents,
   validateProductionEnvironmentContents,
 } from '../../tools/production/initialize-secrets'
+import { syntheticReportProfile } from '../fixtures/health-reference'
 
 const releaseOidcPolicy = JSON.stringify([
   { workflowRef: 'tungchiahui/tungchiahui_web/.github/workflows/release.yml@refs/heads/main' },
@@ -208,6 +208,11 @@ describe('production secret initialization', () => {
     expect(() =>
       validateProductionEnvironmentContents(
         `${valid}\nHEALTH_REFERENCE_PROFILE_JSON='{"height":178,"birthDate":"2000-02-04","sex":"male"}'`,
+      ),
+    ).not.toThrow()
+    expect(() =>
+      validateProductionEnvironmentContents(
+        `${valid}\nHEALTH_REFERENCE_PROFILE_JSON='${JSON.stringify(syntheticReportProfile)}'`,
       ),
     ).not.toThrow()
     expect(() =>

@@ -1480,7 +1480,9 @@
       "physiqueRating": "體型評價",
       "bodyScore": "身體評分",
       "height": "身高",
-      "waist": "腰圍"
+      "waist": "腰圍",
+      "musclePercentage": "肌肉率",
+      "proteinPercentage": "蛋白質率"
     },
     "units": {
       "kg": "kg",
@@ -1500,7 +1502,7 @@
     "checkpoint": "階段目標",
     "longTerm": "長期目標",
     "remaining": "距階段目標",
-    "relativeStart": "相對計劃起點",
+    "relativeStart": "相對目前階段起點",
     "manage": "數據管理",
     "close": "關閉",
     "rolling": "7 日移動平均",
@@ -1585,7 +1587,9 @@
         "older": "高於實際年齡",
         "tracking": "積累個人基線中",
         "noData": "暫無數據",
-        "recorded": "記錄信息"
+        "recorded": "記錄信息",
+        "good": "優",
+        "dangerous": "危險"
       },
       "methods": {
         "chinaBmi": "採用中國成人 BMI 分界 18.5、24、28，分別對應體重過低、正常、超重和肥胖。體重參考區間按身高平方換算。",
@@ -1596,7 +1600,8 @@
         "mifflin": "Mifflin–St Jeor 公式按同次體重、身高、性別和測量當天年齡估算靜息能量消耗，並與設備基礎代謝對照。男性為 10×kg＋6.25×cm－5×年齡＋5；女性末項為－161。",
         "age": "將設備代謝年齡與測量當天的實際週歲比較。實際年齡由出生日期和北京時間的測量日期計算。",
         "baseline": "與本次測量之前 30 個自然日的有效日均值比較，每個測量日等權。缺失、排除和當日記錄跳過。此項採用個人趨勢參考，至少 3 個有效測量日後顯示比較結果。",
-        "recorded": "展示本次記錄信息。"
+        "recorded": "展示本次記錄信息。",
+        "xiaomiReport": "採用你提供的小米報告區間，匹配測量當天的年齡、身高和性別。肌肉與蛋白質量參考以該報告為基準，百分比區間按同次體重換算，兩種單位共用評級。報告中的邊界已經過顯示舍入。"
       },
       "sources": {
         "chinaBmi": "國家衞健委《體重管理指導原則（2024 年版）》",
@@ -1604,31 +1609,42 @@
         "chinaWaist": "國家衞健委成人腰圍分類",
         "water": "TANITA 成人體水分參考",
         "heart": "美國心臟協會靜息心率參考",
-        "mifflin": "Mifflin–St Jeor 原始研究（1990）"
+        "mifflin": "Mifflin–St Jeor 原始研究（1990）",
+        "xiaomiReport": "小米個性化參考説明"
       },
       "descriptions": {
         "weight": "體重及按身高換算的成人蔘考區間。",
         "bmi": "體重與身高平方的比值，用於成人體重分類。",
         "bodyFat": "脂肪質量佔體重的比例，參考範圍按性別匹配。",
         "bodyWater": "身體總水分佔體重的比例。",
-        "muscleMass": "設備估算的肌肉質量，同時展示同次測量的肌肉率和個人基線比較。",
+        "muscleMass": "設備估算的肌肉量，詳情同時顯示同次測量的肌肉率和兩種單位的趨勢。",
         "skeletalMuscleMass": "設備估算的全身骨骼肌量，採用個人趨勢參考。",
         "boneMass": "設備估算的骨礦物質量，採用個人趨勢參考。",
-        "proteinMass": "設備估算的身體蛋白質量，同時展示同次測量的蛋白率和個人基線比較。",
-        "visceralFat": "設備估算的內臟脂肪等級，採用同一設備的個人趨勢參考。",
+        "proteinMass": "設備估算的身體蛋白質量，詳情同時顯示同次測量的蛋白質率和兩種單位的趨勢。",
+        "visceralFat": "設備估算的內臟脂肪等級，參考適用的個人小米報告或同設備歷史趨勢。",
         "heartRate": "本次心率及多數成人的靜息參考區間。",
-        "basalMetabolism": "設備基礎代謝與按個人參數估算的靜息能量參考。",
+        "basalMetabolism": "設備估算的基礎代謝，參考適用的個人小米報告，並提供個性化靜息能量公式對照。",
         "metabolicAge": "設備估算的代謝年齡及測量當天實際年齡。",
         "physiqueRating": "裝置提供的本次體型分類。",
         "bodyScore": "設備提供的綜合評分，採用同一設備的個人趨勢參考。",
         "height": "身高用於換算體重區間和估算靜息能量消耗。",
-        "waist": "腰圍及按性別匹配的中國成人蔘考界限。"
-      }
+        "waist": "腰圍及按性別匹配的中國成人蔘考界限。",
+        "musclePercentage": "同次測量的肌肉量除以體重，顯示肌肉在身體重量中的佔比。",
+        "proteinPercentage": "同次測量的蛋白質量除以體重，顯示蛋白質在身體重量中的佔比。"
+      },
+      "compositionView": "參考與趨勢單位",
+      "compositionTrend": "近 30 日趨勢",
+      "reportReference": "個人小米報告參考 · {date}",
+      "reportMismatch": "這次測量的年齡、身高或性別與報告檔案有變化，採用當前可用的歷史參考。",
+      "mifflinValue": "Mifflin–St Jeor 公式預測參考 {value} kcal/天"
     },
     "phaseChallenge": "挑戰目標",
     "phaseMaintenance": "長期維持",
     "maintenanceGoal": "{date} 目標 {value} kg，此後維持",
-    "ongoing": "持續維持"
+    "ongoing": "持續維持",
+    "recentChangePercentage": "近 30 日變化（百分點）",
+    "actualMissing": "{date} 暫無實際測量",
+    "planDifference": "相對計劃線 {value} {unit}"
   },
   "HealthPlan": {
     "healthTitle": "先保證身體狀態，再追求速度",

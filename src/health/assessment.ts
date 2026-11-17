@@ -1,16 +1,16 @@
-import {
-  type HealthReferenceProfile,
-  type Measurement,
-  type MetricKey,
-  measurementDay,
-} from './contracts'
+import { type HealthReferenceProfile, type Measurement, measurementDay } from './contracts'
+import { type DisplayMetricKey, displayMetricValue } from './display-metrics'
 import { metricSeries } from './trends'
+
+export { compositionPercentage } from './display-metrics'
 
 export type AssessmentGrade =
   | 'low'
   | 'standard'
   | 'high'
   | 'veryHigh'
+  | 'good'
+  | 'dangerous'
   | 'belowReference'
   | 'atReference'
   | 'aboveReference'
@@ -33,6 +33,7 @@ export type AssessmentSource =
   | 'age'
   | 'baseline'
   | 'recorded'
+  | 'xiaomiReport'
 export type AssessmentBand = {
   upper: number | null
   inclusive: boolean
@@ -47,6 +48,8 @@ export type MetricAssessment = {
   baselineDays: number
   age: number | null
   height: number | null
+  prediction: number | null
+  reportDate: string | null
 }
 
 export const assessmentSources = {
@@ -59,6 +62,7 @@ export const assessmentSources = {
   heart:
     'https://www.heart.org/en/health-topics/high-blood-pressure/the-facts-about-high-blood-pressure/all-about-heart-rate-pulse',
   mifflin: 'https://pubmed.ncbi.nlm.nih.gov/2305711/',
+  xiaomiReport: 'https://www.mi.com/my/support/faq/details/KA-491599/',
 } as const
 
 export function ageOnMeasurement(birthDate: string, measuredAt: string) {
@@ -86,11 +90,28 @@ function compare(value: number, reference: number) {
 }
 
 export function assessMetric(
-  metric: MetricKey,
+  metric: DisplayMetricKey,
   row: Measurement | undefined,
   records: Measurement[],
   profile: HealthReferenceProfile | undefined,
 ): MetricAssessment {
+  if (metric === 'musclePercentage' || metric === 'proteinPercentage') {
+    const mass = metric === 'musclePercentage' ? 'muscleMass' : 'proteinMass'
+    const assessment = assessMetric(mass, row, records, profile)
+    const value = displayMetricValue(row, metric)
+    if (!row || row.weight === null || value === null)
+      return { ...assessment, value: null, grade: 'noData', bands: [], reference: null }
+    const factor = 100 / row.weight
+    return {
+      ...assessment,
+      value,
+      bands: assessment.bands.map((band) => ({
+        ...band,
+        upper: band.upper === null ? null : band.upper * factor,
+      })),
+      reference: assessment.reference === null ? null : assessment.reference * factor,
+    }
+  }
   const age = row && profile ? ageOnMeasurement(profile.birthDate, row.measuredAt) : null
   const height = row?.height ?? profile?.height ?? null
   const result: MetricAssessment = {
@@ -102,9 +123,61 @@ export function assessMetric(
     baselineDays: 0,
     age,
     height,
+    prediction: null,
+    reportDate: null,
   }
   if (!row || row.excluded || result.value === null) return { ...result, value: null }
   if (metric === 'height' || metric === 'physiqueRating') return { ...result, grade: 'recorded' }
+  if (
+    metric === 'basalMetabolism' &&
+    profile &&
+    age !== null &&
+    age >= 19 &&
+    age <= 78 &&
+    row.weight !== null &&
+    height
+  ) {
+    result.prediction =
+      10 * row.weight + 6.25 * height - 5 * age + (profile.sex === 'male' ? 5 : -161)
+  }
+  const report = profile?.reportReference
+  if (report && report.height === height && report.sex === profile.sex && report.age === age) {
+    switch (metric) {
+      case 'muscleMass':
+        result.bands = bands([...report.muscleMass], ['low', 'standard', 'good'], [false, true])
+        break
+      case 'proteinMass':
+        result.bands = bands(
+          report.proteinPercentage.map((value) => (value * report.weight) / 100),
+          ['low', 'standard', 'high'],
+          [false, true],
+        )
+        break
+      case 'basalMetabolism':
+        result.bands = bands(
+          [...report.basalMetabolism],
+          ['low', 'standard', 'high'],
+          [false, true],
+        )
+        break
+      case 'visceralFat':
+        result.bands = bands([...report.visceralFat], ['standard', 'high', 'veryHigh', 'dangerous'])
+        break
+    }
+    if (result.bands.length) {
+      const value = result.value
+      const band = result.bands.find(
+        ({ upper, inclusive }) => upper === null || value < upper || (inclusive && value === upper),
+      )
+      return {
+        ...result,
+        grade: band?.grade ?? 'tracking',
+        source: 'xiaomiReport',
+        reportDate: report.measuredOn,
+      }
+    }
+  }
+
   if (profile && age !== null && age >= 18 && age <= 79) {
     switch (metric) {
       case 'weight':
@@ -152,9 +225,8 @@ export function assessMetric(
       case 'basalMetabolism':
         // Mifflin–St Jeor predicts resting energy expenditure. Comparison is
         // labelled as a model reference, without assigning a health category.
-        if (row.weight !== null && height && age >= 19 && age <= 78) {
-          const reference =
-            10 * row.weight + 6.25 * height - 5 * age + (profile.sex === 'male' ? 5 : -161)
+        if (result.prediction !== null) {
+          const reference = result.prediction
           const grade =
             (['belowReference', 'atReference', 'aboveReference'] as const)[
               compare(result.value, reference) + 1
@@ -204,19 +276,4 @@ export function assessMetric(
       compare(result.value, reference) + 1
     ] ?? 'atBaseline'
   return { ...result, reference, grade, source: 'baseline', baselineDays: daily.length }
-}
-
-export function compositionPercentage(
-  row: Measurement | undefined,
-  metric: 'muscleMass' | 'proteinMass',
-) {
-  if (
-    !row ||
-    row.excluded ||
-    row.weight === null ||
-    row[metric] === null ||
-    row[metric] > row.weight
-  )
-    return null
-  return (row[metric] / row.weight) * 100
 }

@@ -165,11 +165,13 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
     JSON.parse(
       readFileSync(resolve(import.meta.dirname, `../../messages/${locale}.json`), 'utf8'),
     ) as typeof import('../../messages/zh-cn.json')
+  const { displayMetricValue } = await import('../../src/health/display-metrics')
+  const now = Date.parse('2026-11-17T08:00:00+08:00')
   const failures: string[] = []
   page.on('pageerror', (error) => failures.push(error.message))
   const measurements = Array.from({ length: 42 }, (_, index) => {
     const daysAgo = index < 20 ? 86 - index : 43 - index
-    const measuredAt = new Date(Date.now() - daysAgo * 86400000).toISOString()
+    const measuredAt = new Date(now - daysAgo * 86400000).toISOString()
     return measurementSchema.parse({
       ...emptyMetrics,
       id: randomUUID(),
@@ -200,7 +202,7 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
     measurementSchema.parse({
       ...measurements[0],
       id: randomUUID(),
-      measuredAt: new Date().toISOString(),
+      measuredAt: new Date(now).toISOString(),
       excluded: true,
       proteinMass: 199,
       bodyScore: 99,
@@ -223,6 +225,10 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
     })
   })
   await page.goto('/weight-loss')
+  await expect(
+    page.getByText('登录 Owner 账号后可查看个人计划、身体指标和历史记录。'),
+  ).toBeVisible()
+  await page.clock.setFixedTime(new Date(now))
   await page.getByRole('button', { name: '登录', exact: true }).click()
   const login = page.getByRole('dialog')
   await login.getByLabel('用户名').fill('owner')
@@ -269,6 +275,49 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
   await captureChart('health-chart-gap-estimate.png')
   await slider.press('End')
   await chart.getByLabel('显示完整计划').check()
+  const expandedSvg = chart.getByRole('img')
+  expect(
+    await expandedSvg.evaluate((element) => element.getBoundingClientRect().height),
+  ).toBeGreaterThanOrEqual(500)
+  expect(await chart.getByTestId('chart-y-tick').count()).toBeGreaterThanOrEqual(8)
+  await slider.press('End')
+  await expect(chart.getByTestId('chart-reading')).toContainText('2027-03-20')
+  await expect(chart.getByTestId('chart-reading')).toContainText('暂无数据')
+  await expect(chart.getByTestId('chart-plan-reading')).toContainText('70 kg')
+  await expandedSvg.evaluate((element) =>
+    element.scrollIntoView({ behavior: 'instant', block: 'center' }),
+  )
+  const svgBounds = await expandedSvg.boundingBox()
+  if (!svgBounds) throw new Error('Expanded chart bounds missing')
+  const targetPoint = await chart.getByTestId('chart-plan-line').evaluate((element) => {
+    const point = element.getAttribute('points')?.trim().split(' ').at(-1)?.split(',').map(Number)
+    if (point?.length !== 2) throw new Error('Plan endpoint missing')
+    return { x: point[0] ?? 0, y: point[1] ?? 0 }
+  })
+  await page.mouse.move(svgBounds.x + targetPoint.x + 1, svgBounds.y + targetPoint.y)
+  await expect(chart.getByTestId('chart-tooltip')).toContainText('2027-03-20')
+  await expect(chart.getByTestId('chart-tooltip')).toContainText('计划目标')
+  await expect(chart.getByTestId('chart-tooltip')).toContainText('70 kg')
+  const observedMarker = expandedSvg.locator('circle[data-observed]').last()
+  await expandedSvg.evaluate((element) =>
+    element.scrollIntoView({ behavior: 'instant', block: 'center' }),
+  )
+  const observedBounds = await expandedSvg.boundingBox()
+  if (!observedBounds) throw new Error('Observed chart bounds missing')
+  const observedPoint = await observedMarker.evaluate((element) => ({
+    x: Number(element.getAttribute('cx')),
+    y: Number(element.getAttribute('cy')),
+  }))
+  await page.mouse.move(observedBounds.x + observedPoint.x + 1, observedBounds.y + observedPoint.y)
+  await expect(chart.getByTestId('chart-tooltip')).toContainText('2026-11-15')
+  await expect(chart.getByTestId('chart-tooltip')).toContainText('实际测量')
+  await expect(chart.getByTestId('chart-tooltip')).toContainText('计划目标')
+  await page.screenshot({
+    path: test.info().outputPath('health-chart-tooltip-desktop.png'),
+    fullPage: true,
+  })
+  await page.mouse.move(0, 0)
+
   await expect(chart.locator('polyline')).toHaveCount(1)
   await chart.getByLabel('聚合方式').selectOption('rolling')
   await expect(chart.locator('path[data-estimated="true"]')).toHaveCount(2)
@@ -290,14 +339,30 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
     const copy = messagesForLocale(locale).Health
     const overview = page.getByRole('region', { name: copy.overview, exact: true })
     await expect(overview.getByRole('article')).toHaveCount(10)
+    const phaseSummary = overview.getByText(copy.relativeStart, { exact: true }).locator('..')
+    const baseline = measurements.filter(
+      (row) =>
+        !row.excluded && row.weight !== null && measurementDay(row.measuredAt) === '2026-10-26',
+    )
+    expect(baseline.length).toBeGreaterThan(0)
+    const startWeight = baseline.reduce((sum, row) => sum + (row.weight ?? 0), 0) / baseline.length
+    const latestWeight = measurements.find((row) => !row.excluded && row.weight !== null)?.weight
+    expect(typeof latestWeight).toBe('number')
+    const format = (value: number) =>
+      new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(value)
+    await expect(phaseSummary).toContainText(`2026-10-26 · ${format(startWeight)} ${copy.units.kg}`)
+    await expect(phaseSummary).toContainText(
+      `${format((latestWeight ?? 0) - startWeight)} ${copy.units.kg}`,
+    )
+
     await expect(
       overview.getByRole('heading', { name: copy.metrics.waist, exact: true }),
     ).toHaveCount(0)
     for (const metric of [
       'weight',
       'bodyFat',
-      'muscleMass',
-      'proteinMass',
+      'musclePercentage',
+      'proteinPercentage',
       'bmi',
       'bodyWater',
       'visceralFat',
@@ -312,14 +377,16 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
         /NaN|Infinity/,
       )
     }
-    for (const metric of ['proteinMass', 'bodyScore', 'metabolicAge'] as const) {
+    for (const metric of ['proteinPercentage', 'bodyScore', 'metabolicAge'] as const) {
       const card = overview.getByRole('article').filter({
         has: page.getByRole('heading', { name: copy.metrics[metric], exact: true }),
       })
-      const latest = measurements.find((row) => !row.excluded && row[metric] !== null)
+      const latest = measurements.find((row) => displayMetricValue(row, metric) !== null)
       expect(latest).toBeDefined()
       await expect(card).toContainText(
-        new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(latest?.[metric] ?? 0),
+        new Intl.NumberFormat(locale, {
+          maximumFractionDigits: metric === 'proteinPercentage' ? 1 : 2,
+        }).format(displayMetricValue(latest, metric) ?? 0),
       )
       await expect(card).toContainText(measurementDay(latest?.measuredAt ?? ''))
     }
@@ -332,9 +399,10 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
     for (const metric of [
       'bodyFat',
       'bodyWater',
-      'muscleMass',
-      'proteinMass',
+      'musclePercentage',
+      'proteinPercentage',
       'basalMetabolism',
+      'visceralFat',
       'metabolicAge',
     ] as const) {
       const card = overview.getByRole('article').filter({
@@ -358,8 +426,48 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
       }
       if (metric === 'basalMetabolism')
         await expect(detail).toContainText(copy.assessment.sources.mifflin)
-      if (metric === 'muscleMass' || metric === 'proteinMass')
-        await expect(detail).toContainText(copy.assessment.methods.baseline)
+      if (metric === 'basalMetabolism' || metric === 'visceralFat') {
+        await expect(detail).toContainText(copy.assessment.methods.xiaomiReport)
+        await expect(detail.getByTestId('assessment-scale')).toBeVisible()
+      }
+      if (metric === 'musclePercentage' || metric === 'proteinPercentage') {
+        await expect(detail).toContainText(copy.assessment.methods.xiaomiReport)
+        const massMetric = metric === 'musclePercentage' ? 'muscleMass' : 'proteinMass'
+        const latest = measurements.find((row) => displayMetricValue(row, metric) !== null)
+        await expect(detail.getByTestId('composition-values')).toContainText(copy.metrics[metric])
+        await expect(detail.getByTestId('composition-values')).toContainText(
+          format(latest?.[massMetric] ?? 0),
+        )
+        await expect(detail.getByTestId('composition-values')).toContainText(
+          new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(
+            displayMetricValue(latest, metric) ?? 0,
+          ),
+        )
+        const trend = detail.getByTestId('composition-trend')
+        await trend.locator('summary').click()
+        const controls = detail.getByRole('group', { name: copy.assessment.compositionView })
+        const massButton = controls.getByRole('button', {
+          name: `${copy.metrics[massMetric]} (${copy.units.kg})`,
+          exact: true,
+        })
+        await massButton.click()
+        await expect(massButton).toHaveAttribute('aria-pressed', 'true')
+        await expect(detail.getByTestId('assessment-scale')).toContainText(copy.units.kg)
+        await expect(detail.getByRole('img')).toBeVisible()
+        const rateButton = controls.getByRole('button', {
+          name: `${copy.metrics[metric]} (%)`,
+          exact: true,
+        })
+        await rateButton.click()
+        await expect(rateButton).toHaveAttribute('aria-pressed', 'true')
+        await expect(detail.getByTestId('assessment-scale')).toContainText('%')
+        await expect(detail.getByRole('img')).toBeVisible()
+        await trend.locator('summary').click()
+        if (locale === 'zh-cn' && metric === 'musclePercentage')
+          await detail.screenshot({
+            path: test.info().outputPath('health-composition-desktop.png'),
+          })
+      }
       if (locale === 'zh-cn' && metric === 'bodyFat')
         await detail.screenshot({ path: test.info().outputPath('health-assessment-desktop.png') })
       expect(await detail.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
@@ -376,6 +484,12 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
       page.getByRole('heading', { name: copy.phaseMaintenance, exact: true }),
     ).toBeVisible()
     await expect(page.getByRole('heading', { name: copy.stagePlan, exact: true })).toBeVisible()
+    await chart.getByRole('combobox', { name: copy.metric }).selectOption('musclePercentage')
+    await expect(chart.getByTestId('chart-reading')).toContainText('%')
+    await chart.getByRole('combobox', { name: copy.metric }).selectOption('proteinPercentage')
+    await expect(chart.getByTestId('chart-reading')).toContainText('%')
+    await chart.getByRole('combobox', { name: copy.metric }).selectOption('weight')
+
     await expect(page.getByRole('heading', { name: copy.calendar, exact: true })).toBeVisible()
     await expect(page.locator('#health-trend')).not.toContainText('MISSING_MESSAGE')
     await expect(page.locator('.music-floating, .music-mini')).toHaveCount(0)
@@ -399,6 +513,14 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
     await page.keyboard.press('Escape')
     await page.locator('#health-trend svg').tap({ position: { x: 180, y: 100 } })
     await expect(chart.getByTestId('chart-reading')).toContainText(copy.gapEstimate)
+    await expect(chart.getByTestId('chart-tooltip')).toContainText(copy.gapEstimate)
+    expect(
+      await chart.getByRole('img').evaluate((element) => element.getBoundingClientRect().height),
+    ).toBeGreaterThanOrEqual(400)
+    await chart.screenshot({
+      path: test.info().outputPath(`health-chart-tooltip-${locale}-mobile.png`),
+    })
+
     await page.getByRole('button', { name: copy.addRecord, exact: true }).click()
     await expect(page.getByRole('dialog')).toBeVisible()
     expect(

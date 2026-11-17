@@ -3,26 +3,26 @@
 import { Dialog } from '@base-ui/react/dialog'
 import { ChevronRight, X } from 'lucide-react'
 import { useLocale, useTranslations } from 'next-intl'
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { type AssessmentGrade, assessMetric, assessmentSources } from '@/health/assessment'
+import { type Measurement, measurementDay, type OwnerHealthSnapshot } from '@/health/contracts'
 import {
-  type AssessmentGrade,
-  assessMetric,
-  assessmentSources,
+  compositionMassMetric,
   compositionPercentage,
-} from '@/health/assessment'
-import {
-  type Measurement,
-  type MetricKey,
-  measurementDay,
-  metricDefinitions,
-  type OwnerHealthSnapshot,
-} from '@/health/contracts'
+  type DisplayMetricKey,
+  displayMetricDefinitions,
+} from '@/health/display-metrics'
+import { metricSeries } from '@/health/trends'
+import { MeasurementChart } from './measurement-chart'
 
 const gradeColors: Record<AssessmentGrade, string> = {
   low: 'text-sky-700 [.dark_&]:text-sky-300',
   standard: 'text-emerald-700 [.dark_&]:text-emerald-300',
   high: 'text-amber-700 [.dark_&]:text-amber-300',
   veryHigh: 'text-orange-700 [.dark_&]:text-orange-300',
+  good: 'text-emerald-700 [.dark_&]:text-emerald-300',
+  dangerous: 'text-red-700 [.dark_&]:text-red-300',
   belowReference: 'text-muted-foreground',
   atReference: 'text-muted-foreground',
   aboveReference: 'text-muted-foreground',
@@ -41,6 +41,8 @@ const bandColors: Partial<Record<AssessmentGrade, string>> = {
   standard: 'bg-emerald-500',
   high: 'bg-amber-500',
   veryHigh: 'bg-orange-500',
+  good: 'bg-lime-500',
+  dangerous: 'bg-red-500',
 }
 
 export function HealthMetricAssessment({
@@ -48,19 +50,34 @@ export function HealthMetricAssessment({
   row,
   snapshot,
 }: {
-  metric: MetricKey
+  metric: DisplayMetricKey
   row: Measurement | undefined
   snapshot: OwnerHealthSnapshot
 }) {
   const t = useTranslations('Health')
   const locale = useLocale()
-  const assessment = assessMetric(metric, row, snapshot.measurements, snapshot.referenceProfile)
+  const [open, setOpen] = useState(false)
+  const [viewMetric, setViewMetric] = useState<DisplayMetricKey>(metric)
+  const assessment = assessMetric(viewMetric, row, snapshot.measurements, snapshot.referenceProfile)
   const { bands, grade, value, reference, source } = assessment
-  const unit = metricDefinitions.find((item) => item.key === metric)?.unit ?? 'index'
+  const unit = displayMetricDefinitions.find((item) => item.key === viewMetric)?.unit ?? 'index'
   const format = (number: number) =>
     new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(number)
-  const percentage =
-    metric === 'muscleMass' || metric === 'proteinMass' ? compositionPercentage(row, metric) : null
+  const formatPercentage = (number: number | null) =>
+    number === null
+      ? '—'
+      : new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(number)
+  const massMetric = compositionMassMetric(metric)
+  const percentageMetric = massMetric === 'muscleMass' ? 'musclePercentage' : 'proteinPercentage'
+  const percentage = massMetric ? compositionPercentage(row, massMetric) : null
+  const chartTo = row ? measurementDay(row.measuredAt) : ''
+  const chartFrom = chartTo
+    ? new Date(Date.parse(chartTo) - 29 * 86400000).toISOString().slice(0, 10)
+    : ''
+  const points =
+    massMetric && open
+      ? metricSeries(snapshot.measurements, viewMetric, 'smooth', chartFrom, chartTo)
+      : []
   const linkedSource =
     source in assessmentSources ? (source as keyof typeof assessmentSources) : null
   const sourceUrl = linkedSource ? assessmentSources[linkedSource] : null
@@ -78,7 +95,13 @@ export function HealthMetricAssessment({
           bands.length) *
         100
   return (
-    <Dialog.Root>
+    <Dialog.Root
+      open={open}
+      onOpenChange={(value) => {
+        setOpen(value)
+        if (value) setViewMetric(metric)
+      }}
+    >
       <Dialog.Trigger
         className={`mt-1 inline-flex min-h-9 max-w-full items-center gap-1 rounded-lg text-left text-xs focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 ${gradeColors[grade]}`}
         aria-label={t('assessment.open', { metric: t(`metrics.${metric}`) })}
@@ -110,12 +133,37 @@ export function HealthMetricAssessment({
             />
           </div>
           <div className="mt-6 flex flex-wrap items-end justify-between gap-3">
-            <p className="font-semibold text-4xl tabular-nums">
-              {value === null ? '—' : format(value)}{' '}
-              <span className="font-normal text-muted-foreground text-sm">
-                {t(`units.${unit}`)}
-              </span>
-            </p>
+            {massMetric ? (
+              <dl className="grid grid-cols-2 gap-x-6 gap-y-3" data-testid="composition-values">
+                <div>
+                  <dt className="text-muted-foreground text-xs">
+                    {t(`metrics.${percentageMetric}`)}
+                  </dt>
+                  <dd className="mt-2 font-semibold text-3xl tabular-nums">
+                    {formatPercentage(percentage)}{' '}
+                    <span className="font-normal text-muted-foreground text-sm">%</span>
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground text-xs">{t(`metrics.${massMetric}`)}</dt>
+                  <dd className="mt-2 font-semibold text-3xl tabular-nums">
+                    {row?.[massMetric] === null || row?.[massMetric] === undefined
+                      ? '—'
+                      : format(row[massMetric])}{' '}
+                    <span className="font-normal text-muted-foreground text-sm">
+                      {t('units.kg')}
+                    </span>
+                  </dd>
+                </div>
+              </dl>
+            ) : (
+              <p className="font-semibold text-4xl tabular-nums">
+                {value === null ? '—' : format(value)}{' '}
+                <span className="font-normal text-muted-foreground text-sm">
+                  {t(`units.${unit}`)}
+                </span>
+              </p>
+            )}
             <p className={`font-medium text-lg ${gradeColors[grade]}`}>
               {t(`assessment.grades.${grade}`)}
             </p>
@@ -123,15 +171,38 @@ export function HealthMetricAssessment({
           <p className="mt-2 text-muted-foreground text-xs">
             {row ? measurementDay(row.measuredAt) : t('noData')}
           </p>
-          {percentage !== null && (
-            <p className="mt-3 text-sm">
-              {t(
-                metric === 'muscleMass'
-                  ? 'assessment.musclePercentage'
-                  : 'assessment.proteinPercentage',
-                { value: format(percentage) },
-              )}
+          {assessment.reportDate && (
+            <p className="mt-1 text-muted-foreground text-xs">
+              {t('assessment.reportReference', { date: assessment.reportDate })}
             </p>
+          )}
+          {massMetric && (
+            <fieldset
+              className="mt-5 flex min-w-0 flex-wrap gap-2"
+              aria-label={t('assessment.compositionView')}
+            >
+              <Button
+                className={
+                  viewMetric === percentageMetric
+                    ? ''
+                    : 'border bg-card text-foreground hover:bg-muted'
+                }
+                aria-pressed={viewMetric === percentageMetric}
+                disabled={percentage === null}
+                onClick={() => setViewMetric(percentageMetric)}
+              >
+                {t(`metrics.${percentageMetric}`)} (%)
+              </Button>
+              <Button
+                className={
+                  viewMetric === massMetric ? '' : 'border bg-card text-foreground hover:bg-muted'
+                }
+                aria-pressed={viewMetric === massMetric}
+                onClick={() => setViewMetric(massMetric)}
+              >
+                {t(`metrics.${massMetric}`)} ({t('units.kg')})
+              </Button>
+            </fieldset>
           )}
           {bands.length > 0 && (
             <div className="mt-8 space-y-4" data-testid="assessment-scale">
@@ -195,8 +266,33 @@ export function HealthMetricAssessment({
               </p>
             </div>
           )}
+          {massMetric && (
+            <details className="mt-6 space-y-3" data-testid="composition-trend">
+              <summary className="cursor-pointer font-medium text-sm">
+                {t('assessment.compositionTrend')} · {t(`metrics.${viewMetric}`)}
+              </summary>
+              <MeasurementChart
+                key={viewMetric}
+                points={points}
+                metric={viewMetric}
+                smoothed
+                showObserved
+              />
+            </details>
+          )}
+          {source === 'xiaomiReport' && assessment.prediction !== null && (
+            <p className="mt-5 text-muted-foreground text-sm">
+              {t('assessment.mifflinValue', { value: format(assessment.prediction) })}
+            </p>
+          )}
           <div className="mt-6 space-y-3 border-t pt-5 text-sm leading-6">
             <p>{t(`assessment.methods.${source}`)}</p>
+
+            {source === 'baseline' &&
+              snapshot.referenceProfile?.reportReference &&
+              (massMetric || metric === 'basalMetabolism' || metric === 'visceralFat') && (
+                <p className="text-muted-foreground text-xs">{t('assessment.reportMismatch')}</p>
+              )}
             {source === 'baseline' && (
               <p className="text-muted-foreground text-xs">
                 {t('assessment.baselineDays', { count: assessment.baselineDays })}
@@ -212,6 +308,16 @@ export function HealthMetricAssessment({
               </p>
             )}
             <p className="text-muted-foreground text-xs">{t('assessment.healthReference')}</p>
+            {source === 'xiaomiReport' && assessment.prediction !== null && (
+              <a
+                href={assessmentSources.mifflin}
+                target="_blank"
+                rel="noreferrer"
+                className="block text-primary underline underline-offset-4"
+              >
+                {t('assessment.sources.mifflin')}
+              </a>
+            )}
             {sourceUrl && linkedSource && (
               <a
                 href={sourceUrl}

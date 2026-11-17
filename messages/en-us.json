@@ -1480,7 +1480,9 @@
       "physiqueRating": "Physique rating",
       "bodyScore": "Body score",
       "height": "Height",
-      "waist": "Waist"
+      "waist": "Waist",
+      "musclePercentage": "Muscle percentage",
+      "proteinPercentage": "Protein percentage"
     },
     "units": {
       "kg": "kg",
@@ -1500,7 +1502,7 @@
     "checkpoint": "Stage target",
     "longTerm": "Long-term target",
     "remaining": "To stage target",
-    "relativeStart": "From plan start",
+    "relativeStart": "From current phase start",
     "manage": "Data management",
     "close": "Close",
     "rolling": "7-day moving average",
@@ -1585,7 +1587,9 @@
         "older": "Above actual age",
         "tracking": "Building personal baseline",
         "noData": "No data",
-        "recorded": "Recorded information"
+        "recorded": "Recorded information",
+        "good": "Good",
+        "dangerous": "Dangerous"
       },
       "methods": {
         "chinaBmi": "Chinese adult BMI boundaries are 18.5, 24 and 28 for underweight, normal weight, overweight and obesity. Weight boundaries are calculated using height squared.",
@@ -1596,7 +1600,8 @@
         "mifflin": "Mifflin–St Jeor estimates resting energy expenditure using weight from this measurement, height, sex and age on the measurement date. It is compared with device BMR. Men use 10×kg + 6.25×cm − 5×age + 5. The final term for women is −161.",
         "age": "Compares device metabolic age with actual age on the measurement date. Actual age is calculated from date of birth and the Beijing measurement date.",
         "baseline": "Compares with valid daily means from the preceding 30 calendar days, weighting each day equally. Missing, excluded and same-day records are omitted. This personal trend comparison starts at 3 valid measurement days.",
-        "recorded": "Displays information from this measurement."
+        "recorded": "Displays information from this measurement.",
+        "xiaomiReport": "Uses the ranges in your supplied Xiaomi report when measurement-date age, height and sex match. Muscle and protein mass references retain that report as their baseline. Percentage ranges are converted using weight from the same measurement, keeping both units on one grading reference. The supplied boundaries have already been rounded for display."
       },
       "sources": {
         "chinaBmi": "China NHC weight management guidance (2024)",
@@ -1604,31 +1609,42 @@
         "chinaWaist": "China NHC adult waist classification",
         "water": "TANITA adult body water reference",
         "heart": "American Heart Association resting heart rate reference",
-        "mifflin": "Original Mifflin–St Jeor study (1990)"
+        "mifflin": "Original Mifflin–St Jeor study (1990)",
+        "xiaomiReport": "Xiaomi personalized reference explanation"
       },
       "descriptions": {
         "weight": "Body weight and adult reference boundaries calculated from height.",
         "bmi": "Weight divided by height squared, used for adult weight classification.",
         "bodyFat": "Fat mass as a percentage of weight, with sex-specific reference ranges.",
         "bodyWater": "Total body water as a percentage of weight.",
-        "muscleMass": "Device-estimated muscle mass, with muscle percentage from the same measurement and a personal baseline comparison.",
+        "muscleMass": "Device-estimated muscle mass, with muscle percentage from the same measurement and trends in both units.",
         "skeletalMuscleMass": "Device-estimated total skeletal muscle mass, assessed against personal trends.",
         "boneMass": "Device-estimated bone mineral mass, assessed against personal trends.",
-        "proteinMass": "Device-estimated body protein mass, with protein percentage from the same measurement and a personal baseline comparison.",
-        "visceralFat": "Device-estimated visceral fat rating, assessed against personal trends from the same device.",
+        "proteinMass": "Device-estimated body protein mass, with protein percentage from the same measurement and trends in both units.",
+        "visceralFat": "Device-estimated visceral fat rating, compared with an applicable personal Xiaomi report or same-device history.",
         "heartRate": "Heart rate from this measurement and the resting reference for most adults.",
-        "basalMetabolism": "Device BMR compared with resting energy expenditure estimated from personal parameters.",
+        "basalMetabolism": "Device BMR compared with an applicable personal Xiaomi report and a personalized resting energy prediction.",
         "metabolicAge": "Device-estimated metabolic age and actual age on the measurement date.",
         "physiqueRating": "Device-provided physique category from this measurement.",
         "bodyScore": "Device-provided overall score, assessed against personal trends from the same device.",
         "height": "Height is used to calculate weight boundaries and estimate resting energy expenditure.",
-        "waist": "Waist measurement and sex-specific Chinese adult reference boundaries."
-      }
+        "waist": "Waist measurement and sex-specific Chinese adult reference boundaries.",
+        "musclePercentage": "Muscle mass divided by weight from the same measurement, expressed as a percentage.",
+        "proteinPercentage": "Protein mass divided by weight from the same measurement, expressed as a percentage."
+      },
+      "compositionView": "Reference and trend unit",
+      "compositionTrend": "30-day trend",
+      "reportReference": "Personal Xiaomi report reference · {date}",
+      "reportMismatch": "Age, height or sex differs from the report profile. The current available historical reference is used.",
+      "mifflinValue": "Mifflin–St Jeor predicted reference {value} kcal/day"
     },
     "phaseChallenge": "Challenge target",
     "phaseMaintenance": "Long-term maintenance",
     "maintenanceGoal": "Target {value} kg on {date}, then maintain",
-    "ongoing": "Ongoing"
+    "ongoing": "Ongoing",
+    "recentChangePercentage": "30-day change (percentage points)",
+    "actualMissing": "No actual measurement on {date}",
+    "planDifference": "{value} {unit} from the plan line"
   },
   "HealthPlan": {
     "healthTitle": "Protect your health before chasing speed",

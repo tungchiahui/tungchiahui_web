@@ -9,9 +9,9 @@ import {
   healthTimeZone,
   type Measurement,
   measurementDay,
-  metricDefinitions,
   type OwnerHealthSnapshot,
 } from '@/health/contracts'
+import { displayMetricDefinitions, displayMetricValue } from '@/health/display-metrics'
 import { HealthMetricAssessment } from './health-assessment'
 import { HealthExchangePanel } from './health-exchange'
 import { HealthOverview } from './health-overview'
@@ -267,11 +267,11 @@ function HealthDashboard({
           {latest ? dateTime(latest) : t('noData')} · {t('compositionHelp')}
         </p>
         <dl className="mt-5 grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4">
-          {metricDefinitions.map(({ key, unit }) => (
+          {displayMetricDefinitions.map(({ key, unit }) => (
             <div key={key}>
               <dt className="text-muted-foreground text-xs">{t(`metrics.${key}`)}</dt>
               <dd className="mt-1 font-medium tabular-nums">
-                {format(latest?.[key])}{' '}
+                {format(displayMetricValue(latest, key))}{' '}
                 <span className="text-muted-foreground text-xs">{t(`units.${unit}`)}</span>
               </dd>
               <dd>

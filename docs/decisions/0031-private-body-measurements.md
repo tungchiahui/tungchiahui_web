@@ -112,3 +112,30 @@ documentation estimates composition using impedance data, which the existing nor
 export does not supply. The website preserves the imported Xiaomi values and attributes each
 assessment to its actual reference. Detail dialogs expose boundaries or reference values and
 support four locales, mobile bottom sheets, desktop dialogs, dark mode and keyboard focus.
+
+## 2026-11-17 — Composition percentages and report-derived references
+
+The Owner approved percentage-first muscle/protein cards, details showing both percentage and
+mass, and taller interactive trend charts. Display-only metric keys derive percentages from each
+valid same-row mass/weight pair before aggregation. Persisted measurements and version-1 exchange
+retain their existing schema. Both units use the same mass assessment, converting its boundaries
+with the selected measurement's weight.
+
+The optional private profile may include a validated personal Xiaomi report reference with its
+capture date, age, height, sex, weight and observed boundaries. A matching measurement-date age,
+effective height and sex permit use of that reference. Muscle mass uses the captured mass bounds.
+Protein bounds are converted once from the report's percentage and weight into mass anchors.
+The anchored-mass policy is an explicit product choice. Xiaomi's complete proprietary algorithm
+remains unpublished and source rounding can affect the displayed final digit. Mismatched profile
+parameters fall back to the existing baseline/formula. Report-derived visceral-fat and basal-energy
+bands use their captured boundaries. Basal-energy details separately retain the dated formula prediction.
+
+The extension remains within the existing private configuration key. Retained profile validators
+strip unknown nested fields and continue accepting it. Current validators check the full reference,
+and actual profile data remains outside Git and is injected only into control-api. Existing Owner
+authorization, no-store responses and rollback storage contracts remain in effect.
+
+Main charts use taller responsive plots and dynamic axis ticks. Pointer, touch and keyboard
+inspection exposes dates, actual curve values, plan targets and differences using the existing
+targetAt schedule. Future plan dates have no actual value, while bounded missing intervals retain
+their explicit estimate labels. This is client-side presentation over the authenticated snapshot.

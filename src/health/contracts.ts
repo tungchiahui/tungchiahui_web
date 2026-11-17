@@ -161,10 +161,32 @@ export const healthPlanSchema = z
       context.addIssue({ code: 'custom', message: 'invalid plan chronology' })
   })
 export type HealthPlan = z.infer<typeof healthPlanSchema>
-export const healthReferenceProfileSchema = z.object({
+const referenceParametersSchema = z.object({
   height: z.number().min(90).max(220),
-  birthDate: z.iso.date(),
   sex: z.enum(['male', 'female']),
+})
+const referenceRangeSchema = z
+  .tuple([z.number().finite().positive(), z.number().finite().positive()])
+  .refine(([lower, upper]) => lower < upper)
+export const healthReportReferenceSchema = referenceParametersSchema
+  .extend({
+    measuredOn: z.iso.date(),
+    age: z.number().int().min(18).max(79),
+    weight: z.number().min(1).max(500),
+    muscleMass: referenceRangeSchema,
+    proteinPercentage: referenceRangeSchema,
+    basalMetabolism: referenceRangeSchema,
+    visceralFat: z
+      .tuple([z.number().nonnegative(), z.number().positive(), z.number().positive()])
+      .refine(([first, second, third]) => first < second && second < third && third <= 100),
+  })
+  .refine(
+    (reference) =>
+      reference.muscleMass[1] <= reference.weight && reference.proteinPercentage[1] <= 100,
+  )
+export const healthReferenceProfileSchema = referenceParametersSchema.extend({
+  birthDate: z.iso.date(),
+  reportReference: healthReportReferenceSchema.optional(),
 })
 export type HealthReferenceProfile = z.infer<typeof healthReferenceProfileSchema>
 export const healthReferenceProfileJsonSchema = z.preprocess(

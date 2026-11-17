@@ -2,54 +2,16 @@
 
 import { useLocale, useTranslations } from 'next-intl'
 import type { HealthPlan, Measurement } from '@/health/contracts'
+import { healthPlanPhases } from '@/health/plan'
 import { metricSeries } from '@/health/trends'
 import { panelClass } from './tracker-toolbar'
 
 export function HealthStagePlan({ plan, records }: { plan: HealthPlan; records: Measurement[] }) {
   const t = useTranslations('Health')
   const locale = useLocale()
-  const dayBefore = (day: string) => new Date(Date.parse(day) - 86400000).toISOString().slice(0, 10)
-  const dayAfter = (day: string) => new Date(Date.parse(day) + 86400000).toISOString().slice(0, 10)
   const format = (value: number) =>
     new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(value)
-  const phases = [
-    {
-      key: 'phaseInitial',
-      from: plan.startDate,
-      to: dayBefore(plan.holdStart),
-      target:
-        plan.targets.find((point) => point.date === plan.holdStart)?.targetMin ?? plan.startWeight,
-    },
-    {
-      key: 'phaseHold',
-      from: plan.holdStart,
-      to: plan.holdEnd,
-      target:
-        plan.targets.find((point) => point.date === plan.holdStart)?.targetMin ?? plan.startWeight,
-    },
-    {
-      key: 'phaseLoss',
-      from: dayAfter(plan.holdEnd),
-      to: plan.checkpoint?.date ?? plan.endDate,
-      target: plan.checkpoint?.weight ?? plan.goalWeight,
-    },
-    ...(plan.checkpoint
-      ? [
-          {
-            key: 'phaseChallenge' as const,
-            from: dayAfter(plan.checkpoint.date),
-            to: plan.endDate,
-            target: plan.goalWeight,
-          },
-        ]
-      : []),
-    {
-      key: plan.maintainAfterGoal ? 'phaseMaintenance' : 'phaseLongTerm',
-      from: dayAfter(plan.endDate),
-      to: '',
-      target: plan.longTermWeight,
-    },
-  ] as const
+  const phases = healthPlanPhases(plan)
   return (
     <section className={`${panelClass} space-y-4`}>
       <h2 className="font-bold text-xl">{t('stagePlan')}</h2>

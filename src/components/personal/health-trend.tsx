@@ -1,13 +1,8 @@
 'use client'
 import { useTranslations } from 'next-intl'
 import { useState } from 'react'
-import {
-  type HealthPlan,
-  type Measurement,
-  type MetricKey,
-  measurementDay,
-  metricDefinitions,
-} from '@/health/contracts'
+import { type HealthPlan, type Measurement, measurementDay } from '@/health/contracts'
+import { type DisplayMetricKey, displayMetricDefinitions } from '@/health/display-metrics'
 import { targetAt } from '@/health/plan'
 import {
   metricSeries,
@@ -29,7 +24,7 @@ export function HealthTrend({
   initialWindow: { from: string; to: string } | null
 }) {
   const t = useTranslations('Health')
-  const [metric, setMetric] = useState<MetricKey>('weight')
+  const [metric, setMetric] = useState<DisplayMetricKey>('weight')
   const [range, setRange] = useState(initialWindow ? 'custom' : '90')
   const [mode, setMode] = useState<TrendMode>('smooth')
   const [customFrom, setFrom] = useState(initialWindow?.from ?? '')
@@ -112,11 +107,13 @@ export function HealthTrend({
             className={fieldClass}
             value={metric}
             onChange={(event) => {
-              const selected = metricDefinitions.find((row) => row.key === event.target.value)
+              const selected = displayMetricDefinitions.find(
+                (row) => row.key === event.target.value,
+              )
               if (selected) setMetric(selected.key)
             }}
           >
-            {metricDefinitions.map(({ key }) => (
+            {displayMetricDefinitions.map(({ key }) => (
               <option key={key} value={key}>
                 {t(`metrics.${key}`)}
               </option>
@@ -224,6 +221,8 @@ export function HealthTrend({
         )}
       </div>
       <MeasurementChart
+        tall
+        {...(metric === 'weight' ? { plan } : {})}
         key={`${metric}:${mode}:${from}:${to}:${fullPlan}:${smoothing}`}
         points={points}
         targets={targets}
