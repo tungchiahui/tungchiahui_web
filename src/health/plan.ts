@@ -1,6 +1,14 @@
 import type { HealthPlan } from './contracts'
 
+export function nextPlanTarget(plan: HealthPlan, day: string) {
+  if (plan.checkpoint && day <= plan.checkpoint.date) return plan.checkpoint
+  return { date: plan.endDate, weight: plan.goalWeight }
+}
+
 export function targetAt(plan: HealthPlan, day: string) {
+  if (day > plan.endDate && plan.maintainAfterGoal) {
+    return { min: plan.goalWeight, max: plan.goalWeight }
+  }
   if (day < plan.startDate || day > plan.endDate) return null
   const nextIndex = plan.targets.findIndex((point) => point.date >= day)
   const next = plan.targets[nextIndex]

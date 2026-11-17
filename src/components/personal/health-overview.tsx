@@ -9,13 +9,16 @@ import {
   metricDefinitions,
   type OwnerHealthSnapshot,
 } from '@/health/contracts'
+import { nextPlanTarget } from '@/health/plan'
 import { metricSeries } from '@/health/trends'
+import { HealthMetricAssessment } from './health-assessment'
 import { panelClass } from './tracker-toolbar'
 
 export function HealthOverview({ snapshot }: { snapshot: OwnerHealthSnapshot }) {
   const t = useTranslations('Health')
   const locale = useLocale()
   const today = measurementDay(new Date().toISOString())
+  const checkpoint = nextPlanTarget(snapshot.plan, today)
   const from = measurementDay(new Date(Date.now() - 29 * 86400000).toISOString())
   const format = (value: number | null | undefined) =>
     value === null || value === undefined
@@ -81,6 +84,7 @@ export function HealthOverview({ snapshot }: { snapshot: OwnerHealthSnapshot }) 
               <p className="mt-1 min-h-4 text-muted-foreground text-xs">
                 {latest ? measurementDay(latest.measuredAt) : t('noData')}
               </p>
+              <HealthMetricAssessment metric={metric} row={latest} snapshot={snapshot} />
               <svg
                 viewBox="0 0 160 36"
                 className="mt-4 h-9 w-full text-blue-600 dark:text-blue-400"
@@ -136,6 +140,7 @@ export function HealthOverview({ snapshot }: { snapshot: OwnerHealthSnapshot }) 
               <p className="mt-1 text-muted-foreground text-xs">
                 {latest ? measurementDay(latest.measuredAt) : t('noData')}
               </p>
+              <HealthMetricAssessment metric={metric} row={latest} snapshot={snapshot} />
             </article>
           )
         })}
@@ -153,14 +158,22 @@ export function HealthOverview({ snapshot }: { snapshot: OwnerHealthSnapshot }) 
         <div>
           <p className="text-muted-foreground text-xs">{t('checkpoint')}</p>
           <p className="mt-1 font-semibold text-xl">
-            {format(snapshot.plan.goalWeight)} <span className="text-sm">{t('units.kg')}</span>
+            {format(checkpoint.weight)} <span className="text-sm">{t('units.kg')}</span>
           </p>
-          <p className="mt-1 text-muted-foreground text-xs">{snapshot.plan.endDate}</p>
+          <p className="mt-1 text-muted-foreground text-xs">{checkpoint.date}</p>
+          {snapshot.plan.maintainAfterGoal && (
+            <p className="mt-1 text-muted-foreground text-xs">
+              {t('maintenanceGoal', {
+                value: format(snapshot.plan.goalWeight),
+                date: snapshot.plan.endDate,
+              })}
+            </p>
+          )}
         </div>
         <div>
           <p className="text-muted-foreground text-xs">{t('remaining')}</p>
           <p className="mt-1 font-semibold text-xl tabular-nums">
-            {format(average === null ? null : average - snapshot.plan.goalWeight)}{' '}
+            {format(average === null ? null : average - checkpoint.weight)}{' '}
             <span className="text-sm">{t('units.kg')}</span>
           </p>
         </div>

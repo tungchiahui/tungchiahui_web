@@ -10,7 +10,7 @@ import {
 } from '../../src/health/contracts'
 import { createHealthHttpHandler } from '../../src/health/http'
 import { ownerHealthPlan } from '../../src/health/owner-plan'
-import { targetAt } from '../../src/health/plan'
+import { nextPlanTarget, targetAt } from '../../src/health/plan'
 import { HealthRepository } from '../../src/health/repository'
 import {
   measurementCalendar,
@@ -39,7 +39,7 @@ function row(day: string, weight: number | null, extra = {}) {
 }
 
 describe('private health dashboard plan', () => {
-  it('keeps the inclusive maintenance interval at 90 and reaches 80 on January 10', () => {
+  it('reaches 80 on January 10, 70 on March 20 and maintains 70 thereafter', () => {
     const { plan } = ownerHealthPlan('zh-cn', [])
     for (let day = Date.parse('2026-08-14'); day <= Date.parse('2026-10-26'); day += 86400000) {
       expect(targetAt(plan, new Date(day).toISOString().slice(0, 10))).toEqual({ min: 90, max: 90 })
@@ -48,8 +48,14 @@ describe('private health dashboard plan', () => {
     expect(targetAt(plan, '2026-11-10')?.min).toBeCloseTo(88.0263)
     expect(targetAt(plan, '2026-08-13')?.min).toBeGreaterThan(90)
     expect(targetAt(plan, '2026-06-10')).toBeNull()
-    expect(targetAt(plan, '2027-01-11')).toBeNull()
-    expect(plan.longTermWeight).toBe(75)
+    expect(targetAt(plan, '2027-01-11')?.min).toBeLessThan(80)
+    expect(targetAt(plan, '2027-03-20')).toEqual({ min: 70, max: 70 })
+    expect(targetAt(plan, '2027-03-21')).toEqual({ min: 70, max: 70 })
+    expect(targetAt(plan, '2037-03-20')).toEqual({ min: 70, max: 70 })
+    expect(plan.longTermWeight).toBe(70)
+    expect(nextPlanTarget(plan, '2027-01-10')).toEqual({ date: '2027-01-10', weight: 80 })
+    expect(nextPlanTarget(plan, '2027-01-11')).toEqual({ date: '2027-03-20', weight: 70 })
+    expect(nextPlanTarget(plan, '2028-01-01')).toEqual({ date: '2027-03-20', weight: 70 })
   })
   it('preserves earlier custom targets and supersedes old goals in the revised interval', () => {
     const overrides = [
@@ -77,7 +83,10 @@ describe('private health dashboard plan', () => {
     try {
       for (const role of [undefined, 'user', 'owner'] as const) {
         const handler = createHealthHttpHandler(
-          { mode: 'test' },
+          {
+            mode: 'test',
+            healthReferenceProfile: { height: 178, sex: 'male', birthDate: '2000-02-04' },
+          },
           { current: async () => (role ? { id: 'test-owner', role } : undefined) },
           repository,
         )
@@ -92,9 +101,17 @@ describe('private health dashboard plan', () => {
         expect(result.headers['cache-control']).toBe('private, no-store')
         if (role === 'owner') {
           const parsed = ownerHealthSnapshotSchema.parse(result.body)
-          expect(parsed.plan.goalWeight).toBe(80)
+          expect(parsed.plan.goalWeight).toBe(70)
+          expect(parsed.referenceProfile).toEqual({
+            height: 178,
+            sex: 'male',
+            birthDate: '2000-02-04',
+          })
           expect(parsed.planMessages.planTitle).toBe('Current Templates')
-        } else expect(JSON.stringify(result.body)).not.toContain('2027-01-10')
+        } else {
+          expect(JSON.stringify(result.body)).not.toContain('2027-01-10')
+          expect(JSON.stringify(result.body)).not.toContain('2000-02-04')
+        }
       }
       expect(read).toHaveBeenCalledTimes(1)
     } finally {

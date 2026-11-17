@@ -1,5 +1,77 @@
 # Website V2 Current Implementation State
 
+## 2026-11-17 — 动态身体指标参考与 70 kg 维持计划（本地验收完成）
+
+Owner 确认实施指标评级与详情，补充个人参考档案，并将目标指定为 2027-01-10 达到
+80 kg、2027-03-20 挑战 70 kg，此后持续维持 70 kg。Owner 随后明确采用适用国内标准及
+可验证的动态参考，并授权提供的 SSH 连接用于本轮服务器核验。当前改动位于 `main`、
+功能开发基于 `e209223096c9ca39ca1d4b9e9a4d5c416f35f43f`。Owner 随后确认先升级
+安全补丁，再一起上线，已授权 main 推送、蓝绿发布及生产私有档案配置。
+
+### 实现与个人配置
+
+- 总览 10 张卡与全部指标均可打开 Base UI 详情，手机为底部弹层，桌面为对话框。
+  分类参考有色条、位置指针、开闭区间与来源，其余参考显示预测/个人基线和差值。
+  四语言、深色、触控、Escape 与焦点恢复已覆盖。
+- 体重/BMI 与腰围采用国内成人标准，体脂采用中华医学会成人参考；体水分与静息心率
+  分别注明 TANITA/AHA 来源。基础代谢按同次体重、身高、性别和测量当天年龄动态计算
+  Mifflin–St Jeor 预测参考。代谢年龄与测量当天实际周岁比较。
+- 肌肉、骨骼肌、骨量、蛋白、内脏脂肪及身体评分使用前 30 个自然日、同来源/设备的
+  日均基线，至少 3 个有效日后比较。窗口和门槛为本次产品选择。分类体型代码与身高显示
+  记录信息。蛋白率与肌肉率严格配对同条记录的质量和体重。评级为纯显示计算。
+- 真实档案移出源码，使用 `HEALTH_REFERENCE_PROFILE_JSON` 私有配置。control-api 与
+  生产配置验证共用 Zod Schema，Compose 仅向 control-api 注入。开发入口选择性读取
+  Gitignore 的 `.env.local`，已保存 Owner 提供的档案并设置 0600。测试入口固定使用合成
+  档案，隔离真实信息。真实出生日期未写入源码、测试或文档。
+- Snapshot 新字段均可选，保留旧 Service 响应兼容；实际测量、JSON v1、注释与来源保护
+  继续使用既有契约。中间目标为 80 kg，最终目标为 70 kg；`targetAt` 在目标日后持续返回
+  70。阶段卡分开展示恢复减重、挑战与长期维持，旧自定义目标仍随 JSON 保存。
+- 小米官方确认部分参考依赖个人参数，但没有公开完整评级规则。已查到 S400 固件社区
+  公式研究，其计算需要当前导出缺少的阻抗数据。参考链接、适用范围及分界详见身体测量
+  运维文档。本轮使用逐项注明的来源和个人基线。
+
+生产启用应先发布支持新键的 Host/Service 代际，再通过既有审计配置收敛入口加载私有
+档案。既有 canonical `.env` 缺少新键时可以启动，页面使用个人基线回退。普通容器
+Restart 无法加载创建后的新环境配置。个人实际参数在 `.env.local`，禁止复制到 Git 或日志。
+
+### 验证与交接
+
+最终 547 Unit、65 E2E、16 项 Migration、完整应用 Integration/S3Mock、完整 Foundation
+与 Recovery/PITR 均通过。类型、格式/源码策略、Workflow、Drizzle、Renovate 配置、构建
+及客户端安全边界扫描通过。Foundation 覆盖真实隔离蓝绿/回滚、Host 故障恢复、组件复用、
+验证后发布拉取、镜像维护、目标主机迁移与幂等、角色隔离、配置注入、SBOM/Critical 扫描。
+
+过程中一次博客冷启动搜索断言失败，最终新隔离栈按 CI 配置执行 65 项全部通过。
+早期 Foundation 在工作区配置仍修改期间出现目标主机幂等断言失败；冻结源码后的完整
+重跑通过。深色截图检查发现旧测试只添加 dark class，现改用实际主题菜单切换并断言
+浅色 class 已清除。最终手机/桌面及深色截图已复核，使用合成测量和合成档案。
+
+最终日志为 `.local/health-assessment-private-check.log`、`private-unit-final.log`、
+`private-integration.log`、`private-migration.log`、`private-foundation.log` 和
+`private-recovery.log`，后五项均带同一 `health-assessment-` 前缀。截图在
+`test-results/health-management-Owner-da-1c197--mobile-touch-and-dark-mode-chromium/`。
+接管前的四份 S400/迁移文档内容已保留；本轮增补身体测量运维与本节交接。
+两份共享文档的接管原文保存在 `.local/health-assessment-original-body-measurements.md`
+和 `.local/health-assessment-original-current-state.md`，后续可据此单独暂存本轮修改，保留
+原有 S400 文档改动的未提交状态。
+
+### 只读生产核验与既有安全待办
+
+SSH 已退出。生产 Web/Green 仍为 `17fea458a47d627d552055c344472e8e8bee6afc`，Web、
+control-api、content-worker 健康，Host Release Supervisor active，公网 Health/Ready/Version
+返回 200。生产尚未加载新档案配置。本轮没有写入生产测量。
+
+既有 observability-agent 运行但 health 为 503/stale，最后成功采集为
+`2026-11-14T06:06:07.091Z`。历史 metrics 含 `InfrastructureOperationStuck`，其中探测结果
+均为成功；这些是旧快照，不能据此断言当前有未完成 Operation。后续发布需观察新代际监控
+是否恢复采集，必要时另行定位采集阻塞。此次只读核验未重启服务。
+
+构建曾由 Next.js 的 SecurityFatalError 提示 16.4.1 存在已知安全公告。按提示重试后完整
+检查退出 0，依赖版本仍需安排安全更新。官方公告列出相关修复版本 16.4.5。
+[Next.js 官方安全公告](https://github.com/vercel/next.js/security/advisories/GHSA-rhh4-g77r-r9qj)
+
+本阶段上下文已沉淀，可以授权/开启下一阶段。
+
 ## 2026-11-17 — 安全更新与私有档案兼容版本准备
 
 Owner 已明确授权先升级安全补丁，再将身体指标功能上线，包括 main 推送、蓝绿发布和

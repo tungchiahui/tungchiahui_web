@@ -282,6 +282,9 @@ ADR 0031 将旧减重 JSONB、手动记录与 S400 导出统一到 PostgreSQL �
 独立 control-api 的 Owner 私有接口提供。个人计划也仅在 Owner 登录后展示，公共页面保留
 标题、说明和登录入口。计划配置与四语言计划文案由受验证的私有快照提供。content-worker 复用
 PostgreSQL Durable Job 导入隔离目录中的只读 JSON；蓝绿 Web Slot 没有文件挂载。
+私有快照附带经校验的参考档案。指标参考按测量日期和个人参数计算，详情注明采用的国内
+标准、通用参考、预测公式或个人历史基线。评级与比例使用显示计算。计划支持带日期的
+中间节点及最终目标后的持续维持，旧快照的可选字段保持兼容。
 生产接入、JSON 交换、迁移对账与恢复验证见 `../operations/body-measurements.md`。
 
 

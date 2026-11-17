@@ -136,6 +136,8 @@ test('Owner manages partial measurements and versioned JSON with private anonymo
     expect(html).not.toContain(note)
     expect(html).not.toContain('1300-1400 kcal')
     expect(html).not.toContain('2027-01-10')
+    expect(html).not.toContain('2027-03-20')
+    expect(html).not.toContain('2000-02-04')
     await expect(anonymous.getByRole('heading', { name: '阶段计划' })).toHaveCount(0)
     expect((await anonymous.request.get('/api/ops/health/snapshot')).status()).toBe(401)
     expect((await anonymous.request.get('/api/personal-data/weight_loss')).status()).toBe(403)
@@ -325,8 +327,54 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
     const age = overview.getByRole('article').filter({ hasText: copy.metrics.metabolicAge })
     await expect(score).toContainText(copy.units.points)
     await expect(age).toContainText(copy.units.years)
-    await expect(score.locator('svg')).toHaveCount(0)
-    await expect(age.locator('svg')).toHaveCount(0)
+    await expect(score.locator('svg[viewBox="0 0 160 36"]')).toHaveCount(0)
+    await expect(age.locator('svg[viewBox="0 0 160 36"]')).toHaveCount(0)
+    for (const metric of [
+      'bodyFat',
+      'bodyWater',
+      'muscleMass',
+      'proteinMass',
+      'basalMetabolism',
+      'metabolicAge',
+    ] as const) {
+      const card = overview.getByRole('article').filter({
+        has: page.getByRole('heading', { name: copy.metrics[metric], exact: true }),
+      })
+      const trigger = card.getByRole('button', {
+        name: copy.assessment.open.replace('{metric}', copy.metrics[metric]),
+        exact: true,
+      })
+      await trigger.click()
+      const detail = page.getByRole('dialog')
+      await expect(
+        detail.getByRole('heading', { name: copy.metrics[metric], exact: true }),
+      ).toBeVisible()
+      await expect(detail).not.toContainText('MISSING_MESSAGE')
+      if (metric === 'bodyFat' || metric === 'bodyWater') {
+        await expect(detail.getByTestId('assessment-scale')).toBeVisible()
+        await expect(detail).toContainText(
+          copy.assessment.grades[metric === 'bodyFat' ? 'veryHigh' : 'standard'],
+        )
+      }
+      if (metric === 'basalMetabolism')
+        await expect(detail).toContainText(copy.assessment.sources.mifflin)
+      if (metric === 'muscleMass' || metric === 'proteinMass')
+        await expect(detail).toContainText(copy.assessment.methods.baseline)
+      if (locale === 'zh-cn' && metric === 'bodyFat')
+        await detail.screenshot({ path: test.info().outputPath('health-assessment-desktop.png') })
+      expect(await detail.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+        true,
+      )
+      await page.keyboard.press('Escape')
+      await expect(detail).toHaveCount(0)
+      await expect(trigger).toBeFocused()
+    }
+    await expect(
+      page.getByRole('heading', { name: copy.phaseChallenge, exact: true }),
+    ).toBeVisible()
+    await expect(
+      page.getByRole('heading', { name: copy.phaseMaintenance, exact: true }),
+    ).toBeVisible()
     await expect(page.getByRole('heading', { name: copy.stagePlan, exact: true })).toBeVisible()
     await expect(page.getByRole('heading', { name: copy.calendar, exact: true })).toBeVisible()
     await expect(page.locator('#health-trend')).not.toContainText('MISSING_MESSAGE')
@@ -338,6 +386,17 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true)
+    await overview
+      .getByRole('button', {
+        name: copy.assessment.open.replace('{metric}', copy.metrics.bodyFat),
+        exact: true,
+      })
+      .tap()
+    await expect(page.getByRole('dialog').getByTestId('assessment-scale')).toBeVisible()
+    await page
+      .getByRole('dialog')
+      .screenshot({ path: test.info().outputPath(`health-assessment-${locale}-mobile.png`) })
+    await page.keyboard.press('Escape')
     await page.locator('#health-trend svg').tap({ position: { x: 180, y: 100 } })
     await expect(chart.getByTestId('chart-reading')).toContainText(copy.gapEstimate)
     await page.getByRole('button', { name: copy.addRecord, exact: true }).click()
@@ -361,7 +420,18 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
     path: test.info().outputPath('health-dashboard-mobile.png'),
     fullPage: true,
   })
-  await page.evaluate(() => document.documentElement.classList.add('dark'))
+  await page.getByRole('button', { name: '主题模式', exact: true }).click()
+  await page.getByRole('menuitemradio', { name: '深色模式', exact: true }).click()
+  await expect(page.locator('html')).toHaveClass(/dark/)
+  await expect(page.locator('html')).not.toHaveClass(/light/)
+  await overview.getByRole('button', { name: '查看体脂率评级详情', exact: true }).tap()
+  expect(
+    await page.getByRole('dialog').evaluate((element) => getComputedStyle(element).backgroundColor),
+  ).not.toBe('oklch(0.985 0.002 247.839)')
+  await page
+    .getByRole('dialog')
+    .screenshot({ path: test.info().outputPath('health-assessment-mobile-dark.png') })
+  await page.keyboard.press('Escape')
   await page.screenshot({
     path: test.info().outputPath('health-dashboard-mobile-dark.png'),
     fullPage: true,

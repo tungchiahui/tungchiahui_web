@@ -27,20 +27,44 @@ export function HealthStagePlan({ plan, records }: { plan: HealthPlan; records: 
       target:
         plan.targets.find((point) => point.date === plan.holdStart)?.targetMin ?? plan.startWeight,
     },
-    { key: 'phaseLoss', from: dayAfter(plan.holdEnd), to: plan.endDate, target: plan.goalWeight },
-    { key: 'phaseLongTerm', from: dayAfter(plan.endDate), to: '', target: plan.longTermWeight },
+    {
+      key: 'phaseLoss',
+      from: dayAfter(plan.holdEnd),
+      to: plan.checkpoint?.date ?? plan.endDate,
+      target: plan.checkpoint?.weight ?? plan.goalWeight,
+    },
+    ...(plan.checkpoint
+      ? [
+          {
+            key: 'phaseChallenge' as const,
+            from: dayAfter(plan.checkpoint.date),
+            to: plan.endDate,
+            target: plan.goalWeight,
+          },
+        ]
+      : []),
+    {
+      key: plan.maintainAfterGoal ? 'phaseMaintenance' : 'phaseLongTerm',
+      from: dayAfter(plan.endDate),
+      to: '',
+      target: plan.longTermWeight,
+    },
   ] as const
-  const pace =
-    (phases[2].target - phases[1].target) /
-    ((Date.parse(plan.endDate) - Date.parse(phases[2].from)) / 86400000 / 7)
   return (
     <section className={`${panelClass} space-y-4`}>
       <h2 className="font-bold text-xl">{t('stagePlan')}</h2>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {phases.map((phase) => {
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {phases.map((phase, index) => {
           const points = metricSeries(records, 'weight', 'daily', phase.from, phase.to)
           const first = points[0],
             last = points.at(-1)
+          const previous = phases[index - 1]
+          const paceStart = phase.key === 'phaseLoss' ? phase.from : previous?.to
+          const duration =
+            paceStart && phase.to
+              ? (Date.parse(phase.to) - Date.parse(paceStart)) / 86400000 / 7
+              : 0
+          const pace = previous && duration > 0 ? (previous.target - phase.target) / duration : 0
           return (
             <article
               key={phase.key}
@@ -48,7 +72,8 @@ export function HealthStagePlan({ plan, records }: { plan: HealthPlan; records: 
             >
               <h3 className="font-medium text-sm">{t(phase.key)}</h3>
               <p className="mt-2 text-muted-foreground text-xs">
-                {phase.from} – {phase.to || t('pendingDate')}
+                {phase.from} –{' '}
+                {phase.to || t(phase.key === 'phaseMaintenance' ? 'ongoing' : 'pendingDate')}
               </p>
               <p className="mt-4 font-semibold text-2xl tabular-nums">
                 {format(phase.target)}{' '}
@@ -63,13 +88,16 @@ export function HealthStagePlan({ plan, records }: { plan: HealthPlan; records: 
               <p className="mt-1 text-muted-foreground text-xs">
                 {t('phaseSamples', { count: points.length })}
               </p>
+              {pace > 0 && (
+                <p className="mt-3 text-muted-foreground text-xs">
+                  {t('plannedPace', { value: format(pace) })}
+                </p>
+              )}
             </article>
           )
         })}
       </div>
-      <p className="text-muted-foreground text-xs leading-5">
-        {t('plannedPace', { value: format(Math.abs(pace)) })} · {t('planRevisionHelp')}
-      </p>
+      <p className="text-muted-foreground text-xs leading-5">{t('planRevisionHelp')}</p>
     </section>
   )
 }

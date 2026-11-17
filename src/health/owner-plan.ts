@@ -18,6 +18,7 @@ export function ownerHealthPlan(
     { date: '2026-10-25', targetMin: 90, targetMax: 90 },
     { date: '2026-10-26', targetMin: 90, targetMax: 90 },
     { date: '2027-01-10', targetMin: 80, targetMax: 80 },
+    { date: '2027-03-20', targetMin: 70, targetMax: 70 },
   ]
   // The approved replacement schedule governs August 14 onwards. Retain the
   // original overrides in the exchange file, and apply earlier custom targets.
@@ -32,10 +33,12 @@ export function ownerHealthPlan(
   return {
     plan: healthPlanSchema.parse({
       startWeight: 98,
-      goalWeight: 80,
-      longTermWeight: 75,
+      goalWeight: 70,
+      longTermWeight: 70,
       startDate: '2026-06-11',
-      endDate: '2027-01-10',
+      endDate: '2027-03-20',
+      checkpoint: { date: '2027-01-10', weight: 80 },
+      maintainAfterGoal: true,
       holdStart: '2026-08-14',
       holdEnd: '2026-10-25',
       targets: targets.toSorted((left, right) => left.date.localeCompare(right.date)),

@@ -12,6 +12,7 @@ import {
   metricDefinitions,
   type OwnerHealthSnapshot,
 } from '@/health/contracts'
+import { HealthMetricAssessment } from './health-assessment'
 import { HealthExchangePanel } from './health-exchange'
 import { HealthOverview } from './health-overview'
 import { HealthLifestylePlan, HealthStagePlan } from './health-plan'
@@ -272,6 +273,9 @@ function HealthDashboard({
               <dd className="mt-1 font-medium tabular-nums">
                 {format(latest?.[key])}{' '}
                 <span className="text-muted-foreground text-xs">{t(`units.${unit}`)}</span>
+              </dd>
+              <dd>
+                <HealthMetricAssessment metric={key} row={latest} snapshot={snapshot} />
               </dd>
             </div>
           ))}

@@ -76,3 +76,39 @@ validated at control-api startup and injected only into that service. Local deve
 ignored .env.local key. Tests use a synthetic profile. Authenticated snapshots may include the
 profile while retained clients accept the additional optional field. Actual profile values remain
 outside Git. The subsequent UI release documents its assessment references and target schedule.
+
+## 2026-11-17 — Dynamic references and dated maintenance plan
+
+The Owner approved metric assessments, using applicable Chinese standards and verifiable
+personalized references, and specified 80 kg on January 10, 2027, 70 kg on March 20, 2027,
+followed by indefinite maintenance at 70 kg. The March checkpoint is presented as a challenge
+target. The existing 90 kg maintenance interval and earlier custom-target precedence remain.
+
+The server-authored private plan adds an optional checkpoint and maintenance flag. The same
+authenticated response includes a validated reference profile supplied by the Owner. This
+profile comes from the optional host-local `HEALTH_REFERENCE_PROFILE_JSON` configuration,
+validated at control-api startup and exposed only to that service. Birth dates remain outside
+Git. Local development reads the same key from the ignored `.env.local`, while integration tests
+use a synthetic profile. Actual measurements remain authoritative in PostgreSQL. The optional response fields accept retained snapshots from older
+control-api versions. Version-1 JSON exchange and the measurement schema retain their contracts.
+
+Assessments use the measurement's Beijing date to calculate age and prioritize the same row's
+height over the authored reference height. Chinese adult BMI and waist classifications and the
+Chinese Medical Association adult body-fat reference supply categorical assessments. General
+adult body-water and resting-heart-rate references carry their own attribution. Resting energy
+expenditure is dynamically estimated with Mifflin–St Jeor from same-record weight, height, sex
+and measurement-date age. Its result is presented as a formula comparison.
+
+Device-dependent muscle, skeletal-muscle, bone, protein, visceral-fat and body-score values use
+the preceding 30 calendar days of personal daily means from the same source/device. At least
+three valid days are required. Comparisons are explicitly labelled as personal-baseline
+comparisons. The current day, future days, NULL values and excluded records are omitted.
+Categorical physique codes and height remain recorded information. Muscle/protein percentages
+use paired values from the same row. These calculations are display-only.
+
+The source review found that Xiaomi confirms individualized reference values but does not
+publish its complete grading algorithm. The S400 firmware research linked in the operational
+documentation estimates composition using impedance data, which the existing normalized
+export does not supply. The website preserves the imported Xiaomi values and attributes each
+assessment to its actual reference. Detail dialogs expose boundaries or reference values and
+support four locales, mobile bottom sheets, desktop dialogs, dark mode and keyboard focus.
