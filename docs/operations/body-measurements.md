@@ -110,6 +110,18 @@ HEALTH_REFERENCE_PROFILE_JSON='{"height":178,"birthDate":"2000-02-04","sex":"mal
 展示基线/预测参考与差值。手机底部弹层和桌面对话框使用 Base UI，支持 Escape 与焦点
 恢复。退出或会话失效会随私有看板卸载。回滚保留全部测量，旧界面按其版本的计划展示。
 
+2026-11-17 已完成安全兼容版本与功能版本的两次生产发布。私有档案由既有 Host Adapter
+加载，审计 Operation 为 `2294d4c7-8b03-4b6a-ab99-9b722e480c5b`，结果为
+completed/host-bootstrap-verified。canonical 配置保持 root:root/0600，实际参数匹配，
+仅 control-api 具备档案键。运行服务中只有 control-api 重建；另生成的迁移容器保持
+Created/未启动。Current 与 Previous 两代均已支持该可选配置键。
+
+配置收敛入口为 Recovery 镜像中的 `/app/host/host-bootstrap.cjs`。通过授权主机入口
+重新应用配置时，从精确、已核验 Recovery RepoDigest 的停止容器提取该文件，使用对应
+Host Generation 的 Node 调用既有 Bootstrap。canonical 文件经共享 Schema 校验并保持
+原子写入和原权限。日常 main 发布由服务器主动拉取和同一部署引擎执行。完整生产身份
+与核验记录已保存在当前状态交接。[当前状态交接](../planning/current-state.md)
+
 所有显示、日期筛选、日期精度输入及每日平均使用 `Asia/Shanghai`。旧日期显式转换为
 `YYYY-MM-DDT00:00:00+08:00`，保留 `time_precision = date`。具有具体时间的记录为 datetime。
 同日多次记录均保留。各指标独立忽略 NULL，排除记录不参与概览与趋势统计。

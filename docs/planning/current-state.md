@@ -1,5 +1,80 @@
 # Website V2 Current Implementation State
 
+## 2026-11-17 — 安全更新、动态指标评级与 70 kg 维持计划生产验收
+
+Owner 明确选择先升级安全补丁，再一起上线，授权 main 推送、蓝绿发布和私有档案加载。
+本轮已完成。先发布配置兼容版本，再发布功能版本，确保加载新键时 Current/Previous 两代
+均接受可选的 HEALTH_REFERENCE_PROFILE_JSON。真实出生日期与完整个人档案保持在 Git
+之外，canonical 主机配置为 root:root/0600，运行参数只注入 control-api。
+
+### 当前生产身份与回执
+
+- Web/Service 为 `1e226b55d5466fd8a4af59922d85d9f2b9343731`，Active Green。
+  Web Digest 为 `sha256:f28a59e6147b4ad69eb886fc8da151dc9d0465d240e853fea63d05cbb1d53896`，
+  Service Digest 为 `sha256:7fd175a4bda559e91974cd2ecb6d512c321a6b640cdc1ae9ad0195676d752089`。
+- Previous Blue 为安全兼容版本 `23237dca2770629e907a9c2f14a577cf8bd58273`，
+  Web Digest 为 `sha256:b56aeac2626ac94e3c8f997f5095a46c0c820c0fb930f1b2d5730f1d60719677`。
+  Recovery 复用该 SHA，Digest 为
+  `sha256:0efe0abaf3030c008e43376ad190d612e3e827fb9449e72fe1a0a16d5817e52b`。
+- 安全兼容版本 Main Release [44042311701](https://github.com/tungchiahui/tungchiahui_web/actions/runs/44042311701)
+  与 Production Status 44047197668 成功，Deployment 7848057653，Operation
+  `7b3198fc-237b-45b0-83ec-6790f5af4ae0` 已完成。
+- 功能版本 Main Release [44048199235](https://github.com/tungchiahui/tungchiahui_web/actions/runs/44048199235)
+  与 Production Status 44055417755 成功，Deployment 7849188053，Operation
+  `d40610bf-79d1-42d4-ab02-8f189ee54a92` 为 completed/deployment-verified。
+  公网版本、签名完整回执、Host Release 收敛和健康 Executor 均通过，无 Pending 或未完成操作。
+
+### 功能与安全验收
+
+- 2027-01-10 为 80 kg 节点，2027-03-20 为 70 kg 挑战目标，之后长期维持 70 kg。
+  历史 90 kg 维持区间与原始自定义元数据继续遵守原有规则。目标日后的 targetAt 返回 70。
+- 全部指标及总览卡可打开评级详情。体重/BMI、腰围与体脂采用已注明的国内参考，体水分、
+  静息心率及基础代谢分别附通用参考或预测公式。年龄按测量日期计算，同次身高优先。
+  设备相关肌肉、骨量、蛋白、内脏脂肪、评分采用此前 30 日同来源/设备的个人日均基线，
+  至少 3 个有效日。该窗口与门槛为产品选择。小米没有公开完整评级规则，来源限制已写入运维文档。
+- Next.js 为 16.4.6，Zod 为 4.6.6，KaTeX 为 0.18.2，source-map-js 为 1.2.2。
+  KaTeX Override 覆盖数学插件的传递依赖，旧 Next 版本 release-age 例外已移除。
+  本轮官方 Registry 的生产依赖审计为零已知公告，线上 Active Slot 已核对 Next 版本。
+- 两个精确发布提交均通过完整 CI。功能版本为 547 Unit、65 E2E、16 Migration，包含
+  完整应用 Integration/S3Mock、Foundation/Recovery/PITR、格式/类型/构建和安全边界检查。
+  补丁后的本地应用集成与 65 E2E 也通过。本地 Foundation 曾因 Trivy 漏洞库 OCI 下载
+  超时失败，完整验证由精确提交的 CI 通过。线上匿名检查首次超时，完整重跑通过。
+- 公网四语言匿名页面、HTML/RSC 中的新目标和私有档案泄露检查，以及快照 401/旧接口
+  403 和 private/no-store 均通过。已发布页面注入合成浏览器响应后，四语言 10 卡、评级
+  色条/来源、挑战与持续维持、Escape/焦点、390px 无溢出、手机触控、深色及桌面均通过。
+  最终截图已检查，浏览器运行时错误为零。验证使用合成测量和合成档案。
+
+### 私有档案加载与主机核验
+
+通过 Owner 授权的服务器连接，复用精确 Recovery 镜像中的原 host-bootstrap 入口收敛配置。
+Operation `2294d4c7-8b03-4b6a-ab99-9b722e480c5b` 于 09:31:01.030 UTC 完成
+completed/host-bootstrap-verified。实际运行参数与本地私有档案一致，输出仅记录校验结果。
+运行服务中只有 control-api 的容器身份变化。既有配置收敛另生成 database-migrate 容器，
+状态为 Created、StartedAt 为零。Web 两槽、PostgreSQL、Worker、代理与
+监控服务身份保持一致。Current/Previous SHA 保持上述两代，传输临时文件已删除，SSH 已退出。
+
+线上证据为 `.local/health-feature-release-verification.json`、
+`.local/health-assessment-production-preview.json`、`.local/health-profile-bootstrap-operation.json`、
+`.local/health-production-pre-profile-inventory.json` 和
+`.local/health-production-post-profile-inventory.json`。截图为
+`.local/health-assessment-production-desktop-detail.png` 和
+`.local/health-assessment-production-mobile-dark-detail.png` 等合成渲染图。
+
+### 既有监控与备份待办
+
+原 observability-agent 采集停滞已随服务代际更新恢复，Health 200，lastSuccessAt 持续推进。
+仍有 InfrastructureOperationStuck 告警，当前未完成数为零，触发项为 failed24hCount=1。
+已定位昨晚 Operation `68ef1564-f3b7-4395-be34-c4f60c333ed8`，在 2026-11-16
+19:40:09.479 UTC 失败，failedComponent 为 assets，错误为 S3 XML 解析时 hr/body 标签不匹配。
+该次数据库备份及主/异地副本、控制状态备份均已完成。该既有资源备份失败仍待处理，
+受限详情见 `.local/health-existing-recovery-failure.json`。
+本轮 Service 镜像构建的缓存导出耗时 1040.3 秒，最终构建与发布均成功。
+
+本地和 origin 均仅有 main。接管前四份 S400/迁移文档的未提交内容完整保留，已按原始
+保存副本比对。此交接提交仅更新文档，实际运行版本为上面的 Web SHA。
+
+本阶段上下文已沉淀，可以授权/开启下一阶段。
+
 ## 2026-11-17 — 动态身体指标参考与 70 kg 维持计划（本地验收完成）
 
 Owner 确认实施指标评级与详情，补充个人参考档案，并将目标指定为 2027-01-10 达到
