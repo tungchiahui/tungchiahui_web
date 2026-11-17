@@ -1,9 +1,13 @@
 import type { Locale } from '../domain/persistence'
 import { messagesForLocale } from '../i18n/messages'
 import { getTargetRange } from '../personal/weight-plan'
-import { type HealthSnapshot, healthPlanSchema } from './contracts'
+import { type HealthReferenceProfile, type HealthSnapshot, healthPlanSchema } from './contracts'
 
-export function ownerHealthPlan(locale: Locale, overrides: HealthSnapshot['planOverrides']) {
+export function ownerHealthPlan(
+  locale: Locale,
+  overrides: HealthSnapshot['planOverrides'],
+  referenceProfile?: HealthReferenceProfile,
+) {
   const targets = [
     { date: '2026-06-11', targetMin: 98, targetMax: 98 },
     { date: '2026-06-25', targetMin: 96, targetMax: 96.5 },
@@ -37,5 +41,6 @@ export function ownerHealthPlan(locale: Locale, overrides: HealthSnapshot['planO
       targets: targets.toSorted((left, right) => left.date.localeCompare(right.date)),
     }),
     planMessages: messagesForLocale(locale).HealthPlan,
+    ...(referenceProfile ? { referenceProfile } : {}),
   }
 }

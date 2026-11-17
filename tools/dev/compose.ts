@@ -1,4 +1,6 @@
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { parseEnv } from 'node:util'
 
 import { z } from 'zod'
 
@@ -50,7 +52,7 @@ function copyEnvironmentVariable(target: NodeJS.ProcessEnv, name: string) {
   }
 }
 
-function createRestrictedEnvironment(configuration: ComposeEnvironment) {
+function createRestrictedEnvironment(configuration: ComposeEnvironment, repositoryRoot: string) {
   const environment: NodeJS.ProcessEnv = {
     NODE_ENV: configuration.mode === 'test' ? 'test' : 'development',
     SITE_CONTROL_STATE_DIRECTORY: configuration.controlStateDirectory,
@@ -76,6 +78,16 @@ function createRestrictedEnvironment(configuration: ComposeEnvironment) {
     copyEnvironmentVariable(environment, name)
   }
 
+  if (configuration.mode === 'local') {
+    const localFile = resolve(repositoryRoot, '.env.local')
+    const profile =
+      process.env.HEALTH_REFERENCE_PROFILE_JSON ??
+      (existsSync(localFile)
+        ? parseEnv(readFileSync(localFile, 'utf8')).HEALTH_REFERENCE_PROFILE_JSON
+        : undefined)
+    if (profile) environment.HEALTH_REFERENCE_PROFILE_JSON = profile
+  }
+
   return environment
 }
 
@@ -93,7 +105,7 @@ export class ComposeProject {
     const base = resolve(repositoryRoot, 'ops/dev/compose.yaml')
     const override = resolve(repositoryRoot, `ops/dev/compose.${mode}.yaml`)
     this.#arguments = ['compose', '--project-name', projectName, '-f', base, '-f', override]
-    this.#environment = createRestrictedEnvironment(configuration)
+    this.#environment = createRestrictedEnvironment(configuration, repositoryRoot)
     this.projectName = projectName
   }
 

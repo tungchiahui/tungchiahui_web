@@ -1,5 +1,24 @@
 # Website V2 Current Implementation State
 
+## 2026-11-17 — 安全更新与私有档案兼容版本准备
+
+Owner 已明确授权先升级安全补丁，再将身体指标功能上线，包括 main 推送、蓝绿发布和
+生产私有档案配置。安全版本使用 Next.js 16.4.6、Zod 4.6.6、KaTeX 0.18.2 与
+source-map-js 1.2.2。KaTeX 的安全 Override 同时覆盖数学插件的传递依赖。生产依赖的
+官方 Registry 审计为零公告。旧 Next.js 16.4.1 的 release-age 例外已移除。
+
+此次先发布安全更新和可选的 HEALTH_REFERENCE_PROFILE_JSON 支持，确保回滚保留代际
+也支持新配置键。个人档案只注入 control-api 并经共享 Zod 校验，测试使用合成档案，
+真实值保持在 Gitignore 的本地/主机私有配置中。该兼容版本继续原有 Owner 私有看板及
+80 kg 阶段计划。随后发布已本地验收的指标详情和 70 kg 长期维持计划，再加载生产档案。
+
+新功能本地验收与待提交工作已保存在开发工作区。生产发布将通过 main Quality Gates、
+不可变镜像、验证后元数据、服务器拉取和同一蓝绿引擎完成。前后代际兼容后再启用档案，
+当前运行身份和完整回执将在实际验收完成后补充。
+
+安全依据为 Next.js 官方发布与 GHSA-238p-pmpm-9mq7、GHSA-68fv-2mgg-jv7q、
+GHSA-mrhx-c7xc-m3w5。Owner 接管前的 S400 文档改动保持未提交。
+
 ## 2026-11-14 — 蛋白质量与评分/代谢年龄总览生产验收
 
 Owner 确认方案并授权执行。总览第四项由腰围替换为蛋白质量（kg），8 张趋势卡下方、

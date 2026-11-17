@@ -175,6 +175,7 @@ describe('Phase 12 production foundation policy', () => {
         'GITHUB_CONTENT_READ_TOKEN',
         'OBSERVABILITY_ALERT_WEBHOOK_BEARER_TOKEN',
         'OWNER_PASSWORD_HASH',
+        'HEALTH_REFERENCE_PROFILE_JSON',
         'PGBOUNCER_USERLIST_BASE64',
         'POSTGRES_PASSWORD',
       ],
@@ -190,6 +191,7 @@ describe('Phase 12 production foundation policy', () => {
         'DATABASE_ADMIN_URL',
         'DEPLOYMENT_REGISTRY_TOKEN',
         'OWNER_PASSWORD_HASH',
+        'HEALTH_REFERENCE_PROFILE_JSON',
       ],
       'web-green': [
         'BACKUP_S3_SECRET_ACCESS_KEY',
@@ -197,6 +199,7 @@ describe('Phase 12 production foundation policy', () => {
         'DATABASE_ADMIN_URL',
         'DEPLOYMENT_REGISTRY_TOKEN',
         'OWNER_PASSWORD_HASH',
+        'HEALTH_REFERENCE_PROFILE_JSON',
       ],
     } as const
     for (const [serviceName, forbiddenKeys] of Object.entries(forbiddenByService)) {

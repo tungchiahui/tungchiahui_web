@@ -38,11 +38,11 @@
     "clsx": "2.1.1",
     "drizzle-orm": "0.45.2",
     "jose": "6.2.10",
-    "katex": "0.16.47",
+    "katex": "0.18.2",
     "lucide-react": "1.33.0",
     "mdast-util-from-markdown": "2.1.0",
     "micromark-util-types": "2.0.3",
-    "next": "16.4.1",
+    "next": "16.4.6",
     "next-intl": "4.13.7",
     "opencc-js": "1.4.2",
     "pg": "8.23.0",
@@ -62,7 +62,7 @@
     "unified": "11.0.5",
     "unist-util-visit": "5.1.0",
     "yaml": "2.9.0",
-    "zod": "4.4.3"
+    "zod": "4.6.6"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.10",

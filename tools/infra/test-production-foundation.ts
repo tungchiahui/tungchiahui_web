@@ -800,6 +800,7 @@ function inspectHardening() {
     GITHUB_CONTENT_READ_TOKEN: ['content-worker'],
     OBSERVABILITY_ALERT_WEBHOOK_BEARER_TOKEN: ['observability-agent'],
     OWNER_PASSWORD_HASH: ['control-api'],
+    HEALTH_REFERENCE_PROFILE_JSON: ['control-api'],
     PGBACKREST_REPO1_CIPHER_PASS: ['deploy-agent', 'postgres'],
     POSTGRES_PASSWORD: ['postgres'],
     SITE_REVALIDATION_SECRET: ['content-worker', 'deploy-agent', 'web-blue', 'web-green'],

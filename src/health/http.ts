@@ -20,7 +20,8 @@ async function readBody(request: IncomingMessage) {
   return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown
 }
 export function createHealthHttpHandler(
-  configuration: Pick<ControlApiConfiguration, 'mode'>,
+  configuration: Pick<ControlApiConfiguration, 'mode'> &
+    Partial<Pick<ControlApiConfiguration, 'healthReferenceProfile'>>,
   sessions: {
     current(token: string): Promise<{ id: string; role: 'owner' | 'user' } | undefined>
   } | null,
@@ -53,7 +54,10 @@ export function createHealthHttpHandler(
       if (path === '/api/ops/health/snapshot' && request.method === 'GET') {
         const locale = localeSchema.parse(url.searchParams.get('locale') ?? 'zh-cn')
         const snapshot = await repository.snapshot()
-        return respond(200, { ...snapshot, ...ownerHealthPlan(locale, snapshot.planOverrides) })
+        return respond(200, {
+          ...snapshot,
+          ...ownerHealthPlan(locale, snapshot.planOverrides, configuration.healthReferenceProfile),
+        })
       }
       if (!['POST', 'PUT', 'DELETE', 'PATCH'].includes(request.method ?? ''))
         return respond(405, { error: 'method_not_allowed' })

@@ -51,6 +51,8 @@ const forbiddenClientValues = [
   'CONTROL_OPERATOR_KEYS_JSON',
   'DEPLOYMENT_REGISTRY_TOKEN',
   'DEEPSEEK_API_KEY',
+  'HEALTH_REFERENCE_PROFILE_JSON',
+  '2027-03-20',
 ] as const
 for (const path of clientBundleFiles) {
   const source = readFileSync(path, 'utf8')

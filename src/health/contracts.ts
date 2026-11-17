@@ -133,6 +133,8 @@ export const healthPlanSchema = z
     holdStart: z.iso.date(),
     holdEnd: z.iso.date(),
     targets: z.array(planOverrideSchema).min(2),
+    checkpoint: z.object({ date: z.iso.date(), weight: z.number().positive() }).optional(),
+    maintainAfterGoal: z.boolean().optional(),
   })
   .superRefine((plan, context) => {
     if (
@@ -143,6 +145,15 @@ export const healthPlanSchema = z
       ) ||
       plan.targets[0]?.date !== plan.startDate ||
       plan.targets.at(-1)?.date !== plan.endDate ||
+      (plan.checkpoint !== undefined &&
+        (plan.checkpoint.date <= plan.holdEnd ||
+          plan.checkpoint.date >= plan.endDate ||
+          !plan.targets.some(
+            (point) =>
+              point.date === plan.checkpoint?.date &&
+              point.targetMin === plan.checkpoint.weight &&
+              point.targetMax === plan.checkpoint.weight,
+          ))) ||
       plan.targets.some(
         (point, index) => index > 0 && point.date <= (plan.targets[index - 1]?.date ?? ''),
       )
@@ -150,9 +161,30 @@ export const healthPlanSchema = z
       context.addIssue({ code: 'custom', message: 'invalid plan chronology' })
   })
 export type HealthPlan = z.infer<typeof healthPlanSchema>
+export const healthReferenceProfileSchema = z.object({
+  height: z.number().min(90).max(220),
+  birthDate: z.iso.date(),
+  sex: z.enum(['male', 'female']),
+})
+export type HealthReferenceProfile = z.infer<typeof healthReferenceProfileSchema>
+export const healthReferenceProfileJsonSchema = z.preprocess(
+  (value) => (value === '' ? undefined : value),
+  z
+    .string()
+    .transform((value, context) => {
+      try {
+        return healthReferenceProfileSchema.parse(JSON.parse(value) as unknown)
+      } catch {
+        context.addIssue({ code: 'custom', message: 'Invalid private health reference profile' })
+        return z.NEVER
+      }
+    })
+    .optional(),
+)
 export const ownerHealthSnapshotSchema = healthSnapshotSchema.extend({
   plan: healthPlanSchema,
   planMessages: z.record(z.string(), z.string()),
+  referenceProfile: healthReferenceProfileSchema.optional(),
 })
 export type OwnerHealthSnapshot = z.infer<typeof ownerHealthSnapshotSchema>
 export const healthImportPreviewSchema = z.object({

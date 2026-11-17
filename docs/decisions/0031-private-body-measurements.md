@@ -66,3 +66,13 @@ metric sparklines, weekly change bars, a measurement calendar and accessible rec
 Verification covers authorization, anonymous HTML/RSC, four locales, time boundaries, missing values,
 excluded records, smooth-path bounds, responsive layout and the retained JSON/annotation workflows.
 Operational behavior and rollback implications are documented in body-measurements.md.
+
+## 2026-11-17 — Private reference-profile compatibility release
+
+The Owner authorized a security update followed by metric assessments and a revised maintenance
+plan. Before enabling the private reference profile, publish optional HEALTH_REFERENCE_PROFILE_JSON
+support to both active and retained host generations. The canonical host-local configuration is
+validated at control-api startup and injected only into that service. Local development reads the
+ignored .env.local key. Tests use a synthetic profile. Authenticated snapshots may include the
+profile while retained clients accept the additional optional field. Actual profile values remain
+outside Git. The subsequent UI release documents its assessment references and target schedule.

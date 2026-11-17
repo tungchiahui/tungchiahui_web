@@ -12,6 +12,7 @@ import {
   createPostgresScramVerifier,
   parsePgbouncerScramUserlist,
 } from '../../src/database/postgres-scram'
+import { healthReferenceProfileJsonSchema } from '../../src/health/contracts'
 
 const publicJwkSchema = z
   .object({
@@ -159,6 +160,7 @@ const productionEnvironmentSchema = z
       (value) => (value === '' ? undefined : value),
       ownerPasswordHashSchema.optional(),
     ),
+    HEALTH_REFERENCE_PROFILE_JSON: healthReferenceProfileJsonSchema,
     PGBACKREST_REPO1_CIPHER_PASS: z.string().min(32),
     PGBOUNCER_USERLIST_BASE64: z.string().min(1),
     POSTGRES_DB: z.string().min(1),
@@ -481,6 +483,7 @@ export function createProductionEnvironmentContents(backupIdentity: string, publ
     ['CONTROL_OPERATOR_KEYS_JSON', operatorKeys],
     ['CONTROL_GITHUB_OIDC_POLICY_JSON', JSON.stringify(githubOidcPolicies())],
     '# OWNER_PASSWORD_HASH=scrypt:<32-hex-salt>:<128-hex-derived-key>',
+    ['HEALTH_REFERENCE_PROFILE_JSON', ''],
     ['ASSET_S3_ENDPOINT', 'https://REPLACE_WITH_ASSET_S3_ENDPOINT'],
     ['ASSET_S3_REGION', 'us-east-1'],
     ['ASSET_S3_BUCKET', 'REPLACE_WITH_ASSET_BUCKET'],

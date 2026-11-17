@@ -206,6 +206,16 @@ describe('production secret initialization', () => {
     const valid = env.replace('REPLACE_WITH_R2_SECRET', 'r2-backup-secret')
     expect(() => validateProductionEnvironmentContents(valid)).not.toThrow()
     expect(() =>
+      validateProductionEnvironmentContents(
+        `${valid}\nHEALTH_REFERENCE_PROFILE_JSON='{"height":178,"birthDate":"2000-02-04","sex":"male"}'`,
+      ),
+    ).not.toThrow()
+    expect(() =>
+      validateProductionEnvironmentContents(
+        `${valid}\nHEALTH_REFERENCE_PROFILE_JSON='{"birthDate":"private-marker"}'`,
+      ),
+    ).toThrow('Invalid private health reference profile')
+    expect(() =>
       validateProductionEnvironmentContents(`${valid}\nBACKUP_R2_BUCKET=obsolete`),
     ).toThrow('obsolete BACKUP_R2_* keys')
     expect(() =>
