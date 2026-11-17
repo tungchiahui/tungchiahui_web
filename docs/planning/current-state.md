@@ -70,6 +70,12 @@ completed/host-bootstrap-verified。实际运行参数与本地私有档案一�
 受限详情见 `.local/health-existing-recovery-failure.json`。
 本轮 Service 镜像构建的缓存导出耗时 1040.3 秒，最终构建与发布均成功。
 
+最终核验时，服务器到 GitHub API 的连接出现 ECONNRESET。使用同一 Host Generation
+Node 与 canonical 配置执行只读探测，main ref、Deployment 和 Compare 三个 API 请求
+均发生连接重置，发布轮询显示 publication-unavailable。当前功能版本的完整部署回执已
+成功，Current/Previous 身份正确，九个运行服务健康且未完成操作数为零。该网络异常仍需
+后续复核，可能延迟后续发布发现。主机诊断临时文件已清理，SSH 已退出。
+
 本地和 origin 均仅有 main。接管前四份 S400/迁移文档的未提交内容完整保留，已按原始
 保存副本比对。此交接提交仅更新文档，实际运行版本为上面的 Web SHA。
 
