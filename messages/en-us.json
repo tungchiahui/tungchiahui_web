@@ -1502,7 +1502,7 @@
     "checkpoint": "Stage target",
     "longTerm": "Long-term target",
     "remaining": "To stage target",
-    "relativeStart": "From current phase start",
+    "relativeStart": "Since this phase’s first measurement",
     "manage": "Data management",
     "close": "Close",
     "rolling": "7-day moving average",

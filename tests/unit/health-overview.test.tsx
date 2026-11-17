@@ -66,13 +66,31 @@ describe('current phase starting weight summary', () => {
     expect(card).toHaveTextContent('-3 kg')
     expect(card).toHaveTextContent('2026-10-26 · 90 kg')
   })
-  it('shows missing data when the exact start day has no valid weight', () => {
+  it('uses the first valid day within the phase when its start day has no valid weight', () => {
     const card = overview([
       record('2026-10-25T08:00:00+08:00', 90),
       record('2026-10-26T08:00:00+08:00', 89, true),
       record('2026-10-26T09:00:00+08:00', null),
       record('2026-10-27T08:00:00+08:00', 88),
+      record('2026-10-27T09:00:00+08:00', 90),
       record('2026-11-17T08:00:00+08:00', 87),
+    ])
+    expect(card).toHaveTextContent('-2 kg')
+    expect(card).toHaveTextContent('2026-10-27 · 89 kg')
+  })
+  it('shows missing data when the current phase has no valid measured weight', () => {
+    const card = overview([
+      record('2026-10-25T08:00:00+08:00', 90),
+      record('2026-10-26T08:00:00+08:00', 89, true),
+      record('2026-11-17T08:00:00+08:00', null),
+    ])
+    expect(card).toHaveTextContent('— kg')
+    expect(card).toHaveTextContent('2026-10-26 · 暂无数据')
+  })
+  it('omits future records when choosing the first measurement', () => {
+    const card = overview([
+      record('2026-10-25T08:00:00+08:00', 90),
+      record('2026-11-18T08:00:00+08:00', 87),
     ])
     expect(card).toHaveTextContent('— kg')
     expect(card).toHaveTextContent('2026-10-26 · 暂无数据')
@@ -106,5 +124,16 @@ describe('current phase starting weight summary', () => {
     ])
     expect(card).toHaveTextContent('-0.5 kg')
     expect(card).toHaveTextContent('2027-03-21 · 70.5 kg')
+  })
+  it('uses the first valid maintenance day after its scheduled start', () => {
+    vi.setSystemTime('2027-04-01T00:00:00Z')
+    const card = overview([
+      record('2027-03-20T08:00:00+08:00', 70),
+      record('2027-03-21T08:00:00+08:00', 70.5, true),
+      record('2027-03-24T08:00:00+08:00', 70.2),
+      record('2027-04-01T08:00:00+08:00', 70),
+    ])
+    expect(card).toHaveTextContent('-0.2 kg')
+    expect(card).toHaveTextContent('2027-03-24 · 70.2 kg')
   })
 })

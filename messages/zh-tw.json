@@ -1502,7 +1502,7 @@
     "checkpoint": "階段目標",
     "longTerm": "長期目標",
     "remaining": "距階段目標",
-    "relativeStart": "相對目前階段起點",
+    "relativeStart": "相對本階段首次測量",
     "manage": "資料管理",
     "close": "關閉",
     "rolling": "7 日移動平均",

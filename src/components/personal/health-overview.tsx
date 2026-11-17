@@ -19,7 +19,7 @@ export function HealthOverview({ snapshot }: { snapshot: OwnerHealthSnapshot }) 
     (item) => item.from <= today && (!item.to || today <= item.to),
   )
   const phaseStart = phase
-    ? metricSeries(snapshot.measurements, 'weight', 'daily', phase.from, phase.from)[0]
+    ? metricSeries(snapshot.measurements, 'weight', 'daily', phase.from, today)[0]
     : undefined
   const from = measurementDay(new Date(Date.now() - 29 * 86400000).toISOString())
   const format = (value: number | null | undefined) =>
@@ -201,7 +201,7 @@ export function HealthOverview({ snapshot }: { snapshot: OwnerHealthSnapshot }) 
             <span className="text-sm">{t('units.kg')}</span>
           </p>
           <p className="mt-1 text-muted-foreground text-xs">
-            {phase?.from ?? t('noData')} ·{' '}
+            {phaseStart ? measurementDay(phaseStart.time) : (phase?.from ?? t('noData'))} ·{' '}
             {phaseStart ? `${format(phaseStart.value)} ${t('units.kg')}` : t('noData')}
           </p>
         </div>

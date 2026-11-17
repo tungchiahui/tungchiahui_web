@@ -1502,7 +1502,7 @@
     "checkpoint": "阶段目标",
     "longTerm": "长期目标",
     "remaining": "距阶段目标",
-    "relativeStart": "相对当前阶段起点",
+    "relativeStart": "相对本阶段首次测量",
     "manage": "数据管理",
     "close": "关闭",
     "rolling": "7 日移动平均",
