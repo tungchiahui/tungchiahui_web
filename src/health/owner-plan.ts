@@ -17,7 +17,7 @@ export function ownerHealthPlan(
     { date: '2026-08-14', targetMin: 90, targetMax: 90 },
     { date: '2026-10-25', targetMin: 90, targetMax: 90 },
     { date: '2026-10-26', targetMin: 90, targetMax: 90 },
-    { date: '2027-01-10', targetMin: 80, targetMax: 80 },
+    { date: '2027-01-10', targetMin: 77.5, targetMax: 77.5 },
     { date: '2027-03-20', targetMin: 70, targetMax: 70 },
   ]
   // The approved replacement schedule governs August 14 onwards. Retain the
@@ -37,7 +37,7 @@ export function ownerHealthPlan(
       longTermWeight: 70,
       startDate: '2026-06-11',
       endDate: '2027-03-20',
-      checkpoint: { date: '2027-01-10', weight: 80 },
+      checkpoint: { date: '2027-01-10', weight: 77.5 },
       maintainAfterGoal: true,
       holdStart: '2026-08-14',
       holdEnd: '2026-10-25',

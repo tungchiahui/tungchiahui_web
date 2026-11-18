@@ -339,6 +339,9 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
     const copy = messagesForLocale(locale).Health
     const overview = page.getByRole('region', { name: copy.overview, exact: true })
     await expect(overview.getByRole('article')).toHaveCount(10)
+    const checkpoint = overview.getByText(copy.checkpoint, { exact: true }).locator('..')
+    await expect(checkpoint).toContainText('77.5 kg')
+    await expect(checkpoint).toContainText('2027-01-10')
     const phaseSummary = overview.getByText(copy.relativeStart, { exact: true }).locator('..')
     const baseline = measurements.filter(
       (row) =>
@@ -430,13 +433,20 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
         await expect(detail).toContainText(copy.assessment.methods.xiaomiReport)
         await expect(detail.getByTestId('assessment-scale')).toBeVisible()
       }
-      if (metric === 'musclePercentage' || metric === 'proteinPercentage') {
-        await expect(detail).toContainText(copy.assessment.methods.xiaomiReport)
-        const massMetric = metric === 'musclePercentage' ? 'muscleMass' : 'proteinMass'
+      if (metric === 'musclePercentage' || metric === 'proteinPercentage' || metric === 'bodyFat') {
+        await expect(detail).toContainText(
+          copy.assessment.methods[metric === 'bodyFat' ? 'chinaFat' : 'xiaomiReport'],
+        )
+        const massMetric =
+          metric === 'bodyFat'
+            ? 'fatMass'
+            : metric === 'musclePercentage'
+              ? 'muscleMass'
+              : 'proteinMass'
         const latest = measurements.find((row) => displayMetricValue(row, metric) !== null)
         await expect(detail.getByTestId('composition-values')).toContainText(copy.metrics[metric])
         await expect(detail.getByTestId('composition-values')).toContainText(
-          format(latest?.[massMetric] ?? 0),
+          format(displayMetricValue(latest, massMetric) ?? 0),
         )
         await expect(detail.getByTestId('composition-values')).toContainText(
           new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(
@@ -488,6 +498,9 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
     await expect(chart.getByTestId('chart-reading')).toContainText('%')
     await chart.getByRole('combobox', { name: copy.metric }).selectOption('proteinPercentage')
     await expect(chart.getByTestId('chart-reading')).toContainText('%')
+    await chart.getByRole('combobox', { name: copy.metric }).selectOption('weight')
+    await chart.getByRole('combobox', { name: copy.metric }).selectOption('fatMass')
+    await expect(chart.getByTestId('chart-reading')).toContainText(copy.units.kg)
     await chart.getByRole('combobox', { name: copy.metric }).selectOption('weight')
 
     await expect(page.getByRole('heading', { name: copy.calendar, exact: true })).toBeVisible()

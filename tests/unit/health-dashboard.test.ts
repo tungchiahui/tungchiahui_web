@@ -45,21 +45,21 @@ function row(day: string, weight: number | null, extra = {}) {
 }
 
 describe('private health dashboard plan', () => {
-  it('reaches 80 on January 10, 70 on March 20 and maintains 70 thereafter', () => {
+  it('reaches 77.5 on January 10, 70 on March 20 and maintains 70 thereafter', () => {
     const { plan } = ownerHealthPlan('zh-cn', [])
     for (let day = Date.parse('2026-08-14'); day <= Date.parse('2026-10-26'); day += 86400000) {
       expect(targetAt(plan, new Date(day).toISOString().slice(0, 10))).toEqual({ min: 90, max: 90 })
     }
-    expect(targetAt(plan, '2027-01-10')).toEqual({ min: 80, max: 80 })
-    expect(targetAt(plan, '2026-11-10')?.min).toBeCloseTo(88.0263)
+    expect(targetAt(plan, '2027-01-10')).toEqual({ min: 77.5, max: 77.5 })
+    expect(targetAt(plan, '2026-11-10')?.min).toBeCloseTo(87.5328947)
     expect(targetAt(plan, '2026-08-13')?.min).toBeGreaterThan(90)
     expect(targetAt(plan, '2026-06-10')).toBeNull()
-    expect(targetAt(plan, '2027-01-11')?.min).toBeLessThan(80)
+    expect(targetAt(plan, '2027-01-11')?.min).toBeLessThan(77.5)
     expect(targetAt(plan, '2027-03-20')).toEqual({ min: 70, max: 70 })
     expect(targetAt(plan, '2027-03-21')).toEqual({ min: 70, max: 70 })
     expect(targetAt(plan, '2037-03-20')).toEqual({ min: 70, max: 70 })
     expect(plan.longTermWeight).toBe(70)
-    expect(nextPlanTarget(plan, '2027-01-10')).toEqual({ date: '2027-01-10', weight: 80 })
+    expect(nextPlanTarget(plan, '2027-01-10')).toEqual({ date: '2027-01-10', weight: 77.5 })
     expect(nextPlanTarget(plan, '2027-01-11')).toEqual({ date: '2027-03-20', weight: 70 })
     expect(nextPlanTarget(plan, '2028-01-01')).toEqual({ date: '2027-03-20', weight: 70 })
   })

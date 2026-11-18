@@ -139,3 +139,15 @@ Main charts use taller responsive plots and dynamic axis ticks. Pointer, touch a
 inspection exposes dates, actual curve values, plan targets and differences using the existing
 targetAt schedule. Future plan dates have no actual value, while bounded missing intervals retain
 their explicit estimate labels. This is client-side presentation over the authenticated snapshot.
+
+## 2026-11-18 — Fat mass display and revised checkpoint
+
+The Owner requested body-fat details in both percentage and kg and revised the January 10, 2027
+checkpoint to 77.5 kg. This checkpoint supersedes the prior 80 kg decision. March 20, 2027 remains
+the 70 kg challenge followed by indefinite 70 kg maintenance under the existing schedule.
+
+Display-only fatMass is computed from each valid same-record weight and body-fat percentage before
+aggregation. Both units share the existing body-fat assessment, converting percentage reference
+bounds with that measurement's weight. Details expose both values and unit-switchable references
+and trends. Missing weight leaves the valid percentage available while fat mass is unavailable.
+Existing storage, version-1 exchange, private profile configuration and authorization contracts apply.

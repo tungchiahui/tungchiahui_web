@@ -33,6 +33,64 @@ function record(extra: Partial<Measurement> = {}) {
 }
 
 describe('derived composition metrics', () => {
+  it('derives fat mass from same-measurement weight and body-fat percentage', () => {
+    expect(displayMetricValue(record({ bodyFat: 25.3 }), 'fatMass')).toBeCloseTo(22.011)
+    expect(displayMetricValue(record({ bodyFat: 0 }), 'fatMass')).toBe(0)
+    expect(displayMetricValue(record({ bodyFat: 100 }), 'fatMass')).toBe(87)
+    for (const row of [
+      undefined,
+      record({ bodyFat: null }),
+      record({ weight: null, bodyFat: 25.3 }),
+      record({ excluded: true, bodyFat: 25.3 }),
+    ]) {
+      expect(displayMetricValue(row, 'fatMass')).toBeNull()
+    }
+    expect(compositionPercentage(record({ weight: null, bodyFat: 25.3 }), 'fatMass')).toBe(25.3)
+    expect(compositionPercentage(record({ excluded: true, bodyFat: 25.3 }), 'fatMass')).toBeNull()
+  })
+  it('aggregates paired fat mass before calculating daily, rolling and smooth trends', () => {
+    const rows = [
+      record({ weight: 100, bodyFat: 20 }),
+      record({ weight: 50, bodyFat: 40, measuredAt: '2026-11-17T09:00:00+08:00' }),
+      record({ weight: null, bodyFat: 60 }),
+      record({ weight: 100, bodyFat: null }),
+      record({ weight: 100, bodyFat: 100, excluded: true }),
+    ]
+    for (const mode of ['daily', 'rolling', 'smooth'] as const) {
+      expect(metricSeries(rows, 'fatMass', mode)[0]?.value).toBe(20)
+    }
+    expect(metricSeries(rows, 'fatMass', 'daily')[0]?.count).toBe(2)
+    expect(metricSeries(rows, 'fatMass', 'rolling')[0]?.count).toBe(1)
+    expect(metricSeries(rows, 'fatMass', 'raw')).toHaveLength(2)
+  })
+  it.each([70, 87, 100])('converts fat reference bounds with each %s kg weight', (weight) => {
+    for (const sex of ['male', 'female'] as const) {
+      const profile = { ...syntheticReportProfile, sex }
+      for (const bodyFat of [0, 10, 15, 20, 25, 25.01, 30, 30.01, 100]) {
+        const row = record({ weight, bodyFat })
+        const percentage = assessMetric('bodyFat', row, [], profile)
+        const mass = assessMetric('fatMass', row, [], profile)
+        expect(mass.source).toBe('chinaFat')
+        expect(mass.grade).toBe(percentage.grade)
+        expect(mass.value).toBeCloseTo((weight * bodyFat) / 100)
+        for (const [index, band] of percentage.bands.entries()) {
+          expect(mass.bands[index]?.inclusive).toBe(band.inclusive)
+          if (band.upper === null) expect(mass.bands[index]?.upper).toBeNull()
+          else expect(mass.bands[index]?.upper).toBeCloseTo((weight * band.upper) / 100)
+        }
+      }
+    }
+    const missingWeight = record({ weight: null, bodyFat: 25.3 })
+    expect(assessMetric('bodyFat', missingWeight, [], syntheticReportProfile).grade).toBe(
+      'veryHigh',
+    )
+    expect(assessMetric('fatMass', missingWeight, [], syntheticReportProfile)).toMatchObject({
+      grade: 'noData',
+      value: null,
+      bands: [],
+      reference: null,
+    })
+  })
   it('derives both percentages from paired values in one measurement', () => {
     expect(displayMetricValue(record(), 'musclePercentage')).toBeCloseTo(70.689655)
     expect(displayMetricValue(record(), 'proteinPercentage')).toBeCloseTo(16.781609)

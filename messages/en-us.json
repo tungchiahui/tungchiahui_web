@@ -1482,7 +1482,8 @@
       "height": "Height",
       "waist": "Waist",
       "musclePercentage": "Muscle percentage",
-      "proteinPercentage": "Protein percentage"
+      "proteinPercentage": "Protein percentage",
+      "fatMass": "Fat mass"
     },
     "units": {
       "kg": "kg",
@@ -1615,7 +1616,7 @@
       "descriptions": {
         "weight": "Body weight and adult reference boundaries calculated from height.",
         "bmi": "Weight divided by height squared, used for adult weight classification.",
-        "bodyFat": "Fat mass as a percentage of weight, with sex-specific reference ranges.",
+        "bodyFat": "Fat mass as a proportion of body weight. Details show both the percentage and fat mass calculated using the same measurement’s weight, with sex-specific reference ranges.",
         "bodyWater": "Total body water as a percentage of weight.",
         "muscleMass": "Device-estimated muscle mass, with muscle percentage from the same measurement and trends in both units.",
         "skeletalMuscleMass": "Device-estimated total skeletal muscle mass, assessed against personal trends.",
@@ -1630,7 +1631,8 @@
         "height": "Height is used to calculate weight boundaries and estimate resting energy expenditure.",
         "waist": "Waist measurement and sex-specific Chinese adult reference boundaries.",
         "musclePercentage": "Muscle mass divided by weight from the same measurement, expressed as a percentage.",
-        "proteinPercentage": "Protein mass divided by weight from the same measurement, expressed as a percentage."
+        "proteinPercentage": "Protein mass divided by weight from the same measurement, expressed as a percentage.",
+        "fatMass": "Weight multiplied by the body-fat percentage from the same measurement. Percentage and kg share the body-fat grade, with kg reference bounds converted using that measurement’s weight."
       },
       "compositionView": "Reference and trend unit",
       "compositionTrend": "30-day trend",

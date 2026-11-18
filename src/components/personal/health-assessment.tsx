@@ -10,8 +10,10 @@ import { type Measurement, measurementDay, type OwnerHealthSnapshot } from '@/he
 import {
   compositionMassMetric,
   compositionPercentage,
+  compositionPercentageMetric,
   type DisplayMetricKey,
   displayMetricDefinitions,
+  displayMetricValue,
 } from '@/health/display-metrics'
 import { metricSeries } from '@/health/trends'
 import { MeasurementChart } from './measurement-chart'
@@ -68,8 +70,9 @@ export function HealthMetricAssessment({
       ? '—'
       : new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(number)
   const massMetric = compositionMassMetric(metric)
-  const percentageMetric = massMetric === 'muscleMass' ? 'musclePercentage' : 'proteinPercentage'
+  const percentageMetric = massMetric ? compositionPercentageMetric(massMetric) : null
   const percentage = massMetric ? compositionPercentage(row, massMetric) : null
+  const massValue = massMetric ? displayMetricValue(row, massMetric) : null
   const chartTo = row ? measurementDay(row.measuredAt) : ''
   const chartFrom = chartTo
     ? new Date(Date.parse(chartTo) - 29 * 86400000).toISOString().slice(0, 10)
@@ -133,7 +136,7 @@ export function HealthMetricAssessment({
             />
           </div>
           <div className="mt-6 flex flex-wrap items-end justify-between gap-3">
-            {massMetric ? (
+            {massMetric && percentageMetric ? (
               <dl className="grid grid-cols-2 gap-x-6 gap-y-3" data-testid="composition-values">
                 <div>
                   <dt className="text-muted-foreground text-xs">
@@ -147,9 +150,7 @@ export function HealthMetricAssessment({
                 <div>
                   <dt className="text-muted-foreground text-xs">{t(`metrics.${massMetric}`)}</dt>
                   <dd className="mt-2 font-semibold text-3xl tabular-nums">
-                    {row?.[massMetric] === null || row?.[massMetric] === undefined
-                      ? '—'
-                      : format(row[massMetric])}{' '}
+                    {massValue === null ? '—' : format(massValue)}{' '}
                     <span className="font-normal text-muted-foreground text-sm">
                       {t('units.kg')}
                     </span>
@@ -176,7 +177,7 @@ export function HealthMetricAssessment({
               {t('assessment.reportReference', { date: assessment.reportDate })}
             </p>
           )}
-          {massMetric && (
+          {massMetric && percentageMetric && (
             <fieldset
               className="mt-5 flex min-w-0 flex-wrap gap-2"
               aria-label={t('assessment.compositionView')}
@@ -198,6 +199,7 @@ export function HealthMetricAssessment({
                   viewMetric === massMetric ? '' : 'border bg-card text-foreground hover:bg-muted'
                 }
                 aria-pressed={viewMetric === massMetric}
+                disabled={massValue === null}
                 onClick={() => setViewMetric(massMetric)}
               >
                 {t(`metrics.${massMetric}`)} ({t('units.kg')})
@@ -290,7 +292,9 @@ export function HealthMetricAssessment({
 
             {source === 'baseline' &&
               snapshot.referenceProfile?.reportReference &&
-              (massMetric || metric === 'basalMetabolism' || metric === 'visceralFat') && (
+              ((massMetric && massMetric !== 'fatMass') ||
+                metric === 'basalMetabolism' ||
+                metric === 'visceralFat') && (
                 <p className="text-muted-foreground text-xs">{t('assessment.reportMismatch')}</p>
               )}
             {source === 'baseline' && (

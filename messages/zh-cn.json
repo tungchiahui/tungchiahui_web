@@ -1482,7 +1482,8 @@
       "height": "身高",
       "waist": "腰围",
       "musclePercentage": "肌肉率",
-      "proteinPercentage": "蛋白质率"
+      "proteinPercentage": "蛋白质率",
+      "fatMass": "脂肪量"
     },
     "units": {
       "kg": "kg",
@@ -1615,7 +1616,7 @@
       "descriptions": {
         "weight": "体重及按身高换算的成人参考区间。",
         "bmi": "体重与身高平方的比值，用于成人体重分类。",
-        "bodyFat": "脂肪质量占体重的比例，参考范围按性别匹配。",
+        "bodyFat": "脂肪质量占体重的比例。详情同时显示体脂率和按同次体重换算的脂肪量，参考范围按性别匹配。",
         "bodyWater": "身体总水分占体重的比例。",
         "muscleMass": "设备估算的肌肉量，详情同时显示同次测量的肌肉率和两种单位的趋势。",
         "skeletalMuscleMass": "设备估算的全身骨骼肌量，采用个人趋势参考。",
@@ -1630,7 +1631,8 @@
         "height": "身高用于换算体重区间和估算静息能量消耗。",
         "waist": "腰围及按性别匹配的中国成人参考界限。",
         "musclePercentage": "同次测量的肌肉量除以体重，显示肌肉在身体重量中的占比。",
-        "proteinPercentage": "同次测量的蛋白质量除以体重，显示蛋白质在身体重量中的占比。"
+        "proteinPercentage": "同次测量的蛋白质量除以体重，显示蛋白质在身体重量中的占比。",
+        "fatMass": "同次测量的体重乘以体脂率，换算脂肪量。百分比与 kg 共用体脂率评级，kg 参考边界按该次体重换算。"
       },
       "compositionView": "参考与趋势单位",
       "compositionTrend": "近 30 日趋势",

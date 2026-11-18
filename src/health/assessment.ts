@@ -95,13 +95,18 @@ export function assessMetric(
   records: Measurement[],
   profile: HealthReferenceProfile | undefined,
 ): MetricAssessment {
-  if (metric === 'musclePercentage' || metric === 'proteinPercentage') {
-    const mass = metric === 'musclePercentage' ? 'muscleMass' : 'proteinMass'
-    const assessment = assessMetric(mass, row, records, profile)
+  if (metric === 'musclePercentage' || metric === 'proteinPercentage' || metric === 'fatMass') {
+    const referenceMetric =
+      metric === 'fatMass'
+        ? 'bodyFat'
+        : metric === 'musclePercentage'
+          ? 'muscleMass'
+          : 'proteinMass'
+    const assessment = assessMetric(referenceMetric, row, records, profile)
     const value = displayMetricValue(row, metric)
     if (!row || row.weight === null || value === null)
       return { ...assessment, value: null, grade: 'noData', bands: [], reference: null }
-    const factor = 100 / row.weight
+    const factor = metric === 'fatMass' ? row.weight / 100 : 100 / row.weight
     return {
       ...assessment,
       value,
