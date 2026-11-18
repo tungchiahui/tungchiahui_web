@@ -53,6 +53,7 @@ export function trendPoints(
 export type TrendMode = 'raw' | 'daily' | 'rolling' | 'smooth'
 export const smoothingWindows = [7, 14, 30] as const
 export type SmoothingWindow = (typeof smoothingWindows)[number]
+export const defaultSmoothingWindow: SmoothingWindow = 7
 const dayMilliseconds = 86400000
 
 export function metricSeries(
@@ -61,7 +62,7 @@ export function metricSeries(
   mode: TrendMode,
   from = '',
   to = '',
-  smoothing: SmoothingWindow = 14,
+  smoothing: SmoothingWindow = defaultSmoothingWindow,
 ): TrendPoint[] {
   if (mode === 'smooth')
     return smoothDailyPoints(trendPoints(records, metric, true, '', to), smoothing).filter(

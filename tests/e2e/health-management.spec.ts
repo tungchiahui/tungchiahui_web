@@ -254,10 +254,11 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
   await expect(chart.locator('path[data-estimated="true"]')).toHaveCount(2)
   await expect(chart.locator('path[data-estimated="false"]')).toHaveCount(3)
   await expect(chart.getByLabel('聚合方式')).toHaveValue('smooth')
-  await expect(chart.getByLabel('平滑范围')).toHaveValue('14')
+  await expect(chart.getByLabel('时间范围')).toHaveValue('180')
+  await expect(chart.getByLabel('平滑范围')).toHaveValue('7')
   await chart.getByLabel('平滑范围').selectOption('30')
-  await chart.getByLabel('平滑范围').selectOption('7')
   await chart.getByLabel('平滑范围').selectOption('14')
+  await chart.getByLabel('平滑范围').selectOption('7')
   await chart.getByLabel('显示实测日均点').uncheck()
   await expect(chart.locator('circle[data-observed]')).toHaveCount(0)
   await chart.getByLabel('显示实测日均点').check()
@@ -268,6 +269,11 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
   await page.keyboard.press('ArrowLeft')
   await expect(slider).not.toHaveValue(last)
   await captureChart('health-chart-default.png')
+  await slider.press('Home')
+  await expect(chart.getByTestId('chart-reading')).toContainText(
+    measurementDay(new Date(now - 179 * 86400000).toISOString()),
+  )
+  await chart.getByLabel('时间范围').selectOption('90')
   await slider.press('Home')
   for (let day = 0; day < 35; day++) await slider.press('ArrowRight')
   await expect(chart.getByTestId('chart-reading')).toContainText('缺测估算')
@@ -339,6 +345,8 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
     const copy = messagesForLocale(locale).Health
     const overview = page.getByRole('region', { name: copy.overview, exact: true })
     await expect(overview.getByRole('article')).toHaveCount(10)
+    await expect(chart.getByLabel(copy.range)).toHaveValue('180')
+    await expect(chart.getByLabel(copy.smoothingWindow)).toHaveValue('7')
     const checkpoint = overview.getByText(copy.checkpoint, { exact: true }).locator('..')
     await expect(checkpoint).toContainText('77.5 kg')
     await expect(checkpoint).toContainText('2027-01-10')
@@ -502,6 +510,7 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
     await chart.getByRole('combobox', { name: copy.metric }).selectOption('fatMass')
     await expect(chart.getByTestId('chart-reading')).toContainText(copy.units.kg)
     await chart.getByRole('combobox', { name: copy.metric }).selectOption('weight')
+    await chart.getByLabel(copy.range).selectOption('90')
 
     await expect(page.getByRole('heading', { name: copy.calendar, exact: true })).toBeVisible()
     await expect(page.locator('#health-trend')).not.toContainText('MISSING_MESSAGE')

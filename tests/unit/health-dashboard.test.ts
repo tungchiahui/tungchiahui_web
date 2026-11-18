@@ -144,6 +144,15 @@ describe('private health dashboard plan', () => {
 })
 
 describe('health chart statistics', () => {
+  it('uses a seven-day default smoothing window', () => {
+    const records = [row('2026-11-01', 90), row('2026-11-04', 80), row('2026-11-07', 90)]
+    expect(metricSeries(records, 'weight', 'smooth')).toEqual(
+      metricSeries(records, 'weight', 'smooth', '', '', 7),
+    )
+    expect(metricSeries(records, 'weight', 'smooth')).not.toEqual(
+      metricSeries(records, 'weight', 'smooth', '', '', 14),
+    )
+  })
   it('weights days equally, independently omits nulls, and skips excluded rows', () => {
     const records = [
       row('2026-11-02', 90, { bodyFat: 20 }),

@@ -1451,6 +1451,7 @@
       "7": "Last 7 days",
       "30": "Last 30 days",
       "90": "Last 90 days",
+      "180": "Last 180 days",
       "all": "All time",
       "custom": "Custom"
     },

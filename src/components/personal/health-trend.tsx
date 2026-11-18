@@ -5,6 +5,7 @@ import { type HealthPlan, type Measurement, measurementDay } from '@/health/cont
 import { type DisplayMetricKey, displayMetricDefinitions } from '@/health/display-metrics'
 import { targetAt } from '@/health/plan'
 import {
+  defaultSmoothingWindow,
   metricSeries,
   type SmoothingWindow,
   smoothingWindows,
@@ -25,12 +26,12 @@ export function HealthTrend({
 }) {
   const t = useTranslations('Health')
   const [metric, setMetric] = useState<DisplayMetricKey>('weight')
-  const [range, setRange] = useState(initialWindow ? 'custom' : '90')
+  const [range, setRange] = useState(initialWindow ? 'custom' : '180')
   const [mode, setMode] = useState<TrendMode>('smooth')
   const [customFrom, setFrom] = useState(initialWindow?.from ?? '')
   const [customTo, setTo] = useState(initialWindow?.to ?? '')
   const [fullPlan, setFullPlan] = useState(false)
-  const [smoothing, setSmoothing] = useState<SmoothingWindow>(14)
+  const [smoothing, setSmoothing] = useState<SmoothingWindow>(defaultSmoothingWindow)
   const [showObserved, setShowObserved] = useState(true)
   const from =
     range === 'custom'
@@ -127,7 +128,7 @@ export function HealthTrend({
             value={range}
             onChange={(event) => setRange(event.target.value)}
           >
-            {(['7', '30', '90', 'all', 'custom'] as const).map((value) => (
+            {(['7', '30', '90', '180', 'all', 'custom'] as const).map((value) => (
               <option key={value} value={value}>
                 {t(`ranges.${value}`)}
               </option>

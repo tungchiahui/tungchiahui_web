@@ -151,3 +151,8 @@ aggregation. Both units share the existing body-fat assessment, converting perce
 bounds with that measurement's weight. Details expose both values and unit-switchable references
 and trends. Missing weight leaves the valid percentage available while fat mass is unavailable.
 Existing storage, version-1 exchange, private profile configuration and authorization contracts apply.
+
+The Owner subsequently specified a default seven-day smoothing window and a default latest-180-day
+main chart range. The shared smoothing default applies to details and sparklines as well. Existing
+alternative windows and explicit calendar/period selections remain supported. This updates the
+previous default-window decision while preserving the regression and estimate algorithms.
