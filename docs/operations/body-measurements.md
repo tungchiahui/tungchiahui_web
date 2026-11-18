@@ -134,6 +134,10 @@ Host Generation 的 Node 调用既有 Bootstrap。canonical 文件经共享 Sche
 completed/host-bootstrap-verified，canonical root:root/0600，运行参数匹配。
 完整 CI、生产访问边界及已发布页面合成验证均通过，实际生产身份见最新交接。
 
+本轮体脂双单位、77.5 kg 节点及 7/180 默认值已在 `0db4147f42efcb9fd0de7b9e9d0318fd197fb91b` 上线。
+正式发布 Operation 为 `42381a19-0be4-425a-8f2b-aa5e430f8923`，完整 CI、签名回执、公网健康及
+四语言合成页面验收通过。生产组件身份与详细证据见最新状态交接。
+
 ## 趋势默认范围修订（2026-11-18）
 
 Owner 追加要求平滑范围默认 7 天，时间范围默认最近 180 天。主趋势时间范围保留

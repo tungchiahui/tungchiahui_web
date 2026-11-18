@@ -1,5 +1,50 @@
 # Website V2 Current Implementation State
 
+## 2026-11-18 — 体脂双单位、77.5 kg 与 7/180 默认值生产验收
+
+Owner 授权的累计变更已完成上线。当前 Web 为 `0db4147f42efcb9fd0de7b9e9d0318fd197fb91b`，Active
+green，Previous blue 为
+`16bcf172d6b8ef77e0045995f48d06dd2ee1d418`，Web Digest 为
+`sha256:98e70f0b60429407123f044545fb1fd1c263b66fffcb6f2655c459b679288eb1`。Service Source SHA 为
+`0db4147f42efcb9fd0de7b9e9d0318fd197fb91b`，Recovery Source SHA 为
+`c8c65639632997399992110eac44ebb1756df217`。
+
+Main Release [44216148306](https://github.com/tungchiahui/tungchiahui_web/actions/runs/44216148306)
+完成精确提交的全部质量检查、组件构建/复用与验证后发布。服务器通过既有主动拉取和
+蓝绿引擎执行，Operation `42381a19-0be4-425a-8f2b-aa5e430f8923` 已由完整签名回执、公网版本及
+Health/Ready 核验。595 Unit、65 E2E、16 Migration、完整 Integration/S3Mock、
+Foundation/Recovery/PITR、格式/类型/构建与安全边界检查均已纳入该次 CI。
+
+### 本轮行为
+
+- 体脂详情同时展示百分比和脂肪量 kg，可切换参考色条及 30 日趋势。脂肪量为同条
+  记录的体重×体脂率÷100，先逐条计算后聚合。两种单位共用既有体脂率评级，kg 的
+  边界按该条记录体重换算，分界开闭和参考来源保留。缺少体重时百分比可查看，kg
+  留空并禁用对应按钮，排除记录不参与。脂肪量也可从主趋势和全部指标区域查看。
+- 2027-01-10 节点为 77.5 kg。checkpoint、目标折线、摘要差值与阶段速度共同使用
+  服务端计划。2027-03-20 为 70 kg，之后进入长期 70 kg 维持期。
+- 主趋势默认最近 180 天，默认平滑 7 天。共享默认平滑值也用于详情和迷你趋势。
+  用户可选 7/30/90/180 天、全部、自定义范围及 7/14/30 天平滑，周期/日历跳转使用
+  其显式窗口。180 日窗口含今天并按北京时间计算。
+- 四语言、手机/桌面/深色、kg/% 切换、边界换算和新默认值已覆盖本地与 CI 测试。
+  线上已发布页面使用合成浏览器响应核对实际客户端，包括 77.5 kg 节点、7/180 默认值、
+  体脂两种单位及来源、主趋势脂肪量、未来计划悬停和关闭/焦点行为，运行时错误为零。
+  匿名四语言 HTML/RSC、快照 401 与旧数据接口 403、private/no-store 均通过。
+
+本轮新增 fatMass 为显示指标，复用现有原始测量、Owner 快照和 JSON v1。私有参考档案
+继续由 control-api 现有配置读取，本轮通过正式发布加载全部功能。回滚使用既有 Previous
+Slot 和 Host Engine，旧版本会按其代码展示此前节点及默认范围。无新增数据库迁移。
+
+证据为 `.local/health-fat-ci-status.json`、`.local/health-fat-release-verification.json`、
+`.local/health-fat-production-preview.json`、`.local/health-fat-default-unit.log`、
+`.local/health-fat-default-check.log`、`.local/health-fat-default-integration.log` 及
+生产 Inventory。最新本地完整应用 Integration 与 65 E2E 通过，最终截图已检查。
+
+接管前四份 S400/迁移文档未提交内容完整保留，已按原始保存副本复核。分支仅有 main。
+本次交接为文档提交，生产 Web 身份为本节上面的 SHA。
+
+本阶段上下文已沉淀，可以授权/开启下一阶段。
+
 ## 2026-11-18 — 默认 7 天平滑与最近 180 天
 
 Owner 在体脂双单位及 77.5 kg 节点实施期间追加默认范围要求。主趋势默认时间范围
