@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { nutritionPlanSchema } from './nutrition-plan'
 
 export const healthTimeZone = 'Asia/Shanghai'
 export const metricDefinitions = [
@@ -255,6 +256,7 @@ export const healthReferenceProfileJsonSchema = z.preprocess(
 export const ownerHealthSnapshotSchema = healthSnapshotSchema.extend({
   plan: healthPlanSchema,
   planMessages: z.record(z.string(), z.string()),
+  nutritionPlan: nutritionPlanSchema.optional(),
   referenceProfile: healthReferenceProfileSchema.optional(),
 })
 export type OwnerHealthSnapshot = z.infer<typeof ownerHealthSnapshotSchema>

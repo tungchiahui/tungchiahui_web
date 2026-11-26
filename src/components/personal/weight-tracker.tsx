@@ -3,7 +3,7 @@
 import { Dialog } from '@base-ui/react/dialog'
 import { LockKeyhole, Plus, Settings2, X } from 'lucide-react'
 import { NextIntlClientProvider, useLocale, useMessages, useTranslations } from 'next-intl'
-import { type ReactNode, useState } from 'react'
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   healthTimeZone,
@@ -14,6 +14,7 @@ import {
 import { displayMetricDefinitions, displayMetricValue } from '@/health/display-metrics'
 import { HealthMetricAssessment } from './health-assessment'
 import { HealthExchangePanel } from './health-exchange'
+import { HealthNutritionPlan } from './health-nutrition-plan'
 import { HealthOverview } from './health-overview'
 import { HealthLifestylePlan, HealthStagePlan } from './health-plan'
 import { HealthRecordForm } from './health-record-form'
@@ -23,7 +24,7 @@ import { HealthTrend } from './health-trend'
 import { fieldClass, panelClass } from './tracker-toolbar'
 import { useHealthData } from './use-health-data'
 
-export function WeightTracker({ publicPlan }: { publicPlan: ReactNode }) {
+export function WeightTracker() {
   const t = useTranslations('Weight')
   const h = useTranslations('Health')
   const locale = useLocale()
@@ -40,28 +41,21 @@ export function WeightTracker({ publicPlan }: { publicPlan: ReactNode }) {
           locale={locale}
           messages={{ ...messages, HealthPlan: store.snapshot.planMessages }}
         >
-          <HealthDashboard
-            snapshot={store.snapshot}
-            reload={() => store.reload()}
-            publicPlan={publicPlan}
-          />
+          <HealthDashboard snapshot={store.snapshot} reload={() => store.reload()} />
         </NextIntlClientProvider>
       ) : (
-        <>
-          {publicPlan}
-          <section className={`${panelClass} flex items-start gap-4`}>
-            <LockKeyhole
-              className="mt-0.5 size-5 shrink-0 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <div className="space-y-3">
-              <p role="status" className="text-sm leading-6">
-                {h(store.checking ? 'checking' : store.error ? 'loadFailed' : 'ownerOnly')}
-              </p>
-              {store.error && <Button onClick={() => void store.reload()}>{h('retry')}</Button>}
-            </div>
-          </section>
-        </>
+        <section className={`${panelClass} flex items-start gap-4`}>
+          <LockKeyhole
+            className="mt-0.5 size-5 shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <div className="space-y-3">
+            <p role="status" className="text-sm leading-6">
+              {h(store.checking ? 'checking' : store.error ? 'loadFailed' : 'ownerOnly')}
+            </p>
+            {store.error && <Button onClick={() => void store.reload()}>{h('retry')}</Button>}
+          </div>
+        </section>
       )}
     </div>
   )
@@ -70,11 +64,9 @@ export function WeightTracker({ publicPlan }: { publicPlan: ReactNode }) {
 function HealthDashboard({
   snapshot,
   reload,
-  publicPlan,
 }: {
   snapshot: OwnerHealthSnapshot
   reload: () => Promise<void>
-  publicPlan: ReactNode
 }) {
   const t = useTranslations('Health')
   const locale = useLocale()
@@ -145,7 +137,7 @@ function HealthDashboard({
         </div>
       </div>
       <HealthOverview snapshot={snapshot} />
-      {publicPlan}
+      {snapshot.nutritionPlan && <HealthNutritionPlan plan={snapshot.nutritionPlan} />}
       <HealthTrend
         key={inspection ? `${inspection.from}:${inspection.to}` : 'default'}
         records={records}

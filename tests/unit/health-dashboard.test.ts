@@ -17,10 +17,11 @@ import {
 } from '../../src/health/contracts'
 import { displayMetricValue } from '../../src/health/display-metrics'
 import { createHealthHttpHandler } from '../../src/health/http'
+import { summarizeNutritionPlan } from '../../src/health/nutrition-plan'
 import { ownerBodyTargets } from '../../src/health/owner-body-targets'
+import { ownerNutritionPlan } from '../../src/health/owner-nutrition-plan'
 import { ownerHealthPlan } from '../../src/health/owner-plan'
 import { healthPlanPhases, metricTargetAt, nextPlanTarget, targetAt } from '../../src/health/plan'
-import { publicNutritionPlan, summarizeNutritionPlan } from '../../src/health/public-nutrition-plan'
 import { HealthRepository } from '../../src/health/repository'
 import {
   measurementCalendar,
@@ -135,8 +136,8 @@ describe('private health dashboard plan', () => {
     expect(displayMetricValue({ ...measurement, bodyFat: null }, 'leanMass')).toBeNull()
     expect(displayMetricValue({ ...measurement, weight: null }, 'waterMass')).toBeNull()
   })
-  it('derives the public budget from meals and activity assumptions', () => {
-    expect(summarizeNutritionPlan(publicNutritionPlan)).toEqual({
+  it('derives the Owner budget from meals and activity assumptions', () => {
+    expect(summarizeNutritionPlan(ownerNutritionPlan)).toEqual({
       intake: 1425,
       expenditure: { min: 2755, center: 2855, max: 2955 },
       deficit: { min: 1330, center: 1430, max: 1530 },
@@ -181,10 +182,14 @@ describe('private health dashboard plan', () => {
             birthDate: '2000-02-04',
           })
           expect(parsed.planMessages.planTitle).toBe('Current Templates')
+          expect(parsed.nutritionPlan).toEqual(ownerNutritionPlan)
+          expect(parsed.planMessages.nutrition_title).toBe('Meal plan and calorie budget')
         } else {
           expect(JSON.stringify(result.body)).not.toContain('2027-01-10')
           expect(JSON.stringify(result.body)).not.toContain('2000-02-04')
           expect(JSON.stringify(result.body)).not.toContain(ownerBodyTargets.versionDate)
+          expect(result.body).not.toHaveProperty('nutritionPlan')
+          expect(result.body).not.toHaveProperty('planMessages')
         }
       }
       expect(read).toHaveBeenCalledTimes(1)

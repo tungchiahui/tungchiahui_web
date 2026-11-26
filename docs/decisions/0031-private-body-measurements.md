@@ -165,3 +165,14 @@ following the original weight target schedule. Website visitors receive the targ
 the Owner session and no-store snapshot. The S400 baseline values come from the protected measurement
 data. The shared checkpoint is 78.5 kg on 2027-01-10. The public budget uses separate static inputs.
 The targets ship through the normal release without an environment setting or data migration.
+
+## 2026-11-26 — Open-source meal plan and Owner-only website display
+
+The Owner clarified that the meal plan and its inputs belong in the public GitHub repository.
+Website display requires the Owner session. The existing private, no-store health snapshot
+provides the validated nutrition inputs and localized `HealthPlan` messages. Anonymous HTML,
+RSC and client bundles exclude the plan contents. The new snapshot field is optional for
+blue-green compatibility.
+
+The meal plan opens by default above the main chart. The 30-day chart opens by default in
+numeric metric details. This supersedes the earlier public presentation and collapsed defaults.

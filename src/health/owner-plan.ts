@@ -3,6 +3,7 @@ import { messagesForLocale } from '../i18n/messages'
 import { getTargetRange } from '../personal/weight-plan'
 import { type HealthReferenceProfile, type HealthSnapshot, healthPlanSchema } from './contracts'
 import { ownerBodyTargets, ownerTargetSchedule } from './owner-body-targets'
+import { ownerNutritionPlan } from './owner-nutrition-plan'
 
 export function ownerHealthPlan(
   locale: Locale,
@@ -51,6 +52,7 @@ export function ownerHealthPlan(
       targets: targets.toSorted((left, right) => left.date.localeCompare(right.date)),
     }),
     planMessages: messagesForLocale(locale).HealthPlan,
+    nutritionPlan: ownerNutritionPlan,
     ...(referenceProfile ? { referenceProfile } : {}),
   }
 }
