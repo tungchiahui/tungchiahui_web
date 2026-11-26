@@ -18,10 +18,17 @@ export function HealthTargetTable({
   const t = useTranslations('Health')
   const locale = useLocale()
   const [selectedDate, setSelectedDate] = useState<string>()
-  const baseline = targets.points[0]
+  const legacyBaseline = targets.baselineDate ? undefined : targets.points[0]
+  const baselineDate = targets.baselineDate ?? legacyBaseline?.date
   const selected = targets.points.find((point) => point.date === selectedDate)
+  const selectedDay = selected?.date ?? (selectedDate === baselineDate ? baselineDate : undefined)
   const smartscale = records.filter((row) => row.source === 'smartscale' && !row.excluded)
-  if (!baseline) return null
+  const observed = (key: (typeof bodyTargetMetrics)[number], day: string) =>
+    metricSeries(smartscale, key, 'daily', day, day)[0]?.value
+  const dates = [
+    ...(targets.baselineDate ? [{ date: targets.baselineDate }] : []),
+    ...targets.points,
+  ]
   const number = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 })
   const signed = new Intl.NumberFormat(locale, {
     maximumFractionDigits: 2,
@@ -35,9 +42,11 @@ export function HealthTargetTable({
         <p className="text-muted-foreground text-sm">
           {t('bodyTargets.version', { date: targets.versionDate })}
         </p>
-        <p className="text-muted-foreground text-sm">
-          {t('bodyTargets.help', { date: baseline.date })}
-        </p>
+        {baselineDate && (
+          <p className="text-muted-foreground text-sm">
+            {t('bodyTargets.help', { date: baselineDate })}
+          </p>
+        )}
       </div>
       <div className="overflow-x-auto">
         <table className="w-full whitespace-nowrap text-left text-sm">
@@ -54,36 +63,43 @@ export function HealthTargetTable({
             </tr>
           </thead>
           <tbody>
-            {targets.points.map((point) => (
+            {dates.map((point) => (
               <tr key={point.date} className="border-b last:border-0">
                 <th scope="row" className="px-3 py-2 font-normal">
                   <button
                     type="button"
                     className="text-primary underline underline-offset-4"
-                    aria-expanded={selected?.date === point.date}
+                    aria-expanded={selectedDay === point.date}
                     aria-controls="body-target-detail"
                     onClick={() =>
-                      setSelectedDate(selected?.date === point.date ? undefined : point.date)
+                      setSelectedDate(selectedDay === point.date ? undefined : point.date)
                     }
                   >
                     {point.date}
                   </button>
+                  {point.date === targets.baselineDate && (
+                    <span className="ml-2 text-muted-foreground">{t('bodyTargets.baseline')}</span>
+                  )}
                 </th>
-                {bodyTargetMetrics.slice(0, 4).map((key) => (
-                  <td key={key} className="px-3 py-2 tabular-nums">
-                    {number.format(point[key])}{' '}
-                    {t(key === 'bodyFat' ? 'units.percent' : 'units.kg')}
-                  </td>
-                ))}
+                {bodyTargetMetrics.slice(0, 4).map((key) => {
+                  const value = 'weight' in point ? point[key] : observed(key, point.date)
+                  return (
+                    <td key={key} className="px-3 py-2 tabular-nums">
+                      {value === undefined
+                        ? '—'
+                        : `${number.format(value)} ${t(key === 'bodyFat' ? 'units.percent' : 'units.kg')}`}
+                    </td>
+                  )
+                })}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
       <div id="body-target-detail" className="overflow-x-auto">
-        {selected && (
+        {selectedDay && (
           <table className="w-full whitespace-nowrap text-left text-sm">
-            <caption className="mb-2 text-left font-semibold">{selected.date}</caption>
+            <caption className="mb-2 text-left font-semibold">{selectedDay}</caption>
             <thead>
               <tr className="border-b text-muted-foreground">
                 {(
@@ -107,31 +123,30 @@ export function HealthTargetTable({
                   displayMetricDefinitions.find((metric) => metric.key === key)?.unit ?? 'index'
                 const suffix = t(`units.${unit}`)
                 const deltaSuffix = unit === 'percent' ? t('units.percentagePoints') : suffix
-                const actual = metricSeries(
-                  smartscale,
-                  key,
-                  'daily',
-                  selected.date,
-                  selected.date,
-                )[0]?.value
+                const actual = observed(key, selectedDay)
+                const baseline =
+                  legacyBaseline?.[key] ?? (baselineDate ? observed(key, baselineDate) : undefined)
+                const target = selected?.[key]
                 return (
                   <tr key={key} className="border-b tabular-nums last:border-0">
                     <th scope="row" className="px-3 py-2 font-normal">
                       {t(`metrics.${key}`)}
                     </th>
                     <td className="px-3 py-2">
-                      {number.format(selected[key])} {suffix}
+                      {target === undefined ? '—' : `${number.format(target)} ${suffix}`}
                     </td>
                     <td className="px-3 py-2">
-                      {signed.format(selected[key] - baseline[key])} {deltaSuffix}
+                      {baseline === undefined || target === undefined
+                        ? '—'
+                        : `${signed.format(target - baseline)} ${deltaSuffix}`}
                     </td>
                     <td className="px-3 py-2">
                       {actual === undefined ? t('noData') : `${number.format(actual)} ${suffix}`}
                     </td>
                     <td className="px-3 py-2">
-                      {actual === undefined
+                      {actual === undefined || target === undefined
                         ? '—'
-                        : `${signed.format(actual - selected[key])} ${deltaSuffix}`}
+                        : `${signed.format(actual - target)} ${deltaSuffix}`}
                     </td>
                   </tr>
                 )

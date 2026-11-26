@@ -21,7 +21,7 @@ async function readBody(request: IncomingMessage) {
 }
 export function createHealthHttpHandler(
   configuration: Pick<ControlApiConfiguration, 'mode'> &
-    Partial<Pick<ControlApiConfiguration, 'healthReferenceProfile' | 'healthBodyTargets'>>,
+    Partial<Pick<ControlApiConfiguration, 'healthReferenceProfile'>>,
   sessions: {
     current(token: string): Promise<{ id: string; role: 'owner' | 'user' } | undefined>
   } | null,
@@ -56,12 +56,7 @@ export function createHealthHttpHandler(
         const snapshot = await repository.snapshot()
         return respond(200, {
           ...snapshot,
-          ...ownerHealthPlan(
-            locale,
-            snapshot.planOverrides,
-            configuration.healthReferenceProfile,
-            configuration.healthBodyTargets,
-          ),
+          ...ownerHealthPlan(locale, snapshot.planOverrides, configuration.healthReferenceProfile),
         })
       }
       if (!['POST', 'PUT', 'DELETE', 'PATCH'].includes(request.method ?? ''))

@@ -1519,7 +1519,8 @@
     "bodyTargets": {
       "title": "Body composition targets",
       "version": "Target revision {date}",
-      "help": "The baseline uses S400 readings from {date}, including derived values. Select a date to see all targets and the same-day S400 averages.",
+      "baseline": "S400 baseline",
+      "help": "The baseline uses S400 daily averages from {date}, including derived values. Missing readings are blank. Select a date to see all metrics.",
       "date": "Date",
       "baselineChange": "Change from baseline",
       "scaleMean": "S400 daily average",

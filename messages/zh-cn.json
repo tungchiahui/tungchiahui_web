@@ -1519,7 +1519,8 @@
     "bodyTargets": {
       "title": "身体成分目标",
       "version": "目标版本 {date}",
-      "help": "基准为 {date} 的 S400 测量，部分指标由计算得出。点按日期查看全部目标和同日实测日均。",
+      "baseline": "S400 基准",
+      "help": "基准取 {date} 的 S400 实测日均，部分指标由计算得出。缺测留空。点按日期查看全部指标。",
       "date": "日期",
       "baselineChange": "较基准变化",
       "scaleMean": "S400 日均",

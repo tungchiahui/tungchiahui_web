@@ -1,19 +1,13 @@
 import type { Locale } from '../domain/persistence'
 import { messagesForLocale } from '../i18n/messages'
 import { getTargetRange } from '../personal/weight-plan'
-import {
-  type BodyTargetPlan,
-  type HealthReferenceProfile,
-  type HealthSnapshot,
-  healthPlanSchema,
-} from './contracts'
-import { ownerTargetSchedule } from './owner-body-target-config'
+import { type HealthReferenceProfile, type HealthSnapshot, healthPlanSchema } from './contracts'
+import { ownerBodyTargets, ownerTargetSchedule } from './owner-body-targets'
 
 export function ownerHealthPlan(
   locale: Locale,
   overrides: HealthSnapshot['planOverrides'],
   referenceProfile?: HealthReferenceProfile,
-  bodyTargets?: BodyTargetPlan,
 ) {
   const { checkpoint, holdEnd, goalDate } = ownerTargetSchedule
   const targets = [
@@ -25,13 +19,11 @@ export function ownerHealthPlan(
     { date: '2026-08-14', targetMin: 90, targetMax: 90 },
     { date: '2026-10-25', targetMin: 90, targetMax: 90 },
     { date: '2026-10-26', targetMin: 90, targetMax: 90 },
-    ...(bodyTargets
-      ? bodyTargets.points.map(({ date, weight }) => ({
-          date,
-          targetMin: weight,
-          targetMax: weight,
-        }))
-      : [{ date: checkpoint.date, targetMin: checkpoint.weight, targetMax: checkpoint.weight }]),
+    ...ownerBodyTargets.points.map(({ date, weight }) => ({
+      date,
+      targetMin: weight,
+      targetMax: weight,
+    })),
     { date: goalDate, targetMin: 70, targetMax: 70 },
   ]
   // The approved replacement schedule governs August 14 onwards. Retain the
@@ -52,7 +44,7 @@ export function ownerHealthPlan(
       startDate: '2026-06-11',
       endDate: goalDate,
       checkpoint,
-      bodyTargets,
+      bodyTargets: ownerBodyTargets,
       maintainAfterGoal: true,
       holdStart: '2026-08-14',
       holdEnd,

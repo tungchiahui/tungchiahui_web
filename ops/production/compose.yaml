@@ -137,7 +137,6 @@ services:
       DATABASE_URL: ${CONTROL_API_DATABASE_URL:?control-api database URL is required}
       OWNER_PASSWORD_HASH: ${OWNER_PASSWORD_HASH:-}
       HEALTH_REFERENCE_PROFILE_JSON: ${HEALTH_REFERENCE_PROFILE_JSON:-}
-      HEALTH_BODY_TARGETS_JSON: ${HEALTH_BODY_TARGETS_JSON:-}
       SITE_RUNTIME_MODE: production
     healthcheck:
       test: [CMD, node, -e, "fetch('http://127.0.0.1:8080/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]

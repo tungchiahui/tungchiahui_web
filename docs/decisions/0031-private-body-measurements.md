@@ -160,9 +160,8 @@ previous default-window decision while preserving the regression and estimate al
 ## 2026-11-26 — Public meal budget and private body composition targets
 
 The Owner authorized public presentation of the meal plan, water plan, and estimated daily
-calorie budget. Downloaded measurements, the dated body composition targets, and older private
-plan templates remain under the existing Owner session and no-store snapshot. The new
-`HEALTH_BODY_TARGETS_JSON` optional configuration is validated and scoped to control-api.
-The checkpoint in the shared weight-target schedule is 78.5 kg on 2027-01-10. The private
-configuration adds corresponding metric targets and weight knots to the schedule. The public
-budget is calculated from a separate static configuration. Neither change requires a data migration.
+calorie budget. The Owner also approved keeping the five planned targets in server-side TypeScript,
+following the original weight target schedule. Website visitors receive the target values only via
+the Owner session and no-store snapshot. The S400 baseline values come from the protected measurement
+data. The shared checkpoint is 78.5 kg on 2027-01-10. The public budget uses separate static inputs.
+The targets ship through the normal release without an environment setting or data migration.

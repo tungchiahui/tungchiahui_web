@@ -149,10 +149,13 @@ export const bodyTargetPointSchema = z
 export const bodyTargetPlanSchema = z
   .strictObject({
     versionDate: z.iso.date(),
+    baselineDate: z.iso.date().optional(),
     points: z.array(bodyTargetPointSchema).min(2).max(100),
   })
-  .refine(({ points }) =>
-    points.every((point, index) => index === 0 || point.date > (points[index - 1]?.date ?? '')),
+  .refine(
+    ({ baselineDate, points }) =>
+      (!baselineDate || baselineDate < (points[0]?.date ?? '')) &&
+      points.every((point, index) => index === 0 || point.date > (points[index - 1]?.date ?? '')),
   )
 export type BodyTargetPoint = z.infer<typeof bodyTargetPointSchema>
 export type BodyTargetPlan = z.infer<typeof bodyTargetPlanSchema>

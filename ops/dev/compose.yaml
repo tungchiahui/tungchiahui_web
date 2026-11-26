@@ -74,7 +74,6 @@ services:
       CONTROL_REPLAY_WINDOW_SECONDS: 300
       CONTROL_STATE_PATH: /control-state/control.db
       HEALTH_REFERENCE_PROFILE_JSON: ${HEALTH_REFERENCE_PROFILE_JSON:-}
-      HEALTH_BODY_TARGETS_JSON: ${HEALTH_BODY_TARGETS_JSON:-}
       DATABASE_URL: postgresql://tungchiahui:local-only-postgres@pgbouncer:6432/tungchiahui
       SITE_RUNTIME_MODE: ${SITE_RUNTIME_MODE:?SITE_RUNTIME_MODE is required}
     healthcheck:

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { healthExchangeSchema, healthSnapshotSchema } from '../../src/health/contracts'
+import { healthExchangeSchema, ownerHealthSnapshotSchema } from '../../src/health/contracts'
 import { normalizeSmartscaleRow } from '../../src/health/smartscale'
 import { expect, test } from './fixtures'
 
@@ -34,9 +34,12 @@ test('Owner manages partial measurements and versioned JSON with private anonymo
   await form.getByLabel('备注', { exact: true }).fill(note)
   await form.getByRole('button', { name: '保存记录', exact: true }).click()
   await expect(page.getByRole('cell', { name: note, exact: true })).toBeVisible()
-  const snapshot = healthSnapshotSchema.parse(
+  const snapshot = ownerHealthSnapshotSchema.parse(
     await (await page.request.get('/api/ops/health/snapshot')).json(),
   )
+  expect(snapshot.plan.bodyTargets?.baselineDate).toBe('2026-11-26')
+  expect(snapshot.plan.bodyTargets?.points).toHaveLength(5)
+  expect(snapshot.plan.bodyTargets?.points.at(-1)?.weight).toBe(78.5)
   const record = snapshot.measurements.find((row) => row.note === note)
   expect(record).toMatchObject({
     weight: null,
@@ -53,7 +56,7 @@ test('Owner manages partial measurements and versioned JSON with private anonymo
   await form.getByLabel('腰围 (cm)', { exact: true }).fill('91.5')
   await form.getByRole('button', { name: '保存记录', exact: true }).click()
   await expect(page.getByRole('dialog')).toHaveCount(0)
-  const edited = healthSnapshotSchema
+  const edited = ownerHealthSnapshotSchema
     .parse(await (await page.request.get('/api/ops/health/snapshot')).json())
     .measurements.find((item) => item.id === record.id)
   expect(edited?.waist).toBe(91.5)
@@ -135,6 +138,7 @@ test('Owner manages partial measurements and versioned JSON with private anonymo
     const html = await (await anonymous.request.get('/weight-loss')).text()
     expect(html).not.toContain(note)
     expect(html).not.toContain('1300-1400 kcal')
+    expect(html).not.toContain('2026-11-30')
     expect(html).not.toContain('2027-01-10')
     expect(html).not.toContain('2027-03-20')
     expect(html).not.toContain('2000-02-04')
@@ -212,12 +216,12 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
   let emptySupplementaryMetrics = false
   await page.route('**/api/ops/health/snapshot?*', async (route) => {
     const response = await route.fetch()
-    const { ownerHealthSnapshotSchema } = await import('../../src/health/contracts')
     const complete = ownerHealthSnapshotSchema.parse(await response.json())
     await route.fulfill({
       response,
       json: {
         ...complete,
+        plan: { ...complete.plan, bodyTargets: undefined },
         measurements: emptySupplementaryMetrics
           ? measurements.map((row) => ({ ...row, bodyScore: null, metabolicAge: null }))
           : measurements,
@@ -603,6 +607,7 @@ test('public nutrition and owner body targets keep distinct visibility and displ
 }) => {
   const { syntheticBodyTargets } = await import('../fixtures/health-targets')
   const { measurementSchema } = await import('../../src/health/contracts')
+  const baselineDate = '2026-12-01'
   const date = '2026-12-02'
   const measuredAt = `${date}T08:00:00+08:00`
   const reading = normalizeSmartscaleRow({ Date: measuredAt, Weight: 86, BodyFat: 25 })
@@ -613,6 +618,14 @@ test('public nutrition and owner body targets keep distinct visibility and displ
     revision: 0,
     createdAt: measuredAt,
     updatedAt: measuredAt,
+  })
+  const baselineTime = `${baselineDate}T08:00:00+08:00`
+  const baselineMeasurement = measurementSchema.parse({
+    ...measurement,
+    ...normalizeSmartscaleRow({ Date: baselineTime, Weight: 87, BodyFat: 26 }),
+    id: randomUUID(),
+    createdAt: baselineTime,
+    updatedAt: baselineTime,
   })
   let ownerView = false
   await page.route('**/api/ops/auth/session', (route) =>
@@ -635,7 +648,7 @@ test('public nutrition and owner body targets keep distinct visibility and displ
           endDate: '2027-03-20',
           maintainAfterGoal: true,
           checkpoint: { date: '2027-01-10', weight: 78.5 },
-          bodyTargets: syntheticBodyTargets,
+          bodyTargets: { ...syntheticBodyTargets, baselineDate },
           targets: [
             { date: '2026-10-01', targetMin: 90, targetMax: 90 },
             ...syntheticBodyTargets.points.map(({ date, weight }) => ({
@@ -649,7 +662,7 @@ test('public nutrition and owner body targets keep distinct visibility and displ
         planMessages: JSON.parse(
           readFileSync(resolve(import.meta.dirname, '../../messages/zh-cn.json'), 'utf8'),
         ).HealthPlan,
-        measurements: [measurement],
+        measurements: [measurement, baselineMeasurement],
         planOverrides: [],
         revision: 0,
         sync: { lastSuccessAt: null, sourceUpdatedAt: null, lastError: null },
@@ -685,10 +698,20 @@ test('public nutrition and owner body targets keep distinct visibility and displ
   await slider.press('ArrowLeft')
   await expect(chart.getByTestId('chart-plan-reading')).toContainText('目标插值')
 
+  await page.getByRole('button', { name: baselineDate, exact: true }).click()
+  const baselineDetail = page.getByRole('table', { name: baselineDate })
+  await expect(
+    baselineDetail.getByRole('row').filter({ hasText: '体脂率' }).getByRole('cell'),
+  ).toHaveText(['—', '—', '26 %', '—'])
   await page.getByRole('button', { name: date, exact: true }).click()
   const detail = page.getByRole('table', { name: date })
   await expect(detail.getByRole('row')).toHaveCount(12)
   const bodyFat = detail.getByRole('row').filter({ hasText: '体脂率' })
-  await expect(bodyFat.getByRole('cell')).toHaveText(['24.4 %', '0 百分点', '25 %', '+0.6 百分点'])
+  await expect(bodyFat.getByRole('cell')).toHaveText([
+    '24.4 %',
+    '-1.6 百分点',
+    '25 %',
+    '+0.6 百分点',
+  ])
   await expect(detail.getByRole('row').filter({ hasText: '骨骼肌量' })).toContainText('暂无数据')
 })
