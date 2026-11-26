@@ -21,8 +21,8 @@ LABEL org.opencontainers.image.revision=${SITE_DEPLOYMENT_SHA} \
 
 RUN apk add --no-cache \
       brotli-libs=1.2.1-r0 c-ares=1.34.9-r0 krb5-libs=1.22.3-r0 libbz2 \
-      libcrypto3=3.5.9-r0 libcurl=8.23.0-r0 libpq libssh2=1.11.1-r4 \
-      libssl3=3.5.9-r0 libuuid=2.42.3-r1 libxml2 libxslt=1.1.43-r4 lz4-libs \
+      libcrypto3=3.5.9-r1 libcurl=8.23.0-r0 libpq libssh2=1.11.1-r4 \
+      libssl3=3.5.9-r1 libuuid=2.42.3-r1 libxml2 libxslt=1.1.43-r4 lz4-libs \
       musl=1.2.6-r3 musl-utils=1.2.6-r3 nghttp2-libs=1.70.0-r0 zlib=1.4-r0 zstd-libs \
   && rm -f /usr/local/bin/gosu
 COPY --from=build /tmp/pgbackrest-build/src/pgbackrest /usr/local/bin/pgbackrest
