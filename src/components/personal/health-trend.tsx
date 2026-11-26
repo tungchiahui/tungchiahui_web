@@ -3,7 +3,7 @@ import { useTranslations } from 'next-intl'
 import { useState } from 'react'
 import { type HealthPlan, type Measurement, measurementDay } from '@/health/contracts'
 import { type DisplayMetricKey, displayMetricDefinitions } from '@/health/display-metrics'
-import { targetAt } from '@/health/plan'
+import { isBodyTargetMetric, metricTargetAt } from '@/health/plan'
 import {
   defaultSmoothingWindow,
   metricSeries,
@@ -30,7 +30,7 @@ export function HealthTrend({
   const [mode, setMode] = useState<TrendMode>('smooth')
   const [customFrom, setFrom] = useState(initialWindow?.from ?? '')
   const [customTo, setTo] = useState(initialWindow?.to ?? '')
-  const [fullPlan, setFullPlan] = useState(false)
+  const [fullPlan, setFullPlan] = useState(Boolean(plan.bodyTargets && !initialWindow))
   const [smoothing, setSmoothing] = useState<SmoothingWindow>(defaultSmoothingWindow)
   const [showObserved, setShowObserved] = useState(true)
   const from =
@@ -46,32 +46,34 @@ export function HealthTrend({
     range === 'custom' && customTo
       ? customTo
       : measurementDay(points.at(-1)?.time ?? new Date().toISOString())
+  const targetPoints = plan.bodyTargets?.points ?? []
+  const hasTargets = metric === 'weight' || (targetPoints.length > 0 && isBodyTargetMetric(metric))
+  const targetFrom = metric === 'weight' ? plan.startDate : targetPoints[0]?.date
+  const targetTo = metric === 'weight' ? plan.endDate : targetPoints.at(-1)?.date
   const domain =
-    fullPlan && metric === 'weight'
+    fullPlan && targetFrom && targetTo && hasTargets
       ? {
-          from: actualFrom < plan.startDate ? actualFrom : plan.startDate,
-          to: actualTo > plan.endDate ? actualTo : plan.endDate,
+          from: actualFrom < targetFrom ? actualFrom : targetFrom,
+          to: actualTo > targetTo ? actualTo : targetTo,
         }
       : { from: actualFrom, to: actualTo < actualFrom ? actualFrom : actualTo }
-  const dates = [
-    ...new Set([domain.from, domain.to, ...plan.targets.map((point) => point.date)]),
-  ].sort()
-  const targets: TrendPoint[] =
-    metric === 'weight'
-      ? dates.flatMap((day) => {
-          const target = targetAt(plan, day)
-          return target && day >= domain.from && day <= domain.to
-            ? [
-                {
-                  id: day,
-                  time: `${day}T00:00:00+08:00`,
-                  value: (target.min + target.max) / 2,
-                  count: 0,
-                },
-              ]
-            : []
-        })
-      : []
+  const knots = metric === 'weight' ? plan.targets : targetPoints
+  const dates = [...new Set([domain.from, domain.to, ...knots.map(({ date }) => date)])].sort()
+  const targets: TrendPoint[] = hasTargets
+    ? dates.flatMap((day) => {
+        const target = metricTargetAt(plan, metric, day)
+        return target && day >= domain.from && day <= domain.to
+          ? [
+              {
+                id: day,
+                time: `${day}T00:00:00+08:00`,
+                value: (target.min + target.max) / 2,
+                count: 0,
+              },
+            ]
+          : []
+      })
+    : []
   return (
     <section id="health-trend" className={`${panelClass} min-w-0 space-y-5 scroll-mt-28`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -93,7 +95,7 @@ export function HealthTrend({
               {t('observedMean')}
             </span>
           )}
-          {metric === 'weight' && (
+          {hasTargets && (
             <span className="flex items-center gap-2">
               <span className="w-5 border-t-2 border-emerald-600 border-dashed dark:border-emerald-400" />
               {t('targetLabel')}
@@ -210,7 +212,7 @@ export function HealthTrend({
             {t('showObserved')}
           </label>
         )}
-        {metric === 'weight' && (
+        {hasTargets && (
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
@@ -223,7 +225,7 @@ export function HealthTrend({
       </div>
       <MeasurementChart
         tall
-        {...(metric === 'weight' ? { plan } : {})}
+        {...(hasTargets ? { plan } : {})}
         key={`${metric}:${mode}:${from}:${to}:${fullPlan}:${smoothing}`}
         points={points}
         targets={targets}

@@ -25,6 +25,7 @@ import { ContentLink } from '@/components/content-link'
 import { MoreDirectory } from '@/components/more-directory'
 import { MusicManagement } from '@/components/music-management'
 import { MusicPage } from '@/components/music-page'
+import { PublicNutritionPlan } from '@/components/personal/public-nutrition-plan'
 import { TechTracker } from '@/components/personal/tech-tracker'
 import { WeightTracker } from '@/components/personal/weight-tracker'
 import { SiteShell } from '@/components/site-shell'
@@ -831,7 +832,7 @@ async function SpecialPage({
       )
     }
     case 'weight-loss': {
-      return <WeightTracker />
+      return <WeightTracker publicPlan={<PublicNutritionPlan locale={context.locale} />} />
     }
   }
 }

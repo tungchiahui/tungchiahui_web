@@ -1,4 +1,5 @@
-import type { HealthPlan } from './contracts'
+import type { BodyTargetPoint, HealthPlan } from './contracts'
+import type { DisplayMetricKey } from './display-metrics'
 
 export function healthPlanPhases(plan: HealthPlan) {
   const dayBefore = (day: string) => new Date(Date.parse(day) - 86400000).toISOString().slice(0, 10)
@@ -59,3 +60,47 @@ export function targetAt(plan: HealthPlan, day: string) {
     max: previous.targetMax + (next.targetMax - previous.targetMax) * progress,
   }
 }
+
+export function metricTargetAt(plan: HealthPlan, metric: DisplayMetricKey, day: string) {
+  const points = plan.bodyTargets?.points
+  const first = points?.[0]
+  const last = points?.at(-1)
+  const inBodyPlan = first && last && day >= first.date && day <= last.date
+  const index = inBodyPlan ? points.findIndex((point) => point.date >= day) : -1
+  const next = points?.[index]
+  const interpolated = next !== undefined && next.date !== day
+  if (metric === 'weight') {
+    const target = targetAt(plan, day)
+    return target && { ...target, interpolated }
+  }
+  if (!next || !isBodyTargetMetric(metric)) return null
+  const previous = points?.[index - 1]
+  const value =
+    interpolated && previous
+      ? previous[metric] +
+        (next[metric] - previous[metric]) *
+          ((Date.parse(day) - Date.parse(previous.date)) /
+            (Date.parse(next.date) - Date.parse(previous.date)))
+      : next[metric]
+  return { min: value, max: value, interpolated }
+}
+
+export function isBodyTargetMetric(
+  metric: DisplayMetricKey,
+): metric is (typeof bodyTargetMetrics)[number] {
+  return bodyTargetMetrics.some((target) => target === metric)
+}
+
+export const bodyTargetMetrics = [
+  'weight',
+  'bodyFat',
+  'fatMass',
+  'leanMass',
+  'muscleMass',
+  'skeletalMuscleMass',
+  'proteinMass',
+  'waterMass',
+  'bodyWater',
+  'bmi',
+  'basalMetabolism',
+] as const satisfies readonly (keyof Omit<BodyTargetPoint, 'date'>)[]

@@ -80,12 +80,11 @@ function createRestrictedEnvironment(configuration: ComposeEnvironment, reposito
 
   if (configuration.mode === 'local') {
     const localFile = resolve(repositoryRoot, '.env.local')
-    const profile =
-      process.env.HEALTH_REFERENCE_PROFILE_JSON ??
-      (existsSync(localFile)
-        ? parseEnv(readFileSync(localFile, 'utf8')).HEALTH_REFERENCE_PROFILE_JSON
-        : undefined)
-    if (profile) environment.HEALTH_REFERENCE_PROFILE_JSON = profile
+    const privateHealth = existsSync(localFile) ? parseEnv(readFileSync(localFile, 'utf8')) : {}
+    for (const name of ['HEALTH_REFERENCE_PROFILE_JSON', 'HEALTH_BODY_TARGETS_JSON']) {
+      const value = process.env[name] ?? privateHealth[name]
+      if (value) environment[name] = value
+    }
   }
 
   return environment

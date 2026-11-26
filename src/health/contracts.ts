@@ -123,6 +123,40 @@ export type Measurement = z.infer<typeof measurementSchema>
 export type MeasurementInput = z.infer<typeof measurementInputSchema>
 export type HealthSnapshot = z.infer<typeof healthSnapshotSchema>
 export type HealthExchange = z.infer<typeof healthExchangeSchema>
+export const bodyTargetPointSchema = z
+  .strictObject({
+    date: z.iso.date(),
+    weight: z.number().min(35).max(250),
+    bodyFat: z.number().min(0).max(100),
+    fatMass: z.number().nonnegative(),
+    leanMass: z.number().positive(),
+    muscleMass: z.number().positive(),
+    skeletalMuscleMass: z.number().positive(),
+    proteinMass: z.number().positive(),
+    waterMass: z.number().positive(),
+    bodyWater: z.number().min(0).max(100),
+    bmi: z.number().positive(),
+    basalMetabolism: z.number().positive(),
+  })
+  .refine(
+    (point) =>
+      Math.abs(point.weight - point.fatMass - point.leanMass) <= 0.15 &&
+      point.skeletalMuscleMass <= point.muscleMass &&
+      point.muscleMass <= point.leanMass &&
+      point.proteinMass <= point.leanMass &&
+      point.waterMass <= point.weight,
+  )
+export const bodyTargetPlanSchema = z
+  .strictObject({
+    versionDate: z.iso.date(),
+    points: z.array(bodyTargetPointSchema).min(2).max(100),
+  })
+  .refine(({ points }) =>
+    points.every((point, index) => index === 0 || point.date > (points[index - 1]?.date ?? '')),
+  )
+export type BodyTargetPoint = z.infer<typeof bodyTargetPointSchema>
+export type BodyTargetPlan = z.infer<typeof bodyTargetPlanSchema>
+
 export const healthPlanSchema = z
   .object({
     startWeight: z.number().positive(),
@@ -135,6 +169,7 @@ export const healthPlanSchema = z
     targets: z.array(planOverrideSchema).min(2),
     checkpoint: z.object({ date: z.iso.date(), weight: z.number().positive() }).optional(),
     maintainAfterGoal: z.boolean().optional(),
+    bodyTargets: bodyTargetPlanSchema.optional(),
   })
   .superRefine((plan, context) => {
     if (
@@ -156,6 +191,17 @@ export const healthPlanSchema = z
           ))) ||
       plan.targets.some(
         (point, index) => index > 0 && point.date <= (plan.targets[index - 1]?.date ?? ''),
+      ) ||
+      plan.bodyTargets?.points.some(
+        (point) =>
+          point.date <= plan.holdEnd ||
+          point.date >= plan.endDate ||
+          !plan.targets.some(
+            (weight) =>
+              weight.date === point.date &&
+              weight.targetMin === point.weight &&
+              weight.targetMax === point.weight,
+          ),
       )
     )
       context.addIssue({ code: 'custom', message: 'invalid plan chronology' })

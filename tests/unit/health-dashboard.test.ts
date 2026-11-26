@@ -14,9 +14,12 @@ import {
   measurementSchema,
   ownerHealthSnapshotSchema,
 } from '../../src/health/contracts'
+import { displayMetricValue } from '../../src/health/display-metrics'
 import { createHealthHttpHandler } from '../../src/health/http'
+import { healthBodyTargetsJsonSchema } from '../../src/health/owner-body-target-config'
 import { ownerHealthPlan } from '../../src/health/owner-plan'
-import { healthPlanPhases, nextPlanTarget, targetAt } from '../../src/health/plan'
+import { healthPlanPhases, metricTargetAt, nextPlanTarget, targetAt } from '../../src/health/plan'
+import { publicNutritionPlan, summarizeNutritionPlan } from '../../src/health/public-nutrition-plan'
 import { HealthRepository } from '../../src/health/repository'
 import {
   measurementCalendar,
@@ -24,6 +27,7 @@ import {
   periodSummaries,
   smoothDailyPoints,
 } from '../../src/health/trends'
+import { syntheticBodyTargets } from '../fixtures/health-targets'
 
 function row(day: string, weight: number | null, extra = {}) {
   return measurementSchema.parse({
@@ -45,21 +49,21 @@ function row(day: string, weight: number | null, extra = {}) {
 }
 
 describe('private health dashboard plan', () => {
-  it('reaches 77.5 on January 10, 70 on March 20 and maintains 70 thereafter', () => {
+  it('reaches 78.5 on January 10, 70 on March 20 and maintains 70 thereafter', () => {
     const { plan } = ownerHealthPlan('zh-cn', [])
     for (let day = Date.parse('2026-08-14'); day <= Date.parse('2026-10-26'); day += 86400000) {
       expect(targetAt(plan, new Date(day).toISOString().slice(0, 10))).toEqual({ min: 90, max: 90 })
     }
-    expect(targetAt(plan, '2027-01-10')).toEqual({ min: 77.5, max: 77.5 })
-    expect(targetAt(plan, '2026-11-10')?.min).toBeCloseTo(87.5328947)
+    expect(targetAt(plan, '2027-01-10')).toEqual({ min: 78.5, max: 78.5 })
+    expect(targetAt(plan, '2026-11-10')?.min).toBeCloseTo(87.7302632)
     expect(targetAt(plan, '2026-08-13')?.min).toBeGreaterThan(90)
     expect(targetAt(plan, '2026-06-10')).toBeNull()
-    expect(targetAt(plan, '2027-01-11')?.min).toBeLessThan(77.5)
+    expect(targetAt(plan, '2027-01-11')?.min).toBeLessThan(78.5)
     expect(targetAt(plan, '2027-03-20')).toEqual({ min: 70, max: 70 })
     expect(targetAt(plan, '2027-03-21')).toEqual({ min: 70, max: 70 })
     expect(targetAt(plan, '2037-03-20')).toEqual({ min: 70, max: 70 })
     expect(plan.longTermWeight).toBe(70)
-    expect(nextPlanTarget(plan, '2027-01-10')).toEqual({ date: '2027-01-10', weight: 77.5 })
+    expect(nextPlanTarget(plan, '2027-01-10')).toEqual({ date: '2027-01-10', weight: 78.5 })
     expect(nextPlanTarget(plan, '2027-01-11')).toEqual({ date: '2027-03-20', weight: 70 })
     expect(nextPlanTarget(plan, '2028-01-01')).toEqual({ date: '2027-03-20', weight: 70 })
   })
@@ -91,6 +95,60 @@ describe('private health dashboard plan', () => {
     expect(overrides).toHaveLength(3)
     expect(() => healthPlanSchema.parse({ ...plan, targets: plan.targets.toReversed() })).toThrow()
   })
+  it('uses the body target nodes in the same weight plan and bounds the other curves', () => {
+    const { plan } = ownerHealthPlan('zh-cn', [], undefined, syntheticBodyTargets)
+    expect(targetAt(plan, '2026-12-02')).toEqual({ min: 85.5, max: 85.5 })
+    expect(metricTargetAt(plan, 'bodyFat', '2026-12-02')).toEqual({
+      min: 24.4,
+      max: 24.4,
+      interpolated: false,
+    })
+    const between = metricTargetAt(plan, 'bodyFat', '2026-12-15')
+    expect(between?.min).toBeCloseTo(24.4 + (20 - 24.4) / 3)
+    expect(between?.interpolated).toBe(true)
+    expect(metricTargetAt(plan, 'bodyFat', '2026-12-01')).toBeNull()
+    expect(metricTargetAt(plan, 'bodyFat', '2027-01-11')).toBeNull()
+    expect(metricTargetAt(plan, 'weight', '2027-03-20')).toEqual({
+      min: 70,
+      max: 70,
+      interpolated: false,
+    })
+    expect(healthBodyTargetsJsonSchema.parse(JSON.stringify(syntheticBodyTargets))).toEqual(
+      syntheticBodyTargets,
+    )
+    expect(
+      healthBodyTargetsJsonSchema.safeParse(
+        JSON.stringify({
+          ...syntheticBodyTargets,
+          points: syntheticBodyTargets.points.toReversed(),
+        }),
+      ).success,
+    ).toBe(false)
+    expect(
+      healthBodyTargetsJsonSchema.safeParse(
+        JSON.stringify({
+          ...syntheticBodyTargets,
+          points: syntheticBodyTargets.points.map((point) =>
+            point.date === '2027-01-10' ? { ...point, date: '2027-01-09' } : point,
+          ),
+        }),
+      ).success,
+    ).toBe(false)
+  })
+  it('computes each derived mass from the same measurement', () => {
+    const measurement = row('2026-12-02', 90, { bodyFat: 22, bodyWater: 55 })
+    expect(displayMetricValue(measurement, 'leanMass')).toBeCloseTo(70.2)
+    expect(displayMetricValue(measurement, 'waterMass')).toBeCloseTo(49.5)
+    expect(displayMetricValue({ ...measurement, bodyFat: null }, 'leanMass')).toBeNull()
+    expect(displayMetricValue({ ...measurement, weight: null }, 'waterMass')).toBeNull()
+  })
+  it('derives the public budget from meals and activity assumptions', () => {
+    expect(summarizeNutritionPlan(publicNutritionPlan)).toEqual({
+      intake: 1425,
+      expenditure: { min: 2755, center: 2855, max: 2955 },
+      deficit: { min: 1330, center: 1430, max: 1530 },
+    })
+  })
   it('returns private localized plan content only after Owner authorization', async () => {
     const repository = new HealthRepository('postgresql://test:test@127.0.0.1:1/test')
     const snapshot = {
@@ -106,6 +164,7 @@ describe('private health dashboard plan', () => {
         const handler = createHealthHttpHandler(
           {
             mode: 'test',
+            healthBodyTargets: syntheticBodyTargets,
             healthReferenceProfile: { height: 178, sex: 'male', birthDate: '2000-02-04' },
           },
           { current: async () => (role ? { id: 'test-owner', role } : undefined) },
@@ -123,6 +182,7 @@ describe('private health dashboard plan', () => {
         if (role === 'owner') {
           const parsed = ownerHealthSnapshotSchema.parse(result.body)
           expect(parsed.plan.goalWeight).toBe(70)
+          expect(parsed.plan.bodyTargets).toEqual(syntheticBodyTargets)
           expect(parsed.referenceProfile).toEqual({
             height: 178,
             sex: 'male',
@@ -132,6 +192,7 @@ describe('private health dashboard plan', () => {
         } else {
           expect(JSON.stringify(result.body)).not.toContain('2027-01-10')
           expect(JSON.stringify(result.body)).not.toContain('2000-02-04')
+          expect(JSON.stringify(result.body)).not.toContain(syntheticBodyTargets.versionDate)
         }
       }
       expect(read).toHaveBeenCalledTimes(1)

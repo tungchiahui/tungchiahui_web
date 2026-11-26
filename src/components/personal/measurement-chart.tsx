@@ -5,7 +5,7 @@ import { type PointerEvent, useCallback, useEffect, useMemo, useRef, useState } 
 import { chartYAxis, inspectCurve, timeSeriesCurve } from '@/health/chart'
 import { type HealthPlan, healthTimeZone, measurementDay } from '@/health/contracts'
 import { type DisplayMetricKey, displayMetricDefinitions } from '@/health/display-metrics'
-import { targetAt } from '@/health/plan'
+import { metricTargetAt } from '@/health/plan'
 import type { TrendPoint } from '@/health/trends'
 
 const emptyTargets: TrendPoint[] = []
@@ -116,7 +116,11 @@ export function MeasurementChart({
       : inspectionDay >= firstActualDay && inspectionDay <= lastActualDay)
       ? inspected
       : null
-  const planned = metric === 'weight' && plan ? targetAt(plan, inspectionDay) : null
+  const planned = plan && targets.length ? metricTargetAt(plan, metric, inspectionDay) : null
+  const targetLabel = t(planned?.interpolated ? 'targetInterpolation' : 'targetLabel')
+  const targetNodes = targets.filter((point) =>
+    plan?.bodyTargets?.points.some((node) => node.date === point.id),
+  )
   const plannedValue = planned ? (planned.min + planned.max) / 2 : null
   const cursorX = x(dayTime)
   const planNearest =
@@ -128,7 +132,14 @@ export function MeasurementChart({
       ? format(planned.min)
       : `${format(planned.min)}–${format(planned.max)}`
     : ''
-  const difference = selected && plannedValue !== null ? selected.value - plannedValue : null
+  const observed =
+    selected && !selected.estimated && !rolling
+      ? smoothed
+        ? selected.observedValue
+        : selected.value
+      : null
+  const difference = observed !== null && plannedValue !== null ? observed - plannedValue : null
+  const differenceUnit = t(unit === 'percent' ? 'units.percentagePoints' : `units.${unit}`)
   const differenceLabel =
     difference === null ? '' : `${difference > 0 ? '+' : ''}${format(difference)}`
   const paths = useMemo(() => {
@@ -232,7 +243,7 @@ export function MeasurementChart({
         })
       : `${smoothed ? t('smoothedValue') : t('readingValue')} · ${t('chartPoint', { date: measurementDay(selected.time), metric: t(`metrics.${metric}`), value: format(selected.value), unit: t(`units.${unit}`), count: selected.count })}`
     : t('actualMissing', { date: inspectionDay })
-  const inspectionLabel = `${readingLabel}${planned ? ` · ${t('targetLabel')} ${plannedLabel} ${t(`units.${unit}`)}` : ''}`
+  const inspectionLabel = `${readingLabel}${planned ? ` · ${targetLabel} ${plannedLabel} ${t(`units.${unit}`)}` : ''}`
   return (
     <div ref={container} className="min-w-0 space-y-3">
       {(selected || planned || activeTime !== null) && (
@@ -283,9 +294,9 @@ export function MeasurementChart({
               className="text-emerald-700 [.dark_&]:text-emerald-300 text-sm"
               data-testid="chart-plan-reading"
             >
-              {t('targetLabel')} · {plannedLabel} {t(`units.${unit}`)}
+              {targetLabel} · {plannedLabel} {t(`units.${unit}`)}
               {difference !== null &&
-                ` · ${t('planDifference', { value: differenceLabel, unit: t(`units.${unit}`) })}`}
+                ` · ${t('planDifference', { value: differenceLabel, unit: differenceUnit })}`}
             </p>
           )}
         </div>
@@ -344,12 +355,12 @@ export function MeasurementChart({
                 )}
                 {planned && (
                   <p className="mt-1 text-emerald-700 [.dark_&]:text-emerald-300">
-                    {t('targetLabel')} · {plannedLabel} {t(`units.${unit}`)}
+                    {targetLabel} · {plannedLabel} {t(`units.${unit}`)}
                   </p>
                 )}
                 {difference !== null && (
                   <p className="mt-2 text-muted-foreground">
-                    {t('planDifference', { value: differenceLabel, unit: t(`units.${unit}`) })}
+                    {t('planDifference', { value: differenceLabel, unit: differenceUnit })}
                   </p>
                 )}
               </div>
@@ -419,6 +430,17 @@ export function MeasurementChart({
                   points={targets.map((point) => `${x(point.time)},${y(point.value)}`).join(' ')}
                 />
               )}
+              {targetNodes.map((point) => (
+                <circle
+                  key={point.id}
+                  className="text-emerald-600 dark:text-emerald-400"
+                  cx={x(point.time)}
+                  cy={y(point.value)}
+                  r="3.5"
+                  fill="currentColor"
+                  data-testid="chart-target-node"
+                />
+              ))}
               {!raw &&
                 paths.map((path) => (
                   <path

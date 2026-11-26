@@ -1484,9 +1484,12 @@
       "waist": "Waist",
       "musclePercentage": "Muscle percentage",
       "proteinPercentage": "Protein percentage",
-      "fatMass": "Fat mass"
+      "fatMass": "Fat mass",
+      "leanMass": "Lean body mass",
+      "waterMass": "Water mass"
     },
     "units": {
+      "percentagePoints": "pp",
       "kg": "kg",
       "index": "index",
       "percent": "%",
@@ -1513,6 +1516,16 @@
     "fullPlan": "Show full plan",
     "actualCurve": "Actual measurements",
     "targetLabel": "Plan target",
+    "bodyTargets": {
+      "title": "Body composition targets",
+      "version": "Target revision {date}",
+      "help": "The baseline uses S400 readings from {date}, including derived values. Select a date to see all targets and the same-day S400 averages.",
+      "date": "Date",
+      "baselineChange": "Change from baseline",
+      "scaleMean": "S400 daily average",
+      "difference": "Measured − target"
+    },
+    "targetInterpolation": "Interpolated target",
     "holdLabel": "Maintenance",
     "review": "Period review",
     "week": "Weekly",
@@ -1633,7 +1646,9 @@
         "waist": "Waist measurement and sex-specific Chinese adult reference boundaries.",
         "musclePercentage": "Muscle mass divided by weight from the same measurement, expressed as a percentage.",
         "proteinPercentage": "Protein mass divided by weight from the same measurement, expressed as a percentage.",
-        "fatMass": "Weight multiplied by the body-fat percentage from the same measurement. Percentage and kg share the body-fat grade, with kg reference bounds converted using that measurement’s weight."
+        "fatMass": "Weight multiplied by the body-fat percentage from the same measurement. Percentage and kg share the body-fat grade, with kg reference bounds converted using that measurement’s weight.",
+        "leanMass": "Weight less fat mass from the same measurement.",
+        "waterMass": "Weight multiplied by the water percentage from the same measurement."
       },
       "compositionView": "Reference and trend unit",
       "compositionTrend": "30-day trend",
@@ -1648,6 +1663,27 @@
     "recentChangePercentage": "30-day change (percentage points)",
     "actualMissing": "No actual measurement on {date}",
     "planDifference": "{value} {unit} from the plan line"
+  },
+  "PublicNutritionPlan": {
+    "title": "Meal plan and calorie budget",
+    "intro": "Planned meals and estimated daily energy figures.",
+    "breakfast": "Breakfast",
+    "lunch": "Lunch",
+    "dinner": "Dinner",
+    "water": "Daily water",
+    "breakfastDescription": "One pack of whole-grain rye bread ({breadGrams} g, {breadSlices} slices) and one {milkMl} mL pack of Mengniu whole milk. About {proteinGrams} g of protein.",
+    "lunchDescription": "A meal at the campus cafeteria. The menu varies and the budget assumes {calories} kcal.",
+    "dinnerDescription": "One scoop each of protein powder and oats, plus one egg. The budget assumes {calories} kcal. Both scoops hold {scoopMl} mL and the ingredients have yet to be weighed.",
+    "waterDescription": "About {minLiters}–{maxLiters} L.",
+    "foodCalories": "About {value} kcal",
+    "foodRange": "About {min}–{max} kcal",
+    "budget": "Average daily calorie budget",
+    "intake": "Planned intake",
+    "expenditure": "Estimated expenditure",
+    "deficit": "Estimated deficit",
+    "dailyUnit": "kcal/day",
+    "dailyRange": "Range {min}–{max} kcal/day",
+    "method": "Intake is the sum of the three meal estimates. Expenditure uses a basal reference of {resting} kcal/day, {activityMin}–{activityMax} kcal/day of other activity, and about {runCalories} extra kcal per {distance} km run every {runDays} days. The deficit range assumes an intake of {intake} kcal/day and varies with lunch and activity."
   },
   "HealthPlan": {
     "healthTitle": "Protect your health before chasing speed",

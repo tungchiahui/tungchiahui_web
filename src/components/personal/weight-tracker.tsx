@@ -3,7 +3,7 @@
 import { Dialog } from '@base-ui/react/dialog'
 import { LockKeyhole, Plus, Settings2, X } from 'lucide-react'
 import { NextIntlClientProvider, useLocale, useMessages, useTranslations } from 'next-intl'
-import { useState } from 'react'
+import { type ReactNode, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   healthTimeZone,
@@ -18,11 +18,12 @@ import { HealthOverview } from './health-overview'
 import { HealthLifestylePlan, HealthStagePlan } from './health-plan'
 import { HealthRecordForm } from './health-record-form'
 import { HealthReview } from './health-review'
+import { HealthTargetTable } from './health-targets'
 import { HealthTrend } from './health-trend'
 import { fieldClass, panelClass } from './tracker-toolbar'
 import { useHealthData } from './use-health-data'
 
-export function WeightTracker() {
+export function WeightTracker({ publicPlan }: { publicPlan: ReactNode }) {
   const t = useTranslations('Weight')
   const h = useTranslations('Health')
   const locale = useLocale()
@@ -34,6 +35,7 @@ export function WeightTracker() {
         <h1 className="font-bold text-3xl tracking-tight sm:text-4xl">{t('title')}</h1>
         <p className="mt-3 text-muted-foreground text-sm leading-6">{t('intro')}</p>
       </header>
+      {publicPlan}
       {store.snapshot ? (
         <NextIntlClientProvider
           locale={locale}
@@ -141,6 +143,9 @@ function HealthDashboard({
         plan={snapshot.plan}
         initialWindow={inspection}
       />
+      {snapshot.plan.bodyTargets && (
+        <HealthTargetTable targets={snapshot.plan.bodyTargets} records={records} />
+      )}
       <HealthReview records={records} inspect={inspect} />
       <HealthStagePlan plan={snapshot.plan} records={records} />
       <section id="health-history" className={`${panelClass} min-w-0 space-y-4`}>

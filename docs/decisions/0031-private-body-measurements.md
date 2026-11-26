@@ -156,3 +156,13 @@ The Owner subsequently specified a default seven-day smoothing window and a defa
 main chart range. The shared smoothing default applies to details and sparklines as well. Existing
 alternative windows and explicit calendar/period selections remain supported. This updates the
 previous default-window decision while preserving the regression and estimate algorithms.
+
+## 2026-11-26 — Public meal budget and private body composition targets
+
+The Owner authorized public presentation of the meal plan, water plan, and estimated daily
+calorie budget. Downloaded measurements, the dated body composition targets, and older private
+plan templates remain under the existing Owner session and no-store snapshot. The new
+`HEALTH_BODY_TARGETS_JSON` optional configuration is validated and scoped to control-api.
+The checkpoint in the shared weight-target schedule is 78.5 kg on 2027-01-10. The private
+configuration adds corresponding metric targets and weight knots to the schedule. The public
+budget is calculated from a separate static configuration. Neither change requires a data migration.

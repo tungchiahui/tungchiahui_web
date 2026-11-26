@@ -1484,9 +1484,12 @@
       "waist": "腰围",
       "musclePercentage": "肌肉率",
       "proteinPercentage": "蛋白质率",
-      "fatMass": "脂肪量"
+      "fatMass": "脂肪量",
+      "leanMass": "去脂体重",
+      "waterMass": "水分量"
     },
     "units": {
+      "percentagePoints": "百分点",
       "kg": "kg",
       "index": "指数",
       "percent": "%",
@@ -1513,6 +1516,16 @@
     "fullPlan": "显示完整计划",
     "actualCurve": "实际测量",
     "targetLabel": "计划目标",
+    "bodyTargets": {
+      "title": "身体成分目标",
+      "version": "目标版本 {date}",
+      "help": "基准为 {date} 的 S400 测量，部分指标由计算得出。点按日期查看全部目标和同日实测日均。",
+      "date": "日期",
+      "baselineChange": "较基准变化",
+      "scaleMean": "S400 日均",
+      "difference": "实测 − 目标"
+    },
+    "targetInterpolation": "目标插值",
     "holdLabel": "维持期",
     "review": "周期回顾",
     "week": "按周",
@@ -1633,7 +1646,9 @@
         "waist": "腰围及按性别匹配的中国成人参考界限。",
         "musclePercentage": "同次测量的肌肉量除以体重，显示肌肉在身体重量中的占比。",
         "proteinPercentage": "同次测量的蛋白质量除以体重，显示蛋白质在身体重量中的占比。",
-        "fatMass": "同次测量的体重乘以体脂率，换算脂肪量。百分比与 kg 共用体脂率评级，kg 参考边界按该次体重换算。"
+        "fatMass": "同次测量的体重乘以体脂率，换算脂肪量。百分比与 kg 共用体脂率评级，kg 参考边界按该次体重换算。",
+        "leanMass": "同次测量的体重减去脂肪量，换算去脂体重。",
+        "waterMass": "同次测量的体重乘以水分率，换算水分量。"
       },
       "compositionView": "参考与趋势单位",
       "compositionTrend": "近 30 日趋势",
@@ -1648,6 +1663,27 @@
     "recentChangePercentage": "近 30 日变化（百分点）",
     "actualMissing": "{date} 暂无实际测量",
     "planDifference": "相对计划线 {value} {unit}"
+  },
+  "PublicNutritionPlan": {
+    "title": "饮食与热量计划",
+    "intro": "日常饮食安排和热量预算，数值为计划估算。",
+    "breakfast": "早餐",
+    "lunch": "午餐",
+    "dinner": "晚餐",
+    "water": "全天饮水",
+    "breakfastDescription": "黑麦全麦面包 1 袋（{breadGrams} g、{breadSlices} 片），蒙牛纯牛奶 1 包（{milkMl} mL），蛋白质约 {proteinGrams} g。",
+    "lunchDescription": "学校食堂，菜单不固定，日均预算按 {calories} kcal 估算。",
+    "dinnerDescription": "蛋白粉 1 勺、燕麦 1 勺、鸡蛋 1 个，预算按 {calories} kcal 估算。两种量勺的容积均为 {scoopMl} mL，实际克数待称量。",
+    "waterDescription": "约 {minLiters}～{maxLiters} L。",
+    "foodCalories": "约 {value} kcal",
+    "foodRange": "约 {min}～{max} kcal",
+    "budget": "日均热量预算",
+    "intake": "计划摄入",
+    "expenditure": "估算消耗",
+    "deficit": "估算缺口",
+    "dailyUnit": "kcal/天",
+    "dailyRange": "范围 {min}～{max} kcal/天",
+    "method": "摄入按三餐参考值合计。消耗按每日基础代谢参考值 {resting} kcal、非跑步活动 {activityMin}～{activityMax} kcal，加上每 {runDays} 天跑 {distance} km、每次额外消耗约 {runCalories} kcal 折算。缺口范围按日均摄入 {intake} kcal 计算，会随午餐和活动变化。"
   },
   "HealthPlan": {
     "healthTitle": "先保证身体状态，再追求速度",

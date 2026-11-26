@@ -123,7 +123,7 @@ export function assessMetric(
     grade: 'noData',
     source: 'recorded',
     bands: [],
-    value: row?.[metric] ?? null,
+    value: displayMetricValue(row, metric),
     reference: null,
     baselineDays: 0,
     age,
@@ -244,6 +244,8 @@ export function assessMetric(
           (['younger', 'sameAge', 'older'] as const)[compare(result.value, age) + 1] ?? 'sameAge'
         return { ...result, reference: age, grade, source: 'age' }
       }
+      case 'leanMass':
+      case 'waterMass':
       case 'muscleMass':
       case 'skeletalMuscleMass':
       case 'boneMass':

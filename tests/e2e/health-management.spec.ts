@@ -348,7 +348,7 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
     await expect(chart.getByLabel(copy.range)).toHaveValue('180')
     await expect(chart.getByLabel(copy.smoothingWindow)).toHaveValue('7')
     const checkpoint = overview.getByText(copy.checkpoint, { exact: true }).locator('..')
-    await expect(checkpoint).toContainText('77.5 kg')
+    await expect(checkpoint).toContainText('78.5 kg')
     await expect(checkpoint).toContainText('2027-01-10')
     const phaseSummary = overview.getByText(copy.relativeStart, { exact: true }).locator('..')
     const baseline = measurements.filter(
@@ -596,4 +596,99 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
     await expect(card).toContainText('—')
   }
   expect(failures).toEqual([])
+})
+
+test('public nutrition and owner body targets keep distinct visibility and display', async ({
+  page,
+}) => {
+  const { syntheticBodyTargets } = await import('../fixtures/health-targets')
+  const { measurementSchema } = await import('../../src/health/contracts')
+  const date = '2026-12-02'
+  const measuredAt = `${date}T08:00:00+08:00`
+  const reading = normalizeSmartscaleRow({ Date: measuredAt, Weight: 86, BodyFat: 25 })
+  const measurement = measurementSchema.parse({
+    ...reading,
+    id: randomUUID(),
+    source: 'smartscale',
+    revision: 0,
+    createdAt: measuredAt,
+    updatedAt: measuredAt,
+  })
+  let ownerView = false
+  await page.route('**/api/ops/auth/session', (route) =>
+    route.fulfill({
+      json: ownerView
+        ? { authenticated: true, account: { username: 'fixture-owner', role: 'owner' } }
+        : { authenticated: false, account: null },
+    }),
+  )
+  await page.route('**/api/ops/health/snapshot?*', (route) =>
+    route.fulfill({
+      json: {
+        plan: {
+          startWeight: 90,
+          goalWeight: 70,
+          longTermWeight: 70,
+          startDate: '2026-10-01',
+          holdStart: '2026-10-15',
+          holdEnd: '2026-10-25',
+          endDate: '2027-03-20',
+          maintainAfterGoal: true,
+          checkpoint: { date: '2027-01-10', weight: 78.5 },
+          bodyTargets: syntheticBodyTargets,
+          targets: [
+            { date: '2026-10-01', targetMin: 90, targetMax: 90 },
+            ...syntheticBodyTargets.points.map(({ date, weight }) => ({
+              date,
+              targetMin: weight,
+              targetMax: weight,
+            })),
+            { date: '2027-03-20', targetMin: 70, targetMax: 70 },
+          ],
+        },
+        planMessages: JSON.parse(
+          readFileSync(resolve(import.meta.dirname, '../../messages/zh-cn.json'), 'utf8'),
+        ).HealthPlan,
+        measurements: [measurement],
+        planOverrides: [],
+        revision: 0,
+        sync: { lastSuccessAt: null, sourceUpdatedAt: null, lastError: null },
+      },
+    }),
+  )
+  await page.clock.setFixedTime(new Date('2026-12-18T00:00:00.000Z'))
+  await page.goto('/weight-loss')
+  const publicPlan = page.getByRole('region', { name: '饮食与热量计划' })
+  await expect(publicPlan).toContainText('1,425')
+  await expect(publicPlan).toContainText('2,855')
+  await expect(publicPlan).toContainText('1,430')
+  await expect(
+    page.getByText('登录 Owner 账号后可查看个人计划、身体指标和历史记录。'),
+  ).toBeVisible()
+  await expect(page.getByRole('heading', { name: '身体成分目标' })).toHaveCount(0)
+  const publicHtml = await (await page.request.get('/weight-loss')).text()
+  expect(publicHtml).not.toContain(syntheticBodyTargets.versionDate)
+
+  ownerView = true
+  await page.reload()
+  const chart = page.locator('#health-trend')
+  const overview = page.getByRole('region', { name: '减重总览' })
+  await expect(overview.getByText('阶段目标', { exact: true }).locator('..')).toContainText(
+    '78.5 kg',
+  )
+  await expect(chart.getByTestId('chart-target-node')).toHaveCount(2)
+  await chart.getByRole('combobox', { name: '指标' }).selectOption('bodyFat')
+  await expect(chart.getByTestId('chart-target-node')).toHaveCount(2)
+  const slider = chart.getByRole('slider')
+  await slider.press('End')
+  await expect(chart.getByTestId('chart-plan-reading')).toContainText('20 %')
+  await slider.press('ArrowLeft')
+  await expect(chart.getByTestId('chart-plan-reading')).toContainText('目标插值')
+
+  await page.getByRole('button', { name: date, exact: true }).click()
+  const detail = page.getByRole('table', { name: date })
+  await expect(detail.getByRole('row')).toHaveCount(12)
+  const bodyFat = detail.getByRole('row').filter({ hasText: '体脂率' })
+  await expect(bodyFat.getByRole('cell')).toHaveText(['24.4 %', '0 百分点', '25 %', '+0.6 百分点'])
+  await expect(detail.getByRole('row').filter({ hasText: '骨骼肌量' })).toContainText('暂无数据')
 })

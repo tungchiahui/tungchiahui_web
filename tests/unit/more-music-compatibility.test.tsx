@@ -251,7 +251,7 @@ describe('Phase 18 More and music compatibility', () => {
 
     render(
       <NextIntlClientProvider locale="zh-cn" messages={zhCn}>
-        <WeightTracker />
+        <WeightTracker publicPlan={null} />
       </NextIntlClientProvider>,
     )
     expect(screen.getByRole('heading', { name: '减脂计划与进度记录' })).toBeVisible()

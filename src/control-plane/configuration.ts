@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { healthReferenceProfileJsonSchema } from '../health/contracts'
+import { healthBodyTargetsJsonSchema } from '../health/owner-body-target-config'
 import { parseAssetStorageConfiguration } from '../storage/configuration'
 
 import {
@@ -20,6 +21,7 @@ const configurationSchema = z.object({
   CONTROL_OPERATOR_KEYS_JSON: z.string().min(2).optional(),
   DATABASE_URL: z.string().url().optional(),
   HEALTH_REFERENCE_PROFILE_JSON: healthReferenceProfileJsonSchema,
+  HEALTH_BODY_TARGETS_JSON: healthBodyTargetsJsonSchema,
   OWNER_PASSWORD_HASH: z.preprocess(
     (value) => (value === '' ? undefined : value),
     ownerPasswordHashSchema.optional(),
@@ -102,6 +104,7 @@ export function parseControlApiConfiguration(input: unknown) {
   return Object.freeze({
     assetStorage,
     healthReferenceProfile: parsed.HEALTH_REFERENCE_PROFILE_JSON,
+    healthBodyTargets: parsed.HEALTH_BODY_TARGETS_JSON,
     assetCdnBaseUrl: new URL(parsed.ASSET_CDN_BASE_URL),
     authentication,
     ownerPasswordHash:

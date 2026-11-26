@@ -1,13 +1,21 @@
 import type { Locale } from '../domain/persistence'
 import { messagesForLocale } from '../i18n/messages'
 import { getTargetRange } from '../personal/weight-plan'
-import { type HealthReferenceProfile, type HealthSnapshot, healthPlanSchema } from './contracts'
+import {
+  type BodyTargetPlan,
+  type HealthReferenceProfile,
+  type HealthSnapshot,
+  healthPlanSchema,
+} from './contracts'
+import { ownerTargetSchedule } from './owner-body-target-config'
 
 export function ownerHealthPlan(
   locale: Locale,
   overrides: HealthSnapshot['planOverrides'],
   referenceProfile?: HealthReferenceProfile,
+  bodyTargets?: BodyTargetPlan,
 ) {
+  const { checkpoint, holdEnd, goalDate } = ownerTargetSchedule
   const targets = [
     { date: '2026-06-11', targetMin: 98, targetMax: 98 },
     { date: '2026-06-25', targetMin: 96, targetMax: 96.5 },
@@ -17,8 +25,14 @@ export function ownerHealthPlan(
     { date: '2026-08-14', targetMin: 90, targetMax: 90 },
     { date: '2026-10-25', targetMin: 90, targetMax: 90 },
     { date: '2026-10-26', targetMin: 90, targetMax: 90 },
-    { date: '2027-01-10', targetMin: 77.5, targetMax: 77.5 },
-    { date: '2027-03-20', targetMin: 70, targetMax: 70 },
+    ...(bodyTargets
+      ? bodyTargets.points.map(({ date, weight }) => ({
+          date,
+          targetMin: weight,
+          targetMax: weight,
+        }))
+      : [{ date: checkpoint.date, targetMin: checkpoint.weight, targetMax: checkpoint.weight }]),
+    { date: goalDate, targetMin: 70, targetMax: 70 },
   ]
   // The approved replacement schedule governs August 14 onwards. Retain the
   // original overrides in the exchange file, and apply earlier custom targets.
@@ -36,11 +50,12 @@ export function ownerHealthPlan(
       goalWeight: 70,
       longTermWeight: 70,
       startDate: '2026-06-11',
-      endDate: '2027-03-20',
-      checkpoint: { date: '2027-01-10', weight: 77.5 },
+      endDate: goalDate,
+      checkpoint,
+      bodyTargets,
       maintainAfterGoal: true,
       holdStart: '2026-08-14',
-      holdEnd: '2026-10-25',
+      holdEnd,
       targets: targets.toSorted((left, right) => left.date.localeCompare(right.date)),
     }),
     planMessages: messagesForLocale(locale).HealthPlan,
