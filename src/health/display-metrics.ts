@@ -5,7 +5,10 @@ export const compositionDefinitions = [
   { key: 'proteinPercentage', mass: 'proteinMass', unit: 'percent' },
 ] as const
 export type CompositionMetric = (typeof compositionDefinitions)[number]['key']
-export type CompositionMassMetric = (typeof compositionDefinitions)[number]['mass'] | 'fatMass'
+export type CompositionMassMetric =
+  | (typeof compositionDefinitions)[number]['mass']
+  | 'fatMass'
+  | 'waterMass'
 export type DisplayMetricKey = MetricKey | CompositionMetric | 'fatMass' | 'leanMass' | 'waterMass'
 export const displayMetricDefinitions = [
   ...metricDefinitions,
@@ -26,6 +29,9 @@ export function compositionMassMetric(metric: DisplayMetricKey): CompositionMass
     case 'bodyFat':
     case 'fatMass':
       return 'fatMass'
+    case 'bodyWater':
+    case 'waterMass':
+      return 'waterMass'
     default:
       return null
   }
@@ -39,11 +45,14 @@ export function compositionPercentageMetric(metric: CompositionMassMetric) {
       return 'proteinPercentage'
     case 'fatMass':
       return 'bodyFat'
+    case 'waterMass':
+      return 'bodyWater'
   }
 }
 
 export function compositionPercentage(row: Measurement | undefined, metric: CompositionMassMetric) {
-  if (metric === 'fatMass') return row && !row.excluded ? row.bodyFat : null
+  if (metric === 'fatMass' || metric === 'waterMass')
+    return row && !row.excluded ? row[metric === 'fatMass' ? 'bodyFat' : 'bodyWater'] : null
   if (
     !row ||
     row.excluded ||

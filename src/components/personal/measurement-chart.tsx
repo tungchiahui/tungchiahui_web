@@ -118,9 +118,6 @@ export function MeasurementChart({
       : null
   const planned = plan && targets.length ? metricTargetAt(plan, metric, inspectionDay) : null
   const targetLabel = t(planned?.interpolated ? 'targetInterpolation' : 'targetLabel')
-  const targetNodes = targets.filter((point) =>
-    plan?.bodyTargets?.points.some((node) => node.date === point.id),
-  )
   const plannedValue = planned ? (planned.min + planned.max) / 2 : null
   const cursorX = x(dayTime)
   const planNearest =
@@ -430,17 +427,6 @@ export function MeasurementChart({
                   points={targets.map((point) => `${x(point.time)},${y(point.value)}`).join(' ')}
                 />
               )}
-              {targetNodes.map((point) => (
-                <circle
-                  key={point.id}
-                  className="text-emerald-600 dark:text-emerald-400"
-                  cx={x(point.time)}
-                  cy={y(point.value)}
-                  r="3.5"
-                  fill="currentColor"
-                  data-testid="chart-target-node"
-                />
-              ))}
               {!raw &&
                 paths.map((path) => (
                   <path
@@ -478,18 +464,6 @@ export function MeasurementChart({
                       stroke="currentColor"
                       strokeWidth="2"
                       fill={selected.estimated ? 'var(--card)' : 'currentColor'}
-                    />
-                  )}
-                  {plannedValue !== null && (
-                    <circle
-                      cx={cursorX}
-                      cy={y(plannedValue)}
-                      r="4"
-                      className="text-emerald-600 dark:text-emerald-400"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      fill="var(--card)"
-                      data-testid="chart-plan-cursor"
                     />
                   )}
                 </g>

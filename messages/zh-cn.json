@@ -1486,7 +1486,7 @@
       "proteinPercentage": "蛋白质率",
       "fatMass": "脂肪量",
       "leanMass": "去脂体重",
-      "waterMass": "水分量"
+      "waterMass": "体水分量"
     },
     "units": {
       "percentagePoints": "百分点",
@@ -1632,7 +1632,7 @@
         "weight": "体重及按身高换算的成人参考区间。",
         "bmi": "体重与身高平方的比值，用于成人体重分类。",
         "bodyFat": "脂肪质量占体重的比例。详情同时显示体脂率和按同次体重换算的脂肪量，参考范围按性别匹配。",
-        "bodyWater": "身体总水分占体重的比例。",
+        "bodyWater": "身体总水分占体重的比例。体水分量由同次测量的体重和体水分率换算。",
         "muscleMass": "设备估算的肌肉量，详情同时显示同次测量的肌肉率和两种单位的趋势。",
         "skeletalMuscleMass": "设备估算的全身骨骼肌量，采用个人趋势参考。",
         "boneMass": "设备估算的骨矿物质量，采用个人趋势参考。",
@@ -1649,10 +1649,10 @@
         "proteinPercentage": "同次测量的蛋白质量除以体重，显示蛋白质在身体重量中的占比。",
         "fatMass": "同次测量的体重乘以体脂率，换算脂肪量。百分比与 kg 共用体脂率评级，kg 参考边界按该次体重换算。",
         "leanMass": "同次测量的体重减去脂肪量，换算去脂体重。",
-        "waterMass": "同次测量的体重乘以水分率，换算水分量。"
+        "waterMass": "同次测量的体重乘以体水分率，换算体水分量和对应的 kg 参考边界。"
       },
       "compositionView": "参考与趋势单位",
-      "compositionTrend": "近 30 日趋势",
+      "detailTrend": "近 30 日趋势",
       "reportReference": "个人小米报告参考 · {date}",
       "reportMismatch": "这次测量的年龄、身高或性别与报告档案有变化，采用当前可用的历史参考。",
       "mifflinValue": "Mifflin–St Jeor 公式预测参考 {value} kcal/天"

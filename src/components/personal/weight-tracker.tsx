@@ -35,27 +35,33 @@ export function WeightTracker({ publicPlan }: { publicPlan: ReactNode }) {
         <h1 className="font-bold text-3xl tracking-tight sm:text-4xl">{t('title')}</h1>
         <p className="mt-3 text-muted-foreground text-sm leading-6">{t('intro')}</p>
       </header>
-      {publicPlan}
       {store.snapshot ? (
         <NextIntlClientProvider
           locale={locale}
           messages={{ ...messages, HealthPlan: store.snapshot.planMessages }}
         >
-          <HealthDashboard snapshot={store.snapshot} reload={() => store.reload()} />
+          <HealthDashboard
+            snapshot={store.snapshot}
+            reload={() => store.reload()}
+            publicPlan={publicPlan}
+          />
         </NextIntlClientProvider>
       ) : (
-        <section className={`${panelClass} flex items-start gap-4`}>
-          <LockKeyhole
-            className="mt-0.5 size-5 shrink-0 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <div className="space-y-3">
-            <p role="status" className="text-sm leading-6">
-              {h(store.checking ? 'checking' : store.error ? 'loadFailed' : 'ownerOnly')}
-            </p>
-            {store.error && <Button onClick={() => void store.reload()}>{h('retry')}</Button>}
-          </div>
-        </section>
+        <>
+          {publicPlan}
+          <section className={`${panelClass} flex items-start gap-4`}>
+            <LockKeyhole
+              className="mt-0.5 size-5 shrink-0 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <div className="space-y-3">
+              <p role="status" className="text-sm leading-6">
+                {h(store.checking ? 'checking' : store.error ? 'loadFailed' : 'ownerOnly')}
+              </p>
+              {store.error && <Button onClick={() => void store.reload()}>{h('retry')}</Button>}
+            </div>
+          </section>
+        </>
       )}
     </div>
   )
@@ -64,9 +70,11 @@ export function WeightTracker({ publicPlan }: { publicPlan: ReactNode }) {
 function HealthDashboard({
   snapshot,
   reload,
+  publicPlan,
 }: {
   snapshot: OwnerHealthSnapshot
   reload: () => Promise<void>
+  publicPlan: ReactNode
 }) {
   const t = useTranslations('Health')
   const locale = useLocale()
@@ -137,6 +145,7 @@ function HealthDashboard({
         </div>
       </div>
       <HealthOverview snapshot={snapshot} />
+      {publicPlan}
       <HealthTrend
         key={inspection ? `${inspection.from}:${inspection.to}` : 'default'}
         records={records}
@@ -272,18 +281,20 @@ function HealthDashboard({
           {latest ? dateTime(latest) : t('noData')} · {t('compositionHelp')}
         </p>
         <dl className="mt-5 grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4">
-          {displayMetricDefinitions.map(({ key, unit }) => (
-            <div key={key}>
-              <dt className="text-muted-foreground text-xs">{t(`metrics.${key}`)}</dt>
-              <dd className="mt-1 font-medium tabular-nums">
-                {format(displayMetricValue(latest, key))}{' '}
-                <span className="text-muted-foreground text-xs">{t(`units.${unit}`)}</span>
-              </dd>
-              <dd>
-                <HealthMetricAssessment metric={key} row={latest} snapshot={snapshot} />
-              </dd>
-            </div>
-          ))}
+          {displayMetricDefinitions
+            .filter(({ key }) => key !== 'waterMass')
+            .map(({ key, unit }) => (
+              <div key={key}>
+                <dt className="text-muted-foreground text-xs">{t(`metrics.${key}`)}</dt>
+                <dd className="mt-1 font-medium tabular-nums">
+                  {format(displayMetricValue(latest, key))}{' '}
+                  <span className="text-muted-foreground text-xs">{t(`units.${unit}`)}</span>
+                </dd>
+                <dd>
+                  <HealthMetricAssessment metric={key} row={latest} snapshot={snapshot} />
+                </dd>
+              </div>
+            ))}
         </dl>
       </details>
       <HealthLifestylePlan />

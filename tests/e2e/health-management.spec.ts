@@ -308,6 +308,7 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
   await expect(chart.getByTestId('chart-tooltip')).toContainText('2027-03-20')
   await expect(chart.getByTestId('chart-tooltip')).toContainText('计划目标')
   await expect(chart.getByTestId('chart-tooltip')).toContainText('70 kg')
+  await expect(chart.locator('circle[class*="text-emerald"]')).toHaveCount(0)
   const observedMarker = expandedSvg.locator('circle[data-observed]').last()
   await expandedSvg.evaluate((element) =>
     element.scrollIntoView({ behavior: 'instant', block: 'center' }),
@@ -412,10 +413,12 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
     await expect(score.locator('svg[viewBox="0 0 160 36"]')).toHaveCount(0)
     await expect(age.locator('svg[viewBox="0 0 160 36"]')).toHaveCount(0)
     for (const metric of [
+      'weight',
       'bodyFat',
       'bodyWater',
       'musclePercentage',
       'proteinPercentage',
+      'bmi',
       'basalMetabolism',
       'visceralFat',
       'metabolicAge',
@@ -445,16 +448,22 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
         await expect(detail).toContainText(copy.assessment.methods.xiaomiReport)
         await expect(detail.getByTestId('assessment-scale')).toBeVisible()
       }
-      if (metric === 'musclePercentage' || metric === 'proteinPercentage' || metric === 'bodyFat') {
-        await expect(detail).toContainText(
-          copy.assessment.methods[metric === 'bodyFat' ? 'chinaFat' : 'xiaomiReport'],
-        )
-        const massMetric =
-          metric === 'bodyFat'
-            ? 'fatMass'
-            : metric === 'musclePercentage'
-              ? 'muscleMass'
-              : 'proteinMass'
+      const trend = detail.getByTestId('metric-detail-trend')
+      const trendTitle = trend.locator('summary')
+      await expect(trendTitle).toContainText(copy.assessment.detailTrend)
+      await trendTitle.click()
+      await expect(trend.getByRole('img')).toBeVisible()
+      if (metric === 'weight') await expect(trend.locator('circle[data-observed]')).toHaveCount(22)
+      const composition = [
+        { rate: 'bodyFat', mass: 'fatMass', method: 'chinaFat' },
+        { rate: 'bodyWater', mass: 'waterMass', method: 'water' },
+        { rate: 'musclePercentage', mass: 'muscleMass', method: 'xiaomiReport' },
+        { rate: 'proteinPercentage', mass: 'proteinMass', method: 'xiaomiReport' },
+      ] as const
+      const selected = composition.find(({ rate }) => rate === metric)
+      if (selected) {
+        await expect(detail).toContainText(copy.assessment.methods[selected.method])
+        const massMetric = selected.mass
         const latest = measurements.find((row) => displayMetricValue(row, metric) !== null)
         await expect(detail.getByTestId('composition-values')).toContainText(copy.metrics[metric])
         await expect(detail.getByTestId('composition-values')).toContainText(
@@ -465,8 +474,6 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
             displayMetricValue(latest, metric) ?? 0,
           ),
         )
-        const trend = detail.getByTestId('composition-trend')
-        await trend.locator('summary').click()
         const controls = detail.getByRole('group', { name: copy.assessment.compositionView })
         const massButton = controls.getByRole('button', {
           name: `${copy.metrics[massMetric]} (${copy.units.kg})`,
@@ -475,7 +482,8 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
         await massButton.click()
         await expect(massButton).toHaveAttribute('aria-pressed', 'true')
         await expect(detail.getByTestId('assessment-scale')).toContainText(copy.units.kg)
-        await expect(detail.getByRole('img')).toBeVisible()
+        await expect(trendTitle).toContainText(copy.metrics[massMetric])
+        await expect(trend.getByTestId('chart-reading')).toContainText(copy.units.kg)
         const rateButton = controls.getByRole('button', {
           name: `${copy.metrics[metric]} (%)`,
           exact: true,
@@ -484,7 +492,7 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
         await expect(rateButton).toHaveAttribute('aria-pressed', 'true')
         await expect(detail.getByTestId('assessment-scale')).toContainText('%')
         await expect(detail.getByRole('img')).toBeVisible()
-        await trend.locator('summary').click()
+        await trendTitle.click()
         if (locale === 'zh-cn' && metric === 'musclePercentage')
           await detail.screenshot({
             path: test.info().outputPath('health-composition-desktop.png'),
@@ -672,7 +680,9 @@ test('public nutrition and owner body targets keep distinct visibility and displ
   await page.clock.setFixedTime(new Date('2026-12-18T00:00:00.000Z'))
   await page.goto('/weight-loss')
   const publicPlan = page.getByRole('region', { name: '饮食与热量计划' })
-  await expect(publicPlan).toContainText('1,425')
+  await expect(publicPlan.locator('details')).toHaveJSProperty('open', false)
+  await publicPlan.locator('summary').click()
+  await expect(publicPlan.getByText('1,425', { exact: false }).first()).toBeVisible()
   await expect(publicPlan).toContainText('2,855')
   await expect(publicPlan).toContainText('1,430')
   await expect(
@@ -689,9 +699,16 @@ test('public nutrition and owner body targets keep distinct visibility and displ
   await expect(overview.getByText('阶段目标', { exact: true }).locator('..')).toContainText(
     '78.5 kg',
   )
-  await expect(chart.getByTestId('chart-target-node')).toHaveCount(2)
+  await expect(publicPlan.locator('details')).toHaveJSProperty('open', false)
+  await expect(publicPlan.locator('xpath=following-sibling::*[1]')).toHaveAttribute(
+    'id',
+    'health-trend',
+  )
+  await expect(chart.getByTestId('chart-plan-line')).toBeVisible()
+  await expect(chart.locator('circle[class*="text-emerald"]')).toHaveCount(0)
   await chart.getByRole('combobox', { name: '指标' }).selectOption('bodyFat')
-  await expect(chart.getByTestId('chart-target-node')).toHaveCount(2)
+  await expect(chart.getByTestId('chart-plan-line')).toBeVisible()
+  await expect(chart.locator('circle[class*="text-emerald"]')).toHaveCount(0)
   const slider = chart.getByRole('slider')
   await slider.press('End')
   await expect(chart.getByTestId('chart-plan-reading')).toContainText('20 %')
