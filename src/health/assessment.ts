@@ -1,5 +1,9 @@
 import { type HealthReferenceProfile, type Measurement, measurementDay } from './contracts'
-import { type DisplayMetricKey, displayMetricValue } from './display-metrics'
+import {
+  compositionPercentageMetric,
+  type DisplayMetricKey,
+  displayMetricValue,
+} from './display-metrics'
 import { metricSeries } from './trends'
 
 export { compositionPercentage } from './display-metrics'
@@ -95,18 +99,18 @@ export function assessMetric(
   records: Measurement[],
   profile: HealthReferenceProfile | undefined,
 ): MetricAssessment {
-  if (metric === 'musclePercentage' || metric === 'proteinPercentage' || metric === 'fatMass') {
-    const referenceMetric =
-      metric === 'fatMass'
-        ? 'bodyFat'
-        : metric === 'musclePercentage'
-          ? 'muscleMass'
-          : 'proteinMass'
+  const massFromPercentage = metric === 'fatMass' || metric === 'waterMass'
+  if (metric === 'musclePercentage' || metric === 'proteinPercentage' || massFromPercentage) {
+    const referenceMetric = massFromPercentage
+      ? compositionPercentageMetric(metric)
+      : metric === 'musclePercentage'
+        ? 'muscleMass'
+        : 'proteinMass'
     const assessment = assessMetric(referenceMetric, row, records, profile)
     const value = displayMetricValue(row, metric)
     if (!row || row.weight === null || value === null)
       return { ...assessment, value: null, grade: 'noData', bands: [], reference: null }
-    const factor = metric === 'fatMass' ? row.weight / 100 : 100 / row.weight
+    const factor = massFromPercentage ? row.weight / 100 : 100 / row.weight
     return {
       ...assessment,
       value,
@@ -245,7 +249,6 @@ export function assessMetric(
         return { ...result, reference: age, grade, source: 'age' }
       }
       case 'leanMass':
-      case 'waterMass':
       case 'muscleMass':
       case 'skeletalMuscleMass':
       case 'boneMass':

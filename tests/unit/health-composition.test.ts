@@ -63,6 +63,43 @@ describe('derived composition metrics', () => {
     expect(metricSeries(rows, 'fatMass', 'rolling')[0]?.count).toBe(1)
     expect(metricSeries(rows, 'fatMass', 'raw')).toHaveLength(2)
   })
+  it('uses only valid same-measurement pairs for body water mass and its trend', () => {
+    const missingWeight = record({ weight: null, bodyWater: 60 })
+    const rows = [
+      record({ weight: 80, bodyWater: 50 }),
+      record({ weight: 60, bodyWater: 60, measuredAt: '2026-11-17T09:00:00+08:00' }),
+      missingWeight,
+      record({ bodyWater: null }),
+      record({ bodyWater: 90, excluded: true }),
+    ]
+    expect(displayMetricValue(rows[0], 'waterMass')).toBe(40)
+    expect(displayMetricValue(missingWeight, 'waterMass')).toBeNull()
+    expect(compositionPercentage(missingWeight, 'waterMass')).toBe(60)
+    expect(metricSeries(rows, 'waterMass', 'daily')[0]).toMatchObject({ value: 38, count: 2 })
+    expect(metricSeries(rows, 'waterMass', 'smooth')[0]?.value).toBe(38)
+  })
+  it.each([
+    [49.99, 'low'],
+    [50, 'standard'],
+    [65, 'standard'],
+    [65.01, 'high'],
+  ] as const)(
+    'keeps both body water units on the same reference at %s percent',
+    (bodyWater, grade) => {
+      const row = record({ weight: 80, bodyWater })
+      const assessment = assessMetric('waterMass', row, [], syntheticReportProfile)
+      expect(assessment).toMatchObject({ source: 'water', grade })
+      expect(assessment.value).toBeCloseTo((80 * bodyWater) / 100)
+      expect(assessment.bands.map(({ upper, inclusive }) => [upper, inclusive])).toEqual([
+        [40, false],
+        [52, true],
+        [null, false],
+      ])
+      expect(
+        assessMetric('waterMass', { ...row, weight: null }, [], syntheticReportProfile).grade,
+      ).toBe('noData')
+    },
+  )
   it.each([70, 87, 100])('converts fat reference bounds with each %s kg weight', (weight) => {
     for (const sex of ['male', 'female'] as const) {
       const profile = { ...syntheticReportProfile, sex }

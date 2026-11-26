@@ -73,14 +73,27 @@ export function HealthMetricAssessment({
   const percentageMetric = massMetric ? compositionPercentageMetric(massMetric) : null
   const percentage = massMetric ? compositionPercentage(row, massMetric) : null
   const massValue = massMetric ? displayMetricValue(row, massMetric) : null
-  const chartTo = row ? measurementDay(row.measuredAt) : ''
+  const canShowMass =
+    massValue !== null ||
+    (open &&
+      massMetric === 'waterMass' &&
+      snapshot.measurements.some(
+        (measurement) => displayMetricValue(measurement, massMetric) !== null,
+      ))
+  const hasTrend = metric !== 'physiqueRating'
+  const latestChartRow =
+    open && hasTrend
+      ? snapshot.measurements.find(
+          (measurement) => displayMetricValue(measurement, viewMetric) !== null,
+        )
+      : undefined
+  const chartTo = latestChartRow ? measurementDay(latestChartRow.measuredAt) : ''
   const chartFrom = chartTo
     ? new Date(Date.parse(chartTo) - 29 * 86400000).toISOString().slice(0, 10)
     : ''
-  const points =
-    massMetric && open
-      ? metricSeries(snapshot.measurements, viewMetric, 'smooth', chartFrom, chartTo)
-      : []
+  const points = chartTo
+    ? metricSeries(snapshot.measurements, viewMetric, 'smooth', chartFrom, chartTo)
+    : []
   const linkedSource =
     source in assessmentSources ? (source as keyof typeof assessmentSources) : null
   const sourceUrl = linkedSource ? assessmentSources[linkedSource] : null
@@ -199,7 +212,7 @@ export function HealthMetricAssessment({
                   viewMetric === massMetric ? '' : 'border bg-card text-foreground hover:bg-muted'
                 }
                 aria-pressed={viewMetric === massMetric}
-                disabled={massValue === null}
+                disabled={!canShowMass}
                 onClick={() => setViewMetric(massMetric)}
               >
                 {t(`metrics.${massMetric}`)} ({t('units.kg')})
@@ -268,10 +281,10 @@ export function HealthMetricAssessment({
               </p>
             </div>
           )}
-          {massMetric && (
-            <details className="mt-6 space-y-3" data-testid="composition-trend">
+          {hasTrend && (
+            <details className="mt-6 space-y-3" data-testid="metric-detail-trend">
               <summary className="cursor-pointer font-medium text-sm">
-                {t('assessment.compositionTrend')} · {t(`metrics.${viewMetric}`)}
+                {t('assessment.detailTrend')} · {t(`metrics.${viewMetric}`)}
               </summary>
               <MeasurementChart
                 key={viewMetric}
@@ -292,7 +305,8 @@ export function HealthMetricAssessment({
 
             {source === 'baseline' &&
               snapshot.referenceProfile?.reportReference &&
-              ((massMetric && massMetric !== 'fatMass') ||
+              (massMetric === 'muscleMass' ||
+                massMetric === 'proteinMass' ||
                 metric === 'basalMetabolism' ||
                 metric === 'visceralFat') && (
                 <p className="text-muted-foreground text-xs">{t('assessment.reportMismatch')}</p>
