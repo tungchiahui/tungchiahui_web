@@ -138,6 +138,9 @@ test('Owner manages partial measurements and versioned JSON with private anonymo
     const html = await (await anonymous.request.get('/weight-loss')).text()
     expect(html).not.toContain(note)
     expect(html).not.toContain('1300-1400 kcal')
+    expect(html).not.toContain('饮食与热量计划')
+    expect(html).not.toContain('nutrition_breakfastDescription')
+    expect(html).not.toContain('蒙牛纯牛奶')
     expect(html).not.toContain('2026-11-30')
     expect(html).not.toContain('2027-01-10')
     expect(html).not.toContain('2027-03-20')
@@ -347,7 +350,10 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
   })
   for (const locale of ['zh-cn', 'zh-hk', 'zh-tw', 'en-us'] as const) {
     await page.goto(locale === 'zh-cn' ? '/weight-loss' : `/${locale}/weight-loss`)
-    const copy = messagesForLocale(locale).Health
+    const { Health: copy, HealthPlan: planCopy } = messagesForLocale(locale)
+    const nutrition = page.getByRole('region', { name: planCopy.nutrition_title, exact: true })
+    await expect(nutrition.locator('details')).toHaveJSProperty('open', true)
+    await expect(nutrition.getByRole('heading', { name: planCopy.nutrition_budget })).toBeVisible()
     const overview = page.getByRole('region', { name: copy.overview, exact: true })
     await expect(overview.getByRole('article')).toHaveCount(10)
     await expect(chart.getByLabel(copy.range)).toHaveValue('180')
@@ -451,7 +457,7 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
       const trend = detail.getByTestId('metric-detail-trend')
       const trendTitle = trend.locator('summary')
       await expect(trendTitle).toContainText(copy.assessment.detailTrend)
-      await trendTitle.click()
+      await expect(trend).toHaveJSProperty('open', true)
       await expect(trend.getByRole('img')).toBeVisible()
       if (metric === 'weight') await expect(trend.locator('circle[data-observed]')).toHaveCount(22)
       const composition = [
@@ -493,6 +499,7 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
         await expect(detail.getByTestId('assessment-scale')).toContainText('%')
         await expect(detail.getByRole('img')).toBeVisible()
         await trendTitle.click()
+        await expect(trend).toHaveJSProperty('open', false)
         if (locale === 'zh-cn' && metric === 'musclePercentage')
           await detail.screenshot({
             path: test.info().outputPath('health-composition-desktop.png'),
@@ -610,10 +617,9 @@ test('Owner dashboard charts support four locales, keyboard, mobile touch and da
   expect(failures).toEqual([])
 })
 
-test('public nutrition and owner body targets keep distinct visibility and display', async ({
-  page,
-}) => {
+test('nutrition and body targets only display to the Owner', async ({ page }) => {
   const { syntheticBodyTargets } = await import('../fixtures/health-targets')
+  const { ownerNutritionPlan } = await import('../../src/health/owner-nutrition-plan')
   const { measurementSchema } = await import('../../src/health/contracts')
   const baselineDate = '2026-12-01'
   const date = '2026-12-02'
@@ -635,11 +641,11 @@ test('public nutrition and owner body targets keep distinct visibility and displ
     createdAt: baselineTime,
     updatedAt: baselineTime,
   })
-  let ownerView = false
+  let role: 'owner' | 'user' | undefined
   await page.route('**/api/ops/auth/session', (route) =>
     route.fulfill({
-      json: ownerView
-        ? { authenticated: true, account: { username: 'fixture-owner', role: 'owner' } }
+      json: role
+        ? { authenticated: true, account: { username: 'fixture-account', role } }
         : { authenticated: false, account: null },
     }),
   )
@@ -667,6 +673,7 @@ test('public nutrition and owner body targets keep distinct visibility and displ
             { date: '2027-03-20', targetMin: 70, targetMax: 70 },
           ],
         },
+        nutritionPlan: ownerNutritionPlan,
         planMessages: JSON.parse(
           readFileSync(resolve(import.meta.dirname, '../../messages/zh-cn.json'), 'utf8'),
         ).HealthPlan,
@@ -679,28 +686,38 @@ test('public nutrition and owner body targets keep distinct visibility and displ
   )
   await page.clock.setFixedTime(new Date('2026-12-18T00:00:00.000Z'))
   await page.goto('/weight-loss')
-  const publicPlan = page.getByRole('region', { name: '饮食与热量计划' })
-  await expect(publicPlan.locator('details')).toHaveJSProperty('open', false)
-  await publicPlan.locator('summary').click()
-  await expect(publicPlan.getByText('1,425', { exact: false }).first()).toBeVisible()
-  await expect(publicPlan).toContainText('2,855')
-  await expect(publicPlan).toContainText('1,430')
-  await expect(
-    page.getByText('登录 Owner 账号后可查看个人计划、身体指标和历史记录。'),
-  ).toBeVisible()
-  await expect(page.getByRole('heading', { name: '身体成分目标' })).toHaveCount(0)
-  const publicHtml = await (await page.request.get('/weight-loss')).text()
-  expect(publicHtml).not.toContain(syntheticBodyTargets.versionDate)
+  const nutrition = page.getByRole('region', { name: '饮食与热量计划' })
+  const ownerPrompt = page.getByText('登录 Owner 账号后可查看个人计划、身体指标和历史记录。')
+  const targets = page.getByRole('heading', { name: '身体成分目标' })
 
-  ownerView = true
+  await expect(ownerPrompt).toBeVisible()
+  await expect(nutrition).toHaveCount(0)
+  await expect(targets).toHaveCount(0)
+  const rsc = await page.request.get('/weight-loss', { headers: { RSC: '1' } })
+  expect(rsc.headers()['content-type']).toContain('text/x-component')
+  const publicPayload = await rsc.text()
+  expect(publicPayload).not.toContain(syntheticBodyTargets.versionDate)
+  expect(publicPayload).not.toContain('nutrition_breakfastDescription')
+  expect(publicPayload).not.toContain('蒙牛纯牛奶')
+
+  role = 'user'
+  await page.reload()
+  await expect(ownerPrompt).toBeVisible()
+  await expect(nutrition).toHaveCount(0)
+  await expect(targets).toHaveCount(0)
+
+  role = 'owner'
   await page.reload()
   const chart = page.locator('#health-trend')
   const overview = page.getByRole('region', { name: '减重总览' })
   await expect(overview.getByText('阶段目标', { exact: true }).locator('..')).toContainText(
     '78.5 kg',
   )
-  await expect(publicPlan.locator('details')).toHaveJSProperty('open', false)
-  await expect(publicPlan.locator('xpath=following-sibling::*[1]')).toHaveAttribute(
+  await expect(nutrition.locator('details')).toHaveJSProperty('open', true)
+  await expect(nutrition.getByText('1,425', { exact: false }).first()).toBeVisible()
+  await expect(nutrition).toContainText('2,855')
+  await expect(nutrition).toContainText('1,430')
+  await expect(nutrition.locator('xpath=following-sibling::*[1]')).toHaveAttribute(
     'id',
     'health-trend',
   )
@@ -731,4 +748,9 @@ test('public nutrition and owner body targets keep distinct visibility and displ
     '+0.6 百分点',
   ])
   await expect(detail.getByRole('row').filter({ hasText: '骨骼肌量' })).toContainText('暂无数据')
+
+  await overview.getByRole('button', { name: '查看体重评级详情', exact: true }).click()
+  const recentTrend = page.getByRole('dialog').getByTestId('metric-detail-trend')
+  await expect(recentTrend).toHaveJSProperty('open', true)
+  await expect(recentTrend.getByRole('img')).toBeVisible()
 })

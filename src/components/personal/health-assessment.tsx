@@ -282,7 +282,7 @@ export function HealthMetricAssessment({
             </div>
           )}
           {hasTrend && (
-            <details className="mt-6 space-y-3" data-testid="metric-detail-trend">
+            <details open className="mt-6 space-y-3" data-testid="metric-detail-trend">
               <summary className="cursor-pointer font-medium text-sm">
                 {t('assessment.detailTrend')} · {t(`metrics.${viewMetric}`)}
               </summary>

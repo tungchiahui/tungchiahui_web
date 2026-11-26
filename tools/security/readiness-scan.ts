@@ -52,6 +52,10 @@ const forbiddenClientValues = [
   'DEPLOYMENT_REGISTRY_TOKEN',
   'DEEPSEEK_API_KEY',
   'HEALTH_REFERENCE_PROFILE_JSON',
+  'Mengniu whole milk',
+  '蒙牛纯牛奶',
+  '蒙牛純牛奶',
+  'breadGrams:45,breadSlices:2,milkMl:200',
   '2026-11-30',
   '2027-03-20',
 ] as const
